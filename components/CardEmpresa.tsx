@@ -5,7 +5,6 @@ import {
   type Mes,
   SUBTITULO_EMPRESA,
   formatBRL,
-  getFaturamentoDezembro,
   getFaturamentoMes,
   getVerbaMes,
   metaAcumuladaAteHoje,
@@ -22,7 +21,6 @@ export default function CardEmpresa({
 }) {
   const investimento = getVerbaMes(empresa.slug, mes)
   const meta = getFaturamentoMes(empresa.slug, mes)
-  const faturamentoDez = getFaturamentoDezembro(empresa.slug)
   const indisponivel = meta === 0 && investimento === 0
 
   const metaAcumulada = metaAcumuladaAteHoje(meta, mes, ANO_PADRAO)
@@ -34,15 +32,9 @@ export default function CardEmpresa({
     ? "#4caf50"
     : "#e24b4a"
 
-  const progressoPct = temReal
-    ? Math.min(100, Math.round((faturamentoReal / Math.max(meta, 1)) * 100))
-    : meta > 0
-    ? Math.min(100, Math.round((metaAcumulada / meta) * 100))
-    : 0
-
-  const pctDezembro =
-    faturamentoDez > 0
-      ? Math.min(100, Math.round((meta / faturamentoDez) * 100))
+  const progressoPct =
+    temReal && meta > 0
+      ? Math.min(100, Math.round((faturamentoReal / meta) * 100))
       : 0
 
   return (
@@ -117,7 +109,11 @@ export default function CardEmpresa({
               />
             </div>
             <p className="mt-1.5 text-[11px] text-neutral-500">
-              {pctDezembro}% do faturamento de Dezembro ({formatBRL(faturamentoDez)})
+              {temReal
+                ? `${progressoPct}% da meta de ${mes} atingida (${formatBRL(
+                    faturamentoReal
+                  )} de ${formatBRL(meta)})`
+                : `Nenhum dado inserido para ${mes}`}
             </p>
           </div>
         </>
