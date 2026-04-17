@@ -391,18 +391,18 @@ export function getFunilCompleto(slug: EmpresaSlug, mes: Mes): EtapaFunil[] {
     )
     if (!linha) return []
     return [
-      { chave: "investimento", rotulo: "💰 Investimento", valor: linha.verba, tipo: "moeda" },
+      { chave: "investimento", rotulo: "Investimento", valor: linha.verba, tipo: "moeda" },
       {
         chave: "criativos",
-        rotulo: "🎨 Criativos",
+        rotulo: "Criativos",
         valor: linha.criativos,
         tipo: "numero",
-        subtitulo: `${linha.criativos_semana}/semana`,
+        subtitulo: `${linha.criativos_semana} por semana`,
       },
-      { chave: "leads", rotulo: "👥 Leads", valor: linha.leads, tipo: "numero" },
-      { chave: "reunioes", rotulo: "📅 Reuniões", valor: linha.reunioes, tipo: "numero" },
-      { chave: "contratos", rotulo: "✅ Contratos", valor: linha.contratos, tipo: "numero" },
-      { chave: "faturamento", rotulo: "💵 Faturamento", valor: linha.faturamento, tipo: "moeda" },
+      { chave: "leads", rotulo: "Leads", valor: linha.leads, tipo: "numero" },
+      { chave: "reunioes", rotulo: "Reuniões", valor: linha.reunioes, tipo: "numero" },
+      { chave: "contratos", rotulo: "Contratos", valor: linha.contratos, tipo: "numero" },
+      { chave: "faturamento", rotulo: "Faturamento", valor: linha.faturamento, tipo: "moeda" },
     ]
   }
 
@@ -412,18 +412,18 @@ export function getFunilCompleto(slug: EmpresaSlug, mes: Mes): EtapaFunil[] {
     )
     if (!linha) return []
     return [
-      { chave: "investimento", rotulo: "💰 Investimento", valor: linha.verba, tipo: "moeda" },
+      { chave: "investimento", rotulo: "Investimento", valor: linha.verba, tipo: "moeda" },
       {
         chave: "criativos",
-        rotulo: "🎨 Criativos",
+        rotulo: "Criativos",
         valor: linha.criativos,
         tipo: "numero",
-        subtitulo: `${linha.criativos_semana}/semana`,
+        subtitulo: `${linha.criativos_semana} por semana`,
       },
-      { chave: "leads", rotulo: "👥 Leads", valor: linha.leads, tipo: "numero" },
-      { chave: "reunioes", rotulo: "📅 Orçamentos", valor: linha.orcamentos, tipo: "numero" },
-      { chave: "contratos", rotulo: "✅ Vendas", valor: linha.vendas, tipo: "numero" },
-      { chave: "faturamento", rotulo: "💵 Faturamento", valor: linha.faturamento, tipo: "moeda" },
+      { chave: "leads", rotulo: "Leads", valor: linha.leads, tipo: "numero" },
+      { chave: "reunioes", rotulo: "Orçamentos", valor: linha.orcamentos, tipo: "numero" },
+      { chave: "contratos", rotulo: "Vendas", valor: linha.vendas, tipo: "numero" },
+      { chave: "faturamento", rotulo: "Faturamento", valor: linha.faturamento, tipo: "moeda" },
     ]
   }
 
@@ -433,18 +433,18 @@ export function getFunilCompleto(slug: EmpresaSlug, mes: Mes): EtapaFunil[] {
     )
     if (!linha) return []
     return [
-      { chave: "investimento", rotulo: "💰 Investimento", valor: linha.verba, tipo: "moeda" },
+      { chave: "investimento", rotulo: "Investimento", valor: linha.verba, tipo: "moeda" },
       {
         chave: "criativos",
-        rotulo: "🎨 Criativos",
+        rotulo: "Criativos",
         valor: linha.criativos,
         tipo: "numero",
-        subtitulo: `${linha.criativos_semana}/semana`,
+        subtitulo: `${linha.criativos_semana} por semana`,
       },
-      { chave: "leads", rotulo: "👥 Influenciadores", valor: linha.influenciadores, tipo: "numero" },
-      { chave: "reunioes", rotulo: "📅 Vendas Influ.", valor: linha.vendas_influenciador, tipo: "numero" },
-      { chave: "contratos", rotulo: "✅ Total Vendas", valor: linha.total_vendas, tipo: "numero" },
-      { chave: "faturamento", rotulo: "💵 Receita", valor: linha.receita, tipo: "moeda" },
+      { chave: "leads", rotulo: "Influenciadores", valor: linha.influenciadores, tipo: "numero" },
+      { chave: "reunioes", rotulo: "Vendas Influ.", valor: linha.vendas_influenciador, tipo: "numero" },
+      { chave: "contratos", rotulo: "Total Vendas", valor: linha.total_vendas, tipo: "numero" },
+      { chave: "faturamento", rotulo: "Receita", valor: linha.receita, tipo: "moeda" },
     ]
   }
 
@@ -454,9 +454,9 @@ export function getFunilCompleto(slug: EmpresaSlug, mes: Mes): EtapaFunil[] {
     )
     if (!linha) return []
     return [
-      { chave: "faturamento_diego", rotulo: "💵 Faturamento Diego", valor: linha.faturamento_diego, tipo: "moeda" },
-      { chave: "percentual", rotulo: "📊 Percentual", valor: linha.percentual, tipo: "numero", subtitulo: "%" },
-      { chave: "faturamento", rotulo: "💰 Receita Hub", valor: linha.receita_hub, tipo: "moeda" },
+      { chave: "faturamento_diego", rotulo: "Faturamento Diego", valor: linha.faturamento_diego, tipo: "moeda" },
+      { chave: "percentual", rotulo: "Percentual", valor: linha.percentual, tipo: "numero", subtitulo: "%" },
+      { chave: "faturamento", rotulo: "Receita Hub", valor: linha.receita_hub, tipo: "moeda" },
     ]
   }
 
