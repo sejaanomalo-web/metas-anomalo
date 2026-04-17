@@ -2,6 +2,7 @@
 
 import {
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -12,15 +13,24 @@ import {
 
 interface Ponto {
   mes: string
-  faturamento: number
+  meta: number
+  real: number | null
 }
 
 export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
+  const temReal = dados.some((p) => p.real !== null && p.real > 0)
   return (
     <div className="card p-6">
-      <p className="text-xs uppercase tracking-widest text-neutral-500 mb-4">
-        Evolução do faturamento
-      </p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs uppercase tracking-widest text-neutral-500">
+          Evolução do faturamento
+        </p>
+        {temReal && (
+          <span className="text-[10px] uppercase tracking-widest text-neutral-500">
+            Meta vs Real
+          </span>
+        )}
+      </div>
       <div style={{ width: "100%", height: 320 }}>
         <ResponsiveContainer>
           <LineChart
@@ -63,22 +73,46 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
                 color: "#fff",
                 fontSize: 12,
               }}
-              formatter={(v: number) =>
-                v.toLocaleString("pt-BR", {
-                  style: "currency",
-                  currency: "BRL",
-                  maximumFractionDigits: 0,
-                })
-              }
+              formatter={(v, name) => {
+                const n = typeof v === "number" ? v : Number(v)
+                const texto =
+                  !Number.isFinite(n)
+                    ? "—"
+                    : n.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                        maximumFractionDigits: 0,
+                      })
+                return [texto, name]
+              }}
             />
+            {temReal && (
+              <Legend
+                wrapperStyle={{ fontSize: 11, color: "#999" }}
+                iconType="plainline"
+              />
+            )}
             <Line
               type="monotone"
-              dataKey="faturamento"
+              dataKey="meta"
+              name="Meta"
               stroke="url(#goldLine)"
               strokeWidth={2.5}
               dot={{ r: 4, stroke: "#C9953A", strokeWidth: 2, fill: "#0a0a0a" }}
               activeDot={{ r: 6, fill: "#C9953A" }}
             />
+            {temReal && (
+              <Line
+                type="monotone"
+                dataKey="real"
+                name="Real"
+                stroke="#ffffff"
+                strokeWidth={2}
+                strokeDasharray="4 3"
+                dot={{ r: 3, stroke: "#fff", strokeWidth: 2, fill: "#0a0a0a" }}
+                connectNulls={false}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>

@@ -4,27 +4,32 @@ import {
   type Mes,
   formatBRL,
   formatNumero,
+  getCriativosMes,
   getFaturamentoDezembro,
   getFaturamentoMes,
-  getFunilResumo,
+  getLeadsMes,
+  getVerbaMes,
 } from "@/lib/data"
 
 export default function CardEmpresa({
   empresa,
   mes,
+  temDadosReais,
 }: {
   empresa: EmpresaMeta
   mes: Mes
+  temDadosReais: boolean
 }) {
-  const funil = getFunilResumo(empresa.slug, mes)
+  const investimento = getVerbaMes(empresa.slug, mes)
+  const criativos = getCriativosMes(empresa.slug, mes)
+  const leads = getLeadsMes(empresa.slug, mes)
   const faturamentoMes = getFaturamentoMes(empresa.slug, mes)
   const faturamentoDez = getFaturamentoDezembro(empresa.slug)
   const progresso =
     faturamentoDez > 0
       ? Math.min(100, Math.round((faturamentoMes / faturamentoDez) * 100))
       : 0
-
-  const indisponivel = !funil || faturamentoMes === 0
+  const indisponivel = faturamentoMes === 0 && investimento === 0 && leads === 0
 
   return (
     <Link
@@ -42,9 +47,17 @@ export default function CardEmpresa({
               : "Funil de vendas"}
           </p>
         </div>
-        <span className="text-[10px] uppercase tracking-widest text-gold/80">
-          {mes}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              temDadosReais ? "bg-emerald-400" : "bg-neutral-700"
+            }`}
+            title={temDadosReais ? "Dados reais inseridos" : "Apenas meta"}
+          />
+          <span className="text-[10px] uppercase tracking-widest text-gold/80">
+            {mes}
+          </span>
+        </div>
       </div>
 
       {indisponivel ? (
@@ -53,29 +66,38 @@ export default function CardEmpresa({
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-2">
-            {funil.rotulos.map((rotulo, i) => (
-              <div key={rotulo} className="rounded-lg bg-black/50 border border-neutral-900 p-2.5">
+          {empresa.tipo === "diego" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-black/50 border border-neutral-900 p-2.5">
                 <p className="text-[10px] uppercase tracking-wider text-neutral-500">
-                  {rotulo}
+                  Receita Hub
                 </p>
                 <p className="text-base font-medium text-white mt-0.5">
-                  {empresa.tipo === "diego" && i === 0
-                    ? formatBRL(funil.valores[i])
-                    : empresa.tipo === "diego" && i === 2
-                    ? formatBRL(funil.valores[i])
-                    : empresa.tipo === "diego" && i === 1
-                    ? `${funil.valores[i]}%`
-                    : formatNumero(funil.valores[i])}
+                  {formatBRL(faturamentoMes)}
                 </p>
               </div>
-            ))}
-          </div>
+              <div className="rounded-lg bg-black/50 border border-neutral-900 p-2.5">
+                <p className="text-[10px] uppercase tracking-wider text-neutral-500">
+                  Meta de Dezembro
+                </p>
+                <p className="text-base font-medium text-white mt-0.5">
+                  {formatBRL(faturamentoDez)}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-1.5">
+              <EtapaMini rotulo="Inv." valor={formatBRL(investimento)} />
+              <EtapaMini rotulo="Criat." valor={formatNumero(criativos.mes)} />
+              <EtapaMini rotulo="Leads" valor={formatNumero(leads)} />
+              <EtapaMini rotulo="Fat." valor={formatBRL(faturamentoMes)} />
+            </div>
+          )}
 
           <div>
             <div className="flex items-baseline justify-between">
               <span className="text-xs uppercase tracking-widest text-neutral-500">
-                Faturamento do mês
+                Meta do mês
               </span>
               <span className="text-sm font-medium text-white">
                 {formatBRL(faturamentoMes)}
@@ -88,11 +110,22 @@ export default function CardEmpresa({
               />
             </div>
             <p className="mt-1.5 text-[11px] text-neutral-500">
-              {progresso}% da meta de Dezembro ({formatBRL(faturamentoDez)})
+              {progresso}% do faturamento de Dezembro ({formatBRL(faturamentoDez)})
             </p>
           </div>
         </>
       )}
     </Link>
+  )
+}
+
+function EtapaMini({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <div className="rounded-lg bg-black/50 border border-neutral-900 p-2">
+      <p className="text-[9px] uppercase tracking-wider text-neutral-500">
+        {rotulo}
+      </p>
+      <p className="text-xs font-medium text-white mt-0.5 truncate">{valor}</p>
+    </div>
   )
 }
