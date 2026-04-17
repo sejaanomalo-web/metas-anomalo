@@ -1,17 +1,19 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import Header from "@/components/Header"
-import SeletorMes from "@/components/SeletorMes"
+import SeletorPeriodo from "@/components/SeletorPeriodo"
+import StripMetricas from "@/components/StripMetricas"
+import SectionBar from "@/components/SectionBar"
 import FunilCascata from "@/components/FunilCascata"
 import CenarioReal from "@/components/CenarioReal"
-import MetaProjetada from "@/components/MetaProjetada"
 import GraficoFaturamento from "@/components/GraficoFaturamento"
 import TabelaMeses from "@/components/TabelaMeses"
 import DrawerDadosReais from "@/components/DrawerDadosReais"
 import { estaAutenticado } from "@/lib/auth"
 import {
-  ANO_PADRAO,
-  MESES,
+  SUBTITULO_EMPRESA,
+  anoTemProjecao,
+  anoValido,
   type EmpresaSlug,
   type LinhaAton,
   type LinhaDiego,
@@ -23,24 +25,18 @@ import {
   getDadosEmpresa,
   getEmpresa,
   getFunilCompleto,
+  getResumoGrupo,
+  mesValido,
 } from "@/lib/data"
 import { supabaseConfigurado } from "@/lib/supabase"
 import { getDadosReais, getDadosReaisMes } from "@/lib/dados-reais"
-
-function mesValido(m: string | undefined, dados: { mes: Mes }[]): Mes {
-  if (m && (MESES as readonly string[]).includes(m)) {
-    const mes = m as Mes
-    if (dados.some((l) => l.mes === mes)) return mes
-  }
-  return dados[0]?.mes ?? "Abril"
-}
 
 export default async function EmpresaPage({
   params,
   searchParams,
 }: {
   params: { empresa: string }
-  searchParams: { mes?: string }
+  searchParams: { mes?: string; ano?: string }
 }) {
   if (!estaAutenticado()) {
     redirect("/login")
@@ -51,12 +47,16 @@ export default async function EmpresaPage({
     notFound()
   }
 
-  const dados = getDadosEmpresa(empresa.slug as EmpresaSlug)
-  const mes = mesValido(searchParams?.mes, dados as { mes: Mes }[])
-  const etapas = getFunilCompleto(empresa.slug as EmpresaSlug, mes)
+  const mes = mesValido(searchParams?.mes)
+  const ano = anoValido(searchParams?.ano)
+  const temProjecao = anoTemProjecao(ano)
 
-  const real = await getDadosReaisMes(empresa.db, mes)
-  const todosReais = await getDadosReais(empresa.db)
+  const dados = getDadosEmpresa(empresa.slug as EmpresaSlug, ano)
+  const etapas = getFunilCompleto(empresa.slug as EmpresaSlug, mes, ano)
+  const resumo = getResumoGrupo(mes, ano)
+
+  const real = await getDadosReaisMes(empresa.db, mes, ano)
+  const todosReais = await getDadosReais(empresa.db, ano)
   const mapaReais = new Map(todosReais.map((r) => [r.mes, r]))
   const supabaseOk = supabaseConfigurado()
 
@@ -93,38 +93,93 @@ export default async function EmpresaPage({
     }
   })
 
-  const cardsMeta = construirCardsMeta(empresa, dados, mes)
   const { colunas, linhas } = construirTabela(empresa, dados)
-
   const metaComparavel = extrairMetaComparavel(empresa.tipo, dados, mes)
+
+  let somaFaturamentoReal = 0
+  let somaInvestimentoReal = 0
+  let somaLeadsReal = 0
+  let somaCriativosReal = 0
+  for (const d of todosReais) {
+    somaFaturamentoReal += d.faturamento_real ?? 0
+    somaInvestimentoReal += d.investimento_real ?? 0
+    somaLeadsReal += d.leads_real ?? 0
+    somaCriativosReal += d.criativos_entregues ?? 0
+  }
+
+  const celulas = temProjecao
+    ? [
+        {
+          rotulo: "Faturamento do grupo",
+          valor: formatBRL(resumo.faturamento),
+          destaque: true,
+        },
+        {
+          rotulo: "Total investido em ads",
+          valor: formatBRL(resumo.investimento),
+        },
+        { rotulo: "Total de leads", valor: formatNumero(resumo.leads) },
+        {
+          rotulo: "Criativos do mês",
+          valor: formatNumero(resumo.criativos),
+          hint: `${resumo.criativosSemana} por semana · grupo`,
+        },
+      ]
+    : [
+        {
+          rotulo: "Faturamento real do grupo",
+          valor: formatBRL(somaFaturamentoReal),
+          destaque: true,
+        },
+        {
+          rotulo: "Investimento real",
+          valor: formatBRL(somaInvestimentoReal),
+        },
+        { rotulo: "Leads reais", valor: formatNumero(somaLeadsReal) },
+        {
+          rotulo: "Criativos entregues",
+          valor: formatNumero(somaCriativosReal),
+        },
+      ]
 
   return (
     <>
       <Header>
-        <SeletorMes mesAtual={mes} />
+        <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
       </Header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
-        <div className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <Link
-              href="/dashboard"
-              className="text-xs uppercase tracking-widest text-neutral-500 hover:text-gold transition"
-            >
-              ← Voltar ao painel
-            </Link>
-            <h1 className="mt-3 text-3xl font-medium tracking-tight text-white">
-              {empresa.nome}
-            </h1>
-            <p className="text-sm text-neutral-500 mt-1">
-              {mes} de {ANO_PADRAO} · Detalhamento completo
-            </p>
-          </div>
+      <StripMetricas celulas={celulas} />
+
+      <SectionBar titulo={empresa.nome} hint={SUBTITULO_EMPRESA[empresa.slug]} />
+
+      <main
+        style={{
+          background: "#090909",
+          padding: "16px 24px",
+        }}
+      >
+        <div
+          className="flex items-center justify-between"
+          style={{ marginBottom: 16 }}
+        >
+          <Link
+            href={`/dashboard?mes=${mes}&ano=${ano}`}
+            style={{
+              fontSize: 8,
+              letterSpacing: "2px",
+              color: "#1e1e1e",
+              textTransform: "uppercase",
+              fontWeight: 400,
+            }}
+            className="hover:text-[#686868] transition"
+          >
+            ← Voltar ao painel
+          </Link>
           {empresa.tipo !== "diego" && (
             <DrawerDadosReais
               empresa={empresa.db}
               mes={mes}
-              ano={ANO_PADRAO}
+              ano={ano}
               supabaseOk={supabaseOk}
               tipoEmpresa={empresa.tipo}
               existentes={real}
@@ -132,41 +187,53 @@ export default async function EmpresaPage({
           )}
         </div>
 
-        {etapas.length > 0 && (
-          <FunilCascata etapas={etapas} reais={etapasReais} />
-        )}
-
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {empresa.tipo !== "diego" && (
-            <CenarioReal dados={real} meta={metaComparavel} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {etapas.length > 0 && (
+            <FunilCascata etapas={etapas} reais={etapasReais} />
           )}
-          <MetaProjetada cards={cardsMeta} />
-        </section>
 
-        <section>
-          <GraficoFaturamento dados={pontos} />
-        </section>
+          {empresa.tipo !== "diego" && (
+            <CenarioReal
+              dados={real}
+              meta={metaComparavel}
+              mes={mes}
+              ano={ano}
+            />
+          )}
 
-        <section>
-          <TabelaMeses colunas={colunas} linhas={linhas} />
-        </section>
+          {temProjecao && pontos.length > 0 && (
+            <GraficoFaturamento dados={pontos} />
+          )}
+
+          {temProjecao && linhas.length > 0 && (
+            <TabelaMeses colunas={colunas} linhas={linhas} mesAtual={mes} />
+          )}
+
+          {!temProjecao && (
+            <div
+              style={{
+                background: "#0c0c0c",
+                border: "0.5px solid #141414",
+                borderRadius: 10,
+                padding: 24,
+                textAlign: "center",
+                color: "#1c1c1c",
+                fontSize: 12,
+                fontWeight: 300,
+              }}
+            >
+              Nenhuma projeção definida para {ano}. Os dados mostrados são
+              apenas os reais inseridos manualmente.
+            </div>
+          )}
+        </div>
       </main>
-
-      <footer className="max-w-7xl mx-auto px-6 py-10 text-center">
-        <p className="text-[11px] uppercase tracking-widest text-neutral-700">
-          Anômalo Hub · {new Date().getFullYear()}
-        </p>
-      </footer>
     </>
   )
 }
 
 function extrairMetaComparavel(
-  tipo: ReturnType<typeof getEmpresa> extends infer T
-    ? T extends { tipo: infer U }
-      ? U
-      : never
-    : never,
+  tipo: NonNullable<ReturnType<typeof getEmpresa>>["tipo"],
   dados: ReturnType<typeof getDadosEmpresa>,
   mes: Mes
 ) {
@@ -207,84 +274,6 @@ function extrairMetaComparavel(
       : {}
   }
   return {}
-}
-
-function construirCardsMeta(
-  empresa: NonNullable<ReturnType<typeof getEmpresa>>,
-  dados: ReturnType<typeof getDadosEmpresa>,
-  mes: Mes
-): { titulo: string; valor: string; hint?: string }[] {
-  if (empresa.tipo === "leads-reunioes-contratos") {
-    const linha = (dados as LinhaPadrao[]).find((l) => l.mes === mes)
-    if (!linha) return []
-    const custoPorContrato =
-      linha.contratos > 0 ? Math.round(linha.verba / linha.contratos) : 0
-    return [
-      { titulo: "CPL projetado", valor: empresa.cpl ? formatBRL(empresa.cpl) : "—" },
-      { titulo: "Custo por contrato", valor: formatBRL(custoPorContrato) },
-      { titulo: "Ticket médio", valor: formatBRL(linha.ticket) },
-      { titulo: "Verba do mês", valor: formatBRL(linha.verba) },
-      {
-        titulo: "Criativos",
-        valor: formatNumero(linha.criativos),
-        hint: `${linha.criativos_semana}/semana`,
-      },
-      { titulo: "Clientes ativos", valor: formatNumero(linha.clientes) },
-    ]
-  }
-
-  if (empresa.tipo === "aton") {
-    const linha = (dados as LinhaAton[]).find((l) => l.mes === mes)
-    if (!linha) return []
-    const custoPorVenda =
-      linha.vendas > 0 ? Math.round(linha.verba / linha.vendas) : 0
-    return [
-      { titulo: "CPL projetado", valor: empresa.cpl ? formatBRL(empresa.cpl) : "—" },
-      { titulo: "Custo por venda", valor: formatBRL(custoPorVenda) },
-      { titulo: "Ticket médio", valor: formatBRL(linha.ticket) },
-      { titulo: "Verba do mês", valor: formatBRL(linha.verba) },
-      {
-        titulo: "Criativos",
-        valor: formatNumero(linha.criativos),
-        hint: `${linha.criativos_semana}/semana`,
-      },
-      { titulo: "Vendas projetadas", valor: formatNumero(linha.vendas) },
-    ]
-  }
-
-  if (empresa.tipo === "hato") {
-    const linha = (dados as LinhaHato[]).find((l) => l.mes === mes)
-    if (!linha) return []
-    const ticket =
-      linha.total_vendas > 0 ? Math.round(linha.receita / linha.total_vendas) : 0
-    return [
-      { titulo: "Ticket médio", valor: formatBRL(ticket) },
-      {
-        titulo: "Custo influenciadores",
-        valor: formatBRL(linha.custo_influenciadores),
-      },
-      { titulo: "Verba de mídia", valor: formatBRL(linha.verba) },
-      { titulo: "Vendas totais", valor: formatNumero(linha.total_vendas) },
-      {
-        titulo: "Criativos",
-        valor: formatNumero(linha.criativos),
-        hint: `${linha.criativos_semana}/semana`,
-      },
-      { titulo: "Influenciadores", valor: formatNumero(linha.influenciadores) },
-    ]
-  }
-
-  if (empresa.tipo === "diego") {
-    const linha = (dados as LinhaDiego[]).find((l) => l.mes === mes)
-    if (!linha) return []
-    return [
-      { titulo: "Faturamento Diego", valor: formatBRL(linha.faturamento_diego) },
-      { titulo: "Percentual Hub", valor: `${linha.percentual}%` },
-      { titulo: "Receita do Hub", valor: formatBRL(linha.receita_hub) },
-    ]
-  }
-
-  return []
 }
 
 function construirTabela(

@@ -1,4 +1,4 @@
-import { formatBRL, formatNumero } from "@/lib/data"
+import { type Mes, formatBRL, formatNumero } from "@/lib/data"
 
 interface Coluna {
   chave: string
@@ -9,23 +9,51 @@ interface Coluna {
 export default function TabelaMeses({
   colunas,
   linhas,
+  mesAtual,
 }: {
   colunas: Coluna[]
   linhas: Record<string, string | number>[]
+  mesAtual?: Mes
 }) {
   return (
-    <div className="card p-6">
-      <p className="text-xs uppercase tracking-widest text-neutral-500 mb-4">
+    <div
+      style={{
+        background: "#0c0c0c",
+        border: "0.5px solid #141414",
+        borderRadius: 10,
+        padding: 20,
+      }}
+    >
+      <p
+        style={{
+          fontSize: 8,
+          letterSpacing: "2px",
+          color: "#202020",
+          textTransform: "uppercase",
+          fontWeight: 400,
+          marginBottom: 14,
+        }}
+      >
         Detalhamento mensal
       </p>
       <div className="overflow-x-auto scrollbar-thin">
-        <table className="w-full text-sm">
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr className="text-left">
+            <tr>
               {colunas.map((c) => (
                 <th
                   key={c.chave}
-                  className="text-[11px] uppercase tracking-widest text-neutral-500 font-normal pb-3 pr-4 whitespace-nowrap"
+                  style={{
+                    fontSize: 8,
+                    letterSpacing: "2px",
+                    color: "#1e1e1e",
+                    textTransform: "uppercase",
+                    fontWeight: 400,
+                    textAlign: "left",
+                    padding: "10px 14px",
+                    borderBottom: "0.5px solid #111",
+                    whiteSpace: "nowrap",
+                  }}
                 >
                   {c.titulo}
                 </th>
@@ -33,30 +61,49 @@ export default function TabelaMeses({
             </tr>
           </thead>
           <tbody>
-            {linhas.map((linha, i) => (
-              <tr
-                key={i}
-                className="border-t border-neutral-900 hover:bg-white/[0.02]"
-              >
-                {colunas.map((c) => {
-                  const v = linha[c.chave]
-                  let conteudo: string = String(v ?? "—")
-                  if (typeof v === "number") {
-                    if (c.tipo === "brl") conteudo = formatBRL(v)
-                    else if (c.tipo === "percent") conteudo = `${v}%`
-                    else conteudo = formatNumero(v)
-                  }
-                  return (
-                    <td
-                      key={c.chave}
-                      className="py-3 pr-4 text-white whitespace-nowrap"
-                    >
-                      {conteudo}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
+            {linhas.map((linha, i) => {
+              const destacar =
+                mesAtual !== undefined && linha.mes === mesAtual
+              return (
+                <tr
+                  key={i}
+                  style={{
+                    background: destacar ? "#0e0e0e" : "transparent",
+                  }}
+                >
+                  {colunas.map((c) => {
+                    const v = linha[c.chave]
+                    let conteudo: string = String(v ?? "—")
+                    if (typeof v === "number") {
+                      if (c.tipo === "brl") conteudo = formatBRL(v)
+                      else if (c.tipo === "percent") conteudo = `${v}%`
+                      else conteudo = formatNumero(v)
+                    }
+                    const ehFat =
+                      c.chave === "faturamento" ||
+                      c.chave === "receita" ||
+                      c.chave === "receita_hub"
+
+                    return (
+                      <td
+                        key={c.chave}
+                        className="font-mono"
+                        style={{
+                          fontSize: 12,
+                          color: ehFat ? "#C9953A" : "#484848",
+                          fontWeight: 300,
+                          padding: "10px 14px",
+                          border: "0.5px solid #111",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {conteudo}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

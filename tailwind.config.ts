@@ -9,12 +9,28 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: "#0a0a0a",
-        surface: "#111111",
+        bg: "#080808",
+        header: "#0a0a0a",
+        card: "#0c0c0c",
+        cell: "#090909",
+        grid: "#090909",
+        line: "#141414",
+        divider: "#111111",
+        "line-hover": "#202020",
         gold: {
           DEFAULT: "#C9953A",
           soft: "#C9953A33",
-          muted: "#8a6628",
+        },
+        ink: {
+          primary: "#e0e0e0",
+          secondary: "#686868",
+          muted: "#242424",
+          ghost: "#1c1c1c",
+        },
+        status: {
+          red: "#e24b4a",
+          green: "#4caf50",
+          neutral: "#252525",
         },
       },
       fontFamily: {
@@ -27,9 +43,8 @@ const config: Config = {
           "Roboto",
           "sans-serif",
         ],
-      },
-      boxShadow: {
-        gold: "0 0 0 1px #C9953A33, 0 8px 30px rgba(201,149,58,0.08)",
+        serif: ["'Playfair Display'", "ui-serif", "Georgia", "serif"],
+        mono: ["'DM Mono'", "ui-monospace", "SFMono-Regular", "monospace"],
       },
     },
   },

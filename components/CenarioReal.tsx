@@ -1,5 +1,11 @@
 import { type DadosReais } from "@/lib/supabase"
-import { formatBRL, formatNumero } from "@/lib/data"
+import {
+  type Ano,
+  type Mes,
+  formatBRL,
+  formatNumero,
+  metaAcumuladaAteHoje,
+} from "@/lib/data"
 
 interface MetaComparavel {
   investimento?: number
@@ -9,148 +15,284 @@ interface MetaComparavel {
   faturamento?: number
 }
 
+const LINHAS: {
+  rotulo: string
+  chave:
+    | "investimento_real"
+    | "leads_real"
+    | "reunioes_real"
+    | "contratos_real"
+    | "faturamento_real"
+  metaKey: keyof MetaComparavel
+  tipo: "moeda" | "numero"
+}[] = [
+  {
+    rotulo: "Investimento",
+    chave: "investimento_real",
+    metaKey: "investimento",
+    tipo: "moeda",
+  },
+  {
+    rotulo: "Leads",
+    chave: "leads_real",
+    metaKey: "leads",
+    tipo: "numero",
+  },
+  {
+    rotulo: "Reuniões",
+    chave: "reunioes_real",
+    metaKey: "reunioes",
+    tipo: "numero",
+  },
+  {
+    rotulo: "Contratos",
+    chave: "contratos_real",
+    metaKey: "contratos",
+    tipo: "numero",
+  },
+  {
+    rotulo: "Faturamento",
+    chave: "faturamento_real",
+    metaKey: "faturamento",
+    tipo: "moeda",
+  },
+]
+
+function corStatus(
+  real: number | null,
+  metaTotal: number | undefined,
+  mes: Mes,
+  ano: Ano
+): string | null {
+  if (real === null || metaTotal === undefined || metaTotal === 0) return null
+  if (real >= metaTotal) return "#4caf50"
+  const acumulada = metaAcumuladaAteHoje(metaTotal, mes, ano)
+  if (real >= acumulada) return "#C9953A"
+  return "#e24b4a"
+}
+
 export default function CenarioReal({
   dados,
   meta,
+  mes,
+  ano,
 }: {
   dados: DadosReais | null
   meta: MetaComparavel
+  mes: Mes
+  ano: Ano
 }) {
-  if (!dados) {
-    return (
-      <div className="card p-6">
-        <p className="text-xs uppercase tracking-widest text-neutral-500">
-          Cenário Real
-        </p>
-        <p className="mt-4 text-sm text-neutral-400">
-          Nenhum dado real inserido para este mês. Clique em
-          <span className="text-gold mx-1 font-medium">Inserir dados reais</span>
-          para registrar.
-        </p>
-      </div>
-    )
-  }
-
-  const cpl =
-    dados.investimento_real !== null &&
-    dados.leads_real !== null &&
-    dados.leads_real > 0
-      ? dados.investimento_real / dados.leads_real
-      : null
-
-  const linhas: {
-    rotulo: string
-    real: number | null
-    meta: number | undefined
-    tipo: "moeda" | "numero"
-  }[] = [
-    {
-      rotulo: "Investimento",
-      real: dados.investimento_real,
-      meta: meta.investimento,
-      tipo: "moeda",
-    },
-    {
-      rotulo: "Leads",
-      real: dados.leads_real,
-      meta: meta.leads,
-      tipo: "numero",
-    },
-    {
-      rotulo: "Reuniões/Orçamentos",
-      real: dados.reunioes_real,
-      meta: meta.reunioes,
-      tipo: "numero",
-    },
-    {
-      rotulo: "Contratos/Vendas",
-      real: dados.contratos_real,
-      meta: meta.contratos,
-      tipo: "numero",
-    },
-    {
-      rotulo: "Faturamento",
-      real: dados.faturamento_real,
-      meta: meta.faturamento,
-      tipo: "moeda",
-    },
-  ]
-
   return (
-    <div className="card p-6">
-      <div className="flex items-center justify-between">
-        <p className="text-xs uppercase tracking-widest text-neutral-500">
-          Cenário Real
-        </p>
-        <span className="h-2 w-2 rounded-full bg-emerald-400" />
-      </div>
+    <div
+      style={{
+        background: "#0c0c0c",
+        border: "0.5px solid #141414",
+        borderRadius: 10,
+        padding: 20,
+      }}
+    >
+      <p
+        style={{
+          fontSize: 8,
+          letterSpacing: "2px",
+          color: "#202020",
+          textTransform: "uppercase",
+          fontWeight: 400,
+        }}
+      >
+        Cenário Real · {mes} {ano}
+      </p>
 
-      <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {linhas.map((l) => {
-          const abaixo =
-            l.real !== null && l.meta !== undefined && l.real < l.meta
-          const acima =
-            l.real !== null && l.meta !== undefined && l.real >= l.meta
+      <div
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
+        style={{ gap: "0.5px", background: "#111", marginTop: 14 }}
+      >
+        {LINHAS.map((l) => {
+          const real = dados ? dados[l.chave] : null
+          const metaValor = meta[l.metaKey]
+          const temReal = typeof real === "number"
+          const cor = corStatus(temReal ? real : null, metaValor, mes, ano)
+
           return (
             <div
-              key={l.rotulo}
-              className="rounded-lg bg-black/40 border border-neutral-900 p-3"
+              key={l.chave}
+              style={{ background: "#0c0c0c", padding: "12px 14px" }}
             >
-              <p className="text-[10px] uppercase tracking-widest text-neutral-500">
+              <p
+                style={{
+                  fontSize: 8,
+                  letterSpacing: "2px",
+                  color: "#1c1c1c",
+                  textTransform: "uppercase",
+                  fontWeight: 400,
+                }}
+              >
                 {l.rotulo}
               </p>
-              <p className="mt-1.5 text-base font-medium text-white">
-                {l.real === null
-                  ? "—"
-                  : l.tipo === "moeda"
-                  ? formatBRL(l.real)
-                  : formatNumero(l.real)}
-              </p>
-              {l.meta !== undefined && (
+              {temReal ? (
                 <p
-                  className={`text-[11px] mt-0.5 ${
-                    acima
-                      ? "text-emerald-400"
-                      : abaixo
-                      ? "text-red-400"
-                      : "text-neutral-500"
-                  }`}
+                  className="font-mono"
+                  style={{
+                    fontSize: 18,
+                    color: cor ?? "#e0e0e0",
+                    fontWeight: 300,
+                    letterSpacing: "-0.5px",
+                    marginTop: 6,
+                    lineHeight: 1,
+                  }}
                 >
-                  Meta: {l.tipo === "moeda" ? formatBRL(l.meta) : formatNumero(l.meta)}
+                  {l.tipo === "moeda" ? formatBRL(real) : formatNumero(real)}
+                </p>
+              ) : (
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "#1c1c1c",
+                    fontStyle: "italic",
+                    fontWeight: 300,
+                    marginTop: 6,
+                    lineHeight: 1,
+                  }}
+                >
+                  Não inserido
+                </p>
+              )}
+              {metaValor !== undefined && (
+                <p
+                  className="font-mono"
+                  style={{
+                    fontSize: 9,
+                    color: temReal ? "#3a3a3a" : "#1c1c1c",
+                    fontWeight: 300,
+                    marginTop: 6,
+                  }}
+                >
+                  Meta{" "}
+                  {l.tipo === "moeda"
+                    ? formatBRL(metaValor)
+                    : formatNumero(metaValor)}
                 </p>
               )}
             </div>
           )
         })}
 
-        <div className="rounded-lg bg-black/40 border border-neutral-900 p-3">
-          <p className="text-[10px] uppercase tracking-widest text-neutral-500">
+        <div style={{ background: "#0c0c0c", padding: "12px 14px" }}>
+          <p
+            style={{
+              fontSize: 8,
+              letterSpacing: "2px",
+              color: "#1c1c1c",
+              textTransform: "uppercase",
+              fontWeight: 400,
+            }}
+          >
             CPL Real
           </p>
-          <p className="mt-1.5 text-base font-medium text-white">
-            {cpl === null ? "—" : formatBRL(cpl)}
+          {dados?.cpl_real !== null && dados?.cpl_real !== undefined ? (
+            <p
+              className="font-mono"
+              style={{
+                fontSize: 18,
+                color: "#e0e0e0",
+                fontWeight: 300,
+                letterSpacing: "-0.5px",
+                marginTop: 6,
+                lineHeight: 1,
+              }}
+            >
+              {formatBRL(dados.cpl_real)}
+            </p>
+          ) : (
+            <p
+              style={{
+                fontSize: 13,
+                color: "#1c1c1c",
+                fontStyle: "italic",
+                fontWeight: 300,
+                marginTop: 6,
+              }}
+            >
+              Não inserido
+            </p>
+          )}
+          <p
+            className="font-mono"
+            style={{
+              fontSize: 9,
+              color: "#1c1c1c",
+              fontWeight: 300,
+              marginTop: 6,
+            }}
+          >
+            invest. ÷ leads
           </p>
-          <p className="text-[11px] text-neutral-500">invest. ÷ leads</p>
         </div>
+      </div>
 
-        {dados.criativos_entregues !== null && (
-          <div className="rounded-lg bg-black/40 border border-neutral-900 p-3">
-            <p className="text-[10px] uppercase tracking-widest text-neutral-500">
+      {dados?.criativos_entregues !== null &&
+        dados?.criativos_entregues !== undefined && (
+          <div
+            style={{
+              marginTop: 14,
+              background: "#090909",
+              padding: "12px 14px",
+            }}
+          >
+            <p
+              style={{
+                fontSize: 8,
+                letterSpacing: "2px",
+                color: "#1c1c1c",
+                textTransform: "uppercase",
+                fontWeight: 400,
+              }}
+            >
               Criativos entregues
             </p>
-            <p className="mt-1.5 text-base font-medium text-white">
+            <p
+              className="font-mono"
+              style={{
+                fontSize: 15,
+                color: "#e0e0e0",
+                fontWeight: 300,
+                letterSpacing: "-0.5px",
+                marginTop: 4,
+              }}
+            >
               {formatNumero(dados.criativos_entregues)}
             </p>
           </div>
         )}
-      </div>
 
-      {dados.observacoes && (
-        <div className="mt-4 rounded-lg bg-black/40 border border-neutral-900 p-3">
-          <p className="text-[10px] uppercase tracking-widest text-neutral-500">
+      {dados?.observacoes && (
+        <div
+          style={{
+            marginTop: 14,
+            background: "#090909",
+            padding: "12px 14px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 8,
+              letterSpacing: "2px",
+              color: "#1c1c1c",
+              textTransform: "uppercase",
+              fontWeight: 400,
+            }}
+          >
             Observações
           </p>
-          <p className="mt-1.5 text-sm text-white whitespace-pre-wrap">
+          <p
+            style={{
+              fontSize: 12,
+              color: "#686868",
+              fontWeight: 300,
+              marginTop: 4,
+              whiteSpace: "pre-wrap",
+            }}
+          >
             {dados.observacoes}
           </p>
         </div>

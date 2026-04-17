@@ -8,11 +8,10 @@ import {
   calcularBonusVinicius,
 } from "@/lib/comissionamento"
 import type { Comissionamento } from "@/lib/supabase"
-import type { Mes } from "@/lib/data"
+import type { Ano, Mes } from "@/lib/data"
 import { formatBRL } from "@/lib/data"
 
 interface Faixa {
-  limite: number | null
   valor: number
   rotulo: string
 }
@@ -32,61 +31,121 @@ export default function CardEditor({
   funcao: string
   faixas: Faixa[]
   mes: Mes
-  ano: number
+  ano: Ano
   existente: Comissionamento | null
   supabaseOk: boolean
 }) {
+  const [aberto, setAberto] = useState(false)
   const [entregas, setEntregas] = useState<number>(
     existente?.entregas_validas ?? 0
   )
+  const [descontadas, setDescontadas] = useState<number>(
+    existente?.entregas_descontadas ?? 0
+  )
+  const [observacoes, setObservacoes] = useState(existente?.observacoes ?? "")
   const [pending, startTransition] = useTransition()
-  const [status, setStatus] = useState<string | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
   const router = useRouter()
 
   const calcular =
     colaborador === "vinicius" ? calcularBonusVinicius : calcularBonusEmanuel
-  const bonus = calcular(entregas)
+  const liquidas = Math.max(0, entregas - descontadas)
+  const bonusPreview = calcular(liquidas)
+  const bonusSalvo = existente?.bonus_calculado ?? 0
 
   async function onSubmit(fd: FormData) {
-    setStatus(null)
+    setErro(null)
     const r = await salvarComissaoAction(fd)
-    setStatus(r.ok ? "Salvo ✓" : r.erro ?? "Erro.")
-    if (r.ok) router.refresh()
+    if (!r.ok) {
+      setErro(r.erro ?? "Erro desconhecido.")
+      return
+    }
+    setAberto(false)
+    router.refresh()
   }
 
   return (
-    <div className="card p-6">
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-base font-medium text-white">{nome}</h3>
-        <span className="text-[10px] uppercase tracking-widest text-gold">
-          {funcao}
-        </span>
+    <div
+      style={{
+        background: "#0c0c0c",
+        border: "0.5px solid #141414",
+        borderRadius: 10,
+        padding: "20px 20px 4px",
+      }}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <h3
+            className="font-serif italic"
+            style={{
+              fontSize: 18,
+              color: "#e0e0e0",
+              fontWeight: 300,
+              letterSpacing: "-0.3px",
+            }}
+          >
+            {nome}
+          </h3>
+          <p
+            style={{
+              fontSize: 9,
+              color: "#1c1c1c",
+              fontWeight: 400,
+              marginTop: 2,
+            }}
+          >
+            {funcao}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setAberto(true)}
+          style={{
+            background: "transparent",
+            border: "0.5px solid #C9953A",
+            color: "#C9953A",
+            fontSize: 9,
+            letterSpacing: "1.5px",
+            textTransform: "uppercase",
+            padding: "6px 12px",
+            borderRadius: 4,
+            fontWeight: 400,
+          }}
+          className="hover:bg-[#C9953A] hover:text-[#080808] transition"
+        >
+          Editar dados reais
+        </button>
       </div>
-      <p className="text-xs text-neutral-500 mb-5">
-        Bônus por entregas válidas no mês
-      </p>
 
-      <div className="space-y-1.5 mb-5">
+      <div
+        className="divider-h"
+        style={{ marginTop: 16, marginLeft: -20, marginRight: -20 }}
+      />
+
+      <div style={{ marginTop: 16, marginBottom: 16 }}>
         {faixas.map((f) => {
-          const ativo = bonus === f.valor && f.valor > 0
+          const ativa = bonusSalvo === f.valor && f.valor > 0
           return (
             <div
               key={f.rotulo}
-              className={`flex items-center justify-between px-3 py-1.5 rounded border ${
-                ativo
-                  ? "bg-gold/10 border-gold/50"
-                  : "bg-transparent border-neutral-900"
-              }`}
+              className="flex items-center justify-between py-1.5"
             >
               <span
-                className={`text-xs ${ativo ? "text-gold" : "text-neutral-500"}`}
+                style={{
+                  fontSize: 10,
+                  color: ativa ? "#C9953A" : "#484848",
+                  fontWeight: 400,
+                }}
               >
                 {f.rotulo}
               </span>
               <span
-                className={`text-xs font-medium ${
-                  ativo ? "text-gold" : "text-neutral-600"
-                }`}
+                className="font-mono"
+                style={{
+                  fontSize: 11,
+                  color: ativa ? "#C9953A" : "#242424",
+                  fontWeight: 300,
+                }}
               >
                 {formatBRL(f.valor)}
               </span>
@@ -95,61 +154,329 @@ export default function CardEditor({
         })}
       </div>
 
-      <p className="text-[11px] text-neutral-500 mb-4">
-        Regra: entrega fora do prazo ou com 3+ revisões por erro de atenção não
-        conta.
-      </p>
-
-      <form
-        action={(fd) => startTransition(() => onSubmit(fd))}
-        className="space-y-4"
-      >
-        <input type="hidden" name="colaborador" value={colaborador} />
-        <input type="hidden" name="mes" value={mes} />
-        <input type="hidden" name="ano" value={ano} />
-
-        <label className="block">
-          <span className="text-xs uppercase tracking-widest text-neutral-400">
-            Entregas válidas no mês
+      <div style={{ marginBottom: 10 }}>
+        <p style={{ fontSize: 10, color: "#484848", fontWeight: 400 }}>
+          Entregas válidas:{" "}
+          <span className="font-mono" style={{ color: "#e0e0e0" }}>
+            {existente?.entregas_validas ?? 0}
           </span>
-          <input
-            type="number"
-            name="entregas_validas"
-            min={0}
-            value={entregas}
-            onChange={(e) => setEntregas(Number(e.target.value) || 0)}
-            className="mt-2 w-full rounded-lg bg-black/60 border border-neutral-800 focus:border-gold focus:outline-none px-3 py-2 text-white text-sm"
-          />
-        </label>
-
-        <div className="flex items-center justify-between pt-3 border-t border-neutral-900">
-          <span className="text-xs uppercase tracking-widest text-neutral-500">
-            Bônus calculado
-          </span>
-          <span className="text-xl font-medium text-gold">
-            {formatBRL(bonus)}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 pt-2">
-          <button
-            type="submit"
-            disabled={pending || !supabaseOk}
-            className="flex-1 gold-gradient text-black font-medium rounded-lg py-2.5 transition hover:brightness-110 disabled:opacity-50"
+        </p>
+        {(existente?.entregas_descontadas ?? 0) > 0 && (
+          <p
+            style={{
+              fontSize: 10,
+              color: "#484848",
+              fontWeight: 400,
+              marginTop: 4,
+            }}
           >
-            {pending ? "Salvando..." : "Salvar"}
-          </button>
-          {status && (
-            <span
-              className={`text-xs ${
-                status === "Salvo ✓" ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {status}
+            Descontadas:{" "}
+            <span className="font-mono" style={{ color: "#e24b4a" }}>
+              −{existente?.entregas_descontadas}
             </span>
-          )}
+          </p>
+        )}
+      </div>
+
+      <div
+        className="divider-h"
+        style={{ marginLeft: -20, marginRight: -20 }}
+      />
+
+      <div
+        className="flex items-baseline justify-between"
+        style={{ padding: "18px 0" }}
+      >
+        <span
+          style={{
+            fontSize: 8,
+            letterSpacing: "2px",
+            color: "#202020",
+            textTransform: "uppercase",
+            fontWeight: 400,
+          }}
+        >
+          Bônus total
+        </span>
+        <span
+          className="font-mono"
+          style={{
+            fontSize: 22,
+            color: "#C9953A",
+            fontWeight: 300,
+            letterSpacing: "-0.5px",
+          }}
+        >
+          {formatBRL(bonusSalvo)}
+        </span>
+      </div>
+
+      {aberto && (
+        <div className="fixed inset-0 z-40">
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => setAberto(false)}
+            className="absolute inset-0"
+            style={{ background: "rgba(0,0,0,0.7)" }}
+          />
+
+          <aside
+            className="absolute right-0 top-0 h-full overflow-y-auto"
+            style={{
+              width: 380,
+              background: "#0c0c0c",
+              borderLeft: "0.5px solid #1e1e1e",
+            }}
+          >
+            <div
+              className="sticky top-0"
+              style={{
+                background: "rgba(12,12,12,0.95)",
+                backdropFilter: "blur(6px)",
+                borderBottom: "0.5px solid #141414",
+                padding: "18px 24px",
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p
+                    style={{
+                      fontSize: 8,
+                      letterSpacing: "2px",
+                      color: "#242424",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {mes} · {ano}
+                  </p>
+                  <p
+                    className="font-serif italic"
+                    style={{
+                      fontSize: 18,
+                      color: "#e0e0e0",
+                      fontWeight: 300,
+                      marginTop: 4,
+                    }}
+                  >
+                    Comissão · {nome}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAberto(false)}
+                  style={{ color: "#484848", fontSize: 22, lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <form
+              action={(fd) => startTransition(() => onSubmit(fd))}
+              style={{ padding: 24 }}
+            >
+              <input type="hidden" name="colaborador" value={colaborador} />
+              <input type="hidden" name="mes" value={mes} />
+              <input type="hidden" name="ano" value={ano} />
+
+              <div className="space-y-4">
+                <CampoNumero
+                  label="Entregas válidas no mês"
+                  name="entregas_validas"
+                  value={entregas}
+                  onChange={setEntregas}
+                />
+                <CampoNumero
+                  label="Entregas descontadas (fora do prazo ou 3+ revisões)"
+                  name="entregas_descontadas"
+                  value={descontadas}
+                  onChange={setDescontadas}
+                />
+
+                <label className="block">
+                  <span
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: "1.5px",
+                      color: "#242424",
+                      textTransform: "uppercase",
+                      fontWeight: 400,
+                    }}
+                  >
+                    Observações
+                  </span>
+                  <textarea
+                    name="observacoes"
+                    rows={3}
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    className="font-mono"
+                    style={{
+                      marginTop: 8,
+                      width: "100%",
+                      background: "#111",
+                      border: "0.5px solid #1e1e1e",
+                      color: "#888",
+                      fontSize: 13,
+                      padding: "10px 14px",
+                      borderRadius: 4,
+                      outline: "none",
+                      fontWeight: 300,
+                    }}
+                    placeholder="..."
+                  />
+                </label>
+
+                <div
+                  style={{
+                    padding: "12px 0",
+                    borderTop: "0.5px solid #141414",
+                  }}
+                >
+                  <div className="flex items-baseline justify-between">
+                    <span
+                      style={{
+                        fontSize: 8,
+                        letterSpacing: "2px",
+                        color: "#202020",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Líquidas
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{
+                        fontSize: 13,
+                        color: "#e0e0e0",
+                        fontWeight: 300,
+                      }}
+                    >
+                      {liquidas}
+                    </span>
+                  </div>
+                  <div
+                    className="flex items-baseline justify-between"
+                    style={{ marginTop: 8 }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 8,
+                        letterSpacing: "2px",
+                        color: "#202020",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Prévia do bônus
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{
+                        fontSize: 20,
+                        color: "#C9953A",
+                        fontWeight: 300,
+                        letterSpacing: "-0.5px",
+                      }}
+                    >
+                      {formatBRL(bonusPreview)}
+                    </span>
+                  </div>
+                </div>
+
+                {erro && (
+                  <p style={{ color: "#e24b4a", fontSize: 11 }}>{erro}</p>
+                )}
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={pending || !supabaseOk}
+                    style={{
+                      flex: 1,
+                      background: "#C9953A",
+                      color: "#080808",
+                      padding: "10px 0",
+                      fontSize: 10,
+                      fontWeight: 500,
+                      letterSpacing: "1px",
+                      textTransform: "uppercase",
+                      borderRadius: 4,
+                      opacity: pending || !supabaseOk ? 0.5 : 1,
+                    }}
+                  >
+                    {pending ? "Salvando..." : "Salvar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAberto(false)}
+                    style={{
+                      background: "transparent",
+                      border: "0.5px solid #1e1e1e",
+                      color: "#242424",
+                      padding: "10px 16px",
+                      fontSize: 10,
+                      letterSpacing: "1px",
+                      textTransform: "uppercase",
+                      borderRadius: 4,
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </form>
+          </aside>
         </div>
-      </form>
+      )}
     </div>
+  )
+}
+
+function CampoNumero({
+  label,
+  name,
+  value,
+  onChange,
+}: {
+  label: string
+  name: string
+  value: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <label className="block">
+      <span
+        style={{
+          fontSize: 9,
+          letterSpacing: "1.5px",
+          color: "#242424",
+          textTransform: "uppercase",
+          fontWeight: 400,
+        }}
+      >
+        {label}
+      </span>
+      <input
+        type="number"
+        name={name}
+        min={0}
+        value={value}
+        onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
+        className="font-mono"
+        style={{
+          marginTop: 8,
+          width: "100%",
+          background: "#111",
+          border: "0.5px solid #1e1e1e",
+          color: "#888",
+          fontSize: 13,
+          padding: "10px 14px",
+          borderRadius: 4,
+          outline: "none",
+          fontWeight: 300,
+        }}
+      />
+    </label>
   )
 }

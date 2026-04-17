@@ -1,110 +1,115 @@
-import Link from "next/link"
 import { redirect } from "next/navigation"
 import Header from "@/components/Header"
-import SeletorMes from "@/components/SeletorMes"
-import CardMetrica from "@/components/CardMetrica"
+import SeletorPeriodo from "@/components/SeletorPeriodo"
+import StripMetricas from "@/components/StripMetricas"
+import SectionBar from "@/components/SectionBar"
 import CardEmpresa from "@/components/CardEmpresa"
 import { estaAutenticado } from "@/lib/auth"
 import {
-  MESES,
-  type Mes,
+  anoTemProjecao,
+  anoValido,
   empresas,
   formatBRL,
   formatNumero,
   getResumoGrupo,
+  mesValido,
 } from "@/lib/data"
 import { getDadosReaisDoMes } from "@/lib/dados-reais"
-
-function mesValido(m: string | undefined): Mes {
-  if (m && (MESES as readonly string[]).includes(m)) return m as Mes
-  return "Abril"
-}
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { mes?: string }
+  searchParams: { mes?: string; ano?: string }
 }) {
   if (!estaAutenticado()) {
     redirect("/login")
   }
 
   const mes = mesValido(searchParams?.mes)
-  const resumo = getResumoGrupo(mes)
-  const reaisDoMes = await getDadosReaisDoMes(mes)
+  const ano = anoValido(searchParams?.ano)
+  const temProjecao = anoTemProjecao(ano)
+  const resumo = getResumoGrupo(mes, ano)
+  const reaisDoMes = await getDadosReaisDoMes(mes, ano)
+
+  let somaFaturamentoReal = 0
+  let somaInvestimentoReal = 0
+  let somaLeadsReal = 0
+  let somaCriativosReal = 0
+  for (const d of reaisDoMes.values()) {
+    somaFaturamentoReal += d.faturamento_real ?? 0
+    somaInvestimentoReal += d.investimento_real ?? 0
+    somaLeadsReal += d.leads_real ?? 0
+    somaCriativosReal += d.criativos_entregues ?? 0
+  }
+
+  const celulas = temProjecao
+    ? [
+        {
+          rotulo: "Faturamento do grupo",
+          valor: formatBRL(resumo.faturamento),
+          destaque: true,
+        },
+        {
+          rotulo: "Total investido em ads",
+          valor: formatBRL(resumo.investimento),
+        },
+        { rotulo: "Total de leads", valor: formatNumero(resumo.leads) },
+        {
+          rotulo: "Criativos do mês",
+          valor: formatNumero(resumo.criativos),
+          hint: `${resumo.criativosSemana} por semana · grupo`,
+        },
+      ]
+    : [
+        {
+          rotulo: "Faturamento real do grupo",
+          valor: formatBRL(somaFaturamentoReal),
+          destaque: true,
+        },
+        {
+          rotulo: "Investimento real",
+          valor: formatBRL(somaInvestimentoReal),
+        },
+        { rotulo: "Leads reais", valor: formatNumero(somaLeadsReal) },
+        {
+          rotulo: "Criativos entregues",
+          valor: formatNumero(somaCriativosReal),
+        },
+      ]
 
   return (
     <>
       <Header>
-        <SeletorMes mesAtual={mes} />
+        <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
       </Header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-medium tracking-tight text-white">
-              Visão geral do grupo
-            </h1>
-            <p className="text-sm text-neutral-500 mt-1">
-              {mes} de 2025 · 6 empresas
-            </p>
-          </div>
-          <Link
-            href={`/dashboard/comissionamento?mes=${mes}`}
-            className="text-xs uppercase tracking-widest text-gold hover:brightness-110 border border-gold/40 rounded-lg px-4 py-2"
-          >
-            Comissionamento do time →
-          </Link>
+      <StripMetricas celulas={celulas} />
+
+      <SectionBar titulo="Empresas" hint="Clique para detalhar" />
+
+      <main
+        style={{
+          background: "#090909",
+          padding: "16px 24px",
+        }}
+      >
+        <div
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+          style={{ gap: 10 }}
+        >
+          {empresas.map((empresa) => (
+            <CardEmpresa
+              key={empresa.slug}
+              empresa={empresa}
+              mes={mes}
+              ano={ano}
+              faturamentoReal={
+                reaisDoMes.get(empresa.db)?.faturamento_real ?? null
+              }
+            />
+          ))}
         </div>
-
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-          <CardMetrica
-            titulo="Faturamento do Grupo"
-            valor={formatBRL(resumo.faturamento)}
-          />
-          <CardMetrica
-            titulo="Total Investido em Ads"
-            valor={formatBRL(resumo.investimento)}
-          />
-          <CardMetrica
-            titulo="Total de Leads"
-            valor={formatNumero(resumo.leads)}
-          />
-          <CardMetrica
-            titulo="Criativos do mês"
-            valor={formatNumero(resumo.criativos)}
-            hint={`${resumo.criativosSemana}/semana no grupo`}
-          />
-        </section>
-
-        <section>
-          <div className="flex items-baseline justify-between mb-4">
-            <h2 className="text-lg font-medium text-white">Empresas</h2>
-            <p className="text-xs uppercase tracking-widest text-neutral-500">
-              Clique para detalhar
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {empresas.map((empresa) => (
-              <CardEmpresa
-                key={empresa.slug}
-                empresa={empresa}
-                mes={mes}
-                faturamentoReal={
-                  reaisDoMes.get(empresa.db)?.faturamento_real ?? null
-                }
-              />
-            ))}
-          </div>
-        </section>
       </main>
-
-      <footer className="max-w-7xl mx-auto px-6 py-10 text-center">
-        <p className="text-[11px] uppercase tracking-widest text-neutral-700">
-          Anômalo Hub · {new Date().getFullYear()}
-        </p>
-      </footer>
     </>
   )
 }
