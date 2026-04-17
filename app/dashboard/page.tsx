@@ -13,7 +13,7 @@ import {
   formatNumero,
   getResumoGrupo,
 } from "@/lib/data"
-import { getMesesComDadosReais } from "@/lib/dados-reais"
+import { getDadosReaisDoMes } from "@/lib/dados-reais"
 
 function mesValido(m: string | undefined): Mes {
   if (m && (MESES as readonly string[]).includes(m)) return m as Mes
@@ -31,7 +31,7 @@ export default async function DashboardPage({
 
   const mes = mesValido(searchParams?.mes)
   const resumo = getResumoGrupo(mes)
-  const mesesReais = await getMesesComDadosReais()
+  const reaisDoMes = await getDadosReaisDoMes(mes)
 
   return (
     <>
@@ -91,7 +91,9 @@ export default async function DashboardPage({
                 key={empresa.slug}
                 empresa={empresa}
                 mes={mes}
-                temDadosReais={mesesReais.has(`${empresa.db}:${mes}`)}
+                faturamentoReal={
+                  reaisDoMes.get(empresa.db)?.faturamento_real ?? null
+                }
               />
             ))}
           </div>

@@ -78,6 +78,28 @@ export async function getDadosReaisMes(
   return (data ?? null) as DadosReais | null
 }
 
+export async function getDadosReaisDoMes(
+  mes: Mes,
+  ano: number = ANO_PADRAO
+): Promise<Map<string, DadosReais>> {
+  const supabase = getSupabase()
+  if (!supabase) return new Map()
+  const { data, error } = await supabase
+    .from("dados_reais")
+    .select("*")
+    .eq("mes", mes)
+    .eq("ano", ano)
+  if (error) {
+    console.error("[dados_reais] getDoMes error", error.message)
+    return new Map()
+  }
+  const map = new Map<string, DadosReais>()
+  for (const d of (data ?? []) as DadosReais[]) {
+    map.set(d.empresa, d)
+  }
+  return map
+}
+
 export async function getMesesComDadosReais(
   ano: number = ANO_PADRAO
 ): Promise<Set<string>> {

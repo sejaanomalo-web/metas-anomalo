@@ -463,6 +463,53 @@ export function getFunilCompleto(slug: EmpresaSlug, mes: Mes): EtapaFunil[] {
   return []
 }
 
+export const SUBTITULO_EMPRESA: Record<EmpresaSlug, string> = {
+  "a2-marketing": "Agência de Marketing",
+  "f2-sports": "Marketing Esportivo",
+  "f2-moveis": "Mobiliário",
+  "hato": "Direto + Influenciadores",
+  "aton": "Estofados sob Medida",
+  "diego-knebel": "Receita Hub",
+}
+
+const MES_NUM: Record<Mes, number> = {
+  Abril: 4,
+  Maio: 5,
+  Junho: 6,
+  Julho: 7,
+  Agosto: 8,
+  Setembro: 9,
+  Outubro: 10,
+  Novembro: 11,
+  Dezembro: 12,
+}
+
+export function diasNoMes(mes: Mes, ano: number = ANO_PADRAO): number {
+  return new Date(ano, MES_NUM[mes], 0).getDate()
+}
+
+export function metaAcumuladaAteHoje(
+  metaMes: number,
+  mes: Mes,
+  ano: number = ANO_PADRAO,
+  hoje: Date = new Date()
+): number {
+  const totalDias = diasNoMes(mes, ano)
+  const diaria = metaMes / totalDias
+  const mesNum = MES_NUM[mes]
+  const hojeAno = hoje.getFullYear()
+  const hojeMes = hoje.getMonth() + 1
+  const hojeDia = hoje.getDate()
+
+  if (ano < hojeAno || (ano === hojeAno && mesNum < hojeMes)) {
+    return metaMes
+  }
+  if (ano === hojeAno && mesNum === hojeMes) {
+    return Math.min(metaMes, diaria * hojeDia)
+  }
+  return 0
+}
+
 export function formatBRL(valor: number): string {
   return valor.toLocaleString("pt-BR", {
     style: "currency",
