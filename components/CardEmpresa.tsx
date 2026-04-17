@@ -21,7 +21,7 @@ export default function CardEmpresa({
 }) {
   const investimento = getVerbaMes(empresa.slug, mes)
   const meta = getFaturamentoMes(empresa.slug, mes)
-  const indisponivel = meta === 0 && investimento === 0
+  const inativa = meta === 0 && investimento === 0
 
   const metaAcumulada = metaAcumuladaAteHoje(meta, mes, ANO_PADRAO)
   const temReal = typeof faturamentoReal === "number" && faturamentoReal > 0
@@ -37,22 +37,52 @@ export default function CardEmpresa({
       ? Math.min(100, Math.round((faturamentoReal / meta) * 100))
       : 0
 
+  const textoRodape = inativa
+    ? `Sem dados neste mês${
+        empresa.inicioEm ? ` — início em ${empresa.inicioEm}` : ""
+      }`
+    : temReal
+    ? `${progressoPct}% da meta de ${mes} atingida`
+    : "Nenhum dado inserido"
+
   return (
     <Link
       href={`/dashboard/${empresa.slug}?mes=${mes}`}
-      className="card p-5 flex flex-col gap-5 hover:shadow-gold transition"
+      className="block transition hover:brightness-110"
+      style={{
+        background: "#111111",
+        border: "0.5px solid #1e1e1e",
+        borderLeft: `2px solid ${inativa ? "#1e1e1e" : "#C9953A"}`,
+        borderRadius: 10,
+        padding: "16px 16px 16px 20px",
+        opacity: inativa ? 0.5 : 1,
+      }}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-medium text-white">{empresa.nome}</h3>
-          <p className="text-xs text-neutral-500 mt-0.5">
+          <h3
+            style={{
+              fontSize: 14,
+              fontWeight: 500,
+              color: "#ffffff",
+              lineHeight: 1.2,
+            }}
+          >
+            {empresa.nome}
+          </h3>
+          <p style={{ fontSize: 10, color: "#444", marginTop: 4 }}>
             {SUBTITULO_EMPRESA[empresa.slug]}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <span
-            className="h-2 w-2 rounded-full"
-            style={{ background: corBolinha }}
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: corBolinha,
+              display: "inline-block",
+            }}
             title={
               !temReal
                 ? "Sem faturamento real inserido"
@@ -61,63 +91,94 @@ export default function CardEmpresa({
                 : "Abaixo da meta acumulada"
             }
           />
-          <span className="text-[10px] uppercase tracking-widest text-gold">
+          <span
+            style={{
+              fontSize: 10,
+              color: "#C9953A",
+              letterSpacing: "1px",
+              textTransform: "uppercase",
+            }}
+          >
             {mes}
           </span>
         </div>
       </div>
 
-      {indisponivel ? (
-        <p className="text-sm text-neutral-500">
-          Sem dados neste mês
-          {empresa.inicioEm ? ` — início em ${empresa.inicioEm}` : ""}.
-        </p>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-[10px] uppercase tracking-widest text-neutral-500">
-                Invest.
-              </p>
-              <p className="mt-1 text-base font-medium text-white">
-                {formatBRL(investimento)}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-widest text-neutral-500">
-                Faturamento
-              </p>
-              <p className="mt-1 text-base font-medium text-white">
-                {formatBRL(meta)}
-              </p>
-            </div>
-          </div>
+      <div
+        className="grid grid-cols-2 gap-2"
+        style={{ marginTop: 16 }}
+      >
+        <BlocoMetrica rotulo="Investimento" valor={formatBRL(investimento)} />
+        <BlocoMetrica
+          rotulo="Faturamento"
+          valor={formatBRL(meta)}
+          destaque
+        />
+      </div>
 
-          <div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-[10px] uppercase tracking-widest text-neutral-500">
-                Meta do mês
-              </span>
-              <span className="text-sm font-medium text-gold">
-                {formatBRL(meta)}
-              </span>
-            </div>
-            <div className="mt-2 h-1.5 rounded-full bg-neutral-900 overflow-hidden">
-              <div
-                className="h-full gold-gradient"
-                style={{ width: `${progressoPct}%` }}
-              />
-            </div>
-            <p className="mt-1.5 text-[11px] text-neutral-500">
-              {temReal
-                ? `${progressoPct}% da meta de ${mes} atingida (${formatBRL(
-                    faturamentoReal
-                  )} de ${formatBRL(meta)})`
-                : `Nenhum dado inserido para ${mes}`}
-            </p>
-          </div>
-        </>
-      )}
+      <div style={{ marginTop: 16 }}>
+        <div
+          style={{
+            height: 2,
+            background: "#1a1a1a",
+            borderRadius: 2,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${progressoPct}%`,
+              background: "#C9953A",
+            }}
+          />
+        </div>
+        <p style={{ fontSize: 10, color: "#444", marginTop: 8 }}>
+          {textoRodape}
+        </p>
+      </div>
     </Link>
+  )
+}
+
+function BlocoMetrica({
+  rotulo,
+  valor,
+  destaque,
+}: {
+  rotulo: string
+  valor: string
+  destaque?: boolean
+}) {
+  return (
+    <div
+      style={{
+        background: "#0d0d0d",
+        borderRadius: 6,
+        padding: "10px 12px",
+      }}
+    >
+      <p
+        style={{
+          fontSize: 9,
+          color: "#444",
+          letterSpacing: "1px",
+          textTransform: "uppercase",
+        }}
+      >
+        {rotulo}
+      </p>
+      <p
+        style={{
+          fontSize: 18,
+          fontWeight: 500,
+          color: destaque ? "#C9953A" : "#ffffff",
+          marginTop: 4,
+          lineHeight: 1.1,
+        }}
+      >
+        {valor}
+      </p>
+    </div>
   )
 }
