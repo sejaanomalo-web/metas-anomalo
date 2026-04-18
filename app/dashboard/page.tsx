@@ -71,7 +71,7 @@ export default async function DashboardPage({
   const celulas: Celula[] = [
     {
       rotulo: "Faturamento do Hub",
-      real: temFat ? formatBRL(somaFat) : "—",
+      real: formatBRL(somaFat),
       meta: resumo.faturamento,
       metaLabel: formatBRL(resumo.faturamento),
       temReal: temFat,
@@ -80,7 +80,7 @@ export default async function DashboardPage({
     },
     {
       rotulo: "Total investido em ads",
-      real: temInv ? formatBRL(somaInv) : "—",
+      real: formatBRL(somaInv),
       meta: resumo.investimento,
       metaLabel: formatBRL(resumo.investimento),
       temReal: temInv,
@@ -89,7 +89,7 @@ export default async function DashboardPage({
     },
     {
       rotulo: "Total de leads",
-      real: temLeads ? formatNumero(somaLeads) : "—",
+      real: formatNumero(somaLeads),
       meta: resumo.leads,
       metaLabel: formatNumero(resumo.leads),
       temReal: temLeads,
@@ -98,7 +98,7 @@ export default async function DashboardPage({
     },
     {
       rotulo: "Criativos do mês",
-      real: temCri ? formatNumero(somaCri) : "—",
+      real: formatNumero(somaCri),
       meta: resumo.criativos,
       metaLabel: formatNumero(resumo.criativos),
       temReal: temCri,
@@ -247,7 +247,7 @@ export default async function DashboardPage({
                       textAlign: "right",
                     }}
                   >
-                    {c.temReal ? `${pct}%` : "—"}
+                    {pct}%
                   </span>
                 </div>
               </div>

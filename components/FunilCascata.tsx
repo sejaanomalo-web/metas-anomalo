@@ -107,7 +107,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
                     fontWeight: 500,
                   }}
                 >
-                  Estimado
+                  Meta
                 </span>
                 <span
                   style={{
