@@ -9,6 +9,7 @@ import {
   supabaseConfigurado,
 } from "./supabase"
 import { ANO_PADRAO, type Mes, MESES } from "./data"
+import { ESCALA_PADRAO, GATILHOS_PADRAO } from "./comissionamento-presets"
 
 export interface ResultadoConfig {
   ok: boolean
@@ -158,6 +159,9 @@ export async function salvarColaboradorAction(
   const funcao = String(formData.get("funcao") ?? "").trim()
   const tipoRaw = String(formData.get("tipo") ?? "")
   const configuracaoRaw = String(formData.get("configuracao_padrao") ?? "")
+  const mes = String(formData.get("mes") ?? "").trim()
+  const anoRaw = String(formData.get("ano") ?? "")
+  const ano = parseInt(anoRaw, 10) || new Date().getFullYear()
   const configuracao = parseConfiguracao(configuracaoRaw)
 
   if (!nome || !funcao) {
@@ -186,6 +190,29 @@ export async function salvarColaboradorAction(
     console.error("[colaboradores] insert error", error.message)
     return { ok: false, erro: error.message }
   }
+
+  // Cria bloco de comissionamento para o mês atual se ainda não existir.
+  if (mes) {
+    const presetConfig: ConfiguracaoComissao =
+      tipoRaw === "escala" ? ESCALA_PADRAO : GATILHOS_PADRAO
+    const presetPayload: MetaComissionamento = {
+      colaborador: nome.toLowerCase(),
+      mes,
+      ano,
+      configuracao: presetConfig,
+      updated_at: new Date().toISOString(),
+    }
+    const { error: erroMeta } = await supabase
+      .from("metas_comissionamento")
+      .upsert(presetPayload, {
+        onConflict: "colaborador,mes,ano",
+        ignoreDuplicates: true,
+      })
+    if (erroMeta) {
+      console.error("[metas_comissionamento] preset error", erroMeta.message)
+    }
+  }
+
   revalidatePath("/dashboard/comissionamento")
   return { ok: true }
 }

@@ -5,6 +5,7 @@ import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CardFelipe from "@/components/CardFelipe"
 import CardEditor from "@/components/CardEditor"
 import DrawerEdicaoComissao from "@/components/DrawerEdicaoComissao"
+import CardColaboradorDinamico from "@/components/CardColaboradorDinamico"
 import { estaAutenticado } from "@/lib/auth"
 import { anoValido, formatBRL, mesValido } from "@/lib/data"
 import { getComissionamentoMes } from "@/lib/comissionamento-actions"
@@ -233,6 +234,24 @@ export default async function ComissionamentoPage({
             existente={emanuel}
             supabaseOk={supabaseOk}
           />
+          {colaboradoresExtras.map((c) => {
+            const chave = c.nome.toLowerCase()
+            const meta = metasEditaveis.get(chave)
+            const config = meta?.configuracao ?? c.configuracao_padrao
+            const existente =
+              registros.find((r) => r.colaborador === chave) ?? null
+            return (
+              <CardColaboradorDinamico
+                key={c.id}
+                colaborador={c}
+                configuracao={config}
+                existente={existente}
+                mes={mes}
+                ano={ano}
+                supabaseOk={supabaseOk}
+              />
+            )
+          })}
         </section>
       </main>
 

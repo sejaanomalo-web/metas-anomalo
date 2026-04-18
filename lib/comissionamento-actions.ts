@@ -32,6 +32,12 @@ function colaboradorValido(c: string): c is Colaborador {
   return COLABORADORES.includes(c as Colaborador)
 }
 
+// Aceita felipe/vinicius/emanuel (tipos legados com cálculo embutido)
+// ou qualquer nome livre vindo da tabela colaboradores.
+function colaboradorValidoGenerico(c: string): boolean {
+  return /^[a-z0-9-_çáàâãéèêíïóôõöúñ ]+$/i.test(c) && c.length > 0
+}
+
 export async function getComissionamentoMes(
   mes: Mes,
   ano: number = ANO_PADRAO
@@ -69,7 +75,7 @@ export async function salvarComissaoAction(
   const mes = String(formData.get("mes") ?? "")
   const ano = parseInt0(formData.get("ano")) ?? ANO_PADRAO
 
-  if (!colaboradorValido(colaborador) || !mesValido(mes)) {
+  if (!mesValido(mes) || !colaboradorValidoGenerico(colaborador)) {
     return { ok: false, erro: "Colaborador ou mês inválidos." }
   }
 
@@ -84,12 +90,47 @@ export async function salvarComissaoAction(
     }
     detalhes = flags
     bonus_calculado = calcularBonusFelipe(flags)
-  } else {
+  } else if (colaborador === "vinicius") {
     entregas_validas = parseInt0(formData.get("entregas_validas")) ?? 0
-    bonus_calculado =
-      colaborador === "vinicius"
-        ? calcularBonusVinicius(entregas_validas)
-        : calcularBonusEmanuel(entregas_validas)
+    bonus_calculado = calcularBonusVinicius(entregas_validas)
+  } else if (colaborador === "emanuel") {
+    entregas_validas = parseInt0(formData.get("entregas_validas")) ?? 0
+    bonus_calculado = calcularBonusEmanuel(entregas_validas)
+  } else {
+    // Colaborador dinâmico: busca a config em metas_comissionamento e
+    // calcula baseado em tipo escala/gatilhos.
+    const supabase = getSupabase()
+    if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+    const { data: meta } = await supabase
+      .from("metas_comissionamento")
+      .select("configuracao")
+      .eq("colaborador", colaborador)
+      .eq("mes", mes)
+      .eq("ano", ano)
+      .maybeSingle()
+    const config = meta?.configuracao as
+      | { tipo: "escala"; faixas: { minimo: number; bonus: number }[] }
+      | { tipo: "gatilhos"; gatilhos: { chave: string; valor: number }[] }
+      | undefined
+    if (config?.tipo === "gatilhos") {
+      const flags: Record<string, boolean> = {}
+      for (const g of config.gatilhos) {
+        flags[g.chave] = formData.get(g.chave) === "on"
+      }
+      detalhes = flags
+      bonus_calculado = config.gatilhos.reduce(
+        (acc, g) => acc + (flags[g.chave] ? g.valor : 0),
+        0
+      )
+    } else if (config?.tipo === "escala") {
+      entregas_validas = parseInt0(formData.get("entregas_validas")) ?? 0
+      const ordenado = [...config.faixas].sort((a, b) => a.minimo - b.minimo)
+      let bonus = 0
+      for (const f of ordenado) {
+        if (entregas_validas >= f.minimo) bonus = f.bonus
+      }
+      bonus_calculado = bonus
+    }
   }
 
   const payload: Comissionamento = {

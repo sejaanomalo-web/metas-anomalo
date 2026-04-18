@@ -19,7 +19,9 @@ export interface DadosReais {
 
 export interface Comissionamento {
   id?: string
-  colaborador: "felipe" | "vinicius" | "emanuel"
+  // Fixos historicamente: felipe/vinicius/emanuel. Agora aceita qualquer
+  // nome vindo da tabela colaboradores (lowercased).
+  colaborador: string
   mes: string
   ano: number
   entregas_validas: number | null

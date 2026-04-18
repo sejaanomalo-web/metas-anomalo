@@ -159,6 +159,8 @@ export default function DrawerEdicaoComissao({
               )}
               {aba === "pessoas" && (
                 <AbaPessoas
+                  mes={mes}
+                  ano={ano}
                   supabaseOk={supabaseOk}
                   colaboradores={colaboradores}
                   colaboradoresInativos={colaboradoresInativos}
@@ -1002,10 +1004,14 @@ function EditorEscala({
 type ModoForm = "novo" | "editando"
 
 function AbaPessoas({
+  mes,
+  ano,
   supabaseOk,
   colaboradores,
   colaboradoresInativos,
 }: {
+  mes: Mes
+  ano: number
   supabaseOk: boolean
   colaboradores: Colaborador[]
   colaboradoresInativos: Colaborador[]
@@ -1023,6 +1029,10 @@ function AbaPessoas({
   const [inativosAbertos, setInativosAbertos] = useState(false)
   const [pending, startTransition] = useTransition()
   const [status, setStatus] = useState<string | null>(null)
+  const [criacao, setCriacao] = useState<{
+    nome: string
+    tipo: "escala" | "gatilhos"
+  } | null>(null)
   const router = useRouter()
 
   function limparFormulario() {
@@ -1063,6 +1073,8 @@ function AbaPessoas({
     fd.set("funcao", funcao)
     fd.set("tipo", tipo)
     fd.set("configuracao_padrao", JSON.stringify(configuracao))
+    fd.set("mes", mes)
+    fd.set("ano", String(ano))
     if (modo === "editando" && editingId) {
       fd.set("id", editingId)
       const r = await atualizarColaboradorAction(fd)
@@ -1074,9 +1086,12 @@ function AbaPessoas({
         setStatus(r.erro ?? "Erro")
       }
     } else {
+      const nomeSalvo = nome
+      const tipoSalvo = tipo
       const r = await salvarColaboradorAction(fd)
       if (r.ok) {
-        setStatus("Salvo ✓")
+        setCriacao({ nome: nomeSalvo, tipo: tipoSalvo })
+        setTimeout(() => setCriacao(null), 4000)
         limparFormulario()
         router.refresh()
       } else {
@@ -1118,6 +1133,29 @@ function AbaPessoas({
 
   return (
     <div className="space-y-6">
+      {criacao && (
+        <div
+          style={{
+            background: "rgba(76,175,80,0.08)",
+            border: "0.5px solid rgba(76,175,80,0.2)",
+            borderRadius: 8,
+            padding: "12px 14px",
+            color: "rgba(255,255,255,0.6)",
+            fontSize: 11,
+            fontWeight: 400,
+          }}
+        >
+          <p style={{ color: "#4caf50", marginBottom: 4 }}>
+            ✓ {criacao.nome} adicionado ao time
+          </p>
+          <p>
+            Bloco de comissionamento criado com metas padrão para{" "}
+            {criacao.tipo === "escala" ? "escala de entregas" : "gatilhos"}.
+            Você pode editar as metas a qualquer momento.
+          </p>
+        </div>
+      )}
+
       <div
         style={{
           border: "0.5px solid rgba(255,255,255,0.08)",

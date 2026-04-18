@@ -114,6 +114,11 @@ create policy comissionamento_all
 alter table public.dados_reais
   add column if not exists clientes_ativos int;
 
+-- Afrouxa a constraint de colaborador em comissionamento para aceitar
+-- nomes livres cadastrados pelo drawer de Pessoas.
+alter table public.comissionamento
+  drop constraint if exists comissionamento_colaborador_check;
+
 create table if not exists public.configuracoes (
   id uuid primary key default gen_random_uuid(),
   chave text not null unique,
