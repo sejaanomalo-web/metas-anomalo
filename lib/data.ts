@@ -139,6 +139,9 @@ export const f2Sports: LinhaPadrao[] = [
 ]
 
 export const f2Moveis: LinhaPadrao[] = [
+  { mes: "Abril",    verba: 100, criativos: 20, criativos_semana: 5, leads: 5,  reunioes: 1, contratos: 0, clientes: 0, ticket: 2000, faturamento: 0     },
+  { mes: "Maio",     verba: 150, criativos: 20, criativos_semana: 5, leads: 7,  reunioes: 1, contratos: 1, clientes: 1, ticket: 2000, faturamento: 2000  },
+  { mes: "Junho",    verba: 200, criativos: 20, criativos_semana: 5, leads: 10, reunioes: 1, contratos: 1, clientes: 1, ticket: 2000, faturamento: 2000  },
   { mes: "Julho",    verba: 200, criativos: 20, criativos_semana: 5, leads: 10, reunioes: 1, contratos: 1, clientes: 1, ticket: 2000, faturamento: 2000  },
   { mes: "Agosto",   verba: 250, criativos: 20, criativos_semana: 5, leads: 12, reunioes: 1, contratos: 1, clientes: 2, ticket: 2000, faturamento: 4000  },
   { mes: "Setembro", verba: 300, criativos: 20, criativos_semana: 5, leads: 15, reunioes: 2, contratos: 1, clientes: 3, ticket: 2000, faturamento: 6000  },
@@ -207,7 +210,6 @@ export const empresas: EmpresaMeta[] = [
     db: "f2_moveis",
     nome: "F2 Móveis",
     tipo: "leads-reunioes-contratos",
-    inicioEm: "Julho",
     cpl: 20,
     conversaoLeadReuniao: 0.1,
     conversaoReuniaoFechamento: 0.6,

@@ -282,41 +282,61 @@ export default function CenarioReal({
             invest. ÷ contratos
           </p>
         </div>
-      </div>
 
-      {dados?.criativos_entregues !== null &&
-        dados?.criativos_entregues !== undefined && (
-          <div
-            className="glass"
+        <div
+          className="glass"
+          style={{ padding: "14px 16px", borderRadius: 12 }}
+        >
+          <p
             style={{
-              marginTop: 10,
-              padding: "12px 16px",
-              borderRadius: 12,
+              fontSize: 9,
+              letterSpacing: "2px",
+              color: "rgba(255,255,255,0.35)",
+              textTransform: "uppercase",
+              fontWeight: 500,
             }}
           >
+            Criativos Entregues
+          </p>
+          {dados?.criativos_entregues !== null &&
+          dados?.criativos_entregues !== undefined ? (
             <p
               style={{
-                fontSize: 9,
-                letterSpacing: "2px",
-                color: "rgba(255,255,255,0.35)",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}
-            >
-              Criativos entregues
-            </p>
-            <p
-              style={{
-                fontSize: 17,
+                fontSize: 22,
                 color: "#ffffff",
                 fontWeight: 600,
-                marginTop: 4,
+                marginTop: 6,
+                lineHeight: 1.1,
+                letterSpacing: "-0.3px",
               }}
             >
               {formatNumero(dados.criativos_entregues)}
             </p>
-          </div>
-        )}
+          ) : (
+            <p
+              style={{
+                fontSize: 13,
+                color: "rgba(255,255,255,0.18)",
+                fontStyle: "italic",
+                fontWeight: 300,
+                marginTop: 8,
+              }}
+            >
+              Não inserido
+            </p>
+          )}
+          <p
+            style={{
+              fontSize: 11,
+              color: "rgba(255,255,255,0.2)",
+              fontWeight: 400,
+              marginTop: 6,
+            }}
+          >
+            entregues no mês
+          </p>
+        </div>
+      </div>
 
       {dados?.observacoes && (
         <div
