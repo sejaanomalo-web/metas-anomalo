@@ -100,6 +100,26 @@ export async function getDadosReaisDoMes(
   return map
 }
 
+export async function getMesesComDadosReais(
+  ano: number = ANO_PADRAO
+): Promise<Set<string>> {
+  const supabase = getSupabase()
+  if (!supabase) return new Set()
+  const { data, error } = await supabase
+    .from("dados_reais")
+    .select("empresa, mes")
+    .eq("ano", ano)
+  if (error) {
+    console.error("[dados_reais] getMesesComDados error", error.message)
+    return new Set()
+  }
+  const s = new Set<string>()
+  for (const d of data ?? []) {
+    s.add(`${d.empresa}:${d.mes}`)
+  }
+  return s
+}
+
 export interface ResultadoSalvar {
   ok: boolean
   erro?: string

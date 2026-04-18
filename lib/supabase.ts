@@ -22,10 +22,8 @@ export interface Comissionamento {
   mes: string
   ano: number
   entregas_validas: number | null
-  entregas_descontadas: number | null
   bonus_calculado: number
-  gatilhos_atingidos: Record<string, boolean> | null
-  observacoes: string | null
+  detalhes: Record<string, boolean> | null
   updated_at?: string
 }
 

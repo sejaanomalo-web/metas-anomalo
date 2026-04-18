@@ -1,65 +1,36 @@
+import Image from "next/image"
 import Link from "next/link"
+import logo from "@/public/logo-anomalo.png"
 import { sairAction } from "@/app/login/actions"
-import NavTabs from "./NavTabs"
 
 export default function Header({ children }: { children?: React.ReactNode }) {
   return (
-    <header
-      className="sticky top-0 z-20"
-      style={{
-        background: "#0a0a0a",
-        borderBottom: "0.5px solid #141414",
-        height: 58,
-      }}
-    >
-      <div className="h-full px-6 flex items-center justify-between gap-6">
+    <header className="border-b border-gold/20 bg-bg/90 backdrop-blur sticky top-0 z-20">
+      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
         <Link href="/dashboard" className="flex items-center gap-3">
-          <span
-            style={{
-              fontSize: 20,
-              color: "#C9953A",
-              lineHeight: 1,
-              fontWeight: 500,
-            }}
-          >
-            Λ
-          </span>
-          <div className="leading-tight">
-            <p
-              style={{
-                fontSize: 14,
-                letterSpacing: "0.5px",
-                color: "#fff",
-                fontWeight: 500,
-              }}
-            >
-              ANÔMALO HUB
+          <Image
+            src={logo}
+            alt="Anômalo Hub"
+            height={32}
+            style={{ height: 32, width: "auto" }}
+            priority
+          />
+          <div className="hidden sm:block">
+            <p className="text-sm tracking-widest text-gold uppercase font-medium">
+              Anômalo Hub
             </p>
-            <p
-              style={{
-                fontSize: 12,
-                color: "#666",
-                fontWeight: 400,
-              }}
-            >
+            <p className="text-xs text-neutral-500 -mt-0.5">
               Painel de Metas
             </p>
           </div>
         </Link>
 
-        <NavTabs />
-
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {children}
           <form action={sairAction}>
             <button
               type="submit"
-              style={{
-                fontSize: 11,
-                color: "#666",
-                fontWeight: 400,
-              }}
-              className="hover:text-[#C9953A] transition"
+              className="text-xs uppercase tracking-widest text-neutral-500 hover:text-gold transition"
             >
               Sair
             </button>

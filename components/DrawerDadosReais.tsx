@@ -4,12 +4,12 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { salvarDadosReaisAction } from "@/lib/dados-reais"
 import type { DadosReais } from "@/lib/supabase"
-import type { Ano, EmpresaDb, Mes } from "@/lib/data"
+import type { EmpresaDb, Mes } from "@/lib/data"
 
 interface Props {
   empresa: EmpresaDb
   mes: Mes
-  ano: Ano
+  ano: number
   supabaseOk: boolean
   tipoEmpresa: "leads-reunioes-contratos" | "hato" | "aton" | "diego"
   existentes: DadosReais | null
@@ -56,16 +56,7 @@ export default function DrawerDadosReais({
       <button
         type="button"
         onClick={() => setAberto(true)}
-        style={{
-          background: "transparent",
-          border: "0.5px solid #C9953A",
-          color: "#C9953A",
-          fontSize: 12,
-          padding: "8px 16px",
-          borderRadius: 4,
-          fontWeight: 400,
-        }}
-        className="hover:bg-[#C9953A] hover:text-[#080808] transition"
+        className="text-xs uppercase tracking-widest gold-gradient text-black font-medium rounded-lg px-4 py-2 hover:brightness-110"
       >
         Inserir dados reais
       </button>
@@ -76,198 +67,113 @@ export default function DrawerDadosReais({
             type="button"
             aria-label="Fechar"
             onClick={() => setAberto(false)}
-            className="absolute inset-0"
-            style={{ background: "rgba(0,0,0,0.7)" }}
+            className="absolute inset-0 bg-black/70"
           />
 
-          <aside
-            className="absolute right-0 top-0 h-full overflow-y-auto"
-            style={{
-              width: 400,
-              background: "#0c0c0c",
-              borderLeft: "0.5px solid #1e1e1e",
-            }}
-          >
-            <div
-              className="sticky top-0"
-              style={{
-                background: "rgba(12,12,12,0.95)",
-                backdropFilter: "blur(6px)",
-                borderBottom: "0.5px solid #141414",
-                padding: "20px 24px",
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p
-                    style={{
-                      fontSize: 11,
-                      letterSpacing: "1px",
-                      color: "#666",
-                      textTransform: "uppercase",
-                      fontWeight: 400,
-                    }}
-                  >
-                    {mes} · {ano}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 16,
-                      color: "#fff",
-                      fontWeight: 500,
-                      marginTop: 6,
-                    }}
-                  >
-                    Dados reais
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAberto(false)}
-                  style={{ color: "#666", fontSize: 22, lineHeight: 1 }}
-                  className="hover:text-[#fff] transition"
-                >
-                  ×
-                </button>
+          <aside className="absolute right-0 top-0 h-full w-full max-w-md bg-surface border-l border-gold/30 shadow-2xl overflow-y-auto">
+            <div className="sticky top-0 bg-surface/95 backdrop-blur border-b border-neutral-900 px-6 py-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-neutral-500">
+                  Dados reais · {mes} {ano}
+                </p>
+                <p className="text-sm font-medium text-white">{empresa}</p>
               </div>
+              <button
+                type="button"
+                onClick={() => setAberto(false)}
+                className="text-neutral-500 hover:text-white text-xl leading-none"
+              >
+                ×
+              </button>
             </div>
 
             {!supabaseOk && (
-              <div
-                style={{
-                  margin: "18px 24px 0",
-                  padding: 12,
-                  border: "0.5px solid #5a1e1e",
-                  background: "#1a0a0a",
-                  color: "#e24b4a",
-                  fontSize: 12,
-                  fontWeight: 400,
-                }}
-              >
-                Supabase não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e
-                NEXT_PUBLIC_SUPABASE_ANON_KEY no Vercel.
+              <div className="mx-6 mt-4 p-3 rounded-lg border border-red-900/60 bg-red-950/40 text-sm text-red-300">
+                Supabase não configurado. Defina as variáveis
+                NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no
+                Vercel para salvar dados reais.
               </div>
             )}
 
             <form
               action={(fd) => startTransition(() => onSubmit(fd))}
-              style={{ padding: 24 }}
+              className="p-6 space-y-4"
             >
               <input type="hidden" name="empresa" value={empresa} />
               <input type="hidden" name="mes" value={mes} />
               <input type="hidden" name="ano" value={ano} />
 
-              <div className="space-y-4">
-                <Campo
-                  label="Investimento real (R$)"
-                  name="investimento_real"
-                  tipo="number"
-                  step="0.01"
-                  defaultValue={existentes?.investimento_real ?? ""}
-                />
-                <Campo
-                  label="Leads reais"
-                  name="leads_real"
-                  tipo="number"
-                  defaultValue={existentes?.leads_real ?? ""}
-                />
-                <Campo
-                  label={rotuloReunioes}
-                  name="reunioes_real"
-                  tipo="number"
-                  defaultValue={existentes?.reunioes_real ?? ""}
-                />
-                <Campo
-                  label={rotuloContratos}
-                  name="contratos_real"
-                  tipo="number"
-                  defaultValue={existentes?.contratos_real ?? ""}
-                />
-                <Campo
-                  label="Faturamento real (R$)"
-                  name="faturamento_real"
-                  tipo="number"
-                  step="0.01"
-                  defaultValue={existentes?.faturamento_real ?? ""}
-                />
-                <Campo
-                  label="Criativos entregues"
-                  name="criativos_entregues"
-                  tipo="number"
-                  defaultValue={existentes?.criativos_entregues ?? ""}
-                />
+              <Campo
+                label="Investimento real (R$)"
+                name="investimento_real"
+                tipo="number"
+                step="0.01"
+                defaultValue={existentes?.investimento_real ?? ""}
+              />
+              <Campo
+                label="Leads reais"
+                name="leads_real"
+                tipo="number"
+                defaultValue={existentes?.leads_real ?? ""}
+              />
+              <Campo
+                label={rotuloReunioes}
+                name="reunioes_real"
+                tipo="number"
+                defaultValue={existentes?.reunioes_real ?? ""}
+              />
+              <Campo
+                label={rotuloContratos}
+                name="contratos_real"
+                tipo="number"
+                defaultValue={existentes?.contratos_real ?? ""}
+              />
+              <Campo
+                label="Faturamento real (R$)"
+                name="faturamento_real"
+                tipo="number"
+                step="0.01"
+                defaultValue={existentes?.faturamento_real ?? ""}
+              />
+              <Campo
+                label="Criativos entregues"
+                name="criativos_entregues"
+                tipo="number"
+                defaultValue={existentes?.criativos_entregues ?? ""}
+              />
 
-                <label className="block">
-                  <span
-                    style={{
-                      fontSize: 11,
-                      letterSpacing: "0.5px",
-                      color: "#666",
-                      textTransform: "uppercase",
-                      fontWeight: 400,
-                    }}
-                  >
-                    Observações
-                  </span>
-                  <textarea
-                    name="observacoes"
-                    rows={3}
-                    defaultValue={existentes?.observacoes ?? ""}
-                    style={{
-                      marginTop: 8,
-                      width: "100%",
-                      background: "#111",
-                      border: "0.5px solid #1e1e1e",
-                      color: "#ccc",
-                      fontSize: 14,
-                      padding: "10px 14px",
-                      borderRadius: 4,
-                      outline: "none",
-                      fontWeight: 400,
-                    }}
-                    placeholder="..."
-                  />
-                </label>
+              <label className="block">
+                <span className="text-xs uppercase tracking-widest text-neutral-400">
+                  Observações
+                </span>
+                <textarea
+                  name="observacoes"
+                  rows={3}
+                  defaultValue={existentes?.observacoes ?? ""}
+                  className="mt-2 w-full rounded-lg bg-black/60 border border-neutral-800 focus:border-gold focus:outline-none px-3 py-2 text-white placeholder-neutral-600 text-sm"
+                  placeholder="Anotações do mês..."
+                />
+              </label>
 
-                {erro && (
-                  <p style={{ color: "#e24b4a", fontSize: 12 }}>{erro}</p>
-                )}
+              {erro && (
+                <p className="text-sm text-red-400">{erro}</p>
+              )}
 
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="submit"
-                    disabled={pending || !supabaseOk}
-                    style={{
-                      flex: 1,
-                      background: "#C9953A",
-                      color: "#080808",
-                      padding: "10px 0",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      borderRadius: 4,
-                      opacity: pending || !supabaseOk ? 0.5 : 1,
-                    }}
-                    className="hover:brightness-110 transition"
-                  >
-                    {pending ? "Salvando..." : "Salvar"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAberto(false)}
-                    style={{
-                      background: "transparent",
-                      border: "0.5px solid #1e1e1e",
-                      color: "#666",
-                      padding: "10px 16px",
-                      fontSize: 13,
-                      borderRadius: 4,
-                      fontWeight: 400,
-                    }}
-                    className="hover:text-[#fff] transition"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={pending || !supabaseOk}
+                  className="flex-1 gold-gradient text-black font-medium rounded-lg py-2.5 transition hover:brightness-110 disabled:opacity-50"
+                >
+                  {pending ? "Salvando..." : "Salvar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAberto(false)}
+                  className="text-sm text-neutral-400 hover:text-white px-4 py-2.5"
+                >
+                  Cancelar
+                </button>
               </div>
             </form>
           </aside>
@@ -292,15 +198,7 @@ function Campo({
 }) {
   return (
     <label className="block">
-      <span
-        style={{
-          fontSize: 11,
-          letterSpacing: "0.5px",
-          color: "#666",
-          textTransform: "uppercase",
-          fontWeight: 400,
-        }}
-      >
+      <span className="text-xs uppercase tracking-widest text-neutral-400">
         {label}
       </span>
       <input
@@ -308,18 +206,7 @@ function Campo({
         name={name}
         step={step}
         defaultValue={defaultValue === null ? "" : defaultValue}
-        style={{
-          marginTop: 8,
-          width: "100%",
-          background: "#111",
-          border: "0.5px solid #1e1e1e",
-          color: "#ccc",
-          fontSize: 14,
-          padding: "10px 14px",
-          borderRadius: 4,
-          outline: "none",
-          fontWeight: 400,
-        }}
+        className="mt-2 w-full rounded-lg bg-black/60 border border-neutral-800 focus:border-gold focus:outline-none px-3 py-2 text-white placeholder-neutral-600 text-sm"
         placeholder="—"
       />
     </label>

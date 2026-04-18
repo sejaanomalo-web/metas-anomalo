@@ -19,17 +19,6 @@ os valores **realizados** e o comissionamento vivem no Supabase.
 A2 Marketing · F2 Sports · F2 Móveis · Hato · Aton Estofados · Diego Knebel
 Período: Abril a Dezembro de 2025.
 
-## Período e seletor
-
-Mês vai de **Janeiro a Dezembro**. Ano padrão ao abrir é **2026**, com opções
-2025/2026/2027/2028. Mês e ano ficam na URL — `/dashboard?mes=Abril&ano=2026`
-e `/dashboard/hato?mes=Abril&ano=2026` — para compartilhar períodos
-específicos.
-
-Os dados **projetados** em `lib/data.ts` existem apenas para 2025. Para os
-demais anos, o painel mostra os cartões sem metas (hífens) e consolida
-apenas os **reais** inseridos no Supabase.
-
 ## Rodando localmente
 
 ```bash
@@ -94,19 +83,13 @@ updated_at timestamptz
 **`comissionamento`** — uma linha por colaborador × mês × ano
 ```
 id uuid pk · colaborador text · mes text · ano int
-entregas_validas int · entregas_descontadas int
-bonus_calculado numeric · gatilhos_atingidos jsonb
-observacoes text · updated_at timestamptz
+entregas_validas int · bonus_calculado numeric
+detalhes jsonb · updated_at timestamptz
 ```
 
-`gatilhos_atingidos` armazena os 4 booleanos do Felipe (`cpl_meta`,
-`leads_meta`, `roas_hato`, `posts_prazo`). Para Vinicius e Emanuel o
-bônus vem de `max(0, entregas_validas - entregas_descontadas)` e escalas
-fixas (10/14/20/25/30 para Vinicius, 5/8/11/15 para Emanuel).
-
-> O `schema.sql` já contém migrações idempotentes que adicionam
-> `entregas_descontadas`, `observacoes` e `gatilhos_atingidos` em
-> instalações antigas e renomeiam `detalhes` para `gatilhos_atingidos`.
+`detalhes` armazena os 4 gatilhos booleanos do Felipe (`cpl_meta`, `leads_meta`,
+`roas_hato`, `posts_prazo`). Para Vinicius e Emanuel, o campo fica `null` e
+apenas `entregas_validas` é usado.
 
 ## Estrutura de páginas
 

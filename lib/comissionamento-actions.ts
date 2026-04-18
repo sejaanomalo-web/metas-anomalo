@@ -61,41 +61,35 @@ export async function salvarComissaoAction(
   if (!supabaseConfigurado()) {
     return {
       ok: false,
-      erro: "Supabase não configurado.",
+      erro: "Supabase não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.",
     }
   }
 
   const colaborador = String(formData.get("colaborador") ?? "")
   const mes = String(formData.get("mes") ?? "")
   const ano = parseInt0(formData.get("ano")) ?? ANO_PADRAO
-  const observacoes =
-    String(formData.get("observacoes") ?? "").trim() || null
 
   if (!colaboradorValido(colaborador) || !mesValido(mes)) {
     return { ok: false, erro: "Colaborador ou mês inválidos." }
   }
 
   let entregas_validas: number | null = null
-  let entregas_descontadas: number | null = null
   let bonus_calculado = 0
-  let gatilhos_atingidos: Record<string, boolean> | null = null
+  let detalhes: Record<string, boolean> | null = null
 
   if (colaborador === "felipe") {
     const flags: Record<string, boolean> = {}
     for (const g of GATILHOS_FELIPE) {
       flags[g.chave] = formData.get(g.chave) === "on"
     }
-    gatilhos_atingidos = flags
+    detalhes = flags
     bonus_calculado = calcularBonusFelipe(flags)
   } else {
     entregas_validas = parseInt0(formData.get("entregas_validas")) ?? 0
-    entregas_descontadas =
-      parseInt0(formData.get("entregas_descontadas")) ?? 0
-    const liquidas = Math.max(0, entregas_validas - entregas_descontadas)
     bonus_calculado =
       colaborador === "vinicius"
-        ? calcularBonusVinicius(liquidas)
-        : calcularBonusEmanuel(liquidas)
+        ? calcularBonusVinicius(entregas_validas)
+        : calcularBonusEmanuel(entregas_validas)
   }
 
   const payload: Comissionamento = {
@@ -103,10 +97,8 @@ export async function salvarComissaoAction(
     mes,
     ano,
     entregas_validas,
-    entregas_descontadas,
     bonus_calculado,
-    gatilhos_atingidos,
-    observacoes,
+    detalhes,
     updated_at: new Date().toISOString(),
   }
 

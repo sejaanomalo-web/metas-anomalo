@@ -14,22 +14,10 @@ const CHAVES_COM_CONVERSAO = new Set(["reunioes", "contratos"])
 export default function FunilCascata({ etapas, reais }: Props) {
   return (
     <section>
-      <p
-        style={{
-          fontSize: 11,
-          letterSpacing: "1px",
-          color: "#666",
-          textTransform: "uppercase",
-          fontWeight: 400,
-          marginBottom: 12,
-        }}
-      >
+      <p className="text-xs uppercase tracking-widest text-neutral-500 mb-4">
         Funil do mês
       </p>
-      <div
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-        style={{ gap: 10 }}
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {etapas.map((etapa, i) => {
           const prev = i > 0 ? etapas[i - 1] : null
           const conv =
@@ -46,51 +34,42 @@ export default function FunilCascata({ etapas, reais }: Props) {
           const acima = temReal && real >= etapa.valor
           const abaixo = temReal && real < etapa.valor
 
-          const corReal = acima ? "#4caf50" : abaixo ? "#e24b4a" : "#fff"
+          const corReal = acima ? "#4caf50" : abaixo ? "#e24b4a" : "#ffffff"
 
           return (
             <div
               key={etapa.chave}
+              className="rounded-lg p-4"
               style={{
-                background: isFaturamento ? "#0f0c00" : "#0c0c0c",
-                border: `0.5px solid ${isFaturamento ? "#C9953A" : "#141414"}`,
-                borderRadius: 10,
-                padding: 18,
+                background: isFaturamento ? "#0f0c00" : "#111111",
+                border: isFaturamento
+                  ? "1px solid #C9953A"
+                  : "0.5px solid #1e1e1e",
               }}
             >
               <p
+                className="uppercase font-medium"
                 style={{
-                  fontSize: 11,
-                  letterSpacing: "1px",
-                  color: "#666",
-                  textTransform: "uppercase",
-                  fontWeight: 400,
+                  fontSize: 10,
+                  letterSpacing: "0.14em",
+                  color: "#555",
                 }}
               >
                 {etapa.rotulo}
               </p>
 
-              <div style={{ marginTop: 12, minHeight: 30 }}>
+              <div className="mt-3" style={{ minHeight: 30 }}>
                 {temReal ? (
                   <p
-                    style={{
-                      fontSize: 24,
-                      color: corReal,
-                      fontWeight: 400,
-                      lineHeight: 1,
-                    }}
+                    className="font-medium leading-none"
+                    style={{ fontSize: 26, color: corReal }}
                   >
                     {formatar(real, etapa.tipo)}
                   </p>
                 ) : (
                   <p
-                    style={{
-                      fontSize: 13,
-                      color: "#333",
-                      fontStyle: "italic",
-                      fontWeight: 400,
-                      lineHeight: 1,
-                    }}
+                    className="italic leading-none"
+                    style={{ fontSize: 13, color: "#333" }}
                   >
                     Não inserido
                   </p>
@@ -98,30 +77,28 @@ export default function FunilCascata({ etapas, reais }: Props) {
               </div>
 
               <div
+                className="my-4"
                 style={{
-                  height: 0.5,
+                  height: 1,
                   background: isFaturamento ? "#1a1400" : "#1a1a1a",
-                  margin: "14px 0 10px",
                 }}
               />
 
               <div className="flex items-baseline justify-between">
                 <span
+                  className="uppercase"
                   style={{
-                    fontSize: 11,
-                    letterSpacing: "0.3px",
-                    color: "#555",
-                    textTransform: "uppercase",
-                    fontWeight: 400,
+                    fontSize: 10,
+                    letterSpacing: "0.14em",
+                    color: "#333",
                   }}
                 >
                   Estimado
                 </span>
                 <span
                   style={{
-                    fontSize: 14,
-                    color: isFaturamento ? "#C9953A" : "#888",
-                    fontWeight: 400,
+                    fontSize: 13,
+                    color: isFaturamento ? "#5a4a00" : "#3a3a3a",
                   }}
                 >
                   {formatar(etapa.valor, etapa.tipo)}
@@ -129,19 +106,12 @@ export default function FunilCascata({ etapas, reais }: Props) {
               </div>
 
               {(etapa.subtitulo || conv !== null) && (
-                <div
-                  className="flex items-center justify-between"
-                  style={{ marginTop: 6 }}
-                >
-                  <span
-                    style={{ fontSize: 11, color: "#555", fontWeight: 400 }}
-                  >
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span style={{ fontSize: 10, color: "#2a2a2a" }}>
                     {etapa.subtitulo ?? ""}
                   </span>
                   {conv !== null && (
-                    <span
-                      style={{ fontSize: 11, color: "#555", fontWeight: 400 }}
-                    >
+                    <span style={{ fontSize: 10, color: "#2a2a2a" }}>
                       {conv}% conv.
                     </span>
                   )}
