@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import {
   type Colaborador,
   type ConfiguracaoComissao,
+  type FuncaoTime,
   type MetaComissionamento,
   getSupabase,
   supabaseConfigurado,
@@ -177,12 +178,18 @@ export async function salvarColaboradorAction(
   const supabase = getSupabase()
   if (!supabase) return { ok: false, erro: "Supabase indisponível." }
 
+  const dataEntradaRaw = String(formData.get("data_entrada") ?? "").trim()
+  const observacoes =
+    String(formData.get("observacoes") ?? "").trim().slice(0, 120) || null
+
   const payload: Colaborador = {
     nome,
     funcao,
     tipo: tipoRaw,
     configuracao_padrao: configuracao,
     ativo: true,
+    data_entrada: dataEntradaRaw || null,
+    observacoes,
   }
 
   const { error } = await supabase.from("colaboradores").insert(payload)
@@ -271,6 +278,9 @@ export async function atualizarColaboradorAction(
   const funcao = String(formData.get("funcao") ?? "").trim()
   const tipoRaw = String(formData.get("tipo") ?? "")
   const configuracaoRaw = String(formData.get("configuracao_padrao") ?? "")
+  const dataEntradaRaw = String(formData.get("data_entrada") ?? "").trim()
+  const observacoes =
+    String(formData.get("observacoes") ?? "").trim().slice(0, 120) || null
   const configuracao = parseConfiguracao(configuracaoRaw)
 
   if (!id) return { ok: false, erro: "ID inválido." }
@@ -287,6 +297,16 @@ export async function atualizarColaboradorAction(
   const supabase = getSupabase()
   if (!supabase) return { ok: false, erro: "Supabase indisponível." }
 
+  // Captura o nome antigo para propagar renomeação em metas_comissionamento
+  // e comissionamento caso o nome mude.
+  const { data: atual } = await supabase
+    .from("colaboradores")
+    .select("nome")
+    .eq("id", id)
+    .maybeSingle()
+  const nomeAntigo = atual?.nome?.toLowerCase() ?? null
+  const nomeNovo = nome.toLowerCase()
+
   const { error } = await supabase
     .from("colaboradores")
     .update({
@@ -294,10 +314,25 @@ export async function atualizarColaboradorAction(
       funcao,
       tipo: tipoRaw,
       configuracao_padrao: configuracao,
+      data_entrada: dataEntradaRaw || null,
+      observacoes,
     })
     .eq("id", id)
   if (error) return { ok: false, erro: error.message }
+
+  if (nomeAntigo && nomeAntigo !== nomeNovo) {
+    await supabase
+      .from("metas_comissionamento")
+      .update({ colaborador: nomeNovo })
+      .eq("colaborador", nomeAntigo)
+    await supabase
+      .from("comissionamento")
+      .update({ colaborador: nomeNovo })
+      .eq("colaborador", nomeAntigo)
+  }
+
   revalidatePath("/dashboard/comissionamento")
+  revalidatePath("/dashboard")
   return { ok: true }
 }
 
@@ -337,6 +372,133 @@ export async function excluirColaboradorAction(
     .delete()
     .eq("id", id)
   if (error) return { ok: false, erro: error.message }
+  revalidatePath("/dashboard/comissionamento")
+  return { ok: true }
+}
+
+// ============ Funções do time ============
+
+export interface FuncaoComContagem {
+  nome: string
+  count: number
+  persistida: boolean // true se existe em funcoes_time
+}
+
+export async function listarFuncoesTime(): Promise<FuncaoComContagem[]> {
+  const supabase = getSupabase()
+  if (!supabase) return []
+
+  const [{ data: funcoes }, { data: colaboradoresAtivos }] = await Promise.all([
+    supabase.from("funcoes_time").select("nome"),
+    supabase.from("colaboradores").select("funcao").eq("ativo", true),
+  ])
+
+  const persistidas = new Set<string>(
+    (funcoes ?? []).map((f: { nome: string }) => f.nome)
+  )
+  const contagem = new Map<string, number>()
+  for (const c of (colaboradoresAtivos ?? []) as { funcao: string }[]) {
+    if (!c.funcao) continue
+    contagem.set(c.funcao, (contagem.get(c.funcao) ?? 0) + 1)
+  }
+
+  const nomesUnicos = new Set<string>([
+    ...persistidas,
+    ...Array.from(contagem.keys()),
+  ])
+
+  const lista: FuncaoComContagem[] = Array.from(nomesUnicos)
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .map((nome) => ({
+      nome,
+      count: contagem.get(nome) ?? 0,
+      persistida: persistidas.has(nome),
+    }))
+
+  return lista
+}
+
+export async function criarFuncaoAction(
+  formData: FormData
+): Promise<ResultadoConfig> {
+  if (!supabaseConfigurado()) {
+    return { ok: false, erro: "Supabase não configurado." }
+  }
+  const nome = String(formData.get("nome") ?? "").trim()
+  if (!nome) return { ok: false, erro: "Nome da função é obrigatório." }
+  const supabase = getSupabase()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const payload: FuncaoTime = { nome }
+  const { error } = await supabase
+    .from("funcoes_time")
+    .upsert(payload, { onConflict: "nome", ignoreDuplicates: true })
+  if (error) return { ok: false, erro: error.message }
+
+  revalidatePath("/dashboard/comissionamento")
+  return { ok: true }
+}
+
+export async function renomearFuncaoAction(
+  formData: FormData
+): Promise<ResultadoConfig> {
+  if (!supabaseConfigurado()) {
+    return { ok: false, erro: "Supabase não configurado." }
+  }
+  const antigo = String(formData.get("antigo") ?? "").trim()
+  const novo = String(formData.get("novo") ?? "").trim()
+  if (!antigo || !novo) return { ok: false, erro: "Nomes inválidos." }
+  if (antigo === novo) return { ok: true }
+
+  const supabase = getSupabase()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  // Upsert da nova + update em colaboradores + delete do antigo (se existir)
+  const { error: erroInsert } = await supabase
+    .from("funcoes_time")
+    .upsert({ nome: novo }, { onConflict: "nome", ignoreDuplicates: true })
+  if (erroInsert) return { ok: false, erro: erroInsert.message }
+
+  const { error: erroUpdate } = await supabase
+    .from("colaboradores")
+    .update({ funcao: novo })
+    .eq("funcao", antigo)
+  if (erroUpdate) return { ok: false, erro: erroUpdate.message }
+
+  await supabase.from("funcoes_time").delete().eq("nome", antigo)
+
+  revalidatePath("/dashboard/comissionamento")
+  revalidatePath("/dashboard")
+  return { ok: true }
+}
+
+export async function excluirFuncaoAction(
+  formData: FormData
+): Promise<ResultadoConfig> {
+  if (!supabaseConfigurado()) {
+    return { ok: false, erro: "Supabase não configurado." }
+  }
+  const nome = String(formData.get("nome") ?? "").trim()
+  if (!nome) return { ok: false, erro: "Nome inválido." }
+  const supabase = getSupabase()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const { data: ativos } = await supabase
+    .from("colaboradores")
+    .select("id")
+    .eq("ativo", true)
+    .eq("funcao", nome)
+    .limit(1)
+  if (ativos && ativos.length > 0) {
+    return {
+      ok: false,
+      erro: "Reatribua os colaboradores antes de excluir",
+    }
+  }
+
+  const { error } = await supabase.from("funcoes_time").delete().eq("nome", nome)
+  if (error) return { ok: false, erro: error.message }
+
   revalidatePath("/dashboard/comissionamento")
   return { ok: true }
 }

@@ -12,6 +12,7 @@ import { getComissionamentoMes } from "@/lib/comissionamento-actions"
 import {
   listarColaboradores,
   listarColaboradoresInativos,
+  listarFuncoesTime,
   listarMetasDoMes,
 } from "@/lib/comissionamento-config"
 import type { ConfiguracaoComissao } from "@/lib/supabase"
@@ -51,11 +52,13 @@ export default async function ComissionamentoPage({
     metasEditaveis,
     colaboradoresExtras,
     colaboradoresInativos,
+    funcoes,
   ] = await Promise.all([
     getComissionamentoMes(mes, ano),
     listarMetasDoMes(mes, ano),
     listarColaboradores(true),
     listarColaboradoresInativos(),
+    listarFuncoesTime(),
   ])
 
   const PADROES: Record<string, ConfiguracaoComissao> = {
@@ -184,6 +187,7 @@ export default async function ComissionamentoPage({
               supabaseOk={supabaseOk}
               colaboradores={colaboradoresExtras}
               colaboradoresInativos={colaboradoresInativos}
+              funcoes={funcoes}
               metasPorColaborador={metasEditaveis}
               padroesPorColaborador={PADROES}
             />

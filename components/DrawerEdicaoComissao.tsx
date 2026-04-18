@@ -13,11 +13,15 @@ import type { Mes } from "@/lib/data"
 import { formatBRL } from "@/lib/data"
 import {
   atualizarColaboradorAction,
+  criarFuncaoAction,
   desativarColaboradorAction,
   excluirColaboradorAction,
+  excluirFuncaoAction,
   reativarColaboradorAction,
+  renomearFuncaoAction,
   salvarColaboradorAction,
   salvarMetaComissaoAction,
+  type FuncaoComContagem,
 } from "@/lib/comissionamento-config"
 
 type Aba = "metas" | "pessoas"
@@ -28,6 +32,7 @@ interface Props {
   supabaseOk: boolean
   colaboradores: Colaborador[]
   colaboradoresInativos: Colaborador[]
+  funcoes: FuncaoComContagem[]
   metasPorColaborador: Map<string, MetaComissionamento>
   padroesPorColaborador: Record<string, ConfiguracaoComissao>
 }
@@ -38,6 +43,7 @@ export default function DrawerEdicaoComissao({
   supabaseOk,
   colaboradores,
   colaboradoresInativos,
+  funcoes,
   metasPorColaborador,
   padroesPorColaborador,
 }: Props) {
@@ -164,6 +170,7 @@ export default function DrawerEdicaoComissao({
                   supabaseOk={supabaseOk}
                   colaboradores={colaboradores}
                   colaboradoresInativos={colaboradoresInativos}
+                  funcoes={funcoes}
                 />
               )}
             </div>
@@ -1009,18 +1016,22 @@ function AbaPessoas({
   supabaseOk,
   colaboradores,
   colaboradoresInativos,
+  funcoes,
 }: {
   mes: Mes
   ano: number
   supabaseOk: boolean
   colaboradores: Colaborador[]
   colaboradoresInativos: Colaborador[]
+  funcoes: FuncaoComContagem[]
 }) {
   const [modo, setModo] = useState<ModoForm>("novo")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [nome, setNome] = useState("")
   const [funcao, setFuncao] = useState("")
   const [tipo, setTipo] = useState<"escala" | "gatilhos">("escala")
+  const [dataEntrada, setDataEntrada] = useState<string>("")
+  const [observacoes, setObservacoes] = useState<string>("")
   const [faixas, setFaixas] = useState<Faixa[]>([{ minimo: 0, bonus: 0 }])
   const [gatilhos, setGatilhos] = useState<GatilhoConfig[]>([
     { chave: "g1", rotulo: "Novo gatilho", valor: 100 },
@@ -1041,6 +1052,8 @@ function AbaPessoas({
     setNome("")
     setFuncao("")
     setTipo("escala")
+    setDataEntrada("")
+    setObservacoes("")
     setFaixas([{ minimo: 0, bonus: 0 }])
     setGatilhos([{ chave: "g1", rotulo: "Novo gatilho", valor: 100 }])
     setStatus(null)
@@ -1052,6 +1065,8 @@ function AbaPessoas({
     setNome(c.nome)
     setFuncao(c.funcao)
     setTipo(c.tipo)
+    setDataEntrada(c.data_entrada ?? "")
+    setObservacoes(c.observacoes ?? "")
     if (c.configuracao_padrao.tipo === "escala") {
       setFaixas(c.configuracao_padrao.faixas)
     } else {
@@ -1075,6 +1090,8 @@ function AbaPessoas({
     fd.set("configuracao_padrao", JSON.stringify(configuracao))
     fd.set("mes", mes)
     fd.set("ano", String(ano))
+    if (dataEntrada) fd.set("data_entrada", dataEntrada)
+    if (observacoes) fd.set("observacoes", observacoes)
     if (modo === "editando" && editingId) {
       fd.set("id", editingId)
       const r = await atualizarColaboradorAction(fd)
@@ -1192,10 +1209,11 @@ function AbaPessoas({
 
         <div className="space-y-3 mt-3">
           <label className="block">
-            <LabelSmall>Nome</LabelSmall>
+            <LabelSmall>Nome completo</LabelSmall>
             <input
               value={nome}
               onChange={(e) => setNome(e.target.value)}
+              placeholder="Ex: João Silva"
               className="glass-input"
               style={{
                 marginTop: 6,
@@ -1205,19 +1223,59 @@ function AbaPessoas({
               }}
             />
           </label>
+
+          <AutocompleteFuncao
+            value={funcao}
+            onChange={setFuncao}
+            funcoes={funcoes}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <LabelSmall>Data de entrada</LabelSmall>
+              <input
+                type="date"
+                value={dataEntrada}
+                onChange={(e) => setDataEntrada(e.target.value)}
+                className="glass-input"
+                style={{
+                  marginTop: 6,
+                  width: "100%",
+                  padding: "8px 12px",
+                  fontSize: 13,
+                }}
+              />
+            </label>
+            <div />
+          </div>
+
           <label className="block">
-            <LabelSmall>Função</LabelSmall>
-            <input
-              value={funcao}
-              onChange={(e) => setFuncao(e.target.value)}
+            <LabelSmall>Observações</LabelSmall>
+            <textarea
+              value={observacoes}
+              maxLength={120}
+              rows={2}
+              onChange={(e) => setObservacoes(e.target.value.slice(0, 120))}
+              placeholder="Nota opcional (máx. 120 caracteres)"
               className="glass-input"
               style={{
                 marginTop: 6,
                 width: "100%",
                 padding: "8px 12px",
                 fontSize: 13,
+                resize: "vertical",
               }}
             />
+            <span
+              style={{
+                fontSize: 9,
+                color: "rgba(255,255,255,0.3)",
+                marginTop: 2,
+                display: "block",
+              }}
+            >
+              {observacoes.length}/120
+            </span>
           </label>
           <div>
             <LabelSmall>Tipo</LabelSmall>
@@ -1283,7 +1341,7 @@ function AbaPessoas({
               {pending
                 ? "Salvando..."
                 : modo === "editando"
-                ? "Atualizar colaborador"
+                ? `Atualizar ${nome || "colaborador"}`
                 : "Salvar colaborador"}
             </button>
             {status && (
@@ -1476,6 +1534,8 @@ function AbaPessoas({
         </div>
       )}
 
+      <SecaoFuncoes funcoes={funcoes} />
+
       {modalExcluir && (
         <ModalExcluir
           colaborador={modalExcluir}
@@ -1484,6 +1544,359 @@ function AbaPessoas({
           pending={pending}
         />
       )}
+    </div>
+  )
+}
+
+// ============ Autocomplete de função ============
+
+function AutocompleteFuncao({
+  value,
+  onChange,
+  funcoes,
+}: {
+  value: string
+  onChange: (v: string) => void
+  funcoes: FuncaoComContagem[]
+}) {
+  const [aberto, setAberto] = useState(false)
+  const termo = value.toLowerCase().trim()
+  const sugestoes = funcoes
+    .filter((f) =>
+      termo ? f.nome.toLowerCase().includes(termo) && f.nome !== value : true
+    )
+    .slice(0, 6)
+
+  return (
+    <label className="block" style={{ position: "relative" }}>
+      <LabelSmall>Função</LabelSmall>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setAberto(true)}
+        onBlur={() => setTimeout(() => setAberto(false), 150)}
+        placeholder="Ex: Designer, Social Media, Copywriter"
+        className="glass-input"
+        style={{
+          marginTop: 6,
+          width: "100%",
+          padding: "8px 12px",
+          fontSize: 13,
+        }}
+      />
+      {aberto && sugestoes.length > 0 && (
+        <ul
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: 0,
+            right: 0,
+            marginTop: 4,
+            background: "#1a1400",
+            border: "0.5px solid rgba(201,149,58,0.2)",
+            borderRadius: 8,
+            overflow: "hidden",
+            zIndex: 50,
+            listStyle: "none",
+            padding: 0,
+          }}
+        >
+          {sugestoes.map((s) => (
+            <li key={s.nome}>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  onChange(s.nome)
+                  setAberto(false)
+                }}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "8px 12px",
+                  fontSize: 11,
+                  fontWeight: 400,
+                  color: "rgba(255,255,255,0.8)",
+                  background: "transparent",
+                }}
+                className="hover:bg-[rgba(201,149,58,0.08)] hover:text-[#C9953A] transition"
+              >
+                {s.nome}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </label>
+  )
+}
+
+// ============ Seção: Funções do time ============
+
+function SecaoFuncoes({ funcoes }: { funcoes: FuncaoComContagem[] }) {
+  const [modos, setModos] = useState<Record<string, "ler" | "editar">>({})
+  const [rascunhos, setRascunhos] = useState<Record<string, string>>({})
+  const [nova, setNova] = useState<string | null>(null)
+  const [mensagem, setMensagem] = useState<string | null>(null)
+  const [, startTransition] = useTransition()
+  const router = useRouter()
+
+  async function renomear(antigo: string) {
+    const novo = (rascunhos[antigo] ?? "").trim()
+    if (!novo || novo === antigo) {
+      setModos({ ...modos, [antigo]: "ler" })
+      return
+    }
+    const fd = new FormData()
+    fd.set("antigo", antigo)
+    fd.set("novo", novo)
+    const r = await renomearFuncaoAction(fd)
+    if (r.ok) {
+      setMensagem(`✓ Função renomeada`)
+      setModos({ ...modos, [antigo]: "ler" })
+      setTimeout(() => setMensagem(null), 2500)
+      router.refresh()
+    } else {
+      setMensagem(r.erro ?? "Erro")
+      setTimeout(() => setMensagem(null), 3000)
+    }
+  }
+
+  async function excluir(nome: string) {
+    const fd = new FormData()
+    fd.set("nome", nome)
+    const r = await excluirFuncaoAction(fd)
+    if (r.ok) {
+      router.refresh()
+    } else {
+      setMensagem(r.erro ?? "Erro")
+      setTimeout(() => setMensagem(null), 3500)
+    }
+  }
+
+  async function criar() {
+    const nome = (nova ?? "").trim()
+    if (!nome) {
+      setNova(null)
+      return
+    }
+    const fd = new FormData()
+    fd.set("nome", nome)
+    const r = await criarFuncaoAction(fd)
+    if (r.ok) {
+      setNova(null)
+      router.refresh()
+    } else {
+      setMensagem(r.erro ?? "Erro")
+      setTimeout(() => setMensagem(null), 3000)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        border: "0.5px solid rgba(255,255,255,0.08)",
+        borderRadius: 12,
+        padding: 18,
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>
+          Funções do time
+        </p>
+        <button
+          type="button"
+          onClick={() => setNova(nova === null ? "" : nova)}
+          style={{
+            fontSize: 10,
+            letterSpacing: "0.5px",
+            textTransform: "uppercase",
+            color: "#C9953A",
+            border: "0.5px solid rgba(201,149,58,0.35)",
+            padding: "4px 10px",
+            borderRadius: 6,
+          }}
+          className="hover:bg-[rgba(201,149,58,0.08)] transition"
+        >
+          + Nova função
+        </button>
+      </div>
+
+      {mensagem && (
+        <p
+          style={{
+            fontSize: 10,
+            color: mensagem.startsWith("✓") ? "#4caf50" : "#e24b4a",
+            marginBottom: 8,
+          }}
+        >
+          {mensagem}
+        </p>
+      )}
+
+      <div className="space-y-1">
+        {nova !== null && (
+          <div
+            className="grid grid-cols-[1fr_auto] gap-2 items-center"
+            style={{
+              padding: "6px 10px",
+              border: "0.5px solid rgba(201,149,58,0.35)",
+              borderRadius: 8,
+              background: "rgba(201,149,58,0.04)",
+            }}
+          >
+            <input
+              autoFocus
+              value={nova}
+              onChange={(e) => setNova(e.target.value)}
+              placeholder="Nome da função"
+              className="glass-input"
+              style={{ padding: "6px 10px", fontSize: 12 }}
+            />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => startTransition(() => criar())}
+                style={{
+                  fontSize: 11,
+                  color: "#C9953A",
+                  padding: "2px 6px",
+                }}
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                onClick={() => setNova(null)}
+                style={{
+                  fontSize: 11,
+                  color: "rgba(255,255,255,0.3)",
+                  padding: "2px 6px",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        {funcoes.map((f) => {
+          const modo = modos[f.nome] ?? "ler"
+          if (modo === "editar") {
+            return (
+              <div
+                key={f.nome}
+                className="grid grid-cols-[1fr_auto] gap-2 items-center"
+                style={{
+                  padding: "6px 10px",
+                  border: "0.5px solid rgba(201,149,58,0.35)",
+                  borderRadius: 8,
+                  background: "rgba(201,149,58,0.04)",
+                }}
+              >
+                <input
+                  value={rascunhos[f.nome] ?? f.nome}
+                  onChange={(e) =>
+                    setRascunhos({ ...rascunhos, [f.nome]: e.target.value })
+                  }
+                  className="glass-input"
+                  style={{ padding: "6px 10px", fontSize: 12 }}
+                />
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => startTransition(() => renomear(f.nome))}
+                    style={{ fontSize: 11, color: "#C9953A", padding: "2px 6px" }}
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setModos({ ...modos, [f.nome]: "ler" })
+                    }
+                    style={{
+                      fontSize: 11,
+                      color: "rgba(255,255,255,0.3)",
+                      padding: "2px 6px",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )
+          }
+          const temPessoas = f.count > 0
+          return (
+            <div
+              key={f.nome}
+              className="flex items-center justify-between"
+              style={{
+                padding: "8px 10px",
+                borderRadius: 6,
+              }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(255,255,255,0.75)",
+                    fontWeight: 400,
+                  }}
+                  className="truncate"
+                >
+                  {f.nome}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: "rgba(255,255,255,0.35)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {f.count} {f.count === 1 ? "pessoa" : "pessoas"}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRascunhos({ ...rascunhos, [f.nome]: f.nome })
+                    setModos({ ...modos, [f.nome]: "editar" })
+                  }}
+                  title="Renomear"
+                  style={{ ...BTN_ICON, color: "rgba(255,255,255,0.3)" }}
+                  className="hover:text-[#C9953A] transition"
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    !temPessoas && startTransition(() => excluir(f.nome))
+                  }
+                  disabled={temPessoas}
+                  title={
+                    temPessoas
+                      ? "Reatribua os colaboradores antes de excluir"
+                      : "Excluir"
+                  }
+                  style={{
+                    ...BTN_ICON,
+                    color: "rgba(255,255,255,0.2)",
+                    opacity: temPessoas ? 0.3 : 1,
+                    cursor: temPessoas ? "not-allowed" : "pointer",
+                  }}
+                  className={temPessoas ? "" : "hover:text-[#e24b4a] transition"}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

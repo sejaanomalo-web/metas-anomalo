@@ -22,6 +22,14 @@ function calcularBonusEscala(entregas: number, config: ConfiguracaoComissao) {
   return bonus
 }
 
+function formatarEntrada(raw: string): string {
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return raw
+  return d
+    .toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+    .replace(/^./, (c) => c.toUpperCase())
+}
+
 function calcularBonusGatilhos(
   detalhes: Record<string, boolean>,
   config: ConfiguracaoComissao
@@ -114,13 +122,41 @@ export default function CardColaboradorDinamico({
           color: "rgba(255,255,255,0.35)",
           fontWeight: 300,
           marginTop: 4,
-          marginBottom: 16,
         }}
       >
         {configuracao.tipo === "escala"
           ? "Bônus por entregas válidas no mês"
           : "Bônus por gatilhos de performance"}
       </p>
+
+      {colaborador.data_entrada && (
+        <p
+          style={{
+            fontSize: 9,
+            color: "rgba(255,255,255,0.25)",
+            fontWeight: 300,
+            marginTop: 2,
+          }}
+        >
+          No time desde {formatarEntrada(colaborador.data_entrada)}
+        </p>
+      )}
+
+      {colaborador.observacoes && (
+        <p
+          style={{
+            fontSize: 9,
+            color: "rgba(255,255,255,0.2)",
+            fontStyle: "italic",
+            fontWeight: 300,
+            marginTop: 2,
+          }}
+        >
+          {colaborador.observacoes}
+        </p>
+      )}
+
+      <div style={{ marginBottom: 16 }} />
 
       {configuracao.tipo === "escala" && (
         <div className="space-y-1" style={{ marginBottom: 14 }}>

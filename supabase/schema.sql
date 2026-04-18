@@ -119,6 +119,35 @@ alter table public.dados_reais
 alter table public.comissionamento
   drop constraint if exists comissionamento_colaborador_check;
 
+-- Funções do time + colunas extras em colaboradores --------------------------
+create table if not exists public.funcoes_time (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null unique,
+  criada_em timestamptz not null default now()
+);
+
+insert into public.funcoes_time (nome) values
+  ('Gestor'),
+  ('Tráfego Pago'),
+  ('Editor de Vídeo'),
+  ('Editor de Estáticos')
+on conflict (nome) do nothing;
+
+alter table public.colaboradores
+  add column if not exists data_entrada date;
+alter table public.colaboradores
+  add column if not exists observacoes text;
+
+alter table public.funcoes_time enable row level security;
+
+drop policy if exists funcoes_time_all on public.funcoes_time;
+create policy funcoes_time_all
+  on public.funcoes_time
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
 create table if not exists public.configuracoes (
   id uuid primary key default gen_random_uuid(),
   chave text not null unique,

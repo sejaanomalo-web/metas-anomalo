@@ -62,7 +62,15 @@ export interface Colaborador {
   tipo: "gatilhos" | "escala"
   configuracao_padrao: ConfiguracaoComissao
   ativo: boolean
+  data_entrada?: string | null
+  observacoes?: string | null
   created_at?: string
+}
+
+export interface FuncaoTime {
+  id?: string
+  nome: string
+  criada_em?: string
 }
 
 let cliente: SupabaseClient | null = null
