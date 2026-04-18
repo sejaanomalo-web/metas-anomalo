@@ -55,38 +55,65 @@ export default function CardEditor({
   }
 
   return (
-    <div className="card p-6">
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-base font-medium text-white">{nome}</h3>
-        <span className="text-[10px] uppercase tracking-widest text-gold">
+    <div className="glass" style={{ padding: 24 }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: "#ffffff" }}>
+          {nome}
+        </h3>
+        <span
+          style={{
+            fontSize: 9,
+            letterSpacing: "2px",
+            color: "#C9953A",
+            textTransform: "uppercase",
+            fontWeight: 500,
+          }}
+        >
           {funcao}
         </span>
       </div>
-      <p className="text-xs text-neutral-500 mb-5">
+      <p
+        style={{
+          fontSize: 11,
+          color: "rgba(255,255,255,0.35)",
+          fontWeight: 300,
+          marginBottom: 18,
+        }}
+      >
         Bônus por entregas válidas no mês
       </p>
 
-      <div className="space-y-1.5 mb-5">
+      <div className="space-y-1" style={{ marginBottom: 18 }}>
         {faixas.map((f) => {
           const ativo = bonus === f.valor && f.valor > 0
           return (
             <div
               key={f.rotulo}
-              className={`flex items-center justify-between px-3 py-1.5 rounded border ${
-                ativo
-                  ? "bg-gold/10 border-gold/50"
-                  : "bg-transparent border-neutral-900"
-              }`}
+              className="flex items-center justify-between"
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: ativo
+                  ? "0.5px solid rgba(201,149,58,0.4)"
+                  : "0.5px solid rgba(255,255,255,0.04)",
+                background: ativo ? "rgba(201,149,58,0.08)" : "transparent",
+              }}
             >
               <span
-                className={`text-xs ${ativo ? "text-gold" : "text-neutral-500"}`}
+                style={{
+                  fontSize: 11,
+                  color: ativo ? "#C9953A" : "rgba(255,255,255,0.4)",
+                  fontWeight: 400,
+                }}
               >
                 {f.rotulo}
               </span>
               <span
-                className={`text-xs font-medium ${
-                  ativo ? "text-gold" : "text-neutral-600"
-                }`}
+                style={{
+                  fontSize: 11,
+                  color: ativo ? "#C9953A" : "rgba(255,255,255,0.25)",
+                  fontWeight: 500,
+                }}
               >
                 {formatBRL(f.valor)}
               </span>
@@ -95,7 +122,14 @@ export default function CardEditor({
         })}
       </div>
 
-      <p className="text-[11px] text-neutral-500 mb-4">
+      <p
+        style={{
+          fontSize: 10,
+          color: "rgba(255,255,255,0.35)",
+          fontWeight: 300,
+          marginBottom: 14,
+        }}
+      >
         Regra: entrega fora do prazo ou com 3+ revisões por erro de atenção não
         conta.
       </p>
@@ -109,7 +143,15 @@ export default function CardEditor({
         <input type="hidden" name="ano" value={ano} />
 
         <label className="block">
-          <span className="text-xs uppercase tracking-widest text-neutral-400">
+          <span
+            style={{
+              fontSize: 9,
+              letterSpacing: "2px",
+              color: "rgba(255,255,255,0.35)",
+              textTransform: "uppercase",
+              fontWeight: 500,
+            }}
+          >
             Entregas válidas no mês
           </span>
           <input
@@ -118,15 +160,43 @@ export default function CardEditor({
             min={0}
             value={entregas}
             onChange={(e) => setEntregas(Number(e.target.value) || 0)}
-            className="mt-2 w-full rounded-lg bg-black/60 border border-neutral-800 focus:border-gold focus:outline-none px-3 py-2 text-white text-sm"
+            className="glass-input"
+            style={{
+              marginTop: 8,
+              width: "100%",
+              padding: "10px 14px",
+              fontSize: 13,
+              fontWeight: 400,
+            }}
           />
         </label>
 
-        <div className="flex items-center justify-between pt-3 border-t border-neutral-900">
-          <span className="text-xs uppercase tracking-widest text-neutral-500">
+        <div
+          className="flex items-center justify-between"
+          style={{
+            paddingTop: 16,
+            borderTop: "0.5px solid rgba(255,255,255,0.05)",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 9,
+              letterSpacing: "2px",
+              color: "rgba(255,255,255,0.35)",
+              textTransform: "uppercase",
+              fontWeight: 500,
+            }}
+          >
             Bônus calculado
           </span>
-          <span className="text-xl font-medium text-gold">
+          <span
+            style={{
+              fontSize: 22,
+              color: "#C9953A",
+              fontWeight: 700,
+              letterSpacing: "-0.3px",
+            }}
+          >
             {formatBRL(bonus)}
           </span>
         </div>
@@ -135,15 +205,24 @@ export default function CardEditor({
           <button
             type="submit"
             disabled={pending || !supabaseOk}
-            className="flex-1 gold-gradient text-black font-medium rounded-lg py-2.5 transition hover:brightness-110 disabled:opacity-50"
+            className="btn-gold-solid flex-1"
+            style={{
+              padding: "10px 0",
+              fontSize: 11,
+              letterSpacing: "0.5px",
+              textTransform: "uppercase",
+              opacity: pending || !supabaseOk ? 0.5 : 1,
+            }}
           >
             {pending ? "Salvando..." : "Salvar"}
           </button>
           {status && (
             <span
-              className={`text-xs ${
-                status === "Salvo ✓" ? "text-emerald-400" : "text-red-400"
-              }`}
+              style={{
+                fontSize: 11,
+                color: status === "Salvo ✓" ? "#4caf50" : "#e24b4a",
+                fontWeight: 400,
+              }}
             >
               {status}
             </span>

@@ -20,75 +20,86 @@ interface Ponto {
 export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
   const temReal = dados.some((p) => p.real !== null && p.real > 0)
   return (
-    <div className="card p-6">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-xs uppercase tracking-widest text-neutral-500">
+    <div className="glass" style={{ padding: 24 }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
+        <p
+          style={{
+            fontSize: 9,
+            letterSpacing: "2px",
+            color: "rgba(255,255,255,0.35)",
+            textTransform: "uppercase",
+            fontWeight: 500,
+          }}
+        >
           Evolução do faturamento
         </p>
         {temReal && (
-          <span className="text-[10px] uppercase tracking-widest text-neutral-500">
-            Meta vs Real
-          </span>
+          <div className="flex items-center gap-4" style={{ fontSize: 11, fontWeight: 400 }}>
+            <span style={{ color: "#C9953A" }}>── Meta</span>
+            <span style={{ color: "#4caf50" }}>┅ Real</span>
+          </div>
         )}
       </div>
-      <div style={{ width: "100%", height: 320 }}>
+
+      <div style={{ width: "100%", height: 300 }}>
         <ResponsiveContainer>
           <LineChart
             data={dados}
-            margin={{ top: 10, right: 16, bottom: 10, left: 0 }}
+            margin={{ top: 10, right: 16, bottom: 4, left: 0 }}
           >
-            <defs>
-              <linearGradient id="goldLine" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#C9953A" />
-                <stop offset="100%" stopColor="#e6b560" />
-              </linearGradient>
-            </defs>
             <CartesianGrid
-              stroke="#1a1a1a"
-              strokeDasharray="3 3"
+              stroke="rgba(255,255,255,0.04)"
+              strokeDasharray="2 4"
               vertical={false}
             />
             <XAxis
               dataKey="mes"
-              stroke="#555"
+              stroke="rgba(255,255,255,0.3)"
               tickLine={false}
               axisLine={false}
-              fontSize={11}
+              style={{ fontSize: 9, fontFamily: "Poppins" }}
             />
             <YAxis
-              stroke="#555"
+              stroke="rgba(255,255,255,0.3)"
               tickLine={false}
               axisLine={false}
-              fontSize={11}
+              style={{ fontSize: 9, fontFamily: "Poppins" }}
               tickFormatter={(v) =>
                 v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)
               }
             />
             <Tooltip
-              cursor={{ stroke: "#C9953A33" }}
+              cursor={{ stroke: "rgba(201,149,58,0.25)" }}
               contentStyle={{
-                background: "#111",
-                border: "1px solid #C9953A55",
+                background: "rgba(0,0,0,0.8)",
+                border: "0.5px solid rgba(255,255,255,0.1)",
                 borderRadius: 8,
+                backdropFilter: "blur(16px)",
                 color: "#fff",
-                fontSize: 12,
+                fontFamily: "Poppins",
+                fontSize: 11,
+                fontWeight: 400,
+                boxShadow: "none",
               }}
               formatter={(v, name) => {
                 const n = typeof v === "number" ? v : Number(v)
-                const texto =
-                  !Number.isFinite(n)
-                    ? "—"
-                    : n.toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                        maximumFractionDigits: 0,
-                      })
+                const texto = !Number.isFinite(n)
+                  ? "—"
+                  : n.toLocaleString("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                      maximumFractionDigits: 0,
+                    })
                 return [texto, name]
               }}
             />
             {temReal && (
               <Legend
-                wrapperStyle={{ fontSize: 11, color: "#999" }}
+                wrapperStyle={{
+                  fontSize: 10,
+                  color: "rgba(255,255,255,0.4)",
+                  fontFamily: "Poppins",
+                }}
                 iconType="plainline"
               />
             )}
@@ -96,21 +107,22 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
               type="monotone"
               dataKey="meta"
               name="Meta"
-              stroke="url(#goldLine)"
-              strokeWidth={2.5}
-              dot={{ r: 4, stroke: "#C9953A", strokeWidth: 2, fill: "#0a0a0a" }}
-              activeDot={{ r: 6, fill: "#C9953A" }}
+              stroke="#C9953A"
+              strokeWidth={1.5}
+              dot={false}
+              activeDot={{ r: 4, fill: "#C9953A", stroke: "#000" }}
             />
             {temReal && (
               <Line
                 type="monotone"
                 dataKey="real"
                 name="Real"
-                stroke="#ffffff"
-                strokeWidth={2}
-                strokeDasharray="4 3"
-                dot={{ r: 3, stroke: "#fff", strokeWidth: 2, fill: "#0a0a0a" }}
+                stroke="#4caf50"
+                strokeWidth={1.5}
+                strokeDasharray="4 2"
+                dot={false}
                 connectNulls={false}
+                activeDot={{ r: 3, fill: "#4caf50", stroke: "#000" }}
               />
             )}
           </LineChart>

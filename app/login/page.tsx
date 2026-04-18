@@ -22,19 +22,47 @@ export default function LoginPage({
           <Image
             src={logo}
             alt="Anômalo Hub"
-            height={48}
-            style={{ height: 48, width: "auto" }}
+            height={56}
+            style={{ height: 56, width: "auto" }}
             priority
           />
-          <h1 className="mt-6 text-xl font-medium tracking-tight text-white">
+          <h1
+            style={{
+              fontSize: 20,
+              fontWeight: 700,
+              color: "#ffffff",
+              letterSpacing: "-0.3px",
+              marginTop: 22,
+            }}
+          >
             Anômalo Hub
           </h1>
-          <p className="mt-1 text-sm text-neutral-400">Painel de Metas</p>
+          <div
+            className="gold-divider"
+            style={{ marginTop: 10, marginBottom: 8 }}
+          />
+          <p
+            style={{
+              fontSize: 12,
+              color: "rgba(255,255,255,0.45)",
+              fontWeight: 300,
+            }}
+          >
+            Painel de Metas
+          </p>
         </div>
 
-        <form action={entrarAction} className="card p-6 space-y-4">
+        <form action={entrarAction} className="glass" style={{ padding: 24 }}>
           <label className="block">
-            <span className="text-xs uppercase tracking-widest text-neutral-400">
+            <span
+              style={{
+                fontSize: 9,
+                letterSpacing: "2px",
+                color: "rgba(255,255,255,0.35)",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
               Senha de acesso
             </span>
             <input
@@ -42,24 +70,50 @@ export default function LoginPage({
               name="senha"
               autoFocus
               required
-              className="mt-2 w-full rounded-lg bg-black/60 border border-neutral-800 focus:border-gold focus:outline-none px-3 py-2 text-white placeholder-neutral-600"
+              className="glass-input"
+              style={{
+                marginTop: 10,
+                width: "100%",
+                padding: "12px 14px",
+                fontSize: 14,
+                fontWeight: 400,
+              }}
               placeholder="••••••••"
             />
           </label>
 
           {comErro && (
-            <p className="text-sm text-red-400">Senha incorreta. Tente novamente.</p>
+            <p style={{ fontSize: 12, color: "#e24b4a", marginTop: 12 }}>
+              Senha incorreta. Tente novamente.
+            </p>
           )}
 
           <button
             type="submit"
-            className="w-full gold-gradient text-black font-medium rounded-lg py-2.5 transition hover:brightness-110"
+            className="btn-gold-solid"
+            style={{
+              marginTop: 16,
+              width: "100%",
+              padding: "12px 0",
+              fontSize: 12,
+              letterSpacing: "0.8px",
+              textTransform: "uppercase",
+            }}
           >
             Entrar
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-neutral-600">
+        <p
+          className="mt-8 text-center"
+          style={{
+            fontSize: 10,
+            letterSpacing: "1.5px",
+            color: "rgba(255,255,255,0.2)",
+            textTransform: "uppercase",
+            fontWeight: 400,
+          }}
+        >
           Acesso interno restrito · Grupo Anômalo Hub
         </p>
       </div>

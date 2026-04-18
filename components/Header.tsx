@@ -5,7 +5,7 @@ import { sairAction } from "@/app/login/actions"
 
 export default function Header({ children }: { children?: React.ReactNode }) {
   return (
-    <header className="border-b border-gold/20 bg-bg/90 backdrop-blur sticky top-0 z-20">
+    <header className="glass-header sticky top-0 z-20">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
         <Link href="/dashboard" className="flex items-center gap-3">
           <Image
@@ -15,11 +15,26 @@ export default function Header({ children }: { children?: React.ReactNode }) {
             style={{ height: 32, width: "auto" }}
             priority
           />
-          <div className="hidden sm:block">
-            <p className="text-sm tracking-widest text-gold uppercase font-medium">
+          <div className="hidden sm:block leading-tight">
+            <p
+              style={{
+                fontSize: 13,
+                letterSpacing: "0.5px",
+                color: "#C9953A",
+                fontWeight: 600,
+                textTransform: "uppercase",
+              }}
+            >
               Anômalo Hub
             </p>
-            <p className="text-xs text-neutral-500 -mt-0.5">
+            <p
+              style={{
+                fontSize: 11,
+                color: "rgba(255,255,255,0.35)",
+                fontWeight: 300,
+                marginTop: 2,
+              }}
+            >
               Painel de Metas
             </p>
           </div>
@@ -30,7 +45,13 @@ export default function Header({ children }: { children?: React.ReactNode }) {
           <form action={sairAction}>
             <button
               type="submit"
-              className="text-xs uppercase tracking-widest text-neutral-500 hover:text-gold transition"
+              style={{
+                fontSize: 11,
+                color: "rgba(255,255,255,0.35)",
+                fontWeight: 500,
+                letterSpacing: "0.5px",
+              }}
+              className="hover:text-[#C9953A] transition uppercase"
             >
               Sair
             </button>

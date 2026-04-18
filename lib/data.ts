@@ -510,6 +510,21 @@ export function metaAcumuladaAteHoje(
   return 0
 }
 
+export function corStatusMeta(
+  real: number,
+  metaTotal: number,
+  temReal: boolean,
+  mes: Mes,
+  ano: number = ANO_PADRAO
+): string {
+  if (!temReal) return "rgba(255,255,255,0.2)"
+  if (metaTotal === 0) return "#ffffff"
+  if (real >= metaTotal) return "#4caf50"
+  const acumulada = metaAcumuladaAteHoje(metaTotal, mes, ano)
+  if (real >= acumulada) return "#C9953A"
+  return "#e24b4a"
+}
+
 export function formatBRL(valor: number): string {
   return valor.toLocaleString("pt-BR", {
     style: "currency",

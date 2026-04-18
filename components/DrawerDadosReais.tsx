@@ -56,7 +56,7 @@ export default function DrawerDadosReais({
       <button
         type="button"
         onClick={() => setAberto(true)}
-        className="text-xs uppercase tracking-widest gold-gradient text-black font-medium rounded-lg px-4 py-2 hover:brightness-110"
+        className="btn-gold-outline uppercase"
       >
         Inserir dados reais
       </button>
@@ -67,37 +67,88 @@ export default function DrawerDadosReais({
             type="button"
             aria-label="Fechar"
             onClick={() => setAberto(false)}
-            className="absolute inset-0 bg-black/70"
+            className="absolute inset-0"
+            style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)" }}
           />
 
-          <aside className="absolute right-0 top-0 h-full w-full max-w-md bg-surface border-l border-gold/30 shadow-2xl overflow-y-auto">
-            <div className="sticky top-0 bg-surface/95 backdrop-blur border-b border-neutral-900 px-6 py-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-neutral-500">
-                  Dados reais · {mes} {ano}
-                </p>
-                <p className="text-sm font-medium text-white">{empresa}</p>
+          <aside
+            className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto"
+            style={{
+              background: "rgba(15,15,15,0.85)",
+              backdropFilter: "blur(24px)",
+              WebkitBackdropFilter: "blur(24px)",
+              borderLeft: "0.5px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <div
+              className="sticky top-0"
+              style={{
+                background: "rgba(10,10,10,0.7)",
+                backdropFilter: "blur(16px)",
+                borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+                padding: "18px 24px",
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: "2px",
+                      color: "rgba(255,255,255,0.35)",
+                      textTransform: "uppercase",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Dados reais · {mes} {ano}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 16,
+                      color: "#ffffff",
+                      fontWeight: 600,
+                      marginTop: 4,
+                    }}
+                  >
+                    {empresa}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAberto(false)}
+                  style={{
+                    color: "rgba(255,255,255,0.5)",
+                    fontSize: 22,
+                    lineHeight: 1,
+                  }}
+                  className="hover:text-white transition"
+                >
+                  ×
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setAberto(false)}
-                className="text-neutral-500 hover:text-white text-xl leading-none"
-              >
-                ×
-              </button>
             </div>
 
             {!supabaseOk && (
-              <div className="mx-6 mt-4 p-3 rounded-lg border border-red-900/60 bg-red-950/40 text-sm text-red-300">
-                Supabase não configurado. Defina as variáveis
-                NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no
-                Vercel para salvar dados reais.
+              <div
+                style={{
+                  margin: "18px 24px 0",
+                  padding: 12,
+                  border: "0.5px solid rgba(226,75,74,0.35)",
+                  background: "rgba(226,75,74,0.08)",
+                  color: "#e24b4a",
+                  fontSize: 12,
+                  borderRadius: 8,
+                }}
+              >
+                Supabase não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e
+                NEXT_PUBLIC_SUPABASE_ANON_KEY no Vercel.
               </div>
             )}
 
             <form
               action={(fd) => startTransition(() => onSubmit(fd))}
-              className="p-6 space-y-4"
+              style={{ padding: 24 }}
+              className="space-y-4"
             >
               <input type="hidden" name="empresa" value={empresa} />
               <input type="hidden" name="mes" value={mes} />
@@ -143,34 +194,62 @@ export default function DrawerDadosReais({
               />
 
               <label className="block">
-                <span className="text-xs uppercase tracking-widest text-neutral-400">
+                <span
+                  style={{
+                    fontSize: 9,
+                    letterSpacing: "2px",
+                    color: "rgba(255,255,255,0.35)",
+                    textTransform: "uppercase",
+                    fontWeight: 500,
+                  }}
+                >
                   Observações
                 </span>
                 <textarea
                   name="observacoes"
                   rows={3}
                   defaultValue={existentes?.observacoes ?? ""}
-                  className="mt-2 w-full rounded-lg bg-black/60 border border-neutral-800 focus:border-gold focus:outline-none px-3 py-2 text-white placeholder-neutral-600 text-sm"
+                  className="glass-input"
+                  style={{
+                    marginTop: 8,
+                    width: "100%",
+                    padding: "10px 14px",
+                    fontSize: 13,
+                    fontWeight: 400,
+                  }}
                   placeholder="Anotações do mês..."
                 />
               </label>
 
               {erro && (
-                <p className="text-sm text-red-400">{erro}</p>
+                <p style={{ fontSize: 12, color: "#e24b4a" }}>{erro}</p>
               )}
 
               <div className="flex items-center gap-3 pt-2">
                 <button
                   type="submit"
                   disabled={pending || !supabaseOk}
-                  className="flex-1 gold-gradient text-black font-medium rounded-lg py-2.5 transition hover:brightness-110 disabled:opacity-50"
+                  className="btn-gold-solid flex-1"
+                  style={{
+                    padding: "10px 0",
+                    fontSize: 12,
+                    letterSpacing: "0.5px",
+                    textTransform: "uppercase",
+                    opacity: pending || !supabaseOk ? 0.5 : 1,
+                  }}
                 >
                   {pending ? "Salvando..." : "Salvar"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setAberto(false)}
-                  className="text-sm text-neutral-400 hover:text-white px-4 py-2.5"
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(255,255,255,0.45)",
+                    padding: "10px 16px",
+                    fontWeight: 400,
+                  }}
+                  className="hover:text-white transition"
                 >
                   Cancelar
                 </button>
@@ -198,7 +277,15 @@ function Campo({
 }) {
   return (
     <label className="block">
-      <span className="text-xs uppercase tracking-widest text-neutral-400">
+      <span
+        style={{
+          fontSize: 9,
+          letterSpacing: "2px",
+          color: "rgba(255,255,255,0.35)",
+          textTransform: "uppercase",
+          fontWeight: 500,
+        }}
+      >
         {label}
       </span>
       <input
@@ -206,7 +293,14 @@ function Campo({
         name={name}
         step={step}
         defaultValue={defaultValue === null ? "" : defaultValue}
-        className="mt-2 w-full rounded-lg bg-black/60 border border-neutral-800 focus:border-gold focus:outline-none px-3 py-2 text-white placeholder-neutral-600 text-sm"
+        className="glass-input"
+        style={{
+          marginTop: 8,
+          width: "100%",
+          padding: "10px 14px",
+          fontSize: 13,
+          fontWeight: 400,
+        }}
         placeholder="—"
       />
     </label>

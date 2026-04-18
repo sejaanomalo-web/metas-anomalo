@@ -1,27 +1,65 @@
-import CardMetrica from "./CardMetrica"
-
 export default function MetaProjetada({
   cards,
 }: {
   cards: { titulo: string; valor: string; hint?: string }[]
 }) {
   return (
-    <div className="card p-6">
-      <p className="text-xs uppercase tracking-widest text-neutral-500 mb-4">
+    <div className="glass" style={{ padding: 24 }}>
+      <p
+        style={{
+          fontSize: 9,
+          letterSpacing: "2px",
+          color: "rgba(255,255,255,0.35)",
+          textTransform: "uppercase",
+          fontWeight: 500,
+          marginBottom: 16,
+        }}
+      >
         Meta Projetada
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div
+        className="grid grid-cols-2 sm:grid-cols-3"
+        style={{ gap: 10 }}
+      >
         {cards.map((c) => (
           <div
             key={c.titulo}
-            className="rounded-lg bg-black/40 border border-neutral-900 p-3"
+            className="glass"
+            style={{ padding: "14px 16px", borderRadius: 12 }}
           >
-            <p className="text-[10px] uppercase tracking-widest text-neutral-500">
+            <p
+              style={{
+                fontSize: 9,
+                letterSpacing: "2px",
+                color: "rgba(255,255,255,0.35)",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
               {c.titulo}
             </p>
-            <p className="mt-1.5 text-base font-medium text-white">{c.valor}</p>
+            <p
+              style={{
+                fontSize: 18,
+                color: "#ffffff",
+                fontWeight: 600,
+                marginTop: 6,
+                lineHeight: 1.1,
+              }}
+            >
+              {c.valor}
+            </p>
             {c.hint && (
-              <p className="text-[11px] text-gold/80 mt-0.5">{c.hint}</p>
+              <p
+                style={{
+                  fontSize: 10,
+                  color: "#C9953A",
+                  fontWeight: 400,
+                  marginTop: 4,
+                }}
+              >
+                {c.hint}
+              </p>
             )}
           </div>
         ))}
@@ -29,6 +67,3 @@ export default function MetaProjetada({
     </div>
   )
 }
-
-// Overload to keep CardMetrica usable elsewhere
-export { CardMetrica }

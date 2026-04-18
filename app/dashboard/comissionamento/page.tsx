@@ -64,29 +64,81 @@ export default async function ComissionamentoPage({
           <div>
             <Link
               href={`/dashboard?mes=${mes}`}
-              className="text-xs uppercase tracking-widest text-neutral-500 hover:text-gold transition"
+              style={{
+                fontSize: 10,
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,0.3)",
+                fontWeight: 500,
+              }}
+              className="hover:text-[#C9953A] transition"
             >
               ← Voltar ao painel
             </Link>
-            <h1 className="mt-3 text-3xl font-medium tracking-tight text-white">
+            <h1
+              style={{
+                fontSize: 32,
+                fontWeight: 700,
+                color: "#ffffff",
+                letterSpacing: "-0.5px",
+                lineHeight: 1.1,
+                marginTop: 14,
+              }}
+            >
               Comissionamento do Time
             </h1>
-            <p className="text-sm text-neutral-500 mt-1">
+            <div
+              className="gold-divider"
+              style={{ marginTop: 10, marginBottom: 10 }}
+            />
+            <p
+              style={{
+                fontSize: 13,
+                color: "rgba(255,255,255,0.45)",
+                fontWeight: 300,
+              }}
+            >
               {mes} de {ANO_PADRAO} · Bônus por performance e entregas
             </p>
           </div>
-          <div className="card px-5 py-3">
-            <p className="text-[10px] uppercase tracking-widest text-neutral-500">
+          <div className="glass" style={{ padding: "14px 22px" }}>
+            <p
+              style={{
+                fontSize: 9,
+                letterSpacing: "2px",
+                color: "rgba(255,255,255,0.35)",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
               Total pago no mês
             </p>
-            <p className="text-xl font-medium text-gold">
+            <p
+              style={{
+                fontSize: 22,
+                color: "#C9953A",
+                fontWeight: 700,
+                marginTop: 4,
+                letterSpacing: "-0.3px",
+              }}
+            >
               {formatBRL(totalBonus)}
             </p>
           </div>
         </div>
 
         {!supabaseOk && (
-          <div className="p-4 rounded-lg border border-red-900/60 bg-red-950/30 text-sm text-red-300">
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 12,
+              border: "0.5px solid rgba(226,75,74,0.35)",
+              background: "rgba(226,75,74,0.08)",
+              color: "#e24b4a",
+              fontSize: 12,
+              fontWeight: 400,
+            }}
+          >
             Supabase não configurado. Configure NEXT_PUBLIC_SUPABASE_URL e
             NEXT_PUBLIC_SUPABASE_ANON_KEY para salvar o comissionamento.
           </div>
@@ -123,7 +175,15 @@ export default async function ComissionamentoPage({
       </main>
 
       <footer className="max-w-7xl mx-auto px-6 py-10 text-center">
-        <p className="text-[11px] uppercase tracking-widest text-neutral-700">
+        <p
+          style={{
+            fontSize: 10,
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            color: "rgba(255,255,255,0.15)",
+            fontWeight: 400,
+          }}
+        >
           Anômalo Hub · {new Date().getFullYear()}
         </p>
       </footer>

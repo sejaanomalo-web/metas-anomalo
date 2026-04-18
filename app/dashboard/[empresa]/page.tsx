@@ -108,15 +108,41 @@ export default async function EmpresaPage({
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
             <Link
-              href="/dashboard"
-              className="text-xs uppercase tracking-widest text-neutral-500 hover:text-gold transition"
+              href={`/dashboard?mes=${mes}`}
+              style={{
+                fontSize: 10,
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,0.3)",
+                fontWeight: 500,
+              }}
+              className="hover:text-[#C9953A] transition"
             >
               ← Voltar ao painel
             </Link>
-            <h1 className="mt-3 text-3xl font-medium tracking-tight text-white">
+            <h1
+              style={{
+                fontSize: 32,
+                fontWeight: 700,
+                color: "#ffffff",
+                letterSpacing: "-0.5px",
+                lineHeight: 1.1,
+                marginTop: 14,
+              }}
+            >
               {empresa.nome}
             </h1>
-            <p className="text-sm text-neutral-500 mt-1">
+            <div
+              className="gold-divider"
+              style={{ marginTop: 10, marginBottom: 10 }}
+            />
+            <p
+              style={{
+                fontSize: 13,
+                color: "rgba(255,255,255,0.45)",
+                fontWeight: 300,
+              }}
+            >
               {mes} de {ANO_PADRAO} · Detalhamento completo
             </p>
           </div>
@@ -138,7 +164,7 @@ export default async function EmpresaPage({
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {empresa.tipo !== "diego" && (
-            <CenarioReal dados={real} meta={metaComparavel} />
+            <CenarioReal dados={real} meta={metaComparavel} mes={mes} />
           )}
           <MetaProjetada cards={cardsMeta} />
         </section>
@@ -153,7 +179,15 @@ export default async function EmpresaPage({
       </main>
 
       <footer className="max-w-7xl mx-auto px-6 py-10 text-center">
-        <p className="text-[11px] uppercase tracking-widest text-neutral-700">
+        <p
+          style={{
+            fontSize: 10,
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            color: "rgba(255,255,255,0.15)",
+            fontWeight: 400,
+          }}
+        >
           Anômalo Hub · {new Date().getFullYear()}
         </p>
       </footer>

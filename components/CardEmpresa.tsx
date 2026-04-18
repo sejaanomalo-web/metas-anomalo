@@ -4,6 +4,7 @@ import {
   type EmpresaMeta,
   type Mes,
   SUBTITULO_EMPRESA,
+  corStatusMeta,
   formatBRL,
   getFaturamentoMes,
   getVerbaMes,
@@ -27,116 +28,184 @@ export default function CardEmpresa({
   const temReal = typeof faturamentoReal === "number" && faturamentoReal > 0
 
   const corBolinha = !temReal
-    ? "#555"
+    ? "rgba(255,255,255,0.2)"
     : faturamentoReal >= metaAcumulada
     ? "#4caf50"
     : "#e24b4a"
+
+  const corBarra = corStatusMeta(
+    temReal ? faturamentoReal : 0,
+    meta,
+    temReal,
+    mes
+  )
 
   const progressoPct =
     temReal && meta > 0
       ? Math.min(100, Math.round((faturamentoReal / meta) * 100))
       : 0
 
-  const textoRodape = inativa
-    ? `Sem dados neste mês${
-        empresa.inicioEm ? ` — início em ${empresa.inicioEm}` : ""
-      }`
-    : temReal
-    ? `${progressoPct}% da meta de ${mes} atingida`
-    : "Nenhum dado inserido"
-
   return (
     <Link
       href={`/dashboard/${empresa.slug}?mes=${mes}`}
-      className="block transition hover:brightness-110"
+      className="glass glass-hover block"
       style={{
-        background: "#111111",
-        border: "0.5px solid #1e1e1e",
-        borderLeft: `2px solid ${inativa ? "#1e1e1e" : "#C9953A"}`,
-        borderRadius: 10,
-        padding: "16px 16px 16px 20px",
-        opacity: inativa ? 0.5 : 1,
+        opacity: inativa ? 0.35 : 1,
       }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3
-            style={{
-              fontSize: 14,
-              fontWeight: 500,
-              color: "#ffffff",
-              lineHeight: 1.2,
-            }}
-          >
-            {empresa.nome}
-          </h3>
-          <p style={{ fontSize: 10, color: "#444", marginTop: 4 }}>
-            {SUBTITULO_EMPRESA[empresa.slug]}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: corBolinha,
-              display: "inline-block",
-            }}
-            title={
-              !temReal
-                ? "Sem faturamento real inserido"
-                : faturamentoReal >= metaAcumulada
-                ? "Acima da meta acumulada"
-                : "Abaixo da meta acumulada"
-            }
-          />
-          <span
-            style={{
-              fontSize: 10,
-              color: "#C9953A",
-              letterSpacing: "1px",
-              textTransform: "uppercase",
-            }}
-          >
-            {mes}
-          </span>
-        </div>
-      </div>
-
-      <div
-        className="grid grid-cols-2 gap-2"
-        style={{ marginTop: 16 }}
-      >
-        <BlocoMetrica rotulo="Investimento" valor={formatBRL(investimento)} />
-        <BlocoMetrica
-          rotulo="Faturamento"
-          valor={formatBRL(meta)}
-          destaque
-        />
-      </div>
-
-      <div style={{ marginTop: 16 }}>
+      <div style={{ padding: "18px 20px 14px" }}>
         <div
+          className="flex items-center justify-between"
+          style={{ marginBottom: 10 }}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: corBolinha,
+                display: "inline-block",
+              }}
+            />
+            <span
+              style={{
+                fontSize: 9,
+                letterSpacing: "2px",
+                color: "rgba(255,255,255,0.35)",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
+              {mes} 2025
+            </span>
+          </div>
+        </div>
+
+        <h3
           style={{
-            height: 2,
-            background: "#1a1a1a",
-            borderRadius: 2,
-            overflow: "hidden",
+            fontSize: 18,
+            fontWeight: 600,
+            color: "#ffffff",
+            letterSpacing: "-0.3px",
+            lineHeight: 1.2,
           }}
         >
-          <div
+          {empresa.nome}
+        </h3>
+
+        {!inativa && (
+          <p
             style={{
-              height: "100%",
-              width: `${progressoPct}%`,
-              background: "#C9953A",
+              fontSize: 11,
+              color: "rgba(255,255,255,0.35)",
+              fontWeight: 300,
+              marginTop: 4,
             }}
-          />
-        </div>
-        <p style={{ fontSize: 10, color: "#444", marginTop: 8 }}>
-          {textoRodape}
-        </p>
+          >
+            {SUBTITULO_EMPRESA[empresa.slug]}
+          </p>
+        )}
+
+        {inativa && (
+          <p
+            style={{
+              fontSize: 11,
+              color: "rgba(255,255,255,0.2)",
+              fontWeight: 300,
+              fontStyle: "italic",
+              marginTop: 8,
+            }}
+          >
+            Sem dados neste mês
+            {empresa.inicioEm ? ` — início em ${empresa.inicioEm}` : ""}
+          </p>
+        )}
       </div>
+
+      {!inativa && (
+        <>
+          <div className="divider-h" />
+
+          <div className="grid grid-cols-2" style={{ position: "relative" }}>
+            <div
+              className="divider-v"
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: 10,
+                bottom: 10,
+              }}
+            />
+            <BlocoMetrica rotulo="Investimento" valor={formatBRL(investimento)} />
+            <BlocoMetrica
+              rotulo="Faturamento"
+              valor={formatBRL(meta)}
+              destaque
+            />
+          </div>
+
+          <div className="divider-h" />
+
+          <div style={{ padding: "14px 20px 16px" }}>
+            <div className="flex items-center gap-3">
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 500,
+                  color: temReal ? corBarra : "rgba(255,255,255,0.2)",
+                  width: 32,
+                  textAlign: "right",
+                  flexShrink: 0,
+                }}
+              >
+                {temReal ? `${progressoPct}%` : "—"}
+              </span>
+              <div
+                style={{
+                  flex: 1,
+                  height: 1.5,
+                  background: "rgba(255,255,255,0.06)",
+                  borderRadius: 2,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${progressoPct}%`,
+                    background: corBarra,
+                  }}
+                />
+              </div>
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 300,
+                  color: "rgba(255,255,255,0.3)",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}
+              >
+                Meta {formatBRL(meta)}
+              </span>
+            </div>
+            <p
+              style={{
+                fontSize: 10,
+                color: "rgba(255,255,255,0.45)",
+                marginTop: 8,
+                fontWeight: 300,
+                fontStyle: temReal ? "normal" : "italic",
+              }}
+            >
+              {temReal
+                ? `${progressoPct}% da meta de ${mes} atingida`
+                : "Nenhum dado inserido"}
+            </p>
+          </div>
+        </>
+      )}
     </Link>
   )
 }
@@ -151,29 +220,24 @@ function BlocoMetrica({
   destaque?: boolean
 }) {
   return (
-    <div
-      style={{
-        background: "#0d0d0d",
-        borderRadius: 6,
-        padding: "10px 12px",
-      }}
-    >
+    <div style={{ padding: "14px 20px" }}>
       <p
         style={{
           fontSize: 9,
-          color: "#444",
-          letterSpacing: "1px",
+          letterSpacing: "2px",
+          color: "rgba(255,255,255,0.3)",
           textTransform: "uppercase",
+          fontWeight: 500,
         }}
       >
         {rotulo}
       </p>
       <p
         style={{
-          fontSize: 18,
-          fontWeight: 500,
-          color: destaque ? "#C9953A" : "#ffffff",
-          marginTop: 4,
+          fontSize: 17,
+          fontWeight: destaque ? 600 : 400,
+          color: destaque ? "#C9953A" : "rgba(255,255,255,0.7)",
+          marginTop: 6,
           lineHeight: 1.1,
         }}
       >

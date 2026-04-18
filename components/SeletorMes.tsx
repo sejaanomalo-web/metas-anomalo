@@ -15,21 +15,22 @@ export default function SeletorMes({ mesAtual }: { mesAtual: Mes }) {
   }
 
   return (
-    <label className="flex items-center gap-2">
-      <span className="text-xs uppercase tracking-widest text-neutral-500">
-        Mês
-      </span>
-      <select
-        value={mesAtual}
-        onChange={(e) => alterar(e.target.value)}
-        className="bg-black border border-gold/30 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-gold"
-      >
-        {MESES.map((m) => (
-          <option key={m} value={m}>
-            {m} 2025
-          </option>
-        ))}
-      </select>
-    </label>
+    <select
+      value={mesAtual}
+      onChange={(e) => alterar(e.target.value)}
+      className="glass-input"
+      style={{
+        padding: "8px 14px",
+        fontSize: 11,
+        fontWeight: 500,
+        color: "rgba(255,255,255,0.7)",
+      }}
+    >
+      {MESES.map((m) => (
+        <option key={m} value={m} style={{ background: "#0a0a0a" }}>
+          {m} 2025
+        </option>
+      ))}
+    </select>
   )
 }
