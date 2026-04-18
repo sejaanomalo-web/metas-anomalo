@@ -15,6 +15,7 @@ import {
   mesValido,
 } from "@/lib/data"
 import { getDadosReaisDoMes } from "@/lib/dados-reais"
+import { getTimeDoHub } from "@/lib/strip"
 
 export default async function DashboardPage({
   searchParams,
@@ -29,16 +30,17 @@ export default async function DashboardPage({
   const ano = anoValido(searchParams?.ano)
   const temProjecao = anoTemProjecao(ano)
   const resumo = getResumoGrupo(mes, ano)
-  const reaisDoMes = await getDadosReaisDoMes(mes, ano)
+  const [reaisDoMes, time] = await Promise.all([
+    getDadosReaisDoMes(mes, ano),
+    getTimeDoHub(),
+  ])
 
   let somaFat = 0
   let somaInv = 0
   let somaLeads = 0
-  let somaCri = 0
   let temFat = false
   let temInv = false
   let temLeads = false
-  let temCri = false
   for (const d of reaisDoMes.values()) {
     if (d.faturamento_real !== null) {
       somaFat += d.faturamento_real
@@ -52,10 +54,6 @@ export default async function DashboardPage({
       somaLeads += d.leads_real
       temLeads = true
     }
-    if (d.criativos_entregues !== null) {
-      somaCri += d.criativos_entregues
-      temCri = true
-    }
   }
 
   interface Celula {
@@ -66,6 +64,8 @@ export default async function DashboardPage({
     temReal: boolean
     somaReal: number
     tipo: "moeda" | "numero"
+    semMeta?: boolean
+    subLabel?: string
   }
 
   const celulas: Celula[] = [
@@ -97,13 +97,15 @@ export default async function DashboardPage({
       tipo: "numero",
     },
     {
-      rotulo: "Criativos do mês",
-      real: formatNumero(somaCri),
-      meta: resumo.criativos,
-      metaLabel: formatNumero(resumo.criativos),
-      temReal: temCri,
-      somaReal: somaCri,
+      rotulo: "Time do hub",
+      real: formatNumero(time.total),
+      meta: 0,
+      metaLabel: "",
+      temReal: true,
+      somaReal: time.total,
       tipo: "numero",
+      semMeta: true,
+      subLabel: time.subLabel,
     },
   ]
 
@@ -189,67 +191,82 @@ export default async function DashboardPage({
                 >
                   {c.real}
                 </p>
-                {temProjecao ? (
+                {c.semMeta ? (
                   <p
                     style={{
                       fontSize: 11,
-                      color: cor,
-                      fontWeight: 400,
+                      color: "rgba(255,255,255,0.45)",
+                      fontWeight: 300,
                       marginTop: 6,
                     }}
                   >
-                    Meta {c.metaLabel}
+                    {c.subLabel}
                   </p>
                 ) : (
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(255,255,255,0.2)",
-                      fontWeight: 300,
-                      fontStyle: "italic",
-                      marginTop: 6,
-                    }}
-                  >
-                    Planejamento futuro — sem projeção definida
-                  </p>
-                )}
-                <div
-                  style={{
-                    marginTop: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: 1,
-                      height: 2,
-                      background: "rgba(255,255,255,0.06)",
-                      borderRadius: 2,
-                      overflow: "hidden",
-                    }}
-                  >
+                  <>
+                    {temProjecao ? (
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: cor,
+                          fontWeight: 400,
+                          marginTop: 6,
+                        }}
+                      >
+                        Meta {c.metaLabel}
+                      </p>
+                    ) : (
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "rgba(255,255,255,0.2)",
+                          fontWeight: 300,
+                          fontStyle: "italic",
+                          marginTop: 6,
+                        }}
+                      >
+                        Planejamento futuro — sem projeção definida
+                      </p>
+                    )}
                     <div
                       style={{
-                        height: "100%",
-                        width: `${pct}%`,
-                        background: cor,
+                        marginTop: 10,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
                       }}
-                    />
-                  </div>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 500,
-                      color: cor,
-                      width: 34,
-                      textAlign: "right",
-                    }}
-                  >
-                    {pct}%
-                  </span>
-                </div>
+                    >
+                      <div
+                        style={{
+                          flex: 1,
+                          height: 2,
+                          background: "rgba(255,255,255,0.06)",
+                          borderRadius: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${pct}%`,
+                            background: cor,
+                          }}
+                        />
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 500,
+                          color: cor,
+                          width: 34,
+                          textAlign: "right",
+                        }}
+                      >
+                        {pct}%
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             )
           })}
