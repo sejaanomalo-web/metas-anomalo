@@ -13,6 +13,7 @@ export interface DadosReais {
   criativos_entregues: number | null
   cpl_real: number | null
   observacoes: string | null
+  clientes_ativos: number | null
   updated_at?: string
 }
 

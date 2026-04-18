@@ -150,6 +150,7 @@ export async function salvarDadosReaisAction(
   const faturamento_real = parseNumero(formData.get("faturamento_real"))
   const criativos_entregues = parseInt0(formData.get("criativos_entregues"))
   const observacoes = String(formData.get("observacoes") ?? "").trim() || null
+  const clientes_ativos = parseInt0(formData.get("clientes_ativos"))
 
   const cpl_real =
     investimento_real !== null && leads_real !== null && leads_real > 0
@@ -168,6 +169,7 @@ export async function salvarDadosReaisAction(
     criativos_entregues,
     cpl_real,
     observacoes,
+    clientes_ativos,
     updated_at: new Date().toISOString(),
   }
 

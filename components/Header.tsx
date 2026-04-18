@@ -2,6 +2,7 @@ import Image from "next/image"
 import Link from "next/link"
 import logo from "@/public/logo-anomalo.png"
 import { sairAction } from "@/app/login/actions"
+import BotaoSemanal from "./BotaoSemanal"
 
 export default function Header({ children }: { children?: React.ReactNode }) {
   return (
@@ -40,8 +41,22 @@ export default function Header({ children }: { children?: React.ReactNode }) {
           </div>
         </Link>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {children}
+          <BotaoSemanal />
+          <Link
+            href="/dashboard/configuracoes"
+            aria-label="Configurações"
+            style={{
+              fontSize: 18,
+              color: "rgba(255,255,255,0.3)",
+              lineHeight: 1,
+              padding: "4px 6px",
+            }}
+            className="hover:text-[#C9953A] transition"
+          >
+            ⚙
+          </Link>
           <form action={sairAction}>
             <button
               type="submit"

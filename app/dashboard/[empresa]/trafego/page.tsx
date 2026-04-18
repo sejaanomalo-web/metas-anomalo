@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
+import OutrasPlataformas from "@/components/OutrasPlataformas"
 import { estaAutenticado } from "@/lib/auth"
 import {
   anoValido,
@@ -162,9 +163,6 @@ export default async function TrafegoPage({
 
         <div className="flex items-center gap-2 flex-wrap">
           <TabPlataforma ativa label="Meta Ads" />
-          <TabPlataforma label="Google Ads" />
-          <TabPlataforma label="LinkedIn Ads" />
-          <TabPlataforma label="TikTok Ads" />
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -342,6 +340,10 @@ export default async function TrafegoPage({
               </table>
             </div>
           )}
+
+          <div style={{ marginTop: 18 }}>
+            <OutrasPlataformas />
+          </div>
         </section>
       </main>
     </>

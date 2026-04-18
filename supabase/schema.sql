@@ -109,3 +109,43 @@ create policy comissionamento_all
   to anon, authenticated
   using (true)
   with check (true);
+
+-- Migração: clientes_ativos em dados_reais + configuracoes + log_semanal ----
+alter table public.dados_reais
+  add column if not exists clientes_ativos int;
+
+create table if not exists public.configuracoes (
+  id uuid primary key default gen_random_uuid(),
+  chave text not null unique,
+  valor jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.log_semanal (
+  id uuid primary key default gen_random_uuid(),
+  semana int not null,
+  mes text not null,
+  ano int not null,
+  preenchido_por text,
+  timestamp timestamptz not null default now(),
+  dados_salvos jsonb
+);
+
+alter table public.configuracoes enable row level security;
+alter table public.log_semanal enable row level security;
+
+drop policy if exists configuracoes_all on public.configuracoes;
+create policy configuracoes_all
+  on public.configuracoes
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+drop policy if exists log_semanal_all on public.log_semanal;
+create policy log_semanal_all
+  on public.log_semanal
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);

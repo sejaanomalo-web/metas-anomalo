@@ -9,6 +9,7 @@ import TabelaMeses from "@/components/TabelaMeses"
 import DrawerDadosReais from "@/components/DrawerDadosReais"
 import { estaAutenticado } from "@/lib/auth"
 import {
+  SUBTITULO_EMPRESA,
   anoTemProjecao,
   anoValido,
   type EmpresaSlug,
@@ -113,15 +114,16 @@ export default async function EmpresaPage({
               className="gold-divider"
               style={{ marginTop: 10, marginBottom: 10 }}
             />
-            <p
-              style={{
-                fontSize: 13,
-                color: "rgba(255,255,255,0.45)",
-                fontWeight: 300,
-              }}
-            >
-              {mes} de {ano} · Detalhamento completo
-            </p>
+            <MetadadosEmpresa
+              mes={mes}
+              clientesReais={real?.clientes_ativos ?? null}
+              linhaProjetada={
+                empresa.tipo === "leads-reunioes-contratos"
+                  ? (dados as LinhaPadrao[]).find((l) => l.mes === mes)
+                  : undefined
+              }
+              subtitulo={SUBTITULO_EMPRESA[empresa.slug]}
+            />
           </div>
           {empresa.tipo !== "diego" && (
             <DrawerDadosReais
@@ -215,6 +217,33 @@ export default async function EmpresaPage({
   )
 }
 
+function MetadadosEmpresa({
+  mes,
+  clientesReais,
+  linhaProjetada,
+  subtitulo,
+}: {
+  mes: Mes
+  clientesReais: number | null
+  linhaProjetada?: LinhaPadrao
+  subtitulo: string
+}) {
+  const clientes =
+    clientesReais !== null ? clientesReais : linhaProjetada?.clientes ?? 0
+  return (
+    <p
+      style={{
+        fontSize: 12,
+        color: "rgba(255,255,255,0.35)",
+        fontWeight: 300,
+      }}
+    >
+      {mes} · {clientes} {clientes === 1 ? "cliente ativo" : "clientes ativos"}{" "}
+      · {subtitulo}
+    </p>
+  )
+}
+
 function extrairMetaComparavel(
   tipo: NonNullable<ReturnType<typeof getEmpresa>>["tipo"],
   dados: ReturnType<typeof getDadosEmpresa>,
@@ -273,7 +302,6 @@ function construirTabela(
         { chave: "reunioes", titulo: "Reuniões" },
         { chave: "contratos", titulo: "Contratos" },
         { chave: "churn", titulo: "Churn" },
-        { chave: "clientes", titulo: "Clientes Ativos" },
         { chave: "ticket", titulo: "Ticket", tipo: "brl" as const },
         { chave: "faturamento", titulo: "Faturamento", tipo: "brl" as const },
       ],
