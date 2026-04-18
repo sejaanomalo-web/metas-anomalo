@@ -137,6 +137,48 @@ alter table public.colaboradores
   add column if not exists data_entrada date;
 alter table public.colaboradores
   add column if not exists observacoes text;
+alter table public.colaboradores
+  add column if not exists is_fixed boolean default false;
+alter table public.colaboradores
+  add column if not exists descricao text;
+
+-- Seed dos colaboradores fixos (Felipe, Vinicius, Emanuel) --------------
+-- idempotente: só insere se o nome ainda não existe na tabela.
+insert into public.colaboradores
+  (nome, funcao, descricao, tipo, configuracao_padrao, ativo, is_fixed)
+select
+  'Felipe',
+  'TRÁFEGO',
+  'Bônus por gatilhos de performance',
+  'gatilhos',
+  '{"tipo":"gatilhos","gatilhos":[{"chave":"cpl_meta","rotulo":"CPL dentro da meta","valor":200},{"chave":"leads_meta","rotulo":"Meta de leads atingida","valor":200},{"chave":"roas_hato","rotulo":"ROAS Hato acima do alvo","valor":150,"alvoRoas":2.5},{"chave":"posts_prazo","rotulo":"100% posts no prazo","valor":150}]}'::jsonb,
+  true,
+  true
+where not exists (select 1 from public.colaboradores where nome = 'Felipe');
+
+insert into public.colaboradores
+  (nome, funcao, descricao, tipo, configuracao_padrao, ativo, is_fixed)
+select
+  'Vinicius',
+  'EDITOR · ESTÁTICOS E CARROSSÉIS',
+  'Bônus por entregas válidas no mês',
+  'escala',
+  '{"tipo":"escala","faixas":[{"minimo":0,"bonus":0},{"minimo":10,"bonus":100},{"minimo":15,"bonus":200},{"minimo":20,"bonus":350},{"minimo":25,"bonus":500},{"minimo":30,"bonus":700}]}'::jsonb,
+  true,
+  true
+where not exists (select 1 from public.colaboradores where nome = 'Vinicius');
+
+insert into public.colaboradores
+  (nome, funcao, descricao, tipo, configuracao_padrao, ativo, is_fixed)
+select
+  'Emanuel',
+  'EDITOR DE VÍDEO · REELS',
+  'Bônus por entregas válidas no mês',
+  'escala',
+  '{"tipo":"escala","faixas":[{"minimo":0,"bonus":0},{"minimo":5,"bonus":100},{"minimo":8,"bonus":200},{"minimo":11,"bonus":350},{"minimo":15,"bonus":500}]}'::jsonb,
+  true,
+  true
+where not exists (select 1 from public.colaboradores where nome = 'Emanuel');
 
 alter table public.funcoes_time enable row level security;
 

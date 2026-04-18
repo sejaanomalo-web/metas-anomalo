@@ -124,9 +124,10 @@ export default function CardColaboradorDinamico({
           marginTop: 4,
         }}
       >
-        {configuracao.tipo === "escala"
-          ? "Bônus por entregas válidas no mês"
-          : "Bônus por gatilhos de performance"}
+        {colaborador.descricao ??
+          (configuracao.tipo === "escala"
+            ? "Bônus por entregas válidas no mês"
+            : "Bônus por gatilhos de performance")}
       </p>
 
       {colaborador.data_entrada && (

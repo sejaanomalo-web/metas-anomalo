@@ -181,6 +181,7 @@ export async function salvarColaboradorAction(
   const dataEntradaRaw = String(formData.get("data_entrada") ?? "").trim()
   const observacoes =
     String(formData.get("observacoes") ?? "").trim().slice(0, 120) || null
+  const descricao = String(formData.get("descricao") ?? "").trim() || null
 
   const payload: Colaborador = {
     nome,
@@ -190,6 +191,7 @@ export async function salvarColaboradorAction(
     ativo: true,
     data_entrada: dataEntradaRaw || null,
     observacoes,
+    descricao,
   }
 
   const { error } = await supabase.from("colaboradores").insert(payload)
@@ -281,6 +283,7 @@ export async function atualizarColaboradorAction(
   const dataEntradaRaw = String(formData.get("data_entrada") ?? "").trim()
   const observacoes =
     String(formData.get("observacoes") ?? "").trim().slice(0, 120) || null
+  const descricao = String(formData.get("descricao") ?? "").trim() || null
   const configuracao = parseConfiguracao(configuracaoRaw)
 
   if (!id) return { ok: false, erro: "ID inválido." }
@@ -316,6 +319,7 @@ export async function atualizarColaboradorAction(
       configuracao_padrao: configuracao,
       data_entrada: dataEntradaRaw || null,
       observacoes,
+      descricao,
     })
     .eq("id", id)
   if (error) return { ok: false, erro: error.message }

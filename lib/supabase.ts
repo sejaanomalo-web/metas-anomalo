@@ -64,6 +64,8 @@ export interface Colaborador {
   ativo: boolean
   data_entrada?: string | null
   observacoes?: string | null
+  descricao?: string | null
+  is_fixed?: boolean
   created_at?: string
 }
 

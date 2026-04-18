@@ -212,50 +212,128 @@ export default async function ComissionamentoPage({
         )}
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <CardFelipe
-            mes={mes}
-            ano={ano}
-            existente={felipe}
-            supabaseOk={supabaseOk}
-          />
-          <CardEditor
-            colaborador="vinicius"
-            nome="Vinicius"
-            funcao="Editor · estáticos e carrosséis"
-            faixas={FAIXAS_VINICIUS}
-            mes={mes}
-            ano={ano}
-            existente={vinicius}
-            supabaseOk={supabaseOk}
-          />
-          <CardEditor
-            colaborador="emanuel"
-            nome="Emanuel"
-            funcao="Editor de vídeo · Reels"
-            faixas={FAIXAS_EMANUEL}
-            mes={mes}
-            ano={ano}
-            existente={emanuel}
-            supabaseOk={supabaseOk}
-          />
-          {colaboradoresExtras.map((c) => {
-            const chave = c.nome.toLowerCase()
-            const meta = metasEditaveis.get(chave)
-            const config = meta?.configuracao ?? c.configuracao_padrao
-            const existente =
-              registros.find((r) => r.colaborador === chave) ?? null
+          {(() => {
+            const dbFelipe = colaboradoresExtras.find(
+              (c) => c.nome.toLowerCase() === "felipe"
+            )
+            if (dbFelipe) {
+              const meta = metasEditaveis.get("felipe")
+              const config = meta?.configuracao ?? dbFelipe.configuracao_padrao
+              const existente =
+                registros.find((r) => r.colaborador === "felipe") ?? null
+              return (
+                <CardColaboradorDinamico
+                  colaborador={dbFelipe}
+                  configuracao={config}
+                  existente={existente}
+                  mes={mes}
+                  ano={ano}
+                  supabaseOk={supabaseOk}
+                />
+              )
+            }
             return (
-              <CardColaboradorDinamico
-                key={c.id}
-                colaborador={c}
-                configuracao={config}
-                existente={existente}
+              <CardFelipe
                 mes={mes}
                 ano={ano}
+                existente={felipe}
                 supabaseOk={supabaseOk}
               />
             )
-          })}
+          })()}
+          {(() => {
+            const dbVinicius = colaboradoresExtras.find(
+              (c) => c.nome.toLowerCase() === "vinicius"
+            )
+            if (dbVinicius) {
+              const meta = metasEditaveis.get("vinicius")
+              const config =
+                meta?.configuracao ?? dbVinicius.configuracao_padrao
+              const existente =
+                registros.find((r) => r.colaborador === "vinicius") ?? null
+              return (
+                <CardColaboradorDinamico
+                  colaborador={dbVinicius}
+                  configuracao={config}
+                  existente={existente}
+                  mes={mes}
+                  ano={ano}
+                  supabaseOk={supabaseOk}
+                />
+              )
+            }
+            return (
+              <CardEditor
+                colaborador="vinicius"
+                nome="Vinicius"
+                funcao="Editor · estáticos e carrosséis"
+                faixas={FAIXAS_VINICIUS}
+                mes={mes}
+                ano={ano}
+                existente={vinicius}
+                supabaseOk={supabaseOk}
+              />
+            )
+          })()}
+          {(() => {
+            const dbEmanuel = colaboradoresExtras.find(
+              (c) => c.nome.toLowerCase() === "emanuel"
+            )
+            if (dbEmanuel) {
+              const meta = metasEditaveis.get("emanuel")
+              const config =
+                meta?.configuracao ?? dbEmanuel.configuracao_padrao
+              const existente =
+                registros.find((r) => r.colaborador === "emanuel") ?? null
+              return (
+                <CardColaboradorDinamico
+                  colaborador={dbEmanuel}
+                  configuracao={config}
+                  existente={existente}
+                  mes={mes}
+                  ano={ano}
+                  supabaseOk={supabaseOk}
+                />
+              )
+            }
+            return (
+              <CardEditor
+                colaborador="emanuel"
+                nome="Emanuel"
+                funcao="Editor de vídeo · Reels"
+                faixas={FAIXAS_EMANUEL}
+                mes={mes}
+                ano={ano}
+                existente={emanuel}
+                supabaseOk={supabaseOk}
+              />
+            )
+          })()}
+          {colaboradoresExtras
+            .filter(
+              (c) =>
+                !["felipe", "vinicius", "emanuel"].includes(
+                  c.nome.toLowerCase()
+                )
+            )
+            .map((c) => {
+              const chave = c.nome.toLowerCase()
+              const meta = metasEditaveis.get(chave)
+              const config = meta?.configuracao ?? c.configuracao_padrao
+              const existente =
+                registros.find((r) => r.colaborador === chave) ?? null
+              return (
+                <CardColaboradorDinamico
+                  key={c.id}
+                  colaborador={c}
+                  configuracao={config}
+                  existente={existente}
+                  mes={mes}
+                  ano={ano}
+                  supabaseOk={supabaseOk}
+                />
+              )
+            })}
         </section>
       </main>
 

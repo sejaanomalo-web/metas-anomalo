@@ -1032,6 +1032,8 @@ function AbaPessoas({
   const [tipo, setTipo] = useState<"escala" | "gatilhos">("escala")
   const [dataEntrada, setDataEntrada] = useState<string>("")
   const [observacoes, setObservacoes] = useState<string>("")
+  const [descricao, setDescricao] = useState<string>("")
+  const [atualizacao, setAtualizacao] = useState<string | null>(null)
   const [faixas, setFaixas] = useState<Faixa[]>([{ minimo: 0, bonus: 0 }])
   const [gatilhos, setGatilhos] = useState<GatilhoConfig[]>([
     { chave: "g1", rotulo: "Novo gatilho", valor: 100 },
@@ -1054,6 +1056,7 @@ function AbaPessoas({
     setTipo("escala")
     setDataEntrada("")
     setObservacoes("")
+    setDescricao("")
     setFaixas([{ minimo: 0, bonus: 0 }])
     setGatilhos([{ chave: "g1", rotulo: "Novo gatilho", valor: 100 }])
     setStatus(null)
@@ -1067,6 +1070,7 @@ function AbaPessoas({
     setTipo(c.tipo)
     setDataEntrada(c.data_entrada ?? "")
     setObservacoes(c.observacoes ?? "")
+    setDescricao(c.descricao ?? "")
     if (c.configuracao_padrao.tipo === "escala") {
       setFaixas(c.configuracao_padrao.faixas)
     } else {
@@ -1092,11 +1096,14 @@ function AbaPessoas({
     fd.set("ano", String(ano))
     if (dataEntrada) fd.set("data_entrada", dataEntrada)
     if (observacoes) fd.set("observacoes", observacoes)
+    if (descricao) fd.set("descricao", descricao)
     if (modo === "editando" && editingId) {
       fd.set("id", editingId)
+      const nomeSalvo = nome
       const r = await atualizarColaboradorAction(fd)
       if (r.ok) {
-        setStatus("Atualizado ✓")
+        setAtualizacao(nomeSalvo)
+        setTimeout(() => setAtualizacao(null), 3000)
         limparFormulario()
         router.refresh()
       } else {
@@ -1149,10 +1156,11 @@ function AbaPessoas({
   }
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       {criacao && (
         <div
           style={{
+            order: 0,
             background: "rgba(76,175,80,0.08)",
             border: "0.5px solid rgba(76,175,80,0.2)",
             borderRadius: 8,
@@ -1173,8 +1181,29 @@ function AbaPessoas({
         </div>
       )}
 
+      {atualizacao && (
+        <div
+          style={{
+            order: 0,
+            background: "rgba(76,175,80,0.08)",
+            border: "0.5px solid rgba(76,175,80,0.2)",
+            borderRadius: 8,
+            padding: "12px 14px",
+            color: "rgba(255,255,255,0.6)",
+            fontSize: 11,
+            fontWeight: 400,
+          }}
+        >
+          <p style={{ color: "#4caf50", marginBottom: 4 }}>
+            ✓ {atualizacao} atualizado com sucesso
+          </p>
+          <p>As informações do card foram atualizadas.</p>
+        </div>
+      )}
+
       <div
         style={{
+          order: 2,
           border: "0.5px solid rgba(255,255,255,0.08)",
           borderRadius: 12,
           padding: 18,
@@ -1229,6 +1258,22 @@ function AbaPessoas({
             onChange={setFuncao}
             funcoes={funcoes}
           />
+
+          <label className="block">
+            <LabelSmall>Descrição</LabelSmall>
+            <input
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+              placeholder="Ex: Bônus por entregas válidas no mês"
+              className="glass-input"
+              style={{
+                marginTop: 6,
+                width: "100%",
+                padding: "8px 12px",
+                fontSize: 13,
+              }}
+            />
+          </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
@@ -1359,7 +1404,7 @@ function AbaPessoas({
       </div>
 
       {colaboradores.length > 0 && (
-        <div>
+        <div style={{ order: 1 }}>
           <p
             style={{
               fontSize: 9,
@@ -1424,15 +1469,17 @@ function AbaPessoas({
                   >
                     🗑
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalExcluir(c)}
-                    title="Excluir permanentemente"
-                    style={{ ...BTN_ICON, color: "rgba(255,255,255,0.2)" }}
-                    className="hover:text-[#e24b4a] transition"
-                  >
-                    ✕
-                  </button>
+                  {!c.is_fixed && (
+                    <button
+                      type="button"
+                      onClick={() => setModalExcluir(c)}
+                      title="Excluir permanentemente"
+                      style={{ ...BTN_ICON, color: "rgba(255,255,255,0.2)" }}
+                      className="hover:text-[#e24b4a] transition"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -1441,7 +1488,7 @@ function AbaPessoas({
       )}
 
       {colaboradoresInativos.length > 0 && (
-        <div>
+        <div style={{ order: 3 }}>
           <button
             type="button"
             onClick={() => setInativosAbertos((v) => !v)}
@@ -1534,7 +1581,9 @@ function AbaPessoas({
         </div>
       )}
 
-      <SecaoFuncoes funcoes={funcoes} />
+      <div style={{ order: 4 }}>
+        <SecaoFuncoes funcoes={funcoes} />
+      </div>
 
       {modalExcluir && (
         <ModalExcluir
