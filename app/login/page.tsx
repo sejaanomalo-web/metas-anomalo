@@ -18,35 +18,33 @@ export default function LoginPage({
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-10">
           <span
-            className="font-serif italic"
             style={{
-              fontSize: 64,
+              fontSize: 48,
               color: "#C9953A",
               lineHeight: 1,
-              fontWeight: 400,
+              fontWeight: 500,
             }}
           >
             Λ
           </span>
           <p
-            className="mt-6"
             style={{
-              fontSize: 13,
-              letterSpacing: "2px",
-              color: "#d0d0d0",
+              fontSize: 14,
+              letterSpacing: "0.5px",
+              color: "#fff",
               fontWeight: 500,
               textTransform: "uppercase",
+              marginTop: 18,
             }}
           >
             Anômalo Hub
           </p>
           <p
             style={{
-              fontSize: 9,
-              letterSpacing: "3px",
-              color: "#242424",
-              marginTop: 4,
-              textTransform: "uppercase",
+              fontSize: 12,
+              color: "#666",
+              marginTop: 6,
+              fontWeight: 400,
             }}
           >
             Painel de Metas
@@ -61,9 +59,9 @@ export default function LoginPage({
           <label className="block">
             <span
               style={{
-                fontSize: 9,
-                letterSpacing: "2px",
-                color: "#242424",
+                fontSize: 11,
+                letterSpacing: "0.5px",
+                color: "#666",
                 textTransform: "uppercase",
                 fontWeight: 400,
               }}
@@ -75,18 +73,17 @@ export default function LoginPage({
               name="senha"
               autoFocus
               required
-              className="font-mono"
               style={{
                 marginTop: 10,
                 width: "100%",
                 background: "#111",
                 border: "0.5px solid #1e1e1e",
                 padding: "10px 14px",
-                color: "#888",
-                fontSize: 13,
+                color: "#ccc",
+                fontSize: 14,
                 borderRadius: 4,
                 outline: "none",
-                fontWeight: 300,
+                fontWeight: 400,
               }}
               placeholder="••••••••"
             />
@@ -95,7 +92,7 @@ export default function LoginPage({
           {comErro && (
             <p
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: "#e24b4a",
                 marginTop: 12,
                 fontWeight: 400,
@@ -113,10 +110,8 @@ export default function LoginPage({
               background: "#C9953A",
               color: "#080808",
               padding: "10px 0",
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: 500,
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
               borderRadius: 4,
             }}
             className="hover:brightness-110 transition"
@@ -128,10 +123,9 @@ export default function LoginPage({
         <p
           className="mt-6 text-center"
           style={{
-            fontSize: 8,
-            color: "#242424",
-            letterSpacing: "2px",
-            textTransform: "uppercase",
+            fontSize: 11,
+            color: "#444",
+            fontWeight: 400,
           }}
         >
           Acesso interno restrito · Grupo Anômalo Hub

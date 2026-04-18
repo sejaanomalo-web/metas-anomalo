@@ -5,6 +5,7 @@ import {
   type Mes,
   SUBTITULO_EMPRESA,
   anoTemProjecao,
+  corStatusMeta,
   formatBRL,
   getFaturamentoMes,
   getVerbaMes,
@@ -36,53 +37,72 @@ export default function CardEmpresa({
     ? "#4caf50"
     : "#e24b4a"
 
+  const corStatus = corStatusMeta(
+    temReal ? faturamentoReal : 0,
+    meta,
+    temReal,
+    mes,
+    ano
+  )
+
   const progressoPct =
     temReal && meta > 0
       ? Math.min(100, Math.round((faturamentoReal / meta) * 100))
       : 0
+
+  const textoRodape = inativa
+    ? `Sem dados neste mês${
+        empresa.inicioEm ? ` — início em ${empresa.inicioEm}` : ""
+      }`
+    : !temProjecao
+    ? "Meta não definida"
+    : temReal
+    ? `${progressoPct}% da meta de ${mes} atingida`
+    : `Nenhum dado inserido para ${mes}`
 
   return (
     <Link
       href={`/dashboard/${empresa.slug}?mes=${mes}&ano=${ano}`}
       className="block card-surface"
       style={{
-        opacity: inativa ? 0.18 : 1,
+        opacity: inativa ? 0.25 : 1,
       }}
     >
-      <div style={{ padding: "14px 16px 12px" }}>
-        <div className="flex items-center gap-1.5" style={{ marginBottom: 9 }}>
-          <span
-            style={{
-              width: 5,
-              height: 5,
-              borderRadius: "50%",
-              background: corBolinha,
-              display: "inline-block",
-            }}
-          />
-          <span
-            className="font-mono"
-            style={{
-              fontSize: 8,
-              letterSpacing: "2px",
-              color: "#1e1e1e",
-              textTransform: "uppercase",
-              fontWeight: 400,
-            }}
-          >
-            {mes.toUpperCase()} {ano}
-          </span>
+      <div style={{ padding: "16px 18px 14px" }}>
+        <div
+          className="flex items-center justify-between"
+          style={{ marginBottom: 10 }}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: corBolinha,
+                display: "inline-block",
+              }}
+            />
+            <span
+              style={{
+                fontSize: 11,
+                letterSpacing: "1px",
+                color: "#555",
+                textTransform: "uppercase",
+                fontWeight: 400,
+              }}
+            >
+              {mes} {ano}
+            </span>
+          </div>
         </div>
 
         <h3
-          className="font-serif"
           style={{
-            fontStyle: "italic",
-            fontWeight: 300,
-            fontSize: 20,
-            letterSpacing: "-0.3px",
-            lineHeight: 1.1,
-            color: inativa ? "#303030" : "#e0e0e0",
+            fontSize: 14,
+            fontWeight: 500,
+            color: inativa ? "#555" : "#fff",
+            lineHeight: 1.2,
           }}
         >
           {empresa.nome}
@@ -91,9 +111,8 @@ export default function CardEmpresa({
         {!inativa && (
           <p
             style={{
-              fontSize: 9,
-              letterSpacing: "0.3px",
-              color: "#1c1c1c",
+              fontSize: 12,
+              color: "#666",
               fontWeight: 400,
               marginTop: 4,
             }}
@@ -109,7 +128,7 @@ export default function CardEmpresa({
 
           <div
             className="grid grid-cols-2"
-            style={{ gap: "0.5px", background: "#111" }}
+            style={{ gap: "0.5px", background: "#141414" }}
           >
             <BlocoMetrica
               rotulo="Investimento"
@@ -126,56 +145,38 @@ export default function CardEmpresa({
 
           <div
             style={{
-              padding: "10px 16px 13px",
-              borderTop: "0.5px solid #111",
+              padding: "14px 18px 16px",
+              borderTop: "0.5px solid #141414",
             }}
           >
-            <div className="flex items-center gap-3">
-              <span
-                className="font-mono text-right"
-                style={{
-                  fontSize: 10,
-                  letterSpacing: "0.3px",
-                  width: 32,
-                  flexShrink: 0,
-                  color: temReal ? "#C9953A" : "#1c1c1c",
-                  fontWeight: 300,
-                }}
-              >
-                {temReal ? `${progressoPct}%` : "—"}
-              </span>
-
+            <div
+              style={{
+                height: 3,
+                background: "#141414",
+                borderRadius: 2,
+                overflow: "hidden",
+              }}
+            >
               <div
                 style={{
-                  flex: 1,
-                  height: 1.5,
-                  background: "#161616",
-                  borderRadius: 2,
-                  overflow: "hidden",
+                  height: "100%",
+                  width: `${progressoPct}%`,
+                  background:
+                    temReal && temProjecao ? corStatus : "transparent",
+                  transition: "width 0.2s ease",
                 }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${progressoPct}%`,
-                    background: "#C9953A",
-                  }}
-                />
-              </div>
-
-              <span
-                className="font-mono whitespace-nowrap"
-                style={{
-                  fontSize: 9,
-                  letterSpacing: "0.2px",
-                  color: "#242424",
-                  flexShrink: 0,
-                  fontWeight: 300,
-                }}
-              >
-                {temProjecao ? `Meta ${formatBRL(meta)}` : "Meta não definida"}
-              </span>
+              />
             </div>
+            <p
+              style={{
+                fontSize: 11,
+                color: "#555",
+                marginTop: 10,
+                fontWeight: 400,
+              }}
+            >
+              {textoRodape}
+            </p>
           </div>
         </>
       )}
@@ -195,26 +196,24 @@ function BlocoMetrica({
   esvaziado?: boolean
 }) {
   return (
-    <div style={{ background: "#0c0c0c", padding: "10px 16px" }}>
+    <div style={{ background: "#0c0c0c", padding: "14px 18px" }}>
       <p
         style={{
-          fontSize: 8,
-          letterSpacing: "2px",
-          color: "#1c1c1c",
+          fontSize: 11,
+          letterSpacing: "0.3px",
+          color: "#888",
           textTransform: "uppercase",
           fontWeight: 400,
-          marginBottom: 4,
+          marginBottom: 6,
         }}
       >
         {rotulo}
       </p>
       <p
-        className="font-mono"
         style={{
-          fontSize: 15,
-          fontWeight: 300,
-          letterSpacing: "-0.5px",
-          color: esvaziado ? "#1c1c1c" : destaque ? "#C9953A" : "#3a3a3a",
+          fontSize: 18,
+          fontWeight: 400,
+          color: esvaziado ? "#333" : destaque ? "#C9953A" : "#fff",
           lineHeight: 1.1,
         }}
       >

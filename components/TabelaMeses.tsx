@@ -21,17 +21,17 @@ export default function TabelaMeses({
         background: "#0c0c0c",
         border: "0.5px solid #141414",
         borderRadius: 10,
-        padding: 20,
+        padding: 24,
       }}
     >
       <p
         style={{
-          fontSize: 8,
-          letterSpacing: "2px",
-          color: "#202020",
+          fontSize: 11,
+          letterSpacing: "1px",
+          color: "#666",
           textTransform: "uppercase",
           fontWeight: 400,
-          marginBottom: 14,
+          marginBottom: 16,
         }}
       >
         Detalhamento mensal
@@ -44,14 +44,14 @@ export default function TabelaMeses({
                 <th
                   key={c.chave}
                   style={{
-                    fontSize: 8,
-                    letterSpacing: "2px",
-                    color: "#1e1e1e",
+                    fontSize: 11,
+                    letterSpacing: "1px",
+                    color: "#555",
                     textTransform: "uppercase",
                     fontWeight: 400,
                     textAlign: "left",
-                    padding: "10px 14px",
-                    borderBottom: "0.5px solid #111",
+                    padding: "12px 16px",
+                    borderBottom: "0.5px solid #141414",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -87,13 +87,12 @@ export default function TabelaMeses({
                     return (
                       <td
                         key={c.chave}
-                        className="font-mono"
                         style={{
-                          fontSize: 12,
-                          color: ehFat ? "#C9953A" : "#484848",
-                          fontWeight: 300,
-                          padding: "10px 14px",
-                          border: "0.5px solid #111",
+                          fontSize: 13,
+                          color: ehFat ? "#C9953A" : "#888",
+                          fontWeight: 400,
+                          padding: "12px 16px",
+                          borderBottom: "0.5px solid #141414",
                           whiteSpace: "nowrap",
                         }}
                       >

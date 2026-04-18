@@ -1,9 +1,10 @@
 interface Celula {
   rotulo: string
   valor: string
-  destaque?: boolean
+  cor?: string
+  metaDisplay?: string
+  corMeta?: string
   hint?: string
-  semProjecao?: boolean
 }
 
 export default function StripMetricas({ celulas }: { celulas: Celula[] }) {
@@ -11,7 +12,7 @@ export default function StripMetricas({ celulas }: { celulas: Celula[] }) {
     <div
       className="grid grid-cols-2 md:grid-cols-4"
       style={{
-        background: "#111111",
+        background: "#141414",
         gap: "0.5px",
       }}
     >
@@ -20,14 +21,14 @@ export default function StripMetricas({ celulas }: { celulas: Celula[] }) {
           key={i}
           style={{
             background: "#090909",
-            padding: "14px 20px",
+            padding: "18px 24px",
           }}
         >
           <p
             style={{
-              fontSize: 8,
-              letterSpacing: "2px",
-              color: "#202020",
+              fontSize: 11,
+              letterSpacing: "1px",
+              color: "#666",
               textTransform: "uppercase",
               fontWeight: 400,
             }}
@@ -35,30 +36,35 @@ export default function StripMetricas({ celulas }: { celulas: Celula[] }) {
             {c.rotulo}
           </p>
           <p
-            className="font-mono"
             style={{
-              fontSize: 20,
-              fontWeight: 300,
-              color: c.semProjecao
-                ? "#1c1c1c"
-                : c.destaque
-                ? "#C9953A"
-                : "#b8b8b8",
-              letterSpacing: "-0.5px",
-              marginTop: 6,
+              fontSize: 24,
+              fontWeight: 400,
+              color: c.cor ?? "#fff",
+              marginTop: 8,
               lineHeight: 1.1,
             }}
           >
             {c.valor}
           </p>
+          {c.metaDisplay && (
+            <p
+              style={{
+                fontSize: 12,
+                color: c.corMeta ?? "#333",
+                marginTop: 4,
+                fontWeight: 400,
+              }}
+            >
+              {c.metaDisplay}
+            </p>
+          )}
           {c.hint && (
             <p
-              className="font-mono"
               style={{
-                fontSize: 9,
-                color: "#1a1a1a",
-                marginTop: 4,
-                fontWeight: 300,
+                fontSize: 11,
+                color: "#444",
+                marginTop: 2,
+                fontWeight: 400,
               }}
             >
               {c.hint}

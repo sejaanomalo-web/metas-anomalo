@@ -8,29 +8,28 @@ export default function Header({ children }: { children?: React.ReactNode }) {
       className="sticky top-0 z-20"
       style={{
         background: "#0a0a0a",
-        borderBottom: "0.5px solid #111111",
-        height: 50,
+        borderBottom: "0.5px solid #141414",
+        height: 58,
       }}
     >
       <div className="h-full px-6 flex items-center justify-between gap-6">
         <Link href="/dashboard" className="flex items-center gap-3">
           <span
-            className="font-serif italic"
             style={{
               fontSize: 20,
               color: "#C9953A",
               lineHeight: 1,
-              fontWeight: 400,
+              fontWeight: 500,
             }}
           >
             Λ
           </span>
-          <div className="leading-none">
+          <div className="leading-tight">
             <p
               style={{
-                fontSize: 11,
-                letterSpacing: "1px",
-                color: "#d0d0d0",
+                fontSize: 14,
+                letterSpacing: "0.5px",
+                color: "#fff",
                 fontWeight: 500,
               }}
             >
@@ -38,14 +37,12 @@ export default function Header({ children }: { children?: React.ReactNode }) {
             </p>
             <p
               style={{
-                fontSize: 8,
-                letterSpacing: "2px",
-                color: "#242424",
-                marginTop: 2,
+                fontSize: 12,
+                color: "#666",
                 fontWeight: 400,
               }}
             >
-              PAINEL DE METAS
+              Painel de Metas
             </p>
           </div>
         </Link>
@@ -58,10 +55,8 @@ export default function Header({ children }: { children?: React.ReactNode }) {
             <button
               type="submit"
               style={{
-                fontSize: 9,
-                letterSpacing: "2px",
-                color: "#1e1e1e",
-                textTransform: "uppercase",
+                fontSize: 11,
+                color: "#666",
                 fontWeight: 400,
               }}
               className="hover:text-[#C9953A] transition"

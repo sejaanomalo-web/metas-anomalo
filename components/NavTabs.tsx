@@ -44,24 +44,28 @@ export default function NavTabs() {
   const query = params.toString() ? `?${params.toString()}` : ""
 
   return (
-    <nav className="flex items-center h-[50px]">
+    <nav className="flex items-center h-full">
       {ABAS.map((aba) => {
         const ativa = aba.matches ? aba.matches(pathname) : false
         const indisponivel = !aba.href
-        const classe = "nav-label uppercase px-4 h-full flex items-center"
-        const estiloAtiva = ativa
-          ? { color: "#C9953A", borderBottom: "1.5px solid #C9953A" }
-          : indisponivel
-          ? { color: "#1c1c1c", cursor: "default" as const }
-          : { color: "#242424" }
+        const classe = "px-4 h-full flex items-center"
+        const estilo: React.CSSProperties = {
+          fontSize: 11,
+          fontWeight: 400,
+          ...(ativa
+            ? { color: "#C9953A", borderBottom: "1.5px solid #C9953A" }
+            : indisponivel
+            ? { color: "#333", cursor: "default" }
+            : { color: "#666" }),
+        }
 
         if (aba.href && !indisponivel) {
           return (
             <Link
               key={aba.chave}
               href={`${aba.href}${query}`}
-              className={`${classe} hover:text-[#484848] transition`}
-              style={estiloAtiva}
+              className={`${classe} hover:text-[#e0e0e0] transition`}
+              style={estilo}
             >
               {aba.rotulo}
             </Link>
@@ -71,7 +75,7 @@ export default function NavTabs() {
           <span
             key={aba.chave}
             className={classe}
-            style={estiloAtiva}
+            style={estilo}
             title="Em breve"
           >
             {aba.rotulo}

@@ -20,8 +20,6 @@ import {
   type LinhaHato,
   type LinhaPadrao,
   type Mes,
-  formatBRL,
-  formatNumero,
   getDadosEmpresa,
   getEmpresa,
   getFunilCompleto,
@@ -29,7 +27,12 @@ import {
   mesValido,
 } from "@/lib/data"
 import { supabaseConfigurado } from "@/lib/supabase"
-import { getDadosReais, getDadosReaisMes } from "@/lib/dados-reais"
+import {
+  getDadosReais,
+  getDadosReaisDoMes,
+  getDadosReaisMes,
+} from "@/lib/dados-reais"
+import { montarCelulasGrupo } from "@/lib/strip"
 
 export default async function EmpresaPage({
   params,
@@ -55,8 +58,11 @@ export default async function EmpresaPage({
   const etapas = getFunilCompleto(empresa.slug as EmpresaSlug, mes, ano)
   const resumo = getResumoGrupo(mes, ano)
 
-  const real = await getDadosReaisMes(empresa.db, mes, ano)
-  const todosReais = await getDadosReais(empresa.db, ano)
+  const [real, todosReais, reaisDoMes] = await Promise.all([
+    getDadosReaisMes(empresa.db, mes, ano),
+    getDadosReais(empresa.db, ano),
+    getDadosReaisDoMes(mes, ano),
+  ])
   const mapaReais = new Map(todosReais.map((r) => [r.mes, r]))
   const supabaseOk = supabaseConfigurado()
 
@@ -95,52 +101,7 @@ export default async function EmpresaPage({
 
   const { colunas, linhas } = construirTabela(empresa, dados)
   const metaComparavel = extrairMetaComparavel(empresa.tipo, dados, mes)
-
-  let somaFaturamentoReal = 0
-  let somaInvestimentoReal = 0
-  let somaLeadsReal = 0
-  let somaCriativosReal = 0
-  for (const d of todosReais) {
-    somaFaturamentoReal += d.faturamento_real ?? 0
-    somaInvestimentoReal += d.investimento_real ?? 0
-    somaLeadsReal += d.leads_real ?? 0
-    somaCriativosReal += d.criativos_entregues ?? 0
-  }
-
-  const celulas = temProjecao
-    ? [
-        {
-          rotulo: "Faturamento do grupo",
-          valor: formatBRL(resumo.faturamento),
-          destaque: true,
-        },
-        {
-          rotulo: "Total investido em ads",
-          valor: formatBRL(resumo.investimento),
-        },
-        { rotulo: "Total de leads", valor: formatNumero(resumo.leads) },
-        {
-          rotulo: "Criativos do mês",
-          valor: formatNumero(resumo.criativos),
-          hint: `${resumo.criativosSemana} por semana · grupo`,
-        },
-      ]
-    : [
-        {
-          rotulo: "Faturamento real do grupo",
-          valor: formatBRL(somaFaturamentoReal),
-          destaque: true,
-        },
-        {
-          rotulo: "Investimento real",
-          valor: formatBRL(somaInvestimentoReal),
-        },
-        { rotulo: "Leads reais", valor: formatNumero(somaLeadsReal) },
-        {
-          rotulo: "Criativos entregues",
-          valor: formatNumero(somaCriativosReal),
-        },
-      ]
+  const celulas = montarCelulasGrupo(resumo, reaisDoMes, mes, ano)
 
   return (
     <>
@@ -150,28 +111,29 @@ export default async function EmpresaPage({
 
       <StripMetricas celulas={celulas} />
 
-      <SectionBar titulo={empresa.nome} hint={SUBTITULO_EMPRESA[empresa.slug]} />
+      <SectionBar
+        titulo={empresa.nome}
+        hint={SUBTITULO_EMPRESA[empresa.slug]}
+      />
 
       <main
         style={{
           background: "#090909",
-          padding: "16px 24px",
+          padding: "20px 24px",
         }}
       >
         <div
           className="flex items-center justify-between"
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 20 }}
         >
           <Link
             href={`/dashboard?mes=${mes}&ano=${ano}`}
             style={{
-              fontSize: 8,
-              letterSpacing: "2px",
-              color: "#1e1e1e",
-              textTransform: "uppercase",
+              fontSize: 12,
+              color: "#666",
               fontWeight: 400,
             }}
-            className="hover:text-[#686868] transition"
+            className="hover:text-[#fff] transition"
           >
             ← Voltar ao painel
           </Link>
@@ -187,7 +149,7 @@ export default async function EmpresaPage({
           )}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           {etapas.length > 0 && (
             <FunilCascata etapas={etapas} reais={etapasReais} />
           )}
@@ -215,11 +177,11 @@ export default async function EmpresaPage({
                 background: "#0c0c0c",
                 border: "0.5px solid #141414",
                 borderRadius: 10,
-                padding: 24,
+                padding: 28,
                 textAlign: "center",
-                color: "#1c1c1c",
-                fontSize: 12,
-                fontWeight: 300,
+                color: "#555",
+                fontSize: 13,
+                fontWeight: 400,
               }}
             >
               Nenhuma projeção definida para {ano}. Os dados mostrados são

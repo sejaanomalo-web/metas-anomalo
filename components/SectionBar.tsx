@@ -10,15 +10,14 @@ export default function SectionBar({
       className="flex items-center justify-between"
       style={{
         background: "#090909",
-        borderBottom: "0.5px solid #111111",
-        padding: "12px 24px",
+        borderBottom: "0.5px solid #141414",
+        padding: "14px 24px",
       }}
     >
       <span
         style={{
-          fontSize: 11,
-          letterSpacing: "0.3px",
-          color: "#686868",
+          fontSize: 13,
+          color: "#888",
           fontWeight: 400,
         }}
       >
@@ -27,10 +26,8 @@ export default function SectionBar({
       {hint && (
         <span
           style={{
-            fontSize: 8,
-            letterSpacing: "2px",
-            color: "#1e1e1e",
-            textTransform: "uppercase",
+            fontSize: 11,
+            color: "#555",
             fontWeight: 400,
           }}
         >

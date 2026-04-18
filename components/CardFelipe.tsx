@@ -54,28 +54,26 @@ export default function CardFelipe({
         background: "#0c0c0c",
         border: "0.5px solid #141414",
         borderRadius: 10,
-        padding: "20px 20px 4px",
+        padding: "24px 24px 8px",
       }}
     >
       <div className="flex items-start justify-between">
         <div>
           <h3
-            className="font-serif italic"
             style={{
-              fontSize: 18,
-              color: "#e0e0e0",
-              fontWeight: 300,
-              letterSpacing: "-0.3px",
+              fontSize: 16,
+              color: "#fff",
+              fontWeight: 500,
             }}
           >
             Felipe
           </h3>
           <p
             style={{
-              fontSize: 9,
-              color: "#1c1c1c",
+              fontSize: 12,
+              color: "#666",
               fontWeight: 400,
-              marginTop: 2,
+              marginTop: 4,
             }}
           >
             Tráfego e Postagens
@@ -88,9 +86,7 @@ export default function CardFelipe({
             background: "transparent",
             border: "0.5px solid #C9953A",
             color: "#C9953A",
-            fontSize: 9,
-            letterSpacing: "1.5px",
-            textTransform: "uppercase",
+            fontSize: 11,
             padding: "6px 12px",
             borderRadius: 4,
             fontWeight: 400,
@@ -103,7 +99,7 @@ export default function CardFelipe({
 
       <div
         className="divider-h"
-        style={{ marginTop: 16, marginLeft: -20, marginRight: -20 }}
+        style={{ marginTop: 20, marginLeft: -24, marginRight: -24 }}
       />
 
       <div style={{ marginTop: 16 }}>
@@ -115,25 +111,26 @@ export default function CardFelipe({
               className="flex items-center justify-between py-2"
             >
               <span
-                style={{ fontSize: 10, color: "#484848", fontWeight: 400 }}
+                style={{ fontSize: 13, color: "#888", fontWeight: 400 }}
               >
                 {g.rotulo}
               </span>
               <div className="flex items-center gap-3">
                 <span
                   style={{
-                    fontSize: 8,
-                    letterSpacing: "1.5px",
-                    color: atingido ? "#4caf50" : "#242424",
-                    textTransform: "uppercase",
+                    fontSize: 11,
+                    color: atingido ? "#4caf50" : "#555",
                     fontWeight: 400,
                   }}
                 >
                   {atingido ? "atingido" : "pendente"}
                 </span>
                 <span
-                  className="font-mono"
-                  style={{ fontSize: 11, color: "#C9953A", fontWeight: 300 }}
+                  style={{
+                    fontSize: 13,
+                    color: atingido ? "#C9953A" : "#444",
+                    fontWeight: 400,
+                  }}
                 >
                   {formatBRL(g.valor)}
                 </span>
@@ -145,18 +142,18 @@ export default function CardFelipe({
 
       <div
         className="divider-h"
-        style={{ marginTop: 16, marginLeft: -20, marginRight: -20 }}
+        style={{ marginTop: 16, marginLeft: -24, marginRight: -24 }}
       />
 
       <div
         className="flex items-baseline justify-between"
-        style={{ padding: "18px 0" }}
+        style={{ padding: "20px 0" }}
       >
         <span
           style={{
-            fontSize: 8,
-            letterSpacing: "2px",
-            color: "#202020",
+            fontSize: 11,
+            letterSpacing: "1px",
+            color: "#666",
             textTransform: "uppercase",
             fontWeight: 400,
           }}
@@ -164,17 +161,29 @@ export default function CardFelipe({
           Bônus total
         </span>
         <span
-          className="font-mono"
           style={{
             fontSize: 22,
             color: "#C9953A",
-            fontWeight: 300,
-            letterSpacing: "-0.5px",
+            fontWeight: 500,
           }}
         >
           {formatBRL(bonusSalvo)}
         </span>
       </div>
+
+      {existente?.observacoes && (
+        <p
+          style={{
+            fontSize: 12,
+            color: "#666",
+            fontWeight: 400,
+            paddingBottom: 16,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {existente.observacoes}
+        </p>
+      )}
 
       {aberto && (
         <div className="fixed inset-0 z-40">
@@ -189,7 +198,7 @@ export default function CardFelipe({
           <aside
             className="absolute right-0 top-0 h-full overflow-y-auto"
             style={{
-              width: 380,
+              width: 400,
               background: "#0c0c0c",
               borderLeft: "0.5px solid #1e1e1e",
             }}
@@ -200,28 +209,28 @@ export default function CardFelipe({
                 background: "rgba(12,12,12,0.95)",
                 backdropFilter: "blur(6px)",
                 borderBottom: "0.5px solid #141414",
-                padding: "18px 24px",
+                padding: "20px 24px",
               }}
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p
                     style={{
-                      fontSize: 8,
-                      letterSpacing: "2px",
-                      color: "#242424",
+                      fontSize: 11,
+                      letterSpacing: "1px",
+                      color: "#666",
                       textTransform: "uppercase",
+                      fontWeight: 400,
                     }}
                   >
                     {mes} · {ano}
                   </p>
                   <p
-                    className="font-serif italic"
                     style={{
-                      fontSize: 18,
-                      color: "#e0e0e0",
-                      fontWeight: 300,
-                      marginTop: 4,
+                      fontSize: 16,
+                      color: "#fff",
+                      fontWeight: 500,
+                      marginTop: 6,
                     }}
                   >
                     Comissão · Felipe
@@ -230,7 +239,8 @@ export default function CardFelipe({
                 <button
                   type="button"
                   onClick={() => setAberto(false)}
-                  style={{ color: "#484848", fontSize: 22, lineHeight: 1 }}
+                  style={{ color: "#666", fontSize: 22, lineHeight: 1 }}
+                  className="hover:text-[#fff] transition"
                 >
                   ×
                 </button>
@@ -251,23 +261,23 @@ export default function CardFelipe({
                     key={g.chave}
                     className="flex items-center justify-between gap-3 cursor-pointer"
                     style={{
-                      padding: "12px 14px",
-                      border: "0.5px solid #1e1e1e",
+                      padding: "14px 16px",
+                      border: `0.5px solid ${
+                        flags[g.chave] ? "#2a4a2a" : "#1e1e1e"
+                      }`,
                       background: flags[g.chave] ? "#0e1410" : "#111",
-                      borderColor: flags[g.chave] ? "#2a4a2a" : "#1e1e1e",
                       borderRadius: 4,
                     }}
                   >
                     <div>
-                      <p style={{ fontSize: 11, color: "#e0e0e0" }}>
+                      <p style={{ fontSize: 13, color: "#fff", fontWeight: 400 }}>
                         {g.rotulo}
                       </p>
                       <p
-                        className="font-mono"
                         style={{
-                          fontSize: 10,
+                          fontSize: 12,
                           color: "#C9953A",
-                          fontWeight: 300,
+                          fontWeight: 400,
                           marginTop: 2,
                         }}
                       >
@@ -293,9 +303,9 @@ export default function CardFelipe({
                 <label className="block" style={{ marginTop: 8 }}>
                   <span
                     style={{
-                      fontSize: 9,
-                      letterSpacing: "1.5px",
-                      color: "#242424",
+                      fontSize: 11,
+                      letterSpacing: "0.5px",
+                      color: "#666",
                       textTransform: "uppercase",
                       fontWeight: 400,
                     }}
@@ -307,18 +317,17 @@ export default function CardFelipe({
                     rows={3}
                     value={observacoes}
                     onChange={(e) => setObservacoes(e.target.value)}
-                    className="font-mono"
                     style={{
                       marginTop: 8,
                       width: "100%",
                       background: "#111",
                       border: "0.5px solid #1e1e1e",
-                      color: "#888",
-                      fontSize: 13,
+                      color: "#ccc",
+                      fontSize: 14,
                       padding: "10px 14px",
                       borderRadius: 4,
                       outline: "none",
-                      fontWeight: 300,
+                      fontWeight: 400,
                     }}
                     placeholder="..."
                   />
@@ -328,27 +337,26 @@ export default function CardFelipe({
                   className="flex items-baseline justify-between"
                   style={{
                     marginTop: 12,
-                    padding: "12px 0",
+                    padding: "14px 0",
                     borderTop: "0.5px solid #141414",
                   }}
                 >
                   <span
                     style={{
-                      fontSize: 8,
-                      letterSpacing: "2px",
-                      color: "#202020",
+                      fontSize: 11,
+                      letterSpacing: "1px",
+                      color: "#666",
                       textTransform: "uppercase",
+                      fontWeight: 400,
                     }}
                   >
                     Prévia do bônus
                   </span>
                   <span
-                    className="font-mono"
                     style={{
                       fontSize: 20,
                       color: "#C9953A",
-                      fontWeight: 300,
-                      letterSpacing: "-0.5px",
+                      fontWeight: 500,
                     }}
                   >
                     {formatBRL(bonusPreview)}
@@ -356,7 +364,7 @@ export default function CardFelipe({
                 </div>
 
                 {erro && (
-                  <p style={{ color: "#e24b4a", fontSize: 11 }}>{erro}</p>
+                  <p style={{ color: "#e24b4a", fontSize: 12 }}>{erro}</p>
                 )}
 
                 <div className="flex items-center gap-3 pt-2">
@@ -368,13 +376,12 @@ export default function CardFelipe({
                       background: "#C9953A",
                       color: "#080808",
                       padding: "10px 0",
-                      fontSize: 10,
+                      fontSize: 13,
                       fontWeight: 500,
-                      letterSpacing: "1px",
-                      textTransform: "uppercase",
                       borderRadius: 4,
                       opacity: pending || !supabaseOk ? 0.5 : 1,
                     }}
+                    className="hover:brightness-110 transition"
                   >
                     {pending ? "Salvando..." : "Salvar"}
                   </button>
@@ -384,13 +391,13 @@ export default function CardFelipe({
                     style={{
                       background: "transparent",
                       border: "0.5px solid #1e1e1e",
-                      color: "#242424",
+                      color: "#666",
                       padding: "10px 16px",
-                      fontSize: 10,
-                      letterSpacing: "1px",
-                      textTransform: "uppercase",
+                      fontSize: 13,
                       borderRadius: 4,
+                      fontWeight: 400,
                     }}
+                    className="hover:text-[#fff] transition"
                   >
                     Cancelar
                   </button>

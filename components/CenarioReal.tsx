@@ -2,9 +2,9 @@ import { type DadosReais } from "@/lib/supabase"
 import {
   type Ano,
   type Mes,
+  corStatusMeta,
   formatBRL,
   formatNumero,
-  metaAcumuladaAteHoje,
 } from "@/lib/data"
 
 interface MetaComparavel {
@@ -58,19 +58,6 @@ const LINHAS: {
   },
 ]
 
-function corStatus(
-  real: number | null,
-  metaTotal: number | undefined,
-  mes: Mes,
-  ano: Ano
-): string | null {
-  if (real === null || metaTotal === undefined || metaTotal === 0) return null
-  if (real >= metaTotal) return "#4caf50"
-  const acumulada = metaAcumuladaAteHoje(metaTotal, mes, ano)
-  if (real >= acumulada) return "#C9953A"
-  return "#e24b4a"
-}
-
 export default function CenarioReal({
   dados,
   meta,
@@ -88,14 +75,14 @@ export default function CenarioReal({
         background: "#0c0c0c",
         border: "0.5px solid #141414",
         borderRadius: 10,
-        padding: 20,
+        padding: 24,
       }}
     >
       <p
         style={{
-          fontSize: 8,
-          letterSpacing: "2px",
-          color: "#202020",
+          fontSize: 11,
+          letterSpacing: "1px",
+          color: "#666",
           textTransform: "uppercase",
           fontWeight: 400,
         }}
@@ -105,24 +92,27 @@ export default function CenarioReal({
 
       <div
         className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
-        style={{ gap: "0.5px", background: "#111", marginTop: 14 }}
+        style={{ gap: "0.5px", background: "#141414", marginTop: 18 }}
       >
         {LINHAS.map((l) => {
           const real = dados ? dados[l.chave] : null
           const metaValor = meta[l.metaKey]
           const temReal = typeof real === "number"
-          const cor = corStatus(temReal ? real : null, metaValor, mes, ano)
+          const cor =
+            temReal && metaValor !== undefined
+              ? corStatusMeta(real, metaValor, true, mes, ano)
+              : null
 
           return (
             <div
               key={l.chave}
-              style={{ background: "#0c0c0c", padding: "12px 14px" }}
+              style={{ background: "#0c0c0c", padding: "16px 18px" }}
             >
               <p
                 style={{
-                  fontSize: 8,
-                  letterSpacing: "2px",
-                  color: "#1c1c1c",
+                  fontSize: 11,
+                  letterSpacing: "0.3px",
+                  color: "#666",
                   textTransform: "uppercase",
                   fontWeight: 400,
                 }}
@@ -131,14 +121,12 @@ export default function CenarioReal({
               </p>
               {temReal ? (
                 <p
-                  className="font-mono"
                   style={{
-                    fontSize: 18,
-                    color: cor ?? "#e0e0e0",
-                    fontWeight: 300,
-                    letterSpacing: "-0.5px",
-                    marginTop: 6,
-                    lineHeight: 1,
+                    fontSize: 24,
+                    color: cor ?? "#fff",
+                    fontWeight: 400,
+                    marginTop: 8,
+                    lineHeight: 1.1,
                   }}
                 >
                   {l.tipo === "moeda" ? formatBRL(real) : formatNumero(real)}
@@ -147,11 +135,11 @@ export default function CenarioReal({
                 <p
                   style={{
                     fontSize: 13,
-                    color: "#1c1c1c",
+                    color: "#333",
                     fontStyle: "italic",
-                    fontWeight: 300,
-                    marginTop: 6,
-                    lineHeight: 1,
+                    fontWeight: 400,
+                    marginTop: 8,
+                    lineHeight: 1.1,
                   }}
                 >
                   Não inserido
@@ -159,11 +147,10 @@ export default function CenarioReal({
               )}
               {metaValor !== undefined && (
                 <p
-                  className="font-mono"
                   style={{
-                    fontSize: 9,
-                    color: temReal ? "#3a3a3a" : "#1c1c1c",
-                    fontWeight: 300,
+                    fontSize: 12,
+                    color: temReal ? "#555" : "#333",
+                    fontWeight: 400,
                     marginTop: 6,
                   }}
                 >
@@ -177,12 +164,12 @@ export default function CenarioReal({
           )
         })}
 
-        <div style={{ background: "#0c0c0c", padding: "12px 14px" }}>
+        <div style={{ background: "#0c0c0c", padding: "16px 18px" }}>
           <p
             style={{
-              fontSize: 8,
-              letterSpacing: "2px",
-              color: "#1c1c1c",
+              fontSize: 11,
+              letterSpacing: "0.3px",
+              color: "#666",
               textTransform: "uppercase",
               fontWeight: 400,
             }}
@@ -191,14 +178,12 @@ export default function CenarioReal({
           </p>
           {dados?.cpl_real !== null && dados?.cpl_real !== undefined ? (
             <p
-              className="font-mono"
               style={{
-                fontSize: 18,
-                color: "#e0e0e0",
-                fontWeight: 300,
-                letterSpacing: "-0.5px",
-                marginTop: 6,
-                lineHeight: 1,
+                fontSize: 24,
+                color: "#fff",
+                fontWeight: 400,
+                marginTop: 8,
+                lineHeight: 1.1,
               }}
             >
               {formatBRL(dados.cpl_real)}
@@ -207,21 +192,20 @@ export default function CenarioReal({
             <p
               style={{
                 fontSize: 13,
-                color: "#1c1c1c",
+                color: "#333",
                 fontStyle: "italic",
-                fontWeight: 300,
-                marginTop: 6,
+                fontWeight: 400,
+                marginTop: 8,
               }}
             >
               Não inserido
             </p>
           )}
           <p
-            className="font-mono"
             style={{
-              fontSize: 9,
-              color: "#1c1c1c",
-              fontWeight: 300,
+              fontSize: 12,
+              color: "#333",
+              fontWeight: 400,
               marginTop: 6,
             }}
           >
@@ -236,14 +220,15 @@ export default function CenarioReal({
             style={{
               marginTop: 14,
               background: "#090909",
-              padding: "12px 14px",
+              padding: "14px 18px",
+              borderRadius: 6,
             }}
           >
             <p
               style={{
-                fontSize: 8,
-                letterSpacing: "2px",
-                color: "#1c1c1c",
+                fontSize: 11,
+                letterSpacing: "0.3px",
+                color: "#666",
                 textTransform: "uppercase",
                 fontWeight: 400,
               }}
@@ -251,12 +236,10 @@ export default function CenarioReal({
               Criativos entregues
             </p>
             <p
-              className="font-mono"
               style={{
-                fontSize: 15,
-                color: "#e0e0e0",
-                fontWeight: 300,
-                letterSpacing: "-0.5px",
+                fontSize: 18,
+                color: "#fff",
+                fontWeight: 400,
                 marginTop: 4,
               }}
             >
@@ -270,14 +253,15 @@ export default function CenarioReal({
           style={{
             marginTop: 14,
             background: "#090909",
-            padding: "12px 14px",
+            padding: "14px 18px",
+            borderRadius: 6,
           }}
         >
           <p
             style={{
-              fontSize: 8,
-              letterSpacing: "2px",
-              color: "#1c1c1c",
+              fontSize: 11,
+              letterSpacing: "0.3px",
+              color: "#666",
               textTransform: "uppercase",
               fontWeight: 400,
             }}
@@ -286,10 +270,10 @@ export default function CenarioReal({
           </p>
           <p
             style={{
-              fontSize: 12,
-              color: "#686868",
-              fontWeight: 300,
-              marginTop: 4,
+              fontSize: 13,
+              color: "#888",
+              fontWeight: 400,
+              marginTop: 6,
               whiteSpace: "pre-wrap",
             }}
           >

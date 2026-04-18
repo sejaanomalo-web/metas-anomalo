@@ -60,9 +60,7 @@ export default function DrawerDadosReais({
           background: "transparent",
           border: "0.5px solid #C9953A",
           color: "#C9953A",
-          fontSize: 10,
-          letterSpacing: "1.5px",
-          textTransform: "uppercase",
+          fontSize: 12,
           padding: "8px 16px",
           borderRadius: 4,
           fontWeight: 400,
@@ -85,7 +83,7 @@ export default function DrawerDadosReais({
           <aside
             className="absolute right-0 top-0 h-full overflow-y-auto"
             style={{
-              width: 380,
+              width: 400,
               background: "#0c0c0c",
               borderLeft: "0.5px solid #1e1e1e",
             }}
@@ -96,28 +94,28 @@ export default function DrawerDadosReais({
                 background: "rgba(12,12,12,0.95)",
                 backdropFilter: "blur(6px)",
                 borderBottom: "0.5px solid #141414",
-                padding: "18px 24px",
+                padding: "20px 24px",
               }}
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p
                     style={{
-                      fontSize: 8,
-                      letterSpacing: "2px",
-                      color: "#242424",
+                      fontSize: 11,
+                      letterSpacing: "1px",
+                      color: "#666",
                       textTransform: "uppercase",
+                      fontWeight: 400,
                     }}
                   >
                     {mes} · {ano}
                   </p>
                   <p
-                    className="font-serif italic"
                     style={{
-                      fontSize: 18,
-                      color: "#e0e0e0",
-                      fontWeight: 300,
-                      marginTop: 4,
+                      fontSize: 16,
+                      color: "#fff",
+                      fontWeight: 500,
+                      marginTop: 6,
                     }}
                   >
                     Dados reais
@@ -126,8 +124,8 @@ export default function DrawerDadosReais({
                 <button
                   type="button"
                   onClick={() => setAberto(false)}
-                  style={{ color: "#484848", fontSize: 22, lineHeight: 1 }}
-                  className="hover:text-[#e0e0e0] transition"
+                  style={{ color: "#666", fontSize: 22, lineHeight: 1 }}
+                  className="hover:text-[#fff] transition"
                 >
                   ×
                 </button>
@@ -142,7 +140,8 @@ export default function DrawerDadosReais({
                   border: "0.5px solid #5a1e1e",
                   background: "#1a0a0a",
                   color: "#e24b4a",
-                  fontSize: 11,
+                  fontSize: 12,
+                  fontWeight: 400,
                 }}
               >
                 Supabase não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e
@@ -201,9 +200,9 @@ export default function DrawerDadosReais({
                 <label className="block">
                   <span
                     style={{
-                      fontSize: 9,
-                      letterSpacing: "1.5px",
-                      color: "#242424",
+                      fontSize: 11,
+                      letterSpacing: "0.5px",
+                      color: "#666",
                       textTransform: "uppercase",
                       fontWeight: 400,
                     }}
@@ -214,25 +213,24 @@ export default function DrawerDadosReais({
                     name="observacoes"
                     rows={3}
                     defaultValue={existentes?.observacoes ?? ""}
-                    className="font-mono"
                     style={{
                       marginTop: 8,
                       width: "100%",
                       background: "#111",
                       border: "0.5px solid #1e1e1e",
-                      color: "#888",
-                      fontSize: 13,
+                      color: "#ccc",
+                      fontSize: 14,
                       padding: "10px 14px",
                       borderRadius: 4,
                       outline: "none",
-                      fontWeight: 300,
+                      fontWeight: 400,
                     }}
                     placeholder="..."
                   />
                 </label>
 
                 {erro && (
-                  <p style={{ color: "#e24b4a", fontSize: 11 }}>{erro}</p>
+                  <p style={{ color: "#e24b4a", fontSize: 12 }}>{erro}</p>
                 )}
 
                 <div className="flex items-center gap-3 pt-2">
@@ -244,10 +242,8 @@ export default function DrawerDadosReais({
                       background: "#C9953A",
                       color: "#080808",
                       padding: "10px 0",
-                      fontSize: 10,
+                      fontSize: 13,
                       fontWeight: 500,
-                      letterSpacing: "1px",
-                      textTransform: "uppercase",
                       borderRadius: 4,
                       opacity: pending || !supabaseOk ? 0.5 : 1,
                     }}
@@ -261,14 +257,13 @@ export default function DrawerDadosReais({
                     style={{
                       background: "transparent",
                       border: "0.5px solid #1e1e1e",
-                      color: "#242424",
+                      color: "#666",
                       padding: "10px 16px",
-                      fontSize: 10,
-                      letterSpacing: "1px",
-                      textTransform: "uppercase",
+                      fontSize: 13,
                       borderRadius: 4,
+                      fontWeight: 400,
                     }}
-                    className="hover:text-[#686868] transition"
+                    className="hover:text-[#fff] transition"
                   >
                     Cancelar
                   </button>
@@ -299,9 +294,9 @@ function Campo({
     <label className="block">
       <span
         style={{
-          fontSize: 9,
-          letterSpacing: "1.5px",
-          color: "#242424",
+          fontSize: 11,
+          letterSpacing: "0.5px",
+          color: "#666",
           textTransform: "uppercase",
           fontWeight: 400,
         }}
@@ -313,18 +308,17 @@ function Campo({
         name={name}
         step={step}
         defaultValue={defaultValue === null ? "" : defaultValue}
-        className="font-mono"
         style={{
           marginTop: 8,
           width: "100%",
           background: "#111",
           border: "0.5px solid #1e1e1e",
-          color: "#888",
-          fontSize: 13,
+          color: "#ccc",
+          fontSize: 14,
           padding: "10px 14px",
           borderRadius: 4,
           outline: "none",
-          fontWeight: 300,
+          fontWeight: 400,
         }}
         placeholder="—"
       />

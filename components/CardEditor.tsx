@@ -70,28 +70,26 @@ export default function CardEditor({
         background: "#0c0c0c",
         border: "0.5px solid #141414",
         borderRadius: 10,
-        padding: "20px 20px 4px",
+        padding: "24px 24px 8px",
       }}
     >
       <div className="flex items-start justify-between">
         <div>
           <h3
-            className="font-serif italic"
             style={{
-              fontSize: 18,
-              color: "#e0e0e0",
-              fontWeight: 300,
-              letterSpacing: "-0.3px",
+              fontSize: 16,
+              color: "#fff",
+              fontWeight: 500,
             }}
           >
             {nome}
           </h3>
           <p
             style={{
-              fontSize: 9,
-              color: "#1c1c1c",
+              fontSize: 12,
+              color: "#666",
               fontWeight: 400,
-              marginTop: 2,
+              marginTop: 4,
             }}
           >
             {funcao}
@@ -104,9 +102,7 @@ export default function CardEditor({
             background: "transparent",
             border: "0.5px solid #C9953A",
             color: "#C9953A",
-            fontSize: 9,
-            letterSpacing: "1.5px",
-            textTransform: "uppercase",
+            fontSize: 11,
             padding: "6px 12px",
             borderRadius: 4,
             fontWeight: 400,
@@ -119,7 +115,7 @@ export default function CardEditor({
 
       <div
         className="divider-h"
-        style={{ marginTop: 16, marginLeft: -20, marginRight: -20 }}
+        style={{ marginTop: 20, marginLeft: -24, marginRight: -24 }}
       />
 
       <div style={{ marginTop: 16, marginBottom: 16 }}>
@@ -128,23 +124,22 @@ export default function CardEditor({
           return (
             <div
               key={f.rotulo}
-              className="flex items-center justify-between py-1.5"
+              className="flex items-center justify-between py-2"
             >
               <span
                 style={{
-                  fontSize: 10,
-                  color: ativa ? "#C9953A" : "#484848",
+                  fontSize: 13,
+                  color: ativa ? "#C9953A" : "#888",
                   fontWeight: 400,
                 }}
               >
                 {f.rotulo}
               </span>
               <span
-                className="font-mono"
                 style={{
-                  fontSize: 11,
-                  color: ativa ? "#C9953A" : "#242424",
-                  fontWeight: 300,
+                  fontSize: 13,
+                  color: ativa ? "#C9953A" : "#444",
+                  fontWeight: 400,
                 }}
               >
                 {formatBRL(f.valor)}
@@ -154,24 +149,24 @@ export default function CardEditor({
         })}
       </div>
 
-      <div style={{ marginBottom: 10 }}>
-        <p style={{ fontSize: 10, color: "#484848", fontWeight: 400 }}>
+      <div style={{ marginBottom: 12 }}>
+        <p style={{ fontSize: 12, color: "#666", fontWeight: 400 }}>
           Entregas válidas:{" "}
-          <span className="font-mono" style={{ color: "#e0e0e0" }}>
+          <span style={{ color: "#fff" }}>
             {existente?.entregas_validas ?? 0}
           </span>
         </p>
         {(existente?.entregas_descontadas ?? 0) > 0 && (
           <p
             style={{
-              fontSize: 10,
-              color: "#484848",
+              fontSize: 12,
+              color: "#666",
               fontWeight: 400,
               marginTop: 4,
             }}
           >
             Descontadas:{" "}
-            <span className="font-mono" style={{ color: "#e24b4a" }}>
+            <span style={{ color: "#e24b4a" }}>
               −{existente?.entregas_descontadas}
             </span>
           </p>
@@ -180,18 +175,18 @@ export default function CardEditor({
 
       <div
         className="divider-h"
-        style={{ marginLeft: -20, marginRight: -20 }}
+        style={{ marginLeft: -24, marginRight: -24 }}
       />
 
       <div
         className="flex items-baseline justify-between"
-        style={{ padding: "18px 0" }}
+        style={{ padding: "20px 0" }}
       >
         <span
           style={{
-            fontSize: 8,
-            letterSpacing: "2px",
-            color: "#202020",
+            fontSize: 11,
+            letterSpacing: "1px",
+            color: "#666",
             textTransform: "uppercase",
             fontWeight: 400,
           }}
@@ -199,17 +194,29 @@ export default function CardEditor({
           Bônus total
         </span>
         <span
-          className="font-mono"
           style={{
             fontSize: 22,
             color: "#C9953A",
-            fontWeight: 300,
-            letterSpacing: "-0.5px",
+            fontWeight: 500,
           }}
         >
           {formatBRL(bonusSalvo)}
         </span>
       </div>
+
+      {existente?.observacoes && (
+        <p
+          style={{
+            fontSize: 12,
+            color: "#666",
+            fontWeight: 400,
+            paddingBottom: 16,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {existente.observacoes}
+        </p>
+      )}
 
       {aberto && (
         <div className="fixed inset-0 z-40">
@@ -224,7 +231,7 @@ export default function CardEditor({
           <aside
             className="absolute right-0 top-0 h-full overflow-y-auto"
             style={{
-              width: 380,
+              width: 400,
               background: "#0c0c0c",
               borderLeft: "0.5px solid #1e1e1e",
             }}
@@ -235,28 +242,28 @@ export default function CardEditor({
                 background: "rgba(12,12,12,0.95)",
                 backdropFilter: "blur(6px)",
                 borderBottom: "0.5px solid #141414",
-                padding: "18px 24px",
+                padding: "20px 24px",
               }}
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p
                     style={{
-                      fontSize: 8,
-                      letterSpacing: "2px",
-                      color: "#242424",
+                      fontSize: 11,
+                      letterSpacing: "1px",
+                      color: "#666",
                       textTransform: "uppercase",
+                      fontWeight: 400,
                     }}
                   >
                     {mes} · {ano}
                   </p>
                   <p
-                    className="font-serif italic"
                     style={{
-                      fontSize: 18,
-                      color: "#e0e0e0",
-                      fontWeight: 300,
-                      marginTop: 4,
+                      fontSize: 16,
+                      color: "#fff",
+                      fontWeight: 500,
+                      marginTop: 6,
                     }}
                   >
                     Comissão · {nome}
@@ -265,7 +272,8 @@ export default function CardEditor({
                 <button
                   type="button"
                   onClick={() => setAberto(false)}
-                  style={{ color: "#484848", fontSize: 22, lineHeight: 1 }}
+                  style={{ color: "#666", fontSize: 22, lineHeight: 1 }}
+                  className="hover:text-[#fff] transition"
                 >
                   ×
                 </button>
@@ -297,9 +305,9 @@ export default function CardEditor({
                 <label className="block">
                   <span
                     style={{
-                      fontSize: 9,
-                      letterSpacing: "1.5px",
-                      color: "#242424",
+                      fontSize: 11,
+                      letterSpacing: "0.5px",
+                      color: "#666",
                       textTransform: "uppercase",
                       fontWeight: 400,
                     }}
@@ -311,18 +319,17 @@ export default function CardEditor({
                     rows={3}
                     value={observacoes}
                     onChange={(e) => setObservacoes(e.target.value)}
-                    className="font-mono"
                     style={{
                       marginTop: 8,
                       width: "100%",
                       background: "#111",
                       border: "0.5px solid #1e1e1e",
-                      color: "#888",
-                      fontSize: 13,
+                      color: "#ccc",
+                      fontSize: 14,
                       padding: "10px 14px",
                       borderRadius: 4,
                       outline: "none",
-                      fontWeight: 300,
+                      fontWeight: 400,
                     }}
                     placeholder="..."
                   />
@@ -330,27 +337,27 @@ export default function CardEditor({
 
                 <div
                   style={{
-                    padding: "12px 0",
+                    padding: "14px 0",
                     borderTop: "0.5px solid #141414",
                   }}
                 >
                   <div className="flex items-baseline justify-between">
                     <span
                       style={{
-                        fontSize: 8,
-                        letterSpacing: "2px",
-                        color: "#202020",
+                        fontSize: 11,
+                        letterSpacing: "1px",
+                        color: "#666",
                         textTransform: "uppercase",
+                        fontWeight: 400,
                       }}
                     >
                       Líquidas
                     </span>
                     <span
-                      className="font-mono"
                       style={{
-                        fontSize: 13,
-                        color: "#e0e0e0",
-                        fontWeight: 300,
+                        fontSize: 14,
+                        color: "#fff",
+                        fontWeight: 400,
                       }}
                     >
                       {liquidas}
@@ -358,25 +365,24 @@ export default function CardEditor({
                   </div>
                   <div
                     className="flex items-baseline justify-between"
-                    style={{ marginTop: 8 }}
+                    style={{ marginTop: 10 }}
                   >
                     <span
                       style={{
-                        fontSize: 8,
-                        letterSpacing: "2px",
-                        color: "#202020",
+                        fontSize: 11,
+                        letterSpacing: "1px",
+                        color: "#666",
                         textTransform: "uppercase",
+                        fontWeight: 400,
                       }}
                     >
                       Prévia do bônus
                     </span>
                     <span
-                      className="font-mono"
                       style={{
                         fontSize: 20,
                         color: "#C9953A",
-                        fontWeight: 300,
-                        letterSpacing: "-0.5px",
+                        fontWeight: 500,
                       }}
                     >
                       {formatBRL(bonusPreview)}
@@ -385,7 +391,7 @@ export default function CardEditor({
                 </div>
 
                 {erro && (
-                  <p style={{ color: "#e24b4a", fontSize: 11 }}>{erro}</p>
+                  <p style={{ color: "#e24b4a", fontSize: 12 }}>{erro}</p>
                 )}
 
                 <div className="flex items-center gap-3 pt-2">
@@ -397,13 +403,12 @@ export default function CardEditor({
                       background: "#C9953A",
                       color: "#080808",
                       padding: "10px 0",
-                      fontSize: 10,
+                      fontSize: 13,
                       fontWeight: 500,
-                      letterSpacing: "1px",
-                      textTransform: "uppercase",
                       borderRadius: 4,
                       opacity: pending || !supabaseOk ? 0.5 : 1,
                     }}
+                    className="hover:brightness-110 transition"
                   >
                     {pending ? "Salvando..." : "Salvar"}
                   </button>
@@ -413,13 +418,13 @@ export default function CardEditor({
                     style={{
                       background: "transparent",
                       border: "0.5px solid #1e1e1e",
-                      color: "#242424",
+                      color: "#666",
                       padding: "10px 16px",
-                      fontSize: 10,
-                      letterSpacing: "1px",
-                      textTransform: "uppercase",
+                      fontSize: 13,
                       borderRadius: 4,
+                      fontWeight: 400,
                     }}
+                    className="hover:text-[#fff] transition"
                   >
                     Cancelar
                   </button>
@@ -448,9 +453,9 @@ function CampoNumero({
     <label className="block">
       <span
         style={{
-          fontSize: 9,
-          letterSpacing: "1.5px",
-          color: "#242424",
+          fontSize: 11,
+          letterSpacing: "0.5px",
+          color: "#666",
           textTransform: "uppercase",
           fontWeight: 400,
         }}
@@ -463,18 +468,17 @@ function CampoNumero({
         min={0}
         value={value}
         onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-        className="font-mono"
         style={{
           marginTop: 8,
           width: "100%",
           background: "#111",
           border: "0.5px solid #1e1e1e",
-          color: "#888",
-          fontSize: 13,
+          color: "#ccc",
+          fontSize: 14,
           padding: "10px 14px",
           borderRadius: 4,
           outline: "none",
-          fontWeight: 300,
+          fontWeight: 400,
         }}
       />
     </label>

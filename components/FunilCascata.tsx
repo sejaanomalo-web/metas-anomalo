@@ -16,19 +16,19 @@ export default function FunilCascata({ etapas, reais }: Props) {
     <section>
       <p
         style={{
-          fontSize: 8,
-          letterSpacing: "2px",
-          color: "#202020",
+          fontSize: 11,
+          letterSpacing: "1px",
+          color: "#666",
           textTransform: "uppercase",
           fontWeight: 400,
-          marginBottom: 10,
+          marginBottom: 12,
         }}
       >
         Funil do mês
       </p>
       <div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-        style={{ gap: 8 }}
+        style={{ gap: 10 }}
       >
         {etapas.map((etapa, i) => {
           const prev = i > 0 ? etapas[i - 1] : null
@@ -46,7 +46,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
           const acima = temReal && real >= etapa.valor
           const abaixo = temReal && real < etapa.valor
 
-          const corReal = acima ? "#4caf50" : abaixo ? "#e24b4a" : "#e0e0e0"
+          const corReal = acima ? "#4caf50" : abaixo ? "#e24b4a" : "#fff"
 
           return (
             <div
@@ -55,14 +55,14 @@ export default function FunilCascata({ etapas, reais }: Props) {
                 background: isFaturamento ? "#0f0c00" : "#0c0c0c",
                 border: `0.5px solid ${isFaturamento ? "#C9953A" : "#141414"}`,
                 borderRadius: 10,
-                padding: 16,
+                padding: 18,
               }}
             >
               <p
                 style={{
-                  fontSize: 8,
-                  letterSpacing: "2px",
-                  color: "#555",
+                  fontSize: 11,
+                  letterSpacing: "1px",
+                  color: "#666",
                   textTransform: "uppercase",
                   fontWeight: 400,
                 }}
@@ -70,15 +70,13 @@ export default function FunilCascata({ etapas, reais }: Props) {
                 {etapa.rotulo}
               </p>
 
-              <div style={{ marginTop: 12, minHeight: 28 }}>
+              <div style={{ marginTop: 12, minHeight: 30 }}>
                 {temReal ? (
                   <p
-                    className="font-mono"
                     style={{
-                      fontSize: 26,
+                      fontSize: 24,
                       color: corReal,
-                      fontWeight: 300,
-                      letterSpacing: "-0.5px",
+                      fontWeight: 400,
                       lineHeight: 1,
                     }}
                   >
@@ -90,7 +88,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
                       fontSize: 13,
                       color: "#333",
                       fontStyle: "italic",
-                      fontWeight: 300,
+                      fontWeight: 400,
                       lineHeight: 1,
                     }}
                   >
@@ -110,9 +108,9 @@ export default function FunilCascata({ etapas, reais }: Props) {
               <div className="flex items-baseline justify-between">
                 <span
                   style={{
-                    fontSize: 8,
-                    letterSpacing: "2px",
-                    color: "#333",
+                    fontSize: 11,
+                    letterSpacing: "0.3px",
+                    color: "#555",
                     textTransform: "uppercase",
                     fontWeight: 400,
                   }}
@@ -120,12 +118,10 @@ export default function FunilCascata({ etapas, reais }: Props) {
                   Estimado
                 </span>
                 <span
-                  className="font-mono"
                   style={{
-                    fontSize: 13,
-                    color: isFaturamento ? "#5a4a00" : "#3a3a3a",
-                    fontWeight: 300,
-                    letterSpacing: "-0.5px",
+                    fontSize: 14,
+                    color: isFaturamento ? "#C9953A" : "#888",
+                    fontWeight: 400,
                   }}
                 >
                   {formatar(etapa.valor, etapa.tipo)}
@@ -138,14 +134,13 @@ export default function FunilCascata({ etapas, reais }: Props) {
                   style={{ marginTop: 6 }}
                 >
                   <span
-                    style={{ fontSize: 9, color: "#2a2a2a", fontWeight: 300 }}
+                    style={{ fontSize: 11, color: "#555", fontWeight: 400 }}
                   >
                     {etapa.subtitulo ?? ""}
                   </span>
                   {conv !== null && (
                     <span
-                      className="font-mono"
-                      style={{ fontSize: 9, color: "#2a2a2a", fontWeight: 300 }}
+                      style={{ fontSize: 11, color: "#555", fontWeight: 400 }}
                     >
                       {conv}% conv.
                     </span>
