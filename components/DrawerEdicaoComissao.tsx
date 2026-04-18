@@ -1597,7 +1597,7 @@ function AbaPessoas({
   )
 }
 
-// ============ Autocomplete de função ============
+// ============ Seletor de função ============
 
 function AutocompleteFuncao({
   value,
@@ -1608,23 +1608,18 @@ function AutocompleteFuncao({
   onChange: (v: string) => void
   funcoes: FuncaoComContagem[]
 }) {
-  const [aberto, setAberto] = useState(false)
-  const termo = value.toLowerCase().trim()
-  const sugestoes = funcoes
-    .filter((f) =>
-      termo ? f.nome.toLowerCase().includes(termo) && f.nome !== value : true
-    )
-    .slice(0, 6)
+  // Garante que a função atual (se houver) apareça na lista mesmo
+  // quando não está registrada em funcoes_time.
+  const nomes = funcoes.map((f) => f.nome)
+  const opcoes =
+    value && !nomes.includes(value) ? [value, ...nomes] : nomes
 
   return (
-    <label className="block" style={{ position: "relative" }}>
+    <label className="block">
       <LabelSmall>Função</LabelSmall>
-      <input
+      <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setAberto(true)}
-        onBlur={() => setTimeout(() => setAberto(false), 150)}
-        placeholder="Ex: Designer, Social Media, Copywriter"
         className="glass-input"
         style={{
           marginTop: 6,
@@ -1632,49 +1627,27 @@ function AutocompleteFuncao({
           padding: "8px 12px",
           fontSize: 13,
         }}
-      />
-      {aberto && sugestoes.length > 0 && (
-        <ul
+      >
+        <option value="" style={{ background: "#0a0a0a" }}>
+          Selecione uma função
+        </option>
+        {opcoes.map((nome) => (
+          <option key={nome} value={nome} style={{ background: "#0a0a0a" }}>
+            {nome}
+          </option>
+        ))}
+      </select>
+      {opcoes.length === 0 && (
+        <p
           style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
+            fontSize: 10,
+            color: "rgba(255,255,255,0.4)",
             marginTop: 4,
-            background: "#1a1400",
-            border: "0.5px solid rgba(201,149,58,0.2)",
-            borderRadius: 8,
-            overflow: "hidden",
-            zIndex: 50,
-            listStyle: "none",
-            padding: 0,
           }}
         >
-          {sugestoes.map((s) => (
-            <li key={s.nome}>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  onChange(s.nome)
-                  setAberto(false)
-                }}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "8px 12px",
-                  fontSize: 11,
-                  fontWeight: 400,
-                  color: "rgba(255,255,255,0.8)",
-                  background: "transparent",
-                }}
-                className="hover:bg-[rgba(201,149,58,0.08)] hover:text-[#C9953A] transition"
-              >
-                {s.nome}
-              </button>
-            </li>
-          ))}
-        </ul>
+          Cadastre uma função em <em>Funções do time</em> para poder
+          selecionar aqui.
+        </p>
       )}
     </label>
   )
