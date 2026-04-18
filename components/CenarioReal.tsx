@@ -1,5 +1,6 @@
 import { type DadosReais } from "@/lib/supabase"
 import {
+  type Ano,
   type Mes,
   corStatusMeta,
   formatBRL,
@@ -14,14 +15,16 @@ interface MetaComparavel {
   faturamento?: number
 }
 
+type ChaveReal =
+  | "investimento_real"
+  | "leads_real"
+  | "reunioes_real"
+  | "contratos_real"
+  | "faturamento_real"
+
 const LINHAS: {
   rotulo: string
-  chave:
-    | "investimento_real"
-    | "leads_real"
-    | "reunioes_real"
-    | "contratos_real"
-    | "faturamento_real"
+  chave: ChaveReal
   metaKey: keyof MetaComparavel
   tipo: "moeda" | "numero"
 }[] = [
@@ -56,10 +59,12 @@ export default function CenarioReal({
   dados,
   meta,
   mes,
+  ano,
 }: {
   dados: DadosReais | null
   meta: MetaComparavel
   mes: Mes
+  ano: Ano
 }) {
   const cpl =
     dados?.investimento_real !== null &&
@@ -71,7 +76,10 @@ export default function CenarioReal({
       : null
 
   return (
-    <div className="glass" style={{ padding: 24 }}>
+    <div
+      className="glass h-full flex flex-col"
+      style={{ padding: 24 }}
+    >
       <p
         style={{
           fontSize: 9,
@@ -81,11 +89,11 @@ export default function CenarioReal({
           fontWeight: 500,
         }}
       >
-        Cenário Real · {mes}
+        Cenário Real · {mes} {ano}
       </p>
 
       <div
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
+        className="grid grid-cols-2 flex-1"
         style={{ gap: 10, marginTop: 18 }}
       >
         {LINHAS.map((l) => {
@@ -94,14 +102,14 @@ export default function CenarioReal({
           const temReal = typeof real === "number"
           const cor =
             temReal && metaValor !== undefined
-              ? corStatusMeta(real, metaValor, true, mes)
+              ? corStatusMeta(real, metaValor, true, mes, ano)
               : "#ffffff"
 
           return (
             <div
               key={l.chave}
               className="glass"
-              style={{ padding: "16px 18px", borderRadius: 12 }}
+              style={{ padding: "14px 16px", borderRadius: 12 }}
             >
               <p
                 style={{
@@ -117,10 +125,10 @@ export default function CenarioReal({
               {temReal ? (
                 <p
                   style={{
-                    fontSize: 24,
+                    fontSize: 22,
                     color: cor,
                     fontWeight: 600,
-                    marginTop: 8,
+                    marginTop: 6,
                     lineHeight: 1.1,
                     letterSpacing: "-0.3px",
                   }}
@@ -130,7 +138,7 @@ export default function CenarioReal({
               ) : (
                 <p
                   style={{
-                    fontSize: 14,
+                    fontSize: 13,
                     color: "rgba(255,255,255,0.18)",
                     fontStyle: "italic",
                     fontWeight: 300,
@@ -144,10 +152,8 @@ export default function CenarioReal({
               {metaValor !== undefined && (
                 <p
                   style={{
-                    fontSize: 11,
-                    color: temReal
-                      ? "rgba(255,255,255,0.35)"
-                      : "rgba(255,255,255,0.2)",
+                    fontSize: 12,
+                    color: temReal ? cor : "rgba(255,255,255,0.25)",
                     fontWeight: 400,
                     marginTop: 6,
                   }}
@@ -164,7 +170,7 @@ export default function CenarioReal({
 
         <div
           className="glass"
-          style={{ padding: "16px 18px", borderRadius: 12 }}
+          style={{ padding: "14px 16px", borderRadius: 12 }}
         >
           <p
             style={{
@@ -180,10 +186,10 @@ export default function CenarioReal({
           {cpl !== null ? (
             <p
               style={{
-                fontSize: 24,
+                fontSize: 22,
                 color: "#ffffff",
                 fontWeight: 600,
-                marginTop: 8,
+                marginTop: 6,
                 lineHeight: 1.1,
                 letterSpacing: "-0.3px",
               }}
@@ -193,7 +199,7 @@ export default function CenarioReal({
           ) : (
             <p
               style={{
-                fontSize: 14,
+                fontSize: 13,
                 color: "rgba(255,255,255,0.18)",
                 fontStyle: "italic",
                 fontWeight: 300,
@@ -221,8 +227,8 @@ export default function CenarioReal({
           <div
             className="glass"
             style={{
-              marginTop: 12,
-              padding: "14px 18px",
+              marginTop: 10,
+              padding: "12px 16px",
               borderRadius: 12,
             }}
           >
@@ -239,7 +245,7 @@ export default function CenarioReal({
             </p>
             <p
               style={{
-                fontSize: 18,
+                fontSize: 17,
                 color: "#ffffff",
                 fontWeight: 600,
                 marginTop: 4,
@@ -254,8 +260,8 @@ export default function CenarioReal({
         <div
           className="glass"
           style={{
-            marginTop: 12,
-            padding: "14px 18px",
+            marginTop: 10,
+            padding: "12px 16px",
             borderRadius: 12,
           }}
         >
@@ -272,10 +278,10 @@ export default function CenarioReal({
           </p>
           <p
             style={{
-              fontSize: 13,
+              fontSize: 12,
               color: "rgba(255,255,255,0.7)",
               fontWeight: 300,
-              marginTop: 6,
+              marginTop: 4,
               whiteSpace: "pre-wrap",
             }}
           >

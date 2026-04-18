@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { GATILHOS_FELIPE, calcularBonusFelipe } from "@/lib/comissionamento"
 import { salvarComissaoAction } from "@/lib/comissionamento-actions"
 import type { Comissionamento } from "@/lib/supabase"
-import type { Mes } from "@/lib/data"
+import type { Ano, Mes } from "@/lib/data"
 import { formatBRL } from "@/lib/data"
 
 export default function CardFelipe({
@@ -15,7 +15,7 @@ export default function CardFelipe({
   supabaseOk,
 }: {
   mes: Mes
-  ano: number
+  ano: Ano
   existente: Comissionamento | null
   supabaseOk: boolean
 }) {

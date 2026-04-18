@@ -13,7 +13,7 @@ create table if not exists public.dados_reais (
   mes text not null check (
     mes in ('Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro')
   ),
-  ano int not null default 2025,
+  ano int not null default 2026,
   investimento_real numeric,
   leads_real int,
   reunioes_real int,
@@ -33,13 +33,17 @@ create table if not exists public.comissionamento (
   mes text not null check (
     mes in ('Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro')
   ),
-  ano int not null default 2025,
+  ano int not null default 2026,
   entregas_validas int,
   bonus_calculado numeric not null default 0,
   detalhes jsonb,
   updated_at timestamptz not null default now(),
   unique (colaborador, mes, ano)
 );
+
+-- Migração: atualiza o default do ano para 2026 em instalações antigas
+alter table public.dados_reais alter column ano set default 2026;
+alter table public.comissionamento alter column ano set default 2026;
 
 -- RLS -----------------------------------------------------------------------
 -- Este painel é interno e a autenticação acontece no próprio app via cookie.

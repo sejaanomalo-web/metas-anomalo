@@ -2,7 +2,6 @@
 
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -10,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { formatBRL } from "@/lib/data"
 
 interface Ponto {
   mes: string
@@ -17,10 +17,127 @@ interface Ponto {
   real: number | null
 }
 
+interface LinhaDados {
+  mes: string
+  valor: number | null
+}
+
+interface SegmentoLinha {
+  cor: string
+  dados: LinhaDados[]
+}
+
+function construirSegmentos(dados: Ponto[]): SegmentoLinha[] {
+  const segmentos: SegmentoLinha[] = []
+  for (let i = 0; i < dados.length - 1; i++) {
+    const a = dados[i]
+    const b = dados[i + 1]
+    if (a.real === null || b.real === null) continue
+    const cor = a.real >= a.meta ? "#4caf50" : "#e24b4a"
+    const serie: LinhaDados[] = dados.map((d, idx) => ({
+      mes: d.mes,
+      valor: idx === i ? a.real : idx === i + 1 ? b.real : null,
+    }))
+    segmentos.push({ cor, dados: serie })
+  }
+  return segmentos
+}
+
+function construirPontos(dados: Ponto[]): LinhaDados[] {
+  return dados.map((d) => ({
+    mes: d.mes,
+    valor: d.real,
+  }))
+}
+
+interface DadosTooltip {
+  mes: string
+  meta: number
+  real: number | null
+}
+
+type TooltipPayloadItem = { payload?: unknown }
+
+function TooltipConteudo({
+  active,
+  payload,
+  pontos,
+}: {
+  active?: boolean
+  payload?: TooltipPayloadItem[]
+  pontos: DadosTooltip[]
+}) {
+  if (!active || !payload || payload.length === 0) return null
+  const itemPayload = payload[0]?.payload as { mes?: unknown } | undefined
+  const mesLabel = typeof itemPayload?.mes === "string" ? itemPayload.mes : ""
+  const ponto = pontos.find((p) => p.mes === mesLabel)
+  if (!ponto) return null
+  const real = ponto.real
+  const diff = real !== null ? real - ponto.meta : null
+  const corStatus = real === null
+    ? "rgba(255,255,255,0.5)"
+    : real >= ponto.meta
+    ? "#4caf50"
+    : "#e24b4a"
+
+  return (
+    <div
+      style={{
+        background: "rgba(0,0,0,0.85)",
+        border: "0.5px solid rgba(255,255,255,0.1)",
+        borderRadius: 8,
+        backdropFilter: "blur(16px)",
+        padding: "10px 14px",
+        fontFamily: "Poppins",
+        fontSize: 11,
+        fontWeight: 400,
+        color: "#fff",
+        boxShadow: "none",
+      }}
+    >
+      <p
+        style={{
+          fontSize: 10,
+          color: "rgba(255,255,255,0.5)",
+          letterSpacing: "1px",
+          textTransform: "uppercase",
+          marginBottom: 6,
+        }}
+      >
+        {mesLabel}
+      </p>
+      <p style={{ color: "#C9953A", marginBottom: 2 }}>
+        Meta: {formatBRL(ponto.meta)}
+      </p>
+      {real !== null ? (
+        <>
+          <p style={{ color: corStatus, marginBottom: 2 }}>
+            Real: {formatBRL(real)}
+          </p>
+          {diff !== null && (
+            <p style={{ color: corStatus }}>
+              Diferença: {diff >= 0 ? "+" : ""}
+              {formatBRL(diff)}
+            </p>
+          )}
+        </>
+      ) : (
+        <p style={{ color: "rgba(255,255,255,0.3)" }}>Real: não inserido</p>
+      )}
+    </div>
+  )
+}
+
 export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
   const temReal = dados.some((p) => p.real !== null && p.real > 0)
+  const segmentos = construirSegmentos(dados)
+  const pontos = construirPontos(dados)
+
   return (
-    <div className="glass" style={{ padding: 24 }}>
+    <div
+      className="glass h-full flex flex-col"
+      style={{ padding: 24 }}
+    >
       <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
         <p
           style={{
@@ -31,17 +148,22 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
             fontWeight: 500,
           }}
         >
-          Evolução do faturamento
+          Evolução do Faturamento
         </p>
-        {temReal && (
-          <div className="flex items-center gap-4" style={{ fontSize: 11, fontWeight: 400 }}>
-            <span style={{ color: "#C9953A" }}>── Meta</span>
-            <span style={{ color: "#4caf50" }}>┅ Real</span>
-          </div>
+        {!temReal && (
+          <span
+            style={{
+              fontSize: 9,
+              color: "rgba(255,255,255,0.2)",
+              fontWeight: 300,
+            }}
+          >
+            Sem dados reais inseridos
+          </span>
         )}
       </div>
 
-      <div style={{ width: "100%", height: 300 }}>
+      <div style={{ width: "100%", flex: 1, minHeight: 280 }}>
         <ResponsiveContainer>
           <LineChart
             data={dados}
@@ -70,39 +192,8 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
             />
             <Tooltip
               cursor={{ stroke: "rgba(201,149,58,0.25)" }}
-              contentStyle={{
-                background: "rgba(0,0,0,0.8)",
-                border: "0.5px solid rgba(255,255,255,0.1)",
-                borderRadius: 8,
-                backdropFilter: "blur(16px)",
-                color: "#fff",
-                fontFamily: "Poppins",
-                fontSize: 11,
-                fontWeight: 400,
-                boxShadow: "none",
-              }}
-              formatter={(v, name) => {
-                const n = typeof v === "number" ? v : Number(v)
-                const texto = !Number.isFinite(n)
-                  ? "—"
-                  : n.toLocaleString("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                      maximumFractionDigits: 0,
-                    })
-                return [texto, name]
-              }}
+              content={<TooltipConteudo pontos={dados} />}
             />
-            {temReal && (
-              <Legend
-                wrapperStyle={{
-                  fontSize: 10,
-                  color: "rgba(255,255,255,0.4)",
-                  fontFamily: "Poppins",
-                }}
-                iconType="plainline"
-              />
-            )}
             <Line
               type="monotone"
               dataKey="meta"
@@ -112,21 +203,89 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
               dot={false}
               activeDot={{ r: 4, fill: "#C9953A", stroke: "#000" }}
             />
-            {temReal && (
+            {segmentos.map((seg, idx) => (
               <Line
+                key={`seg-${idx}`}
                 type="monotone"
-                dataKey="real"
+                data={seg.dados}
+                dataKey="valor"
                 name="Real"
-                stroke="#4caf50"
+                stroke={seg.cor}
                 strokeWidth={1.5}
                 strokeDasharray="4 2"
                 dot={false}
                 connectNulls={false}
-                activeDot={{ r: 3, fill: "#4caf50", stroke: "#000" }}
+                activeDot={false}
+                legendType="none"
+                isAnimationActive={false}
+              />
+            ))}
+            {temReal && (
+              <Line
+                type="monotone"
+                data={pontos}
+                dataKey="valor"
+                name="Pontos"
+                stroke="transparent"
+                dot={(props) => {
+                  const { cx, cy, payload, index } = props as {
+                    cx?: number
+                    cy?: number
+                    payload?: { mes?: string; valor?: number | null }
+                    index?: number
+                  }
+                  if (
+                    typeof cx !== "number" ||
+                    typeof cy !== "number" ||
+                    !payload ||
+                    typeof payload.valor !== "number"
+                  ) {
+                    return <g key={`dot-empty-${index ?? 0}`} />
+                  }
+                  const alvoMes = payload.mes
+                  const pontoMeta = dados.find((d) => d.mes === alvoMes)
+                  const metaDomes = pontoMeta?.meta ?? 0
+                  const cor =
+                    payload.valor >= metaDomes ? "#4caf50" : "#e24b4a"
+                  return (
+                    <circle
+                      key={`dot-${alvoMes ?? index ?? 0}`}
+                      cx={cx}
+                      cy={cy}
+                      r={4}
+                      fill={cor}
+                      stroke="#000"
+                      strokeWidth={0.5}
+                    />
+                  )
+                }}
+                activeDot={false}
+                legendType="none"
+                isAnimationActive={false}
               />
             )}
           </LineChart>
         </ResponsiveContainer>
+      </div>
+
+      <div
+        className="flex items-center gap-5 flex-wrap"
+        style={{
+          marginTop: 12,
+          paddingTop: 12,
+          borderTop: "0.5px solid rgba(255,255,255,0.05)",
+          fontSize: 10,
+          fontWeight: 400,
+          color: "rgba(255,255,255,0.4)",
+        }}
+      >
+        <span style={{ color: "#C9953A" }}>── Meta</span>
+        {temReal && (
+          <>
+            <span style={{ color: "#4caf50" }}>┅ Real acima da meta</span>
+            <span style={{ color: "#e24b4a" }}>┅ Real abaixo da meta</span>
+          </>
+        )}
       </div>
     </div>
   )

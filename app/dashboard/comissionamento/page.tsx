@@ -1,18 +1,13 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import Header from "@/components/Header"
-import SeletorMes from "@/components/SeletorMes"
+import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CardFelipe from "@/components/CardFelipe"
 import CardEditor from "@/components/CardEditor"
 import { estaAutenticado } from "@/lib/auth"
-import { ANO_PADRAO, MESES, type Mes, formatBRL } from "@/lib/data"
+import { anoValido, formatBRL, mesValido } from "@/lib/data"
 import { getComissionamentoMes } from "@/lib/comissionamento-actions"
 import { supabaseConfigurado } from "@/lib/supabase"
-
-function mesValido(m: string | undefined): Mes {
-  if (m && (MESES as readonly string[]).includes(m)) return m as Mes
-  return "Abril"
-}
 
 const FAIXAS_VINICIUS = [
   { limite: 10, valor: 0, rotulo: "Menos de 10 entregas" },
@@ -34,15 +29,16 @@ const FAIXAS_EMANUEL = [
 export default async function ComissionamentoPage({
   searchParams,
 }: {
-  searchParams: { mes?: string }
+  searchParams: { mes?: string; ano?: string }
 }) {
   if (!estaAutenticado()) {
     redirect("/login")
   }
 
   const mes = mesValido(searchParams?.mes)
+  const ano = anoValido(searchParams?.ano)
   const supabaseOk = supabaseConfigurado()
-  const registros = await getComissionamentoMes(mes)
+  const registros = await getComissionamentoMes(mes, ano)
 
   const felipe = registros.find((r) => r.colaborador === "felipe") ?? null
   const vinicius = registros.find((r) => r.colaborador === "vinicius") ?? null
@@ -56,14 +52,14 @@ export default async function ComissionamentoPage({
   return (
     <>
       <Header>
-        <SeletorMes mesAtual={mes} />
+        <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
       </Header>
 
       <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
             <Link
-              href={`/dashboard?mes=${mes}`}
+              href={`/dashboard?mes=${mes}&ano=${ano}`}
               style={{
                 fontSize: 10,
                 letterSpacing: "2px",
@@ -98,7 +94,7 @@ export default async function ComissionamentoPage({
                 fontWeight: 300,
               }}
             >
-              {mes} de {ANO_PADRAO} · Bônus por performance e entregas
+              {mes} de {ano} · Bônus por performance e entregas
             </p>
           </div>
           <div className="glass" style={{ padding: "14px 22px" }}>
@@ -147,7 +143,7 @@ export default async function ComissionamentoPage({
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <CardFelipe
             mes={mes}
-            ano={ANO_PADRAO}
+            ano={ano}
             existente={felipe}
             supabaseOk={supabaseOk}
           />
@@ -157,7 +153,7 @@ export default async function ComissionamentoPage({
             funcao="Editor · estáticos e carrosséis"
             faixas={FAIXAS_VINICIUS}
             mes={mes}
-            ano={ANO_PADRAO}
+            ano={ano}
             existente={vinicius}
             supabaseOk={supabaseOk}
           />
@@ -167,7 +163,7 @@ export default async function ComissionamentoPage({
             funcao="Editor de vídeo · Reels"
             faixas={FAIXAS_EMANUEL}
             mes={mes}
-            ano={ANO_PADRAO}
+            ano={ano}
             existente={emanuel}
             supabaseOk={supabaseOk}
           />

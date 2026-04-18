@@ -1,10 +1,10 @@
 import Link from "next/link"
 import {
-  ANO_PADRAO,
+  type Ano,
   type EmpresaMeta,
   type Mes,
   SUBTITULO_EMPRESA,
-  corStatusMeta,
+  anoTemProjecao,
   formatBRL,
   getFaturamentoMes,
   getVerbaMes,
@@ -14,17 +14,20 @@ import {
 export default function CardEmpresa({
   empresa,
   mes,
+  ano,
   faturamentoReal,
 }: {
   empresa: EmpresaMeta
   mes: Mes
+  ano: Ano
   faturamentoReal: number | null
 }) {
-  const investimento = getVerbaMes(empresa.slug, mes)
-  const meta = getFaturamentoMes(empresa.slug, mes)
-  const inativa = meta === 0 && investimento === 0
+  const temProjecao = anoTemProjecao(ano)
+  const investimento = getVerbaMes(empresa.slug, mes, ano)
+  const meta = getFaturamentoMes(empresa.slug, mes, ano)
+  const inativa = temProjecao && meta === 0 && investimento === 0
 
-  const metaAcumulada = metaAcumuladaAteHoje(meta, mes, ANO_PADRAO)
+  const metaAcumulada = metaAcumuladaAteHoje(meta, mes, ano)
   const temReal = typeof faturamentoReal === "number" && faturamentoReal > 0
 
   const corBolinha = !temReal
@@ -33,21 +36,22 @@ export default function CardEmpresa({
     ? "#4caf50"
     : "#e24b4a"
 
-  const corBarra = corStatusMeta(
-    temReal ? faturamentoReal : 0,
-    meta,
-    temReal,
-    mes
-  )
-
   const progressoPct =
     temReal && meta > 0
       ? Math.min(100, Math.round((faturamentoReal / meta) * 100))
       : 0
 
+  const corTextoProgresso = !temReal
+    ? "rgba(255,255,255,0.3)"
+    : faturamentoReal >= meta
+    ? "#4caf50"
+    : faturamentoReal >= metaAcumulada
+    ? "#C9953A"
+    : "#e24b4a"
+
   return (
     <Link
-      href={`/dashboard/${empresa.slug}?mes=${mes}`}
+      href={`/dashboard/${empresa.slug}?mes=${mes}&ano=${ano}`}
       className="glass glass-hover block"
       style={{
         opacity: inativa ? 0.35 : 1,
@@ -77,7 +81,7 @@ export default function CardEmpresa({
                 fontWeight: 500,
               }}
             >
-              {mes} 2025
+              {mes} {ano}
             </span>
           </div>
         </div>
@@ -137,11 +141,16 @@ export default function CardEmpresa({
                 bottom: 10,
               }}
             />
-            <BlocoMetrica rotulo="Investimento" valor={formatBRL(investimento)} />
+            <BlocoMetrica
+              rotulo="Investimento"
+              valor={temProjecao ? formatBRL(investimento) : "—"}
+              esvaziado={!temProjecao}
+            />
             <BlocoMetrica
               rotulo="Faturamento"
-              valor={formatBRL(meta)}
-              destaque
+              valor={temProjecao ? formatBRL(meta) : "—"}
+              destaque={temProjecao}
+              esvaziado={!temProjecao}
             />
           </div>
 
@@ -153,7 +162,7 @@ export default function CardEmpresa({
                 style={{
                   fontSize: 10,
                   fontWeight: 500,
-                  color: temReal ? corBarra : "rgba(255,255,255,0.2)",
+                  color: corTextoProgresso,
                   width: 32,
                   textAlign: "right",
                   flexShrink: 0,
@@ -174,7 +183,7 @@ export default function CardEmpresa({
                   style={{
                     height: "100%",
                     width: `${progressoPct}%`,
-                    background: corBarra,
+                    background: "#C9953A",
                   }}
                 />
               </div>
@@ -187,7 +196,7 @@ export default function CardEmpresa({
                   flexShrink: 0,
                 }}
               >
-                Meta {formatBRL(meta)}
+                {temProjecao ? `Meta ${formatBRL(meta)}` : "Sem projeção"}
               </span>
             </div>
             <p
@@ -214,10 +223,12 @@ function BlocoMetrica({
   rotulo,
   valor,
   destaque,
+  esvaziado,
 }: {
   rotulo: string
   valor: string
   destaque?: boolean
+  esvaziado?: boolean
 }) {
   return (
     <div style={{ padding: "14px 20px" }}>
@@ -236,7 +247,11 @@ function BlocoMetrica({
         style={{
           fontSize: 17,
           fontWeight: destaque ? 600 : 400,
-          color: destaque ? "#C9953A" : "rgba(255,255,255,0.7)",
+          color: esvaziado
+            ? "rgba(255,255,255,0.2)"
+            : destaque
+            ? "#C9953A"
+            : "rgba(255,255,255,0.7)",
           marginTop: 6,
           lineHeight: 1.1,
         }}

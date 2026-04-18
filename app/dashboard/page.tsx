@@ -1,37 +1,35 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import Header from "@/components/Header"
-import SeletorMes from "@/components/SeletorMes"
+import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CardEmpresa from "@/components/CardEmpresa"
 import { estaAutenticado } from "@/lib/auth"
 import {
-  MESES,
-  type Mes,
+  anoValido,
+  anoTemProjecao,
   corStatusMeta,
   empresas,
   formatBRL,
   formatNumero,
   getResumoGrupo,
+  mesValido,
 } from "@/lib/data"
 import { getDadosReaisDoMes } from "@/lib/dados-reais"
-
-function mesValido(m: string | undefined): Mes {
-  if (m && (MESES as readonly string[]).includes(m)) return m as Mes
-  return "Abril"
-}
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { mes?: string }
+  searchParams: { mes?: string; ano?: string }
 }) {
   if (!estaAutenticado()) {
     redirect("/login")
   }
 
   const mes = mesValido(searchParams?.mes)
-  const resumo = getResumoGrupo(mes)
-  const reaisDoMes = await getDadosReaisDoMes(mes)
+  const ano = anoValido(searchParams?.ano)
+  const temProjecao = anoTemProjecao(ano)
+  const resumo = getResumoGrupo(mes, ano)
+  const reaisDoMes = await getDadosReaisDoMes(mes, ano)
 
   let somaFat = 0
   let somaInv = 0
@@ -60,41 +58,59 @@ export default async function DashboardPage({
     }
   }
 
-  const celulas = [
+  interface Celula {
+    rotulo: string
+    real: string
+    meta: number
+    metaLabel: string
+    temReal: boolean
+    somaReal: number
+    tipo: "moeda" | "numero"
+  }
+
+  const celulas: Celula[] = [
     {
-      rotulo: "Faturamento do grupo",
+      rotulo: "Faturamento do Hub",
       real: temFat ? formatBRL(somaFat) : "—",
-      cor: temFat ? corStatusMeta(somaFat, resumo.faturamento, true, mes) : "#C9953A",
-      corMeta: corStatusMeta(somaFat, resumo.faturamento, temFat, mes),
-      meta: `Meta ${formatBRL(resumo.faturamento)}`,
+      meta: resumo.faturamento,
+      metaLabel: formatBRL(resumo.faturamento),
+      temReal: temFat,
+      somaReal: somaFat,
+      tipo: "moeda",
     },
     {
       rotulo: "Total investido em ads",
       real: temInv ? formatBRL(somaInv) : "—",
-      cor: temInv ? corStatusMeta(somaInv, resumo.investimento, true, mes) : "#ffffff",
-      corMeta: corStatusMeta(somaInv, resumo.investimento, temInv, mes),
-      meta: `Meta ${formatBRL(resumo.investimento)}`,
+      meta: resumo.investimento,
+      metaLabel: formatBRL(resumo.investimento),
+      temReal: temInv,
+      somaReal: somaInv,
+      tipo: "moeda",
     },
     {
       rotulo: "Total de leads",
       real: temLeads ? formatNumero(somaLeads) : "—",
-      cor: temLeads ? corStatusMeta(somaLeads, resumo.leads, true, mes) : "#ffffff",
-      corMeta: corStatusMeta(somaLeads, resumo.leads, temLeads, mes),
-      meta: `Meta ${formatNumero(resumo.leads)}`,
+      meta: resumo.leads,
+      metaLabel: formatNumero(resumo.leads),
+      temReal: temLeads,
+      somaReal: somaLeads,
+      tipo: "numero",
     },
     {
       rotulo: "Criativos do mês",
       real: temCri ? formatNumero(somaCri) : "—",
-      cor: temCri ? corStatusMeta(somaCri, resumo.criativos, true, mes) : "#ffffff",
-      corMeta: corStatusMeta(somaCri, resumo.criativos, temCri, mes),
-      meta: `Meta ${formatNumero(resumo.criativos)} · ${resumo.criativosSemana}/sem`,
+      meta: resumo.criativos,
+      metaLabel: formatNumero(resumo.criativos),
+      temReal: temCri,
+      somaReal: somaCri,
+      tipo: "numero",
     },
   ]
 
   return (
     <>
       <Header>
-        <SeletorMes mesAtual={mes} />
+        <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
       </Header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
@@ -122,11 +138,11 @@ export default async function DashboardPage({
                 fontWeight: 300,
               }}
             >
-              {mes} de 2025 · 6 empresas
+              {mes} de {ano} · 6 empresas
             </p>
           </div>
           <Link
-            href={`/dashboard/comissionamento?mes=${mes}`}
+            href={`/dashboard/comissionamento?mes=${mes}&ano=${ano}`}
             className="btn-gold-outline uppercase"
           >
             Comissionamento do time →
@@ -137,42 +153,106 @@ export default async function DashboardPage({
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-12"
           style={{ gap: 10 }}
         >
-          {celulas.map((c) => (
-            <div key={c.rotulo} className="glass" style={{ padding: "18px 22px" }}>
-              <p
-                style={{
-                  fontSize: 10,
-                  letterSpacing: "1.5px",
-                  textTransform: "uppercase",
-                  color: "rgba(255,255,255,0.4)",
-                  fontWeight: 500,
-                }}
+          {celulas.map((c) => {
+            const cor = temProjecao
+              ? corStatusMeta(c.somaReal, c.meta, c.temReal, mes, ano)
+              : "rgba(255,255,255,0.2)"
+            const pct =
+              c.temReal && c.meta > 0
+                ? Math.min(100, Math.round((c.somaReal / c.meta) * 100))
+                : 0
+            return (
+              <div
+                key={c.rotulo}
+                className="glass"
+                style={{ padding: "18px 22px" }}
               >
-                {c.rotulo}
-              </p>
-              <p
-                style={{
-                  fontSize: 28,
-                  fontWeight: 700,
-                  color: c.cor,
-                  marginTop: 10,
-                  lineHeight: 1.1,
-                }}
-              >
-                {c.real}
-              </p>
-              <p
-                style={{
-                  fontSize: 11,
-                  color: c.corMeta,
-                  fontWeight: 400,
-                  marginTop: 4,
-                }}
-              >
-                {c.meta}
-              </p>
-            </div>
-          ))}
+                <p
+                  style={{
+                    fontSize: 9,
+                    letterSpacing: "2px",
+                    textTransform: "uppercase",
+                    color: "rgba(255,255,255,0.4)",
+                    fontWeight: 500,
+                  }}
+                >
+                  {c.rotulo}
+                </p>
+                <p
+                  style={{
+                    fontSize: 28,
+                    fontWeight: 700,
+                    color: "#ffffff",
+                    marginTop: 10,
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {c.real}
+                </p>
+                {temProjecao ? (
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: cor,
+                      fontWeight: 400,
+                      marginTop: 6,
+                    }}
+                  >
+                    Meta {c.metaLabel}
+                  </p>
+                ) : (
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "rgba(255,255,255,0.2)",
+                      fontWeight: 300,
+                      fontStyle: "italic",
+                      marginTop: 6,
+                    }}
+                  >
+                    Planejamento futuro — sem projeção definida
+                  </p>
+                )}
+                <div
+                  style={{
+                    marginTop: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      flex: 1,
+                      height: 2,
+                      background: "rgba(255,255,255,0.06)",
+                      borderRadius: 2,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${pct}%`,
+                        background: cor,
+                      }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 500,
+                      color: cor,
+                      width: 34,
+                      textAlign: "right",
+                    }}
+                  >
+                    {c.temReal ? `${pct}%` : "—"}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
         </section>
 
         <section>
@@ -209,6 +289,7 @@ export default async function DashboardPage({
                 key={empresa.slug}
                 empresa={empresa}
                 mes={mes}
+                ano={ano}
                 faturamentoReal={
                   reaisDoMes.get(empresa.db)?.faturamento_real ?? null
                 }

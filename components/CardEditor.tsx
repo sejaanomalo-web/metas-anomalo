@@ -8,7 +8,7 @@ import {
   calcularBonusVinicius,
 } from "@/lib/comissionamento"
 import type { Comissionamento } from "@/lib/supabase"
-import type { Mes } from "@/lib/data"
+import type { Ano, Mes } from "@/lib/data"
 import { formatBRL } from "@/lib/data"
 
 interface Faixa {
@@ -32,7 +32,7 @@ export default function CardEditor({
   funcao: string
   faixas: Faixa[]
   mes: Mes
-  ano: number
+  ano: Ano
   existente: Comissionamento | null
   supabaseOk: boolean
 }) {

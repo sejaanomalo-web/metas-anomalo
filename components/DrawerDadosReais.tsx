@@ -4,12 +4,12 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { salvarDadosReaisAction } from "@/lib/dados-reais"
 import type { DadosReais } from "@/lib/supabase"
-import type { EmpresaDb, Mes } from "@/lib/data"
+import type { Ano, EmpresaDb, Mes } from "@/lib/data"
 
 interface Props {
   empresa: EmpresaDb
   mes: Mes
-  ano: number
+  ano: Ano
   supabaseOk: boolean
   tipoEmpresa: "leads-reunioes-contratos" | "hato" | "aton" | "diego"
   existentes: DadosReais | null

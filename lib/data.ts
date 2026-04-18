@@ -11,7 +11,30 @@ export const MESES = [
 ] as const
 
 export type Mes = (typeof MESES)[number]
-export const ANO_PADRAO = 2025
+
+export const ANOS_DISPONIVEIS = [2026, 2027, 2028, 2029, 2030] as const
+export type Ano = (typeof ANOS_DISPONIVEIS)[number]
+export const ANO_PADRAO: Ano = 2026
+// Ano que possui dados projetados hardcoded em lib/data.ts
+export const ANO_PROJETADO: Ano = 2026
+
+export function anoTemProjecao(ano: number): boolean {
+  return ano === ANO_PROJETADO
+}
+
+export function anoValido(a: string | undefined | null): Ano {
+  if (!a) return ANO_PADRAO
+  const n = parseInt(a, 10)
+  if (!Number.isFinite(n)) return ANO_PADRAO
+  return (ANOS_DISPONIVEIS as readonly number[]).includes(n)
+    ? (n as Ano)
+    : ANO_PADRAO
+}
+
+export function mesValido(m: string | undefined | null): Mes {
+  if (m && (MESES as readonly string[]).includes(m)) return m as Mes
+  return "Abril"
+}
 
 export type EmpresaSlug =
   | "a2-marketing"
@@ -210,7 +233,11 @@ export function getEmpresaPorDb(db: string): EmpresaMeta | undefined {
   return empresas.find((e) => e.db === db)
 }
 
-export function getDadosEmpresa(slug: EmpresaSlug) {
+export function getDadosEmpresa(
+  slug: EmpresaSlug,
+  ano: number = ANO_PROJETADO
+) {
+  if (!anoTemProjecao(ano)) return []
   switch (slug) {
     case "a2-marketing":
       return a2Marketing
@@ -234,11 +261,14 @@ export function getLinhaMes<T extends { mes: string }>(
   return dados.find((l) => l.mes === mes)
 }
 
-export function getVerbaMes(slug: EmpresaSlug, mes: Mes): number {
+export function getVerbaMes(
+  slug: EmpresaSlug,
+  mes: Mes,
+  ano: number = ANO_PROJETADO
+): number {
   const empresa = getEmpresa(slug)
-  if (!empresa) return 0
-  if (empresa.tipo === "diego") return 0
-  const linha = getDadosEmpresa(slug).find((l) => l.mes === mes) as
+  if (!empresa || !anoTemProjecao(ano) || empresa.tipo === "diego") return 0
+  const linha = getDadosEmpresa(slug, ano).find((l) => l.mes === mes) as
     | LinhaPadrao
     | LinhaAton
     | LinhaHato
@@ -246,11 +276,15 @@ export function getVerbaMes(slug: EmpresaSlug, mes: Mes): number {
   return linha?.verba ?? 0
 }
 
-export function getCriativosMes(slug: EmpresaSlug, mes: Mes) {
+export function getCriativosMes(
+  slug: EmpresaSlug,
+  mes: Mes,
+  ano: number = ANO_PROJETADO
+) {
   const empresa = getEmpresa(slug)
-  if (!empresa || empresa.tipo === "diego")
+  if (!empresa || !anoTemProjecao(ano) || empresa.tipo === "diego")
     return { mes: 0, semana: 0 }
-  const linha = getDadosEmpresa(slug).find((l) => l.mes === mes) as
+  const linha = getDadosEmpresa(slug, ano).find((l) => l.mes === mes) as
     | LinhaPadrao
     | LinhaAton
     | LinhaHato
@@ -258,49 +292,65 @@ export function getCriativosMes(slug: EmpresaSlug, mes: Mes) {
   return { mes: linha?.criativos ?? 0, semana: linha?.criativos_semana ?? 0 }
 }
 
-export function getLeadsMes(slug: EmpresaSlug, mes: Mes): number {
+export function getLeadsMes(
+  slug: EmpresaSlug,
+  mes: Mes,
+  ano: number = ANO_PROJETADO
+): number {
   const empresa = getEmpresa(slug)
-  if (!empresa) return 0
+  if (!empresa || !anoTemProjecao(ano)) return 0
   if (empresa.tipo === "leads-reunioes-contratos") {
-    return (getDadosEmpresa(slug) as LinhaPadrao[]).find((l) => l.mes === mes)
-      ?.leads ?? 0
+    return (
+      (getDadosEmpresa(slug, ano) as LinhaPadrao[]).find((l) => l.mes === mes)
+        ?.leads ?? 0
+    )
   }
   if (empresa.tipo === "aton") {
-    return (getDadosEmpresa(slug) as LinhaAton[]).find((l) => l.mes === mes)
-      ?.leads ?? 0
+    return (
+      (getDadosEmpresa(slug, ano) as LinhaAton[]).find((l) => l.mes === mes)
+        ?.leads ?? 0
+    )
   }
   return 0
 }
 
-export function getFaturamentoMes(slug: EmpresaSlug, mes: Mes): number {
+export function getFaturamentoMes(
+  slug: EmpresaSlug,
+  mes: Mes,
+  ano: number = ANO_PROJETADO
+): number {
   const empresa = getEmpresa(slug)
-  if (!empresa) return 0
+  if (!empresa || !anoTemProjecao(ano)) return 0
   switch (empresa.tipo) {
     case "leads-reunioes-contratos":
       return (
-        (getDadosEmpresa(slug) as LinhaPadrao[]).find((l) => l.mes === mes)
-          ?.faturamento ?? 0
+        (getDadosEmpresa(slug, ano) as LinhaPadrao[]).find(
+          (l) => l.mes === mes
+        )?.faturamento ?? 0
       )
     case "aton":
       return (
-        (getDadosEmpresa(slug) as LinhaAton[]).find((l) => l.mes === mes)
+        (getDadosEmpresa(slug, ano) as LinhaAton[]).find((l) => l.mes === mes)
           ?.faturamento ?? 0
       )
     case "hato":
       return (
-        (getDadosEmpresa(slug) as LinhaHato[]).find((l) => l.mes === mes)
+        (getDadosEmpresa(slug, ano) as LinhaHato[]).find((l) => l.mes === mes)
           ?.receita ?? 0
       )
     case "diego":
       return (
-        (getDadosEmpresa(slug) as LinhaDiego[]).find((l) => l.mes === mes)
+        (getDadosEmpresa(slug, ano) as LinhaDiego[]).find((l) => l.mes === mes)
           ?.receita_hub ?? 0
       )
   }
 }
 
-export function getFaturamentoDezembro(slug: EmpresaSlug): number {
-  return getFaturamentoMes(slug, "Dezembro")
+export function getFaturamentoDezembro(
+  slug: EmpresaSlug,
+  ano: number = ANO_PROJETADO
+): number {
+  return getFaturamentoMes(slug, "Dezembro", ano)
 }
 
 export interface ResumoGrupo {
@@ -313,7 +363,10 @@ export interface ResumoGrupo {
   contratos: number
 }
 
-export function getResumoGrupo(mes: Mes): ResumoGrupo {
+export function getResumoGrupo(
+  mes: Mes,
+  ano: number = ANO_PROJETADO
+): ResumoGrupo {
   let faturamento = 0
   let investimento = 0
   let leads = 0
@@ -322,11 +375,23 @@ export function getResumoGrupo(mes: Mes): ResumoGrupo {
   let reunioes = 0
   let contratos = 0
 
+  if (!anoTemProjecao(ano)) {
+    return {
+      faturamento,
+      investimento,
+      leads,
+      criativos,
+      criativosSemana,
+      reunioes,
+      contratos,
+    }
+  }
+
   for (const empresa of empresas) {
-    faturamento += getFaturamentoMes(empresa.slug, mes)
+    faturamento += getFaturamentoMes(empresa.slug, mes, ano)
 
     if (empresa.tipo === "leads-reunioes-contratos") {
-      const linha = (getDadosEmpresa(empresa.slug) as LinhaPadrao[]).find(
+      const linha = (getDadosEmpresa(empresa.slug, ano) as LinhaPadrao[]).find(
         (l) => l.mes === mes
       )
       if (linha) {
@@ -338,7 +403,7 @@ export function getResumoGrupo(mes: Mes): ResumoGrupo {
         criativosSemana += linha.criativos_semana
       }
     } else if (empresa.tipo === "aton") {
-      const linha = (getDadosEmpresa(empresa.slug) as LinhaAton[]).find(
+      const linha = (getDadosEmpresa(empresa.slug, ano) as LinhaAton[]).find(
         (l) => l.mes === mes
       )
       if (linha) {
@@ -350,7 +415,7 @@ export function getResumoGrupo(mes: Mes): ResumoGrupo {
         criativosSemana += linha.criativos_semana
       }
     } else if (empresa.tipo === "hato") {
-      const linha = (getDadosEmpresa(empresa.slug) as LinhaHato[]).find(
+      const linha = (getDadosEmpresa(empresa.slug, ano) as LinhaHato[]).find(
         (l) => l.mes === mes
       )
       if (linha) {
@@ -381,12 +446,16 @@ export interface EtapaFunil {
   subtitulo?: string
 }
 
-export function getFunilCompleto(slug: EmpresaSlug, mes: Mes): EtapaFunil[] {
+export function getFunilCompleto(
+  slug: EmpresaSlug,
+  mes: Mes,
+  ano: number = ANO_PROJETADO
+): EtapaFunil[] {
   const empresa = getEmpresa(slug)
-  if (!empresa) return []
+  if (!empresa || !anoTemProjecao(ano)) return []
 
   if (empresa.tipo === "leads-reunioes-contratos") {
-    const linha = (getDadosEmpresa(slug) as LinhaPadrao[]).find(
+    const linha = (getDadosEmpresa(slug, ano) as LinhaPadrao[]).find(
       (l) => l.mes === mes
     )
     if (!linha) return []
@@ -407,7 +476,7 @@ export function getFunilCompleto(slug: EmpresaSlug, mes: Mes): EtapaFunil[] {
   }
 
   if (empresa.tipo === "aton") {
-    const linha = (getDadosEmpresa(slug) as LinhaAton[]).find(
+    const linha = (getDadosEmpresa(slug, ano) as LinhaAton[]).find(
       (l) => l.mes === mes
     )
     if (!linha) return []
@@ -428,7 +497,7 @@ export function getFunilCompleto(slug: EmpresaSlug, mes: Mes): EtapaFunil[] {
   }
 
   if (empresa.tipo === "hato") {
-    const linha = (getDadosEmpresa(slug) as LinhaHato[]).find(
+    const linha = (getDadosEmpresa(slug, ano) as LinhaHato[]).find(
       (l) => l.mes === mes
     )
     if (!linha) return []
@@ -449,7 +518,7 @@ export function getFunilCompleto(slug: EmpresaSlug, mes: Mes): EtapaFunil[] {
   }
 
   if (empresa.tipo === "diego") {
-    const linha = (getDadosEmpresa(slug) as LinhaDiego[]).find(
+    const linha = (getDadosEmpresa(slug, ano) as LinhaDiego[]).find(
       (l) => l.mes === mes
     )
     if (!linha) return []
