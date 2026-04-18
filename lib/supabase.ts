@@ -27,6 +27,41 @@ export interface Comissionamento {
   updated_at?: string
 }
 
+export interface Faixa {
+  minimo: number
+  bonus: number
+}
+
+export interface GatilhoConfig {
+  chave: string
+  rotulo: string
+  valor: number
+  alvoRoas?: number
+}
+
+export type ConfiguracaoComissao =
+  | { tipo: "gatilhos"; gatilhos: GatilhoConfig[] }
+  | { tipo: "escala"; faixas: Faixa[] }
+
+export interface MetaComissionamento {
+  id?: string
+  colaborador: string
+  mes: string
+  ano: number
+  configuracao: ConfiguracaoComissao
+  updated_at?: string
+}
+
+export interface Colaborador {
+  id?: string
+  nome: string
+  funcao: string
+  tipo: "gatilhos" | "escala"
+  configuracao_padrao: ConfiguracaoComissao
+  ativo: boolean
+  created_at?: string
+}
+
 let cliente: SupabaseClient | null = null
 
 export function getSupabase(): SupabaseClient | null {

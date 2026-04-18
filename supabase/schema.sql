@@ -45,6 +45,48 @@ create table if not exists public.comissionamento (
 alter table public.dados_reais alter column ano set default 2026;
 alter table public.comissionamento alter column ano set default 2026;
 
+-- Tabelas de configuração do comissionamento ------------------------------
+create extension if not exists "pgcrypto";
+
+create table if not exists public.metas_comissionamento (
+  id uuid primary key default gen_random_uuid(),
+  colaborador text not null,
+  mes text not null,
+  ano int not null default 2026,
+  configuracao jsonb not null,
+  updated_at timestamptz not null default now(),
+  unique (colaborador, mes, ano)
+);
+
+create table if not exists public.colaboradores (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  funcao text not null,
+  tipo text not null check (tipo in ('gatilhos','escala')),
+  configuracao_padrao jsonb not null,
+  ativo boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+alter table public.metas_comissionamento enable row level security;
+alter table public.colaboradores enable row level security;
+
+drop policy if exists metas_comissionamento_all on public.metas_comissionamento;
+create policy metas_comissionamento_all
+  on public.metas_comissionamento
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+drop policy if exists colaboradores_all on public.colaboradores;
+create policy colaboradores_all
+  on public.colaboradores
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
 -- RLS -----------------------------------------------------------------------
 -- Este painel é interno e a autenticação acontece no próprio app via cookie.
 -- Portanto liberamos leitura e escrita pelo ANON key (o app gera o JWT).

@@ -135,7 +135,7 @@ export default function CenarioReal({
                 <p
                   style={{
                     fontSize: 22,
-                    color: cor,
+                    color: "#ffffff",
                     fontWeight: 600,
                     marginTop: 6,
                     lineHeight: 1.1,

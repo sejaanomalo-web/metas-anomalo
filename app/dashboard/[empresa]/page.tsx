@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CenarioReal from "@/components/CenarioReal"
+import TrafegoStrip from "@/components/TrafegoStrip"
 import GraficoFaturamento from "@/components/GraficoFaturamento"
 import TabelaMeses from "@/components/TabelaMeses"
 import DrawerDadosReais from "@/components/DrawerDadosReais"
@@ -169,6 +170,16 @@ export default async function EmpresaPage({
           </section>
         )}
 
+        {empresa.tipo !== "diego" && (
+          <TrafegoStrip
+            empresaSlug={empresa.slug}
+            empresaDb={empresa.db}
+            mes={mes}
+            ano={ano}
+            dadosReais={real}
+          />
+        )}
+
         {empresa.tipo === "diego" && temProjecao && pontos.length > 0 && (
           <section>
             <GraficoFaturamento dados={pontos} />
@@ -177,7 +188,12 @@ export default async function EmpresaPage({
 
         {temProjecao && linhas.length > 0 && (
           <section>
-            <TabelaMeses colunas={colunas} linhas={linhas} />
+            <TabelaMeses
+              colunas={colunas}
+              linhas={linhas}
+              reais={mapaReais}
+              mesAtual={mes}
+            />
           </section>
         )}
       </main>

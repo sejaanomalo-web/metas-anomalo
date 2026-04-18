@@ -4,9 +4,15 @@ import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CardFelipe from "@/components/CardFelipe"
 import CardEditor from "@/components/CardEditor"
+import DrawerEdicaoComissao from "@/components/DrawerEdicaoComissao"
 import { estaAutenticado } from "@/lib/auth"
 import { anoValido, formatBRL, mesValido } from "@/lib/data"
 import { getComissionamentoMes } from "@/lib/comissionamento-actions"
+import {
+  listarColaboradores,
+  listarMetasDoMes,
+} from "@/lib/comissionamento-config"
+import type { ConfiguracaoComissao } from "@/lib/supabase"
 import { supabaseConfigurado } from "@/lib/supabase"
 
 const FAIXAS_VINICIUS = [
@@ -38,7 +44,49 @@ export default async function ComissionamentoPage({
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
   const supabaseOk = supabaseConfigurado()
-  const registros = await getComissionamentoMes(mes, ano)
+  const [registros, metasEditaveis, colaboradoresExtras] = await Promise.all([
+    getComissionamentoMes(mes, ano),
+    listarMetasDoMes(mes, ano),
+    listarColaboradores(true),
+  ])
+
+  const PADROES: Record<string, ConfiguracaoComissao> = {
+    felipe: {
+      tipo: "gatilhos",
+      gatilhos: [
+        { chave: "cpl_meta", rotulo: "CPL dentro da meta", valor: 200 },
+        { chave: "leads_meta", rotulo: "Meta de leads atingida", valor: 200 },
+        {
+          chave: "roas_hato",
+          rotulo: "ROAS Hato acima do alvo",
+          valor: 150,
+          alvoRoas: 2.5,
+        },
+        { chave: "posts_prazo", rotulo: "100% posts no prazo", valor: 150 },
+      ],
+    },
+    vinicius: {
+      tipo: "escala",
+      faixas: [
+        { minimo: 0, bonus: 0 },
+        { minimo: 10, bonus: 100 },
+        { minimo: 15, bonus: 200 },
+        { minimo: 20, bonus: 350 },
+        { minimo: 25, bonus: 500 },
+        { minimo: 30, bonus: 700 },
+      ],
+    },
+    emanuel: {
+      tipo: "escala",
+      faixas: [
+        { minimo: 0, bonus: 0 },
+        { minimo: 5, bonus: 100 },
+        { minimo: 8, bonus: 200 },
+        { minimo: 11, bonus: 350 },
+        { minimo: 15, bonus: 500 },
+      ],
+    },
+  }
 
   const felipe = registros.find((r) => r.colaborador === "felipe") ?? null
   const vinicius = registros.find((r) => r.colaborador === "vinicius") ?? null
@@ -97,29 +145,39 @@ export default async function ComissionamentoPage({
               {mes} de {ano} · Bônus por performance e entregas
             </p>
           </div>
-          <div className="glass" style={{ padding: "14px 22px" }}>
-            <p
-              style={{
-                fontSize: 9,
-                letterSpacing: "2px",
-                color: "rgba(255,255,255,0.35)",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}
-            >
-              Total pago no mês
-            </p>
-            <p
-              style={{
-                fontSize: 22,
-                color: "#C9953A",
-                fontWeight: 700,
-                marginTop: 4,
-                letterSpacing: "-0.3px",
-              }}
-            >
-              {formatBRL(totalBonus)}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="glass" style={{ padding: "14px 22px" }}>
+              <p
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "2px",
+                  color: "rgba(255,255,255,0.35)",
+                  textTransform: "uppercase",
+                  fontWeight: 500,
+                }}
+              >
+                Total pago no mês
+              </p>
+              <p
+                style={{
+                  fontSize: 22,
+                  color: "#C9953A",
+                  fontWeight: 700,
+                  marginTop: 4,
+                  letterSpacing: "-0.3px",
+                }}
+              >
+                {formatBRL(totalBonus)}
+              </p>
+            </div>
+            <DrawerEdicaoComissao
+              mes={mes}
+              ano={ano}
+              supabaseOk={supabaseOk}
+              colaboradores={colaboradoresExtras}
+              metasPorColaborador={metasEditaveis}
+              padroesPorColaborador={PADROES}
+            />
           </div>
         </div>
 
