@@ -142,6 +142,18 @@ alter table public.colaboradores
 alter table public.colaboradores
   add column if not exists descricao text;
 
+-- Remove duplicatas antigas em colaboradores: mantém o registro mais
+-- recente de cada nome e apaga os demais (seguro — só deleta duplicatas
+-- com mesmo nome).
+delete from public.colaboradores a
+using public.colaboradores b
+where a.nome = b.nome
+  and a.created_at < b.created_at;
+
+-- Índice único por nome para bloquear novas duplicatas.
+create unique index if not exists colaboradores_nome_unique_idx
+  on public.colaboradores (nome);
+
 -- Seed dos colaboradores fixos (Felipe, Vinicius, Emanuel) --------------
 -- idempotente: só insere se o nome ainda não existe na tabela.
 insert into public.colaboradores

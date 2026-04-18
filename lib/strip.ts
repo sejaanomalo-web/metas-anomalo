@@ -5,69 +5,57 @@ export interface TimeDoHub {
   subLabel: string
 }
 
-interface ContagemFuncao {
-  gestores: number
-  editores: number
-  trafego: number
-  social: number
-  outros: number
-}
-
-function categorizar(funcao: string): keyof ContagemFuncao {
-  const f = funcao.toLowerCase()
-  if (f.includes("gestor") || f.includes("gestão")) return "gestores"
-  if (f.includes("editor") || f.includes("edit")) return "editores"
+// Normaliza variações do mesmo papel em uma chave única.
+// "EDITOR · ESTÁTICOS E CARROSSÉIS", "Editor de Vídeo" etc → "editor"
+function normalizarFuncao(funcao: string): string {
+  const f = (funcao ?? "").toLowerCase().trim()
+  if (!f) return "outros"
+  if (f.includes("editor") || f.includes("edit")) return "editor"
   if (f.includes("tráfego") || f.includes("trafego") || f.includes("ads"))
-    return "trafego"
+    return "tráfego"
+  if (f.includes("gestor") || f.includes("gestão") || f.includes("gestao"))
+    return "gestor"
   if (f.includes("social")) return "social"
-  return "outros"
+  return f
 }
 
-function montarSubLabel(c: ContagemFuncao): string {
+function pluralizar(chave: string, n: number): string {
+  if (chave === "editor") return `${n} ${n === 1 ? "editor" : "editores"}`
+  if (chave === "gestor") return `${n} ${n === 1 ? "gestor" : "gestores"}`
+  if (chave === "tráfego") return `${n} tráfego`
+  if (chave === "social") return `${n} social`
+  // função desconhecida: mostra o nome original em lowercase
+  return `${n} ${chave}`
+}
+
+function montarSubLabel(contagens: Record<string, number>): string {
+  const ordem = ["gestor", "editor", "tráfego", "social"]
   const partes: string[] = []
-  if (c.gestores > 0) {
-    partes.push(`${c.gestores} ${c.gestores === 1 ? "gestor" : "gestores"}`)
+  for (const k of ordem) {
+    if ((contagens[k] ?? 0) > 0) partes.push(pluralizar(k, contagens[k]))
   }
-  if (c.editores > 0) {
-    partes.push(`${c.editores} ${c.editores === 1 ? "editor" : "editores"}`)
+  for (const [k, n] of Object.entries(contagens)) {
+    if (ordem.includes(k) || n <= 0) continue
+    partes.push(pluralizar(k, n))
   }
-  if (c.trafego > 0) {
-    partes.push(`${c.trafego} tráfego`)
-  }
-  if (c.social > 0) {
-    partes.push(`${c.social} social`)
-  }
-  if (c.outros > 0) {
-    partes.push(`${c.outros} ${c.outros === 1 ? "outro" : "outros"}`)
-  }
-  if (partes.length === 0) return "colaboradores ativos"
-  return partes.join(" · ")
+  return partes.length > 0 ? partes.join(" · ") : "colaboradores ativos"
 }
 
+// Fonte única de verdade = tabela public.colaboradores no Supabase.
+// Não soma nenhuma lista hardcoded. Se a tabela está vazia, retorna 0.
 export async function getTimeDoHub(): Promise<TimeDoHub> {
-  // Pessoas fixas já existentes no sistema:
-  // Bruno + Alisson (gestores) + Felipe (tráfego) + Vinicius + Emanuel (editores)
-  const fixos: ContagemFuncao = {
-    gestores: 2,
-    editores: 2,
-    trafego: 1,
-    social: 0,
-    outros: 0,
-  }
-
-  const contagem: ContagemFuncao = { ...fixos }
-  let total = 5
-
   try {
-    const extras = await listarColaboradores(true)
-    for (const c of extras) {
-      const categoria = categorizar(c.funcao)
-      contagem[categoria]++
-      total++
+    const ativos = await listarColaboradores(true)
+    const contagens: Record<string, number> = {}
+    for (const c of ativos) {
+      const chave = normalizarFuncao(c.funcao)
+      contagens[chave] = (contagens[chave] ?? 0) + 1
+    }
+    return {
+      total: ativos.length,
+      subLabel: montarSubLabel(contagens),
     }
   } catch {
-    // Sem conexão com o Supabase: usa apenas os fixos
+    return { total: 0, subLabel: "colaboradores ativos" }
   }
-
-  return { total, subLabel: montarSubLabel(contagem) }
 }
