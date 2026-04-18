@@ -2,7 +2,6 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
-import FunilCascata from "@/components/FunilCascata"
 import CenarioReal from "@/components/CenarioReal"
 import GraficoFaturamento from "@/components/GraficoFaturamento"
 import TabelaMeses from "@/components/TabelaMeses"
@@ -19,7 +18,6 @@ import {
   type Mes,
   getDadosEmpresa,
   getEmpresa,
-  getFunilCompleto,
   mesValido,
 } from "@/lib/data"
 import { supabaseConfigurado } from "@/lib/supabase"
@@ -46,7 +44,6 @@ export default async function EmpresaPage({
   const temProjecao = anoTemProjecao(ano)
 
   const dados = getDadosEmpresa(empresa.slug as EmpresaSlug, ano)
-  const etapas = getFunilCompleto(empresa.slug as EmpresaSlug, mes, ano)
 
   const [real, todosReais] = await Promise.all([
     getDadosReaisMes(empresa.db, mes, ano),
@@ -54,20 +51,6 @@ export default async function EmpresaPage({
   ])
   const mapaReais = new Map(todosReais.map((r) => [r.mes, r]))
   const supabaseOk = supabaseConfigurado()
-
-  const etapasReais: Record<string, number> = {}
-  if (real) {
-    if (real.investimento_real !== null)
-      etapasReais.investimento = real.investimento_real
-    if (real.criativos_entregues !== null)
-      etapasReais.criativos = real.criativos_entregues
-    if (real.leads_real !== null) etapasReais.leads = real.leads_real
-    if (real.reunioes_real !== null) etapasReais.reunioes = real.reunioes_real
-    if (real.contratos_real !== null)
-      etapasReais.contratos = real.contratos_real
-    if (real.faturamento_real !== null)
-      etapasReais.faturamento = real.faturamento_real
-  }
 
   const pontos = (dados as { mes: string }[]).map((linha) => {
     let meta = 0
@@ -150,10 +133,6 @@ export default async function EmpresaPage({
             />
           )}
         </div>
-
-        {etapas.length > 0 && (
-          <FunilCascata etapas={etapas} reais={etapasReais} />
-        )}
 
         {empresa.tipo !== "diego" && (
           <section

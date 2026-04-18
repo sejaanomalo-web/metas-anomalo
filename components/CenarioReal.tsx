@@ -75,6 +75,15 @@ export default function CenarioReal({
       ? dados.investimento_real / dados.leads_real
       : null
 
+  const cpa =
+    dados?.investimento_real !== null &&
+    dados?.investimento_real !== undefined &&
+    dados?.contratos_real !== null &&
+    dados?.contratos_real !== undefined &&
+    dados.contratos_real > 0
+      ? dados.investimento_real / dados.contratos_real
+      : null
+
   return (
     <div
       className="glass h-full flex flex-col"
@@ -218,6 +227,59 @@ export default function CenarioReal({
             }}
           >
             invest. ÷ leads
+          </p>
+        </div>
+
+        <div
+          className="glass"
+          style={{ padding: "14px 16px", borderRadius: 12 }}
+        >
+          <p
+            style={{
+              fontSize: 9,
+              letterSpacing: "2px",
+              color: "rgba(255,255,255,0.35)",
+              textTransform: "uppercase",
+              fontWeight: 500,
+            }}
+          >
+            CPA Real
+          </p>
+          {cpa !== null ? (
+            <p
+              style={{
+                fontSize: 22,
+                color: "#ffffff",
+                fontWeight: 600,
+                marginTop: 6,
+                lineHeight: 1.1,
+                letterSpacing: "-0.3px",
+              }}
+            >
+              {formatBRL(cpa)}
+            </p>
+          ) : (
+            <p
+              style={{
+                fontSize: 13,
+                color: "rgba(255,255,255,0.18)",
+                fontStyle: "italic",
+                fontWeight: 300,
+                marginTop: 8,
+              }}
+            >
+              Não inserido
+            </p>
+          )}
+          <p
+            style={{
+              fontSize: 11,
+              color: "rgba(255,255,255,0.2)",
+              fontWeight: 400,
+              marginTop: 6,
+            }}
+          >
+            invest. ÷ contratos
           </p>
         </div>
       </div>
