@@ -143,7 +143,7 @@ export default async function DashboardPage({
           </div>
           <Link
             href={`/dashboard/comissionamento?mes=${mes}&ano=${ano}`}
-            className="btn-gold-outline uppercase"
+            className="btn-gold-filled uppercase"
           >
             Comissionamento do time →
           </Link>

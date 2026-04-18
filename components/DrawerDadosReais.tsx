@@ -56,7 +56,7 @@ export default function DrawerDadosReais({
       <button
         type="button"
         onClick={() => setAberto(true)}
-        className="btn-gold-outline uppercase"
+        className="btn-gold-filled uppercase"
       >
         Inserir dados reais
       </button>
