@@ -133,6 +133,21 @@ export async function listarColaboradores(
   return (data ?? []) as Colaborador[]
 }
 
+export async function listarColaboradoresInativos(): Promise<Colaborador[]> {
+  const supabase = getSupabase()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("colaboradores")
+    .select("*")
+    .eq("ativo", false)
+    .order("created_at", { ascending: true })
+  if (error) {
+    console.error("[colaboradores] list inativos error", error.message)
+    return []
+  }
+  return (data ?? []) as Colaborador[]
+}
+
 export async function salvarColaboradorAction(
   formData: FormData
 ): Promise<ResultadoConfig> {
@@ -194,6 +209,107 @@ export async function desativarColaboradorAction(
     console.error("[colaboradores] desativar error", error.message)
     return { ok: false, erro: error.message }
   }
+  revalidatePath("/dashboard/comissionamento")
+  return { ok: true }
+}
+
+export async function reativarColaboradorAction(
+  formData: FormData
+): Promise<ResultadoConfig> {
+  if (!supabaseConfigurado()) {
+    return { ok: false, erro: "Supabase não configurado." }
+  }
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, erro: "ID inválido." }
+  const supabase = getSupabase()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const { error } = await supabase
+    .from("colaboradores")
+    .update({ ativo: true })
+    .eq("id", id)
+  if (error) return { ok: false, erro: error.message }
+  revalidatePath("/dashboard/comissionamento")
+  return { ok: true }
+}
+
+export async function atualizarColaboradorAction(
+  formData: FormData
+): Promise<ResultadoConfig> {
+  if (!supabaseConfigurado()) {
+    return { ok: false, erro: "Supabase não configurado." }
+  }
+  const id = String(formData.get("id") ?? "").trim()
+  const nome = String(formData.get("nome") ?? "").trim()
+  const funcao = String(formData.get("funcao") ?? "").trim()
+  const tipoRaw = String(formData.get("tipo") ?? "")
+  const configuracaoRaw = String(formData.get("configuracao_padrao") ?? "")
+  const configuracao = parseConfiguracao(configuracaoRaw)
+
+  if (!id) return { ok: false, erro: "ID inválido." }
+  if (!nome || !funcao) {
+    return { ok: false, erro: "Nome e função são obrigatórios." }
+  }
+  if (tipoRaw !== "gatilhos" && tipoRaw !== "escala") {
+    return { ok: false, erro: "Tipo inválido." }
+  }
+  if (!configuracao) {
+    return { ok: false, erro: "Configuração inválida." }
+  }
+
+  const supabase = getSupabase()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const { error } = await supabase
+    .from("colaboradores")
+    .update({
+      nome,
+      funcao,
+      tipo: tipoRaw,
+      configuracao_padrao: configuracao,
+    })
+    .eq("id", id)
+  if (error) return { ok: false, erro: error.message }
+  revalidatePath("/dashboard/comissionamento")
+  return { ok: true }
+}
+
+export async function excluirColaboradorAction(
+  formData: FormData
+): Promise<ResultadoConfig> {
+  if (!supabaseConfigurado()) {
+    return { ok: false, erro: "Supabase não configurado." }
+  }
+  const id = String(formData.get("id") ?? "").trim()
+  const nome = String(formData.get("nome") ?? "").trim()
+  if (!id) return { ok: false, erro: "ID inválido." }
+  const supabase = getSupabase()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  // Bloquear se houver histórico de comissionamento.
+  if (nome) {
+    const { data: historico, error: erroHistorico } = await supabase
+      .from("metas_comissionamento")
+      .select("id")
+      .eq("colaborador", nome.toLowerCase())
+      .limit(1)
+    if (erroHistorico) {
+      return { ok: false, erro: erroHistorico.message }
+    }
+    if (historico && historico.length > 0) {
+      return {
+        ok: false,
+        erro:
+          "Este colaborador tem histórico de comissionamento. Use Desativar para ocultá-lo sem perder o histórico.",
+      }
+    }
+  }
+
+  const { error } = await supabase
+    .from("colaboradores")
+    .delete()
+    .eq("id", id)
+  if (error) return { ok: false, erro: error.message }
   revalidatePath("/dashboard/comissionamento")
   return { ok: true }
 }

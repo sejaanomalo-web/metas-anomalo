@@ -10,6 +10,7 @@ import { anoValido, formatBRL, mesValido } from "@/lib/data"
 import { getComissionamentoMes } from "@/lib/comissionamento-actions"
 import {
   listarColaboradores,
+  listarColaboradoresInativos,
   listarMetasDoMes,
 } from "@/lib/comissionamento-config"
 import type { ConfiguracaoComissao } from "@/lib/supabase"
@@ -44,10 +45,16 @@ export default async function ComissionamentoPage({
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
   const supabaseOk = supabaseConfigurado()
-  const [registros, metasEditaveis, colaboradoresExtras] = await Promise.all([
+  const [
+    registros,
+    metasEditaveis,
+    colaboradoresExtras,
+    colaboradoresInativos,
+  ] = await Promise.all([
     getComissionamentoMes(mes, ano),
     listarMetasDoMes(mes, ano),
     listarColaboradores(true),
+    listarColaboradoresInativos(),
   ])
 
   const PADROES: Record<string, ConfiguracaoComissao> = {
@@ -175,6 +182,7 @@ export default async function ComissionamentoPage({
               ano={ano}
               supabaseOk={supabaseOk}
               colaboradores={colaboradoresExtras}
+              colaboradoresInativos={colaboradoresInativos}
               metasPorColaborador={metasEditaveis}
               padroesPorColaborador={PADROES}
             />
