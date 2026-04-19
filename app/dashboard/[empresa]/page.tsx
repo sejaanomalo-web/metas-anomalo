@@ -10,6 +10,7 @@ import TabelaMeses from "@/components/TabelaMeses"
 import DrawerDadosReais from "@/components/DrawerDadosReais"
 import { estaAutenticado } from "@/lib/auth"
 import {
+  MESES,
   anoTemProjecao,
   anoValido,
   type EmpresaSlug,
@@ -55,11 +56,18 @@ export default async function EmpresaPage({
     getMetasOverrideEmpresa(empresa.db, ano),
   ])
 
-  // Aplica overrides do Supabase por cima dos valores hardcoded.
-  const dados = dadosHardcoded.map((linha) => {
+  // Para empresas sem projeções hardcoded (adicionadas via UI), gera
+  // skeleton com 9 meses vazios para que gráfico e tabela apareçam.
+  const baseDados =
+    dadosHardcoded.length > 0
+      ? dadosHardcoded
+      : esqueletoMeses(empresa.tipo)
+
+  // Aplica overrides do Supabase por cima dos valores base.
+  const dados = baseDados.map((linha) => {
     const ov = overrides.get(linha.mes)
     return ov ? { ...linha, ...ov } : linha
-  }) as typeof dadosHardcoded
+  }) as typeof baseDados
   const mapaReais = new Map(todosReais.map((r) => [r.mes, r]))
   const supabaseOk = supabaseConfigurado()
 
@@ -394,4 +402,70 @@ function construirTabela(
   }
 
   return { colunas: [], linhas: [] }
+}
+
+/**
+ * Gera um skeleton de 9 meses com todos os campos zerados, de acordo com o
+ * tipo de funil. Usado quando a empresa não tem projeções hardcoded (caso das
+ * empresas adicionadas via UI). Os valores reais vêm depois via overrides.
+ */
+function esqueletoMeses(
+  tipo: NonNullable<Awaited<ReturnType<typeof getEmpresaAsync>>>["tipo"]
+): LinhaPadrao[] | LinhaAton[] | LinhaHato[] | LinhaDiego[] {
+  if (tipo === "leads-reunioes-contratos") {
+    return MESES.map(
+      (mes): LinhaPadrao => ({
+        mes,
+        verba: 0,
+        criativos: 0,
+        criativos_semana: 0,
+        leads: 0,
+        reunioes: 0,
+        contratos: 0,
+        churn: 0,
+        clientes: 0,
+        ticket: 0,
+        faturamento: 0,
+      })
+    )
+  }
+  if (tipo === "aton") {
+    return MESES.map(
+      (mes): LinhaAton => ({
+        mes,
+        verba: 0,
+        criativos: 0,
+        criativos_semana: 0,
+        leads: 0,
+        orcamentos: 0,
+        vendas: 0,
+        ticket: 0,
+        faturamento: 0,
+      })
+    )
+  }
+  if (tipo === "hato") {
+    return MESES.map(
+      (mes): LinhaHato => ({
+        mes,
+        verba: 0,
+        criativos: 0,
+        criativos_semana: 0,
+        influenciadores: 0,
+        vendas_influenciador: 0,
+        vendas_direto: 0,
+        total_vendas: 0,
+        receita: 0,
+        custo_influenciadores: 0,
+      })
+    )
+  }
+  return MESES.map(
+    (mes): LinhaDiego => ({
+      mes,
+      faturamento_diego: 0,
+      percentual: 0,
+      receita_hub: 0,
+    })
+  )
 }
