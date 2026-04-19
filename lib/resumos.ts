@@ -167,45 +167,65 @@ export async function montarResumoSemanal(
   const blocos = Math.round(progresso / 10)
   const barra = "█".repeat(blocos) + "░".repeat(10 - blocos)
 
-  const linhas = [
-    "📊 *Anômalo Hub — Resumo Semanal*",
-    `Semana ${semana} · ${inicioSemana
+  const divisor = "—".repeat(24)
+  const linhas: string[] = [
+    "*ANÔMALO HUB*",
+    `Resumo Semanal · Semana ${semana}`,
+    `${inicioSemana
       .toLocaleDateString("pt-BR")
       .slice(0, 5)} a ${fimSemana.toLocaleDateString("pt-BR")}`,
+    divisor,
     "",
-    "*Faturamento do Hub*",
-    `Real: ${formatBRL(somaFat)}`,
-    `Meta do mês: ${formatBRL(resumo.faturamento)}`,
-    `Progresso: ${progresso}% [${barra}]`,
+    "*FATURAMENTO DO HUB*",
+    `Real:         ${formatBRL(somaFat)}`,
+    `Meta do mês:  ${formatBRL(resumo.faturamento)}`,
+    `Progresso:    ${progresso}% [${barra}]`,
     "",
-    "*Por empresa*",
+    divisor,
+    "",
+    "*POR EMPRESA*",
   ]
 
+  function classificar(
+    fat: number | null,
+    metaMes: number
+  ): { label: string; pct: number } {
+    if (fat === null) return { label: "sem dados", pct: 0 }
+    const pct =
+      metaMes > 0 ? Math.min(999, Math.round((fat / metaMes) * 100)) : 0
+    if (fat >= metaMes) return { label: "meta batida", pct }
+    if (fat >= metaMes * 0.7) return { label: "atenção", pct }
+    return { label: "atrasado", pct }
+  }
+
+  const nomeLen = Math.max(...empresas.map((e) => e.nome.length))
   for (const empresa of empresas) {
     const metaMes = getFaturamentoMes(empresa.slug, mes, ano)
     const real = reaisDoMes.get(empresa.db)
     const fatReal = real?.faturamento_real ?? null
+    const cls = classificar(fatReal, metaMes)
+    const nomePad = empresa.nome.padEnd(nomeLen)
     if (fatReal === null) {
-      linhas.push(`${empresa.nome} — Sem dados 🔴`)
-      continue
+      linhas.push(`${nomePad}  ·  ${cls.label}`)
+    } else {
+      linhas.push(
+        `${nomePad}  ${formatBRL(fatReal)}  (${cls.pct}%)  ·  ${cls.label}`
+      )
     }
-    const pct =
-      metaMes > 0 ? Math.min(999, Math.round((fatReal / metaMes) * 100)) : 0
-    const emoji =
-      fatReal >= metaMes ? "🟢" : fatReal >= metaMes * 0.7 ? "🟡" : "🔴"
-    linhas.push(
-      `${empresa.nome} — ${formatBRL(fatReal)} (${pct}% da meta) ${emoji}`
-    )
   }
 
   const cpl = somaLeads > 0 ? somaInv / somaLeads : 0
   linhas.push("")
-  linhas.push("*Tráfego pago na semana*")
-  linhas.push(`Investido: ${formatBRL(somaInv)}`)
-  linhas.push(`Leads: ${formatNumero(somaLeads)}`)
-  linhas.push(`CPL médio: ${formatBRL(cpl)}`)
+  linhas.push(divisor)
   linhas.push("")
-  linhas.push("*Comissionamento estimado*")
+  linhas.push("*TRÁFEGO PAGO NA SEMANA*")
+  linhas.push(`Investido:   ${formatBRL(somaInv)}`)
+  linhas.push(`Leads:       ${formatNumero(somaLeads)}`)
+  linhas.push(`CPL médio:   ${formatBRL(cpl)}`)
+  linhas.push("")
+  linhas.push(divisor)
+  linhas.push("")
+  linhas.push("*COMISSIONAMENTO ESTIMADO*")
   const felipe = comissoes.find((c) => c.colaborador === "felipe")
   const vinicius = comissoes.find((c) => c.colaborador === "vinicius")
   const emanuel = comissoes.find((c) => c.colaborador === "emanuel")
@@ -213,22 +233,24 @@ export async function montarResumoSemanal(
     ? Object.values(felipe.detalhes).filter(Boolean).length
     : 0
   linhas.push(
-    `Felipe: ${formatBRL(felipe?.bonus_calculado ?? 0)} (${gatilhosFelipe}/4 gatilhos)`
+    `Felipe:    ${formatBRL(felipe?.bonus_calculado ?? 0)}  (${gatilhosFelipe}/4 gatilhos)`
   )
   linhas.push(
-    `Vinicius: ${formatBRL(vinicius?.bonus_calculado ?? 0)} (${
+    `Vinicius:  ${formatBRL(vinicius?.bonus_calculado ?? 0)}  (${
       vinicius?.entregas_validas ?? 0
-    } entregas válidas)`
+    } entregas)`
   )
   linhas.push(
-    `Emanuel: ${formatBRL(emanuel?.bonus_calculado ?? 0)} (${
+    `Emanuel:   ${formatBRL(emanuel?.bonus_calculado ?? 0)}  (${
       emanuel?.entregas_validas ?? 0
-    } entregas válidas)`
+    } entregas)`
   )
 
   if (linkFormulario) {
     linhas.push("")
-    linhas.push(`📝 Inserir dados da semana:`)
+    linhas.push(divisor)
+    linhas.push("")
+    linhas.push("*INSERIR DADOS DA SEMANA*")
     linhas.push(linkFormulario)
   }
 
@@ -258,16 +280,22 @@ export async function montarResumoMensal(): Promise<string> {
       ? Math.round((somaFat / resumo.faturamento) * 100)
       : 0
   const statusGlobal =
-    atingido >= 100 ? "🟢 Bateu" : atingido >= 70 ? "🟡 Parcial" : "🔴 Abaixo"
+    atingido >= 100 ? "meta batida" : atingido >= 70 ? "parcial" : "abaixo"
 
-  const linhas = [
-    `🏆 *Anômalo Hub — Fechamento de ${mes} ${ano}*`,
+  const divisor = "—".repeat(24)
+  const linhas: string[] = [
+    "*ANÔMALO HUB*",
+    `Fechamento · ${mes} ${ano}`,
+    divisor,
     "",
-    "*Resultado do grupo*",
-    `Faturamento: ${formatBRL(somaFat)} de ${formatBRL(resumo.faturamento)} meta`,
-    `Atingido: ${atingido}% ${statusGlobal}`,
+    "*RESULTADO DO GRUPO*",
+    `Faturamento:  ${formatBRL(somaFat)}`,
+    `Meta:         ${formatBRL(resumo.faturamento)}`,
+    `Atingido:     ${atingido}%  ·  ${statusGlobal}`,
     "",
-    "*Empresas — resultado final*",
+    divisor,
+    "",
+    "*EMPRESAS*",
   ]
 
   let melhorNome = ""
@@ -275,13 +303,15 @@ export async function montarResumoMensal(): Promise<string> {
   let crescimentoNome = ""
   let crescimentoPct = -1
 
+  const nomeLen = Math.max(...empresas.map((e) => e.nome.length))
   for (const empresa of empresas) {
     const metaMes = getFaturamentoMes(empresa.slug, mes, ano)
     const real = reaisDoMes.get(empresa.db)?.faturamento_real ?? 0
     const pct = metaMes > 0 ? Math.round((real / metaMes) * 100) : 0
-    const emoji =
-      pct >= 100 ? "✅ Meta batida" : pct >= 70 ? `⚠️ ${pct}% da meta` : "❌ Abaixo da meta"
-    linhas.push(`${empresa.nome}  ${formatBRL(real)}  ${emoji}`)
+    const label =
+      pct >= 100 ? "meta batida" : pct >= 70 ? `${pct}% da meta` : "abaixo"
+    const nomePad = empresa.nome.padEnd(nomeLen)
+    linhas.push(`${nomePad}  ${formatBRL(real)}  ·  ${label}`)
 
     if (pct > melhorPct) {
       melhorPct = pct
@@ -305,14 +335,16 @@ export async function montarResumoMensal(): Promise<string> {
 
   const cpl = somaLeads > 0 ? somaInv / somaLeads : 0
   linhas.push("")
-  linhas.push("*Tráfego pago no mês*")
-  linhas.push(
-    `Investido: ${formatBRL(somaInv)} · Leads: ${formatNumero(
-      somaLeads
-    )} · CPL: ${formatBRL(cpl)}`
-  )
+  linhas.push(divisor)
   linhas.push("")
-  linhas.push("*Comissionamento final*")
+  linhas.push("*TRÁFEGO PAGO NO MÊS*")
+  linhas.push(`Investido:  ${formatBRL(somaInv)}`)
+  linhas.push(`Leads:      ${formatNumero(somaLeads)}`)
+  linhas.push(`CPL:        ${formatBRL(cpl)}`)
+  linhas.push("")
+  linhas.push(divisor)
+  linhas.push("")
+  linhas.push("*COMISSIONAMENTO FINAL*")
   const felipe = comissoes.find((c) => c.colaborador === "felipe")
   const vinicius = comissoes.find((c) => c.colaborador === "vinicius")
   const emanuel = comissoes.find((c) => c.colaborador === "emanuel")
@@ -320,27 +352,29 @@ export async function montarResumoMensal(): Promise<string> {
     (felipe?.bonus_calculado ?? 0) +
     (vinicius?.bonus_calculado ?? 0) +
     (emanuel?.bonus_calculado ?? 0)
-  linhas.push(`Felipe:   ${formatBRL(felipe?.bonus_calculado ?? 0)}`)
-  linhas.push(`Vinicius: ${formatBRL(vinicius?.bonus_calculado ?? 0)}`)
-  linhas.push(`Emanuel:  ${formatBRL(emanuel?.bonus_calculado ?? 0)}`)
-  linhas.push(`Total:    ${formatBRL(totalComissao)}`)
+  linhas.push(`Felipe:    ${formatBRL(felipe?.bonus_calculado ?? 0)}`)
+  linhas.push(`Vinicius:  ${formatBRL(vinicius?.bonus_calculado ?? 0)}`)
+  linhas.push(`Emanuel:   ${formatBRL(emanuel?.bonus_calculado ?? 0)}`)
+  linhas.push(`Total:     ${formatBRL(totalComissao)}`)
   linhas.push("")
-  linhas.push("*Destaques*")
+  linhas.push(divisor)
+  linhas.push("")
+  linhas.push("*DESTAQUES*")
   if (melhorNome) {
     const acima = Math.max(0, melhorPct - 100)
     linhas.push(
-      `Melhor empresa: ${melhorNome} (${
+      `Melhor empresa:     ${melhorNome} (${
         acima > 0 ? `${acima}% acima` : `${melhorPct}% da`
       } meta)`
     )
   }
   if (crescimentoNome) {
     linhas.push(
-      `Maior crescimento: ${crescimentoNome} (+${crescimentoPct}% vs ${mesAnterior})`
+      `Maior crescimento:  ${crescimentoNome} (+${crescimentoPct}% vs ${mesAnterior})`
     )
   }
   linhas.push("")
-  linhas.push("Bom trabalho a todos! 💛")
+  linhas.push("Bom trabalho a todos.")
 
   return linhas.join("\n")
 }

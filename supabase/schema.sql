@@ -209,6 +209,26 @@ create table if not exists public.configuracoes (
   updated_at timestamptz not null default now()
 );
 
+-- Overrides de metas por empresa × mês × ano (complementa lib/data.ts) -----
+create table if not exists public.metas_empresa (
+  id uuid primary key default gen_random_uuid(),
+  empresa text not null,
+  mes text not null,
+  ano int not null default 2026,
+  overrides jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  unique (empresa, mes, ano)
+);
+
+alter table public.metas_empresa enable row level security;
+drop policy if exists metas_empresa_all on public.metas_empresa;
+create policy metas_empresa_all
+  on public.metas_empresa
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
 create table if not exists public.log_semanal (
   id uuid primary key default gen_random_uuid(),
   semana int not null,

@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CenarioReal from "@/components/CenarioReal"
+import DrawerEditarMeta from "@/components/DrawerEditarMeta"
 import TrafegoStrip from "@/components/TrafegoStrip"
 import GraficoFaturamento from "@/components/GraficoFaturamento"
 import TabelaMeses from "@/components/TabelaMeses"
@@ -24,6 +25,7 @@ import {
 } from "@/lib/data"
 import { supabaseConfigurado } from "@/lib/supabase"
 import { getDadosReais, getDadosReaisMes } from "@/lib/dados-reais"
+import { getMetasOverrideEmpresa } from "@/lib/metas-empresa"
 
 export default async function EmpresaPage({
   params,
@@ -45,12 +47,19 @@ export default async function EmpresaPage({
   const ano = anoValido(searchParams?.ano)
   const temProjecao = anoTemProjecao(ano)
 
-  const dados = getDadosEmpresa(empresa.slug as EmpresaSlug, ano)
+  const dadosHardcoded = getDadosEmpresa(empresa.slug as EmpresaSlug, ano)
 
-  const [real, todosReais] = await Promise.all([
+  const [real, todosReais, overrides] = await Promise.all([
     getDadosReaisMes(empresa.db, mes, ano),
     getDadosReais(empresa.db, ano),
+    getMetasOverrideEmpresa(empresa.db, ano),
   ])
+
+  // Aplica overrides do Supabase por cima dos valores hardcoded.
+  const dados = dadosHardcoded.map((linha) => {
+    const ov = overrides.get(linha.mes)
+    return ov ? { ...linha, ...ov } : linha
+  }) as typeof dadosHardcoded
   const mapaReais = new Map(todosReais.map((r) => [r.mes, r]))
   const supabaseOk = supabaseConfigurado()
 
@@ -195,6 +204,28 @@ export default async function EmpresaPage({
               linhas={linhas}
               reais={mapaReais}
               mesAtual={mes}
+              acao={
+                <DrawerEditarMeta
+                  empresa={empresa.db}
+                  empresaNome={empresa.nome}
+                  tipoEmpresa={empresa.tipo}
+                  ano={ano}
+                  mesInicial={mes}
+                  linhasPorMes={Object.fromEntries(
+                    (
+                      linhas as unknown as Record<string, number | string>[]
+                    ).map((l) => {
+                      const chave = String(l.mes ?? "")
+                      const numericos: Record<string, number> = {}
+                      for (const [k, v] of Object.entries(l)) {
+                        if (k === "mes") continue
+                        if (typeof v === "number") numericos[k] = v
+                      }
+                      return [chave, numericos]
+                    })
+                  )}
+                />
+              }
             />
           </section>
         )}

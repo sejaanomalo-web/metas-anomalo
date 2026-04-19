@@ -299,6 +299,7 @@ function EditorMetaColab({
   supabaseOk: boolean
 }) {
   const [config, setConfig] = useState<ConfiguracaoComissao>(configInicial)
+  const [aberto, setAberto] = useState(false)
   const [pending, startTransition] = useTransition()
   const [status, setStatus] = useState<string | null>(null)
   const router = useRouter()
@@ -311,7 +312,13 @@ function EditorMetaColab({
     fd.set("configuracao", JSON.stringify(config))
     const r = await salvarMetaComissaoAction(fd)
     setStatus(r.ok ? "Salvo ✓" : r.erro ?? "Erro")
-    if (r.ok) router.refresh()
+    if (r.ok) {
+      router.refresh()
+      setTimeout(() => {
+        setStatus(null)
+        setAberto(false)
+      }, 1500)
+    }
   }
 
   return (
@@ -322,65 +329,80 @@ function EditorMetaColab({
         padding: 18,
       }}
     >
-      <p
-        style={{
-          fontSize: 14,
-          fontWeight: 600,
-          color: "#fff",
-          textTransform: "capitalize",
-          marginBottom: 4,
-        }}
-      >
-        {colaborador}
-      </p>
-      <p
-        style={{
-          fontSize: 11,
-          color: "rgba(255,255,255,0.4)",
-          fontWeight: 300,
-          marginBottom: 12,
-        }}
-      >
-        {config.tipo === "gatilhos"
-          ? "Bônus por gatilhos"
-          : "Escala por entregas"}
-      </p>
-
-      {config.tipo === "gatilhos" && (
-        <EditorGatilhos
-          config={config}
-          onChange={(c) => setConfig(c)}
-        />
-      )}
-
-      {config.tipo === "escala" && (
-        <EditorEscala
-          config={config}
-          onChange={(c) => setConfig(c)}
-        />
-      )}
-
-      <div className="flex items-center gap-3 pt-3">
-        <button
-          type="button"
-          onClick={() => startTransition(() => salvar())}
-          disabled={pending || !supabaseOk}
-          className="btn-gold-filled uppercase"
-          style={{ opacity: pending || !supabaseOk ? 0.5 : 1 }}
-        >
-          {pending ? "Salvando..." : "Salvar"}
-        </button>
-        {status && (
-          <span
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p
             style={{
-              fontSize: 11,
-              color: status === "Salvo ✓" ? "#4caf50" : "#e24b4a",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#fff",
+              textTransform: "capitalize",
+              marginBottom: 4,
             }}
           >
-            {status}
-          </span>
-        )}
+            {colaborador}
+          </p>
+          <p
+            style={{
+              fontSize: 11,
+              color: "rgba(255,255,255,0.4)",
+              fontWeight: 300,
+            }}
+          >
+            {config.tipo === "gatilhos"
+              ? "Bônus por gatilhos"
+              : "Escala por entregas"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setAberto((v) => !v)}
+          className="btn-gold-filled uppercase"
+          style={{ flexShrink: 0 }}
+        >
+          {aberto ? "Fechar" : "Editar"}
+        </button>
       </div>
+
+      {!aberto ? null : (
+        <div style={{ marginTop: 14 }}>
+          {config.tipo === "gatilhos" && (
+            <EditorGatilhos
+              config={config}
+              onChange={(c) => setConfig(c)}
+            />
+          )}
+
+          {config.tipo === "escala" && (
+            <EditorEscala
+              config={config}
+              onChange={(c) => setConfig(c)}
+            />
+          )}
+
+          <div className="flex items-center gap-3 pt-3">
+            <button
+              type="button"
+              onClick={() => startTransition(() => salvar())}
+              disabled={pending || !supabaseOk}
+              className="btn-gold-filled uppercase"
+              style={{ opacity: pending || !supabaseOk ? 0.5 : 1 }}
+            >
+              {pending ? "Salvando..." : "Salvar"}
+            </button>
+            {status && (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: status === "Salvo ✓" ? "#4caf50" : "#e24b4a",
+                }}
+              >
+                {status}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1034,6 +1056,7 @@ function AbaPessoas({
   const [observacoes, setObservacoes] = useState<string>("")
   const [descricao, setDescricao] = useState<string>("")
   const [atualizacao, setAtualizacao] = useState<string | null>(null)
+  const [formAberto, setFormAberto] = useState(false)
   const [faixas, setFaixas] = useState<Faixa[]>([{ minimo: 0, bonus: 0 }])
   const [gatilhos, setGatilhos] = useState<GatilhoConfig[]>([
     { chave: "g1", rotulo: "Novo gatilho", valor: 100 },
@@ -1060,6 +1083,7 @@ function AbaPessoas({
     setFaixas([{ minimo: 0, bonus: 0 }])
     setGatilhos([{ chave: "g1", rotulo: "Novo gatilho", valor: 100 }])
     setStatus(null)
+    setFormAberto(false)
   }
 
   function iniciarEdicao(c: Colaborador) {
@@ -1071,6 +1095,7 @@ function AbaPessoas({
     setDataEntrada(c.data_entrada ?? "")
     setObservacoes(c.observacoes ?? "")
     setDescricao(c.descricao ?? "")
+    setFormAberto(true)
     if (c.configuracao_padrao.tipo === "escala") {
       setFaixas(c.configuracao_padrao.faixas)
     } else {
@@ -1201,12 +1226,26 @@ function AbaPessoas({
         </div>
       )}
 
+      {!formAberto && modo === "novo" && (
+        <div style={{ order: 2 }}>
+          <button
+            type="button"
+            onClick={() => setFormAberto(true)}
+            className="btn-gold-filled uppercase"
+            style={{ width: "100%", padding: "12px 16px" }}
+          >
+            + Adicionar colaborador
+          </button>
+        </div>
+      )}
+
       <div
         style={{
           order: 2,
           border: "0.5px solid rgba(255,255,255,0.08)",
           borderRadius: 12,
           padding: 18,
+          display: formAberto || modo === "editando" ? "block" : "none",
         }}
       >
         <div className="flex items-center justify-between">
@@ -1219,21 +1258,19 @@ function AbaPessoas({
           >
             {modo === "editando" ? "Editar colaborador" : "Adicionar colaborador"}
           </p>
-          {modo === "editando" && (
-            <button
-              type="button"
-              onClick={limparFormulario}
-              style={{
-                fontSize: 10,
-                color: "rgba(255,255,255,0.3)",
-                letterSpacing: "0.5px",
-                textTransform: "uppercase",
-              }}
-              className="hover:text-[#C9953A] transition"
-            >
-              Cancelar edição
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={limparFormulario}
+            style={{
+              fontSize: 10,
+              color: "rgba(255,255,255,0.3)",
+              letterSpacing: "0.5px",
+              textTransform: "uppercase",
+            }}
+            className="hover:text-[#C9953A] transition"
+          >
+            {modo === "editando" ? "Cancelar edição" : "Fechar"}
+          </button>
         </div>
 
         <div className="space-y-3 mt-3">

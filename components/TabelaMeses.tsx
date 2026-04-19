@@ -35,11 +35,13 @@ export default function TabelaMeses({
   linhas,
   reais,
   mesAtual,
+  acao,
 }: {
   colunas: Coluna[]
   linhas: Record<string, string | number>[]
   reais?: Map<string, DadosReais>
   mesAtual?: Mes
+  acao?: React.ReactNode
 }) {
   const [modo, setModo] = useState<Modo>("meta")
 
@@ -100,17 +102,20 @@ export default function TabelaMeses({
         >
           Detalhamento Mensal
         </p>
-        <div className="flex items-center gap-1.5">
-          <BotaoModo
-            ativo={modo === "meta"}
-            onClick={() => setModo("meta")}
-            label="Meta"
-          />
-          <BotaoModo
-            ativo={modo === "cenario"}
-            onClick={() => setModo("cenario")}
-            label="Cenário"
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <BotaoModo
+              ativo={modo === "meta"}
+              onClick={() => setModo("meta")}
+              label="Meta"
+            />
+            <BotaoModo
+              ativo={modo === "cenario"}
+              onClick={() => setModo("cenario")}
+              label="Cenário"
+            />
+          </div>
+          {acao}
         </div>
       </div>
 

@@ -159,14 +159,12 @@ export default function CardEmpresa({
             />
             <BlocoMetrica
               rotulo="Investimento"
-              valor={temProjecao ? formatBRL(investimento) : "—"}
-              esvaziado={!temProjecao}
+              valor={formatBRL(investimentoReal ?? 0)}
             />
             <BlocoMetrica
               rotulo="Faturamento"
-              valor={temProjecao ? formatBRL(meta) : "—"}
-              destaque={temProjecao}
-              esvaziado={!temProjecao}
+              valor={formatBRL(faturamentoReal ?? 0)}
+              destaque
             />
           </div>
 
