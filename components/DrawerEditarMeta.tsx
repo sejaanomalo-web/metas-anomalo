@@ -147,7 +147,7 @@ export default function DrawerEditarMeta({
         onClick={abrir}
         className="btn-gold-filled uppercase"
       >
-        Editar meta
+        Editar
       </button>
 
       {aberto && (
