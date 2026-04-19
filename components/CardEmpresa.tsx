@@ -233,19 +233,6 @@ export default function CardEmpresa({
                 )}
               </div>
             </div>
-            <p
-              style={{
-                fontSize: 10,
-                color: "rgba(255,255,255,0.45)",
-                marginTop: 8,
-                fontWeight: 300,
-                fontStyle: temReal ? "normal" : "italic",
-              }}
-            >
-              {temReal
-                ? `${progressoPct}% da meta de ${mes} atingida`
-                : "Nenhum dado inserido"}
-            </p>
           </div>
         </>
       )}
