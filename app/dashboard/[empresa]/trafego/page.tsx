@@ -146,18 +146,6 @@ export default async function TrafegoPage({
           >
             Tráfego — {empresa.nome}
           </h1>
-          <p
-            style={{
-              fontSize: 11,
-              letterSpacing: "2px",
-              color: "#C9953A",
-              textTransform: "uppercase",
-              fontWeight: 600,
-              marginTop: 6,
-            }}
-          >
-            META ADS
-          </p>
           <div
             className="gold-divider"
             style={{ marginTop: 10, marginBottom: 10 }}
@@ -171,6 +159,10 @@ export default async function TrafegoPage({
           >
             {SUBTITULO_EMPRESA[empresa.slug]}
           </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <TabPlataforma ativa label="Meta Ads" />
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -386,6 +378,45 @@ function BadgeStatus({ status }: { status: string }) {
       }}
     >
       {label}
+    </span>
+  )
+}
+
+function TabPlataforma({ label, ativa }: { label: string; ativa?: boolean }) {
+  const cor = ativa ? "#C9953A" : "rgba(255,255,255,0.25)"
+  return (
+    <span
+      style={{
+        padding: "6px 14px",
+        borderRadius: 8,
+        fontSize: 11,
+        fontWeight: 500,
+        letterSpacing: "0.3px",
+        background: ativa ? "rgba(201,149,58,0.12)" : "transparent",
+        border: `0.5px solid ${ativa ? "#C9953A55" : "rgba(255,255,255,0.08)"}`,
+        color: cor,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        cursor: ativa ? "default" : "not-allowed",
+      }}
+    >
+      {label}
+      {!ativa && (
+        <span
+          style={{
+            fontSize: 8,
+            letterSpacing: "1px",
+            textTransform: "uppercase",
+            background: "rgba(255,255,255,0.06)",
+            padding: "2px 6px",
+            borderRadius: 999,
+            color: "rgba(255,255,255,0.35)",
+          }}
+        >
+          Em breve
+        </span>
+      )}
     </span>
   )
 }

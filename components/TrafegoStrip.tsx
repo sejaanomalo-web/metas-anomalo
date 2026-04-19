@@ -83,18 +83,14 @@ export default async function TrafegoStrip({
           </p>
           <span
             style={{
-              fontSize: 9,
-              letterSpacing: "1.5px",
+              fontSize: 10,
+              letterSpacing: "2px",
               textTransform: "uppercase",
               color: "#C9953A",
-              background: "rgba(201,149,58,0.12)",
-              border: "0.5px solid rgba(201,149,58,0.4)",
-              borderRadius: 999,
-              padding: "3px 10px",
-              fontWeight: 500,
+              fontWeight: 600,
             }}
           >
-            Meta Ads
+            META ADS
           </span>
         </div>
         <Link
