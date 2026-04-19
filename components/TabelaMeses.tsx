@@ -102,19 +102,17 @@ export default function TabelaMeses({
         >
           Detalhamento Mensal
         </p>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <BotaoModo
-              ativo={modo === "meta"}
-              onClick={() => setModo("meta")}
-              label="Meta"
-            />
-            <BotaoModo
-              ativo={modo === "cenario"}
-              onClick={() => setModo("cenario")}
-              label="Cenário"
-            />
-          </div>
+        <div className="flex items-center gap-1.5 flex-nowrap">
+          <BotaoModo
+            ativo={modo === "meta"}
+            onClick={() => setModo("meta")}
+            label="Meta"
+          />
+          <BotaoModo
+            ativo={modo === "cenario"}
+            onClick={() => setModo("cenario")}
+            label="Cenário"
+          />
           {acao}
         </div>
       </div>
