@@ -6,6 +6,11 @@ import FormConfig from "@/components/FormConfig"
 import { estaAutenticado } from "@/lib/auth"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
 import { getConfigResumos } from "@/lib/configuracoes"
+import {
+  montarResumoDiario,
+  montarResumoMensal,
+  montarResumoSemanal,
+} from "@/lib/resumos"
 
 export default async function ConfiguracoesPage({
   searchParams,
@@ -18,6 +23,17 @@ export default async function ConfiguracoesPage({
 
   const mes = mesValido(searchParams?.mes)
   const config = await getConfigResumos()
+
+  const origin =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "")
+  const linkSemanal = origin ? `${origin}/dashboard/semanal` : undefined
+
+  const [mensagemDiario, mensagemSemanal, mensagemMensal] = await Promise.all([
+    montarResumoDiario(),
+    montarResumoSemanal(linkSemanal),
+    montarResumoMensal(),
+  ])
 
   return (
     <>
@@ -63,11 +79,16 @@ export default async function ConfiguracoesPage({
               fontWeight: 300,
             }}
           >
-            Resumos automáticos via WhatsApp
+            Contatos + envio manual de resumos via WhatsApp
           </p>
         </div>
 
-        <FormConfig configInicial={config} />
+        <FormConfig
+          configInicial={config}
+          mensagemDiario={mensagemDiario}
+          mensagemSemanal={mensagemSemanal}
+          mensagemMensal={mensagemMensal}
+        />
       </main>
     </>
   )

@@ -5,6 +5,7 @@ import {
   type Mes,
   SUBTITULO_EMPRESA,
   anoTemProjecao,
+  corStatusMeta,
   formatBRL,
   getFaturamentoMes,
   getVerbaMes,
@@ -16,11 +17,13 @@ export default function CardEmpresa({
   mes,
   ano,
   faturamentoReal,
+  investimentoReal,
 }: {
   empresa: EmpresaMeta
   mes: Mes
   ano: Ano
   faturamentoReal: number | null
+  investimentoReal: number | null
 }) {
   const temProjecao = anoTemProjecao(ano)
   const investimento = getVerbaMes(empresa.slug, mes, ano)
@@ -29,6 +32,8 @@ export default function CardEmpresa({
 
   const metaAcumulada = metaAcumuladaAteHoje(meta, mes, ano)
   const temReal = typeof faturamentoReal === "number" && faturamentoReal > 0
+  const temRealInvest =
+    typeof investimentoReal === "number" && investimentoReal > 0
 
   const corBolinha = !temReal
     ? "rgba(255,255,255,0.2)"
@@ -41,13 +46,24 @@ export default function CardEmpresa({
       ? Math.min(100, Math.round((faturamentoReal / meta) * 100))
       : 0
 
-  const corTextoProgresso = !temReal
-    ? "rgba(255,255,255,0.3)"
-    : faturamentoReal >= meta
-    ? "#4caf50"
-    : faturamentoReal >= metaAcumulada
-    ? "#C9953A"
-    : "#e24b4a"
+  // Mesma lógica tri-status da bolinha, agora reaproveitada para as duas
+  // linhas do rodapé (Meta = faturamento vs meta; Invest. = invest. real
+  // vs investimento projetado).
+  const corFaturamento = corStatusMeta(
+    temReal ? faturamentoReal : 0,
+    meta,
+    temReal,
+    mes,
+    ano
+  )
+  const corInvestimento = corStatusMeta(
+    temRealInvest ? investimentoReal : 0,
+    investimento,
+    temRealInvest,
+    mes,
+    ano
+  )
+  const corTextoProgresso = corFaturamento
 
   return (
     <Link
@@ -187,17 +203,37 @@ export default function CardEmpresa({
                   }}
                 />
               </div>
-              <span
+              <div
                 style={{
-                  fontSize: 9,
-                  fontWeight: 300,
-                  color: "rgba(255,255,255,0.3)",
-                  whiteSpace: "nowrap",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  gap: 2,
                   flexShrink: 0,
+                  whiteSpace: "nowrap",
                 }}
               >
-                {temProjecao ? `Meta ${formatBRL(meta)}` : "Sem projeção"}
-              </span>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 300,
+                    color: temProjecao ? corFaturamento : "rgba(255,255,255,0.3)",
+                  }}
+                >
+                  {temProjecao ? `Meta ${formatBRL(meta)}` : "Sem projeção"}
+                </span>
+                {temProjecao && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 300,
+                      color: corInvestimento,
+                    }}
+                  >
+                    Invest. {formatBRL(investimento)}
+                  </span>
+                )}
+              </div>
             </div>
             <p
               style={{

@@ -310,6 +310,9 @@ export default async function DashboardPage({
                 faturamentoReal={
                   reaisDoMes.get(empresa.db)?.faturamento_real ?? null
                 }
+                investimentoReal={
+                  reaisDoMes.get(empresa.db)?.investimento_real ?? null
+                }
               />
             ))}
           </div>

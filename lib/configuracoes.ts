@@ -1,18 +1,15 @@
 import { getSupabase } from "./supabase"
 
-export interface ConfigResumos {
-  diario_ativo: boolean
-  semanal_ativo: boolean
-  mensal_ativo: boolean
-  numeros: string[]
+export interface Contato {
+  nome: string
+  numero: string
 }
 
-const PADRAO: ConfigResumos = {
-  diario_ativo: true,
-  semanal_ativo: true,
-  mensal_ativo: true,
-  numeros: [],
+export interface ConfigResumos {
+  contatos: Contato[]
 }
+
+const PADRAO: ConfigResumos = { contatos: [] }
 
 export async function getConfigResumos(): Promise<ConfigResumos> {
   const supabase = getSupabase()
@@ -23,12 +20,30 @@ export async function getConfigResumos(): Promise<ConfigResumos> {
     .eq("chave", "resumos")
     .maybeSingle()
   if (error || !data) return PADRAO
-  const v = data.valor as Partial<ConfigResumos>
+  const v = data.valor as Partial<ConfigResumos> & {
+    numeros?: string[]
+  }
+
+  // Compat com formato antigo (array de strings).
+  if (!v.contatos && Array.isArray(v.numeros)) {
+    return {
+      contatos: v.numeros
+        .filter((n) => typeof n === "string" && n.trim().length > 0)
+        .map((numero) => ({ nome: "", numero: numero.trim() })),
+    }
+  }
+
   return {
-    diario_ativo: v.diario_ativo ?? PADRAO.diario_ativo,
-    semanal_ativo: v.semanal_ativo ?? PADRAO.semanal_ativo,
-    mensal_ativo: v.mensal_ativo ?? PADRAO.mensal_ativo,
-    numeros: Array.isArray(v.numeros) ? v.numeros : PADRAO.numeros,
+    contatos: Array.isArray(v.contatos)
+      ? v.contatos
+          .filter(
+            (c): c is Contato =>
+              typeof c?.nome === "string" &&
+              typeof c?.numero === "string" &&
+              c.numero.trim().length > 0
+          )
+          .map((c) => ({ nome: c.nome.trim(), numero: c.numero.trim() }))
+      : [],
   }
 }
 
@@ -47,11 +62,4 @@ export async function salvarConfigResumos(
   )
   if (error) return { ok: false, erro: error.message }
   return { ok: true }
-}
-
-export function destinatariosResumo(config: ConfigResumos): string[] {
-  const principal = process.env.WHATSAPP_NUMBER
-  const lista = [...config.numeros]
-  if (principal && !lista.includes(principal)) lista.unshift(principal)
-  return lista
 }
