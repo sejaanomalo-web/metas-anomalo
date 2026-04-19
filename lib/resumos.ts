@@ -38,21 +38,19 @@ function mesAtual(): { mes: Mes; ano: number; hoje: Date } {
   return { mes, ano: hoje.getFullYear(), hoje }
 }
 
-function statusEmoji(
-  real: number,
-  meta: number,
-  metaAcum: number
-): "🟢" | "🟡" | "🔴" {
-  if (real >= meta) return "🟢"
-  if (real >= metaAcum) return "🟡"
-  return "🔴"
+function statusTexto(real: number, meta: number, metaAcum: number): string {
+  if (real >= meta) return "no ritmo"
+  if (real >= metaAcum) return "atenção"
+  return "atrasado"
 }
 
 export async function montarResumoDiario(): Promise<string> {
   const { mes, ano, hoje } = mesAtual()
   const dd = String(hoje.getDate()).padStart(2, "0")
   const mm = String(hoje.getMonth() + 1).padStart(2, "0")
-  const diaSemana = hoje.toLocaleDateString("pt-BR", { weekday: "short" })
+  const diaSemana = hoje.toLocaleDateString("pt-BR", { weekday: "long" })
+  const diaSemanaCap =
+    diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1).replace("-feira", "")
 
   const resumo = getResumoGrupo(mes, ano)
   const reaisDoMes = await getDadosReaisDoMes(mes, ano)
@@ -77,11 +75,15 @@ export async function montarResumoDiario(): Promise<string> {
   }
 
   const metaFatAcum = metaAcumuladaAteHoje(resumo.faturamento, mes, ano, hoje)
-  const status = statusEmoji(somaFat, resumo.faturamento, metaFatAcum)
-  const statusTexto =
-    status === "🟢" ? "No ritmo" : status === "🟡" ? "Atenção" : "Atrasado"
+  const situacao = statusTexto(somaFat, resumo.faturamento, metaFatAcum)
+  const progresso =
+    resumo.faturamento > 0
+      ? Math.min(100, Math.round((somaFat / resumo.faturamento) * 100))
+      : 0
+  const blocos = Math.round(progresso / 10)
+  const barra = "█".repeat(blocos) + "░".repeat(10 - blocos)
 
-  const alertas: string[] = []
+  const alertas: { nome: string; texto: string }[] = []
   for (const empresa of empresas) {
     if (empresa.tipo === "diego") continue
     const metaMes = getFaturamentoMes(empresa.slug, mes, ano)
@@ -90,13 +92,12 @@ export async function montarResumoDiario(): Promise<string> {
     const fatReal = real?.faturamento_real ?? null
     const metaAcum = metaAcumuladaAteHoje(metaMes, mes, ano, hoje)
     if (fatReal === null) {
-      alertas.push(`${empresa.nome} — sem dados inseridos`)
+      alertas.push({ nome: empresa.nome, texto: "sem dados" })
     } else if (fatReal < metaAcum) {
-      alertas.push(
-        `${empresa.nome} — ${formatBRL(fatReal)} de ${formatBRL(
-          metaAcum
-        )} esperado até hoje`
-      )
+      alertas.push({
+        nome: empresa.nome,
+        texto: `${formatBRL(fatReal)} de ${formatBRL(metaAcum)} esperado`,
+      })
     }
   }
 
@@ -106,33 +107,48 @@ export async function montarResumoDiario(): Promise<string> {
     minute: "2-digit",
   })
 
-  const linhas = [
-    `☀️ *Anômalo Hub — Resumo de ${diaSemana}, ${dd}/${mm}*`,
+  const divisor = "—".repeat(24)
+  const linhas: string[] = [
+    "*ANÔMALO HUB*",
+    `Resumo Diário · ${diaSemanaCap}, ${dd}/${mm}`,
+    divisor,
     "",
-    "*Status do grupo hoje*",
-    `Faturamento: ${formatBRL(somaFat)} de ${formatBRL(resumo.faturamento)} meta`,
-    `${status} ${statusTexto}`,
+    "*STATUS DO GRUPO*",
+    `Real:          ${formatBRL(somaFat)}`,
+    `Meta do mês:   ${formatBRL(resumo.faturamento)}`,
+    `Esperado hoje: ${formatBRL(metaFatAcum)}`,
+    `Progresso:     ${progresso}% [${barra}]`,
+    `Situação:      ${situacao}`,
     "",
+    divisor,
+    "",
+    "*ALERTAS*",
   ]
 
   if (alertas.length === 0) {
-    linhas.push("✅ Todas as empresas no ritmo")
+    linhas.push("Todas as empresas no ritmo.")
   } else {
-    linhas.push("*Empresas em alerta*")
-    for (const a of alertas) linhas.push(a)
+    const nomeLen = Math.max(...alertas.map((a) => a.nome.length))
+    for (const a of alertas) {
+      linhas.push(`${a.nome.padEnd(nomeLen)}  ·  ${a.texto}`)
+    }
   }
+
   linhas.push("")
-  linhas.push("*Investimento em ads hoje*")
-  linhas.push(
-    `${formatBRL(somaInv)} investido · ${formatNumero(
-      somaLeads
-    )} leads gerados · CPL ${formatBRL(cpl)}`
-  )
+  linhas.push(divisor)
+  linhas.push("")
+  linhas.push("*TRÁFEGO PAGO HOJE*")
+  linhas.push(`Investido:  ${formatBRL(somaInv)}`)
+  linhas.push(`Leads:      ${formatNumero(somaLeads)}`)
+  linhas.push(`CPL:        ${formatBRL(cpl)}`)
+  linhas.push("")
+  linhas.push(divisor)
+  linhas.push("")
   linhas.push(`Atualizado em ${atualizado}`)
 
   if (!temDado) {
     linhas.push("")
-    linhas.push("_Nenhum dado real inserido ainda neste mês._")
+    linhas.push("Nenhum dado real inserido ainda neste mês.")
   }
 
   return linhas.join("\n")
