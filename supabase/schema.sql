@@ -265,3 +265,89 @@ create policy log_semanal_all
   to anon, authenticated
   using (true)
   with check (true);
+
+-- ===========================================================================
+-- Empresas gerenciadas pelo dashboard (CRUD via UI)
+-- ===========================================================================
+create table if not exists public.empresas_config (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique,
+  db text not null unique,
+  nome text not null,
+  tipo text not null check (tipo in ('leads-reunioes-contratos','hato','aton','diego')),
+  subtitulo text,
+  inicio_em text,
+  cpl numeric,
+  ticket_medio_projetado numeric,
+  conversao_lead_reuniao numeric,
+  conversao_reuniao_fechamento numeric,
+  conversao_lead_orcamento numeric,
+  conversao_orcamento_venda numeric,
+  ativa boolean not null default true,
+  ordem int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.empresas_config enable row level security;
+drop policy if exists empresas_config_all on public.empresas_config;
+create policy empresas_config_all
+  on public.empresas_config
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+-- Remove a restrição de empresa fixa em dados_reais para aceitar empresas
+-- adicionadas dinamicamente via UI.
+alter table public.dados_reais
+  drop constraint if exists dados_reais_empresa_check;
+
+-- Seed das 6 empresas originais (idempotente — só insere se não existir)
+insert into public.empresas_config
+  (slug, db, nome, tipo, subtitulo, cpl, conversao_lead_reuniao, conversao_reuniao_fechamento, ordem)
+select 'a2-marketing', 'a2_marketing', 'A2 Marketing',
+  'leads-reunioes-contratos',
+  'Agência de marketing',
+  6, 0.1, 0.65, 1
+where not exists (select 1 from public.empresas_config where slug = 'a2-marketing');
+
+insert into public.empresas_config
+  (slug, db, nome, tipo, subtitulo, cpl, conversao_lead_reuniao, conversao_reuniao_fechamento, ordem)
+select 'f2-sports', 'f2_sports', 'F2 Sports',
+  'leads-reunioes-contratos',
+  'Artigos esportivos',
+  5, 0.1, 0.6, 2
+where not exists (select 1 from public.empresas_config where slug = 'f2-sports');
+
+insert into public.empresas_config
+  (slug, db, nome, tipo, subtitulo, cpl, conversao_lead_reuniao, conversao_reuniao_fechamento, ordem)
+select 'f2-moveis', 'f2_moveis', 'F2 Móveis',
+  'leads-reunioes-contratos',
+  'Móveis planejados',
+  20, 0.1, 0.6, 3
+where not exists (select 1 from public.empresas_config where slug = 'f2-moveis');
+
+insert into public.empresas_config
+  (slug, db, nome, tipo, subtitulo, ordem)
+select 'hato', 'hato', 'Hato',
+  'hato',
+  'E-commerce via influenciadores',
+  4
+where not exists (select 1 from public.empresas_config where slug = 'hato');
+
+insert into public.empresas_config
+  (slug, db, nome, tipo, subtitulo, cpl, conversao_lead_orcamento, conversao_orcamento_venda, ordem)
+select 'aton', 'aton', 'Aton Estofados',
+  'aton',
+  'Estofados sob medida',
+  15, 0.25, 0.5, 5
+where not exists (select 1 from public.empresas_config where slug = 'aton');
+
+insert into public.empresas_config
+  (slug, db, nome, tipo, subtitulo, ordem)
+select 'diego-knebel', 'diego', 'Diego Knebel',
+  'diego',
+  'Participação no faturamento',
+  6
+where not exists (select 1 from public.empresas_config where slug = 'diego-knebel');

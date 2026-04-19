@@ -10,7 +10,6 @@ import TabelaMeses from "@/components/TabelaMeses"
 import DrawerDadosReais from "@/components/DrawerDadosReais"
 import { estaAutenticado } from "@/lib/auth"
 import {
-  SUBTITULO_EMPRESA,
   anoTemProjecao,
   anoValido,
   type EmpresaSlug,
@@ -20,12 +19,13 @@ import {
   type LinhaPadrao,
   type Mes,
   getDadosEmpresa,
-  getEmpresa,
   mesValido,
+  subtituloDaEmpresa,
 } from "@/lib/data"
 import { supabaseConfigurado } from "@/lib/supabase"
 import { getDadosReais, getDadosReaisMes } from "@/lib/dados-reais"
 import { getMetasOverrideEmpresa } from "@/lib/metas-empresa"
+import { getEmpresaAsync } from "@/lib/empresas-actions"
 
 export default async function EmpresaPage({
   params,
@@ -38,7 +38,7 @@ export default async function EmpresaPage({
     redirect("/login")
   }
 
-  const empresa = getEmpresa(params.empresa)
+  const empresa = await getEmpresaAsync(params.empresa)
   if (!empresa) {
     notFound()
   }
@@ -131,7 +131,7 @@ export default async function EmpresaPage({
                   ? (dados as LinhaPadrao[]).find((l) => l.mes === mes)
                   : undefined
               }
-              subtitulo={SUBTITULO_EMPRESA[empresa.slug]}
+              subtitulo={subtituloDaEmpresa(empresa)}
             />
           </div>
           {empresa.tipo !== "diego" && (
@@ -276,7 +276,7 @@ function MetadadosEmpresa({
 }
 
 function extrairMetaComparavel(
-  tipo: NonNullable<ReturnType<typeof getEmpresa>>["tipo"],
+  tipo: NonNullable<Awaited<ReturnType<typeof getEmpresaAsync>>>["tipo"],
   dados: ReturnType<typeof getDadosEmpresa>,
   mes: Mes
 ) {
@@ -320,7 +320,7 @@ function extrairMetaComparavel(
 }
 
 function construirTabela(
-  empresa: NonNullable<ReturnType<typeof getEmpresa>>,
+  empresa: NonNullable<Awaited<ReturnType<typeof getEmpresaAsync>>>,
   dados: ReturnType<typeof getDadosEmpresa>
 ) {
   if (empresa.tipo === "leads-reunioes-contratos") {

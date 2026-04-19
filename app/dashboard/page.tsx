@@ -3,19 +3,24 @@ import { redirect } from "next/navigation"
 import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CardEmpresa from "@/components/CardEmpresa"
+import DrawerEmpresas from "@/components/DrawerEmpresas"
 import { estaAutenticado } from "@/lib/auth"
 import {
   anoValido,
   anoTemProjecao,
   corStatusMeta,
-  empresas,
   formatBRL,
   formatNumero,
   getResumoGrupo,
   mesValido,
 } from "@/lib/data"
 import { getDadosReaisDoMes } from "@/lib/dados-reais"
+import {
+  listarEmpresas,
+  listarEmpresasInativas,
+} from "@/lib/empresas-actions"
 import { getTimeDoHub } from "@/lib/strip"
+import { supabaseConfigurado } from "@/lib/supabase"
 
 export default async function DashboardPage({
   searchParams,
@@ -30,10 +35,13 @@ export default async function DashboardPage({
   const ano = anoValido(searchParams?.ano)
   const temProjecao = anoTemProjecao(ano)
   const resumo = getResumoGrupo(mes, ano)
-  const [reaisDoMes, time] = await Promise.all([
+  const [reaisDoMes, time, empresas, empresasInativas] = await Promise.all([
     getDadosReaisDoMes(mes, ano),
     getTimeDoHub(),
+    listarEmpresas(true),
+    listarEmpresasInativas(),
   ])
+  const supabaseOk = supabaseConfigurado()
 
   let somaFat = 0
   let somaInv = 0
@@ -140,15 +148,23 @@ export default async function DashboardPage({
                 fontWeight: 300,
               }}
             >
-              {mes} de {ano} · 6 empresas
+              {mes} de {ano} · {empresas.length}{" "}
+              {empresas.length === 1 ? "empresa" : "empresas"}
             </p>
           </div>
-          <Link
-            href={`/dashboard/comissionamento?mes=${mes}&ano=${ano}`}
-            className="btn-gold-filled uppercase"
-          >
-            Comissionamento do time →
-          </Link>
+          <div className="flex items-center gap-3 flex-wrap">
+            <DrawerEmpresas
+              empresas={empresas}
+              empresasInativas={empresasInativas}
+              supabaseOk={supabaseOk}
+            />
+            <Link
+              href={`/dashboard/comissionamento?mes=${mes}&ano=${ano}`}
+              className="btn-gold-filled uppercase"
+            >
+              Comissionamento do time →
+            </Link>
+          </div>
         </div>
 
         <section

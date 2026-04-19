@@ -3,13 +3,13 @@ import {
   type Ano,
   type EmpresaMeta,
   type Mes,
-  SUBTITULO_EMPRESA,
   anoTemProjecao,
   corStatusMeta,
   formatBRL,
   getFaturamentoMes,
   getVerbaMes,
   metaAcumuladaAteHoje,
+  subtituloDaEmpresa,
 } from "@/lib/data"
 
 export default function CardEmpresa({
@@ -123,7 +123,7 @@ export default function CardEmpresa({
               marginTop: 4,
             }}
           >
-            {SUBTITULO_EMPRESA[empresa.slug]}
+            {subtituloDaEmpresa(empresa)}
           </p>
         )}
 

@@ -8,10 +8,10 @@ import {
   anoValido,
   formatBRL,
   formatNumero,
-  getEmpresa,
   mesValido,
-  SUBTITULO_EMPRESA,
+  subtituloDaEmpresa,
 } from "@/lib/data"
+import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
   contaMetaDaEmpresa,
   metaTokenDisponivel,
@@ -46,7 +46,7 @@ export default async function TrafegoPage({
     redirect("/login")
   }
 
-  const empresa = getEmpresa(params.empresa)
+  const empresa = await getEmpresaAsync(params.empresa)
   if (!empresa) notFound()
 
   const mes = mesValido(searchParams?.mes)
@@ -157,7 +157,7 @@ export default async function TrafegoPage({
               fontWeight: 300,
             }}
           >
-            {SUBTITULO_EMPRESA[empresa.slug]}
+            {subtituloDaEmpresa(empresa)}
           </p>
         </div>
 

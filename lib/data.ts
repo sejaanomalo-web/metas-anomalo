@@ -36,29 +36,33 @@ export function mesValido(m: string | undefined | null): Mes {
   return "Abril"
 }
 
-export type EmpresaSlug =
-  | "a2-marketing"
-  | "f2-sports"
-  | "f2-moveis"
-  | "hato"
-  | "aton"
-  | "diego-knebel"
-
-export type EmpresaDb =
-  | "a2_marketing"
-  | "f2_sports"
-  | "f2_moveis"
-  | "hato"
-  | "aton"
-  | "diego"
+// EmpresaSlug e EmpresaDb são identificadores livres (text) desde que empresas
+// podem ser adicionadas dinamicamente via UI. TipoFunil continua union literal
+// porque é validado em check constraint no Supabase.
+export type EmpresaSlug = string
+export type EmpresaDb = string
 
 export type TipoFunil = "leads-reunioes-contratos" | "hato" | "aton" | "diego"
 
+// Lista original de slugs/dbs hardcoded — usada como fallback quando o Supabase
+// está indisponível.
+export const SLUGS_ORIGINAIS = [
+  "a2-marketing",
+  "f2-sports",
+  "f2-moveis",
+  "hato",
+  "aton",
+  "diego-knebel",
+] as const
+
 export interface EmpresaMeta {
+  id?: string
   slug: EmpresaSlug
   db: EmpresaDb
   nome: string
   tipo: TipoFunil
+  subtitulo?: string
+  ativa?: boolean
   inicioEm?: Mes
   cpl?: number
   ticketMedioProjetado?: number
@@ -238,7 +242,7 @@ export function getEmpresaPorDb(db: string): EmpresaMeta | undefined {
 export function getDadosEmpresa(
   slug: EmpresaSlug,
   ano: number = ANO_PROJETADO
-) {
+): LinhaPadrao[] | LinhaAton[] | LinhaHato[] | LinhaDiego[] {
   if (!anoTemProjecao(ano)) return []
   switch (slug) {
     case "a2-marketing":
@@ -253,6 +257,10 @@ export function getDadosEmpresa(
       return aton
     case "diego-knebel":
       return diego
+    default:
+      // Empresas adicionadas via UI não têm projeções hardcoded — retorna vazio.
+      // Valores de meta vêm exclusivamente da tabela metas_empresa (overrides).
+      return []
   }
 }
 
@@ -534,13 +542,19 @@ export function getFunilCompleto(
   return []
 }
 
-export const SUBTITULO_EMPRESA: Record<EmpresaSlug, string> = {
+// Fallback de subtítulos para as 6 empresas originais. Novas empresas
+// adicionadas via UI trazem o subtítulo direto do Supabase em empresa.subtitulo.
+export const SUBTITULO_EMPRESA: Record<string, string> = {
   "a2-marketing": "Agência de Marketing",
   "f2-sports": "Marketing Esportivo",
   "f2-moveis": "Mobiliário",
   "hato": "Direto + Influenciadores",
   "aton": "Estofados sob Medida",
   "diego-knebel": "Receita Hub",
+}
+
+export function subtituloDaEmpresa(empresa: EmpresaMeta): string {
+  return empresa.subtitulo ?? SUBTITULO_EMPRESA[empresa.slug] ?? ""
 }
 
 const MES_NUM: Record<Mes, number> = {
