@@ -32,7 +32,9 @@ function parseInt0(v: FormDataEntryValue | null): number | null {
 }
 
 function empresaValida(empresa: string): empresa is EmpresaDb {
-  return empresas.some((e) => e.db === empresa)
+  // Aceita qualquer identificador válido — empresas criadas via UI não
+  // estão na lista hardcoded `empresas`.
+  return /^[a-z0-9_-]+$/i.test(empresa) && empresa.length > 0
 }
 
 function mesValido(mes: string): mes is Mes {

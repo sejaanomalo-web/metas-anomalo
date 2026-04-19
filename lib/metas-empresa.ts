@@ -20,7 +20,10 @@ function parseNum(v: FormDataEntryValue | null): number | null {
 }
 
 function empresaValida(e: string): e is EmpresaDb {
-  return empresas.some((x) => x.db === e)
+  // Aceita qualquer identificador válido (letras, números, _, -) — empresas
+  // adicionadas via UI não estão em `empresas` hardcoded. A FK e constraint
+  // do Supabase garantem integridade.
+  return /^[a-z0-9_-]+$/i.test(e) && e.length > 0
 }
 
 function mesValidoFn(m: string): m is Mes {
