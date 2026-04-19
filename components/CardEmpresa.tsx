@@ -28,7 +28,11 @@ export default function CardEmpresa({
   const temProjecao = anoTemProjecao(ano)
   const investimento = getVerbaMes(empresa.slug, mes, ano)
   const meta = getFaturamentoMes(empresa.slug, mes, ano)
-  const inativa = temProjecao && meta === 0 && investimento === 0
+  // Empresas vindas do Supabase (com id) são sempre ativas — o filtro já
+  // foi aplicado na listagem. A lógica "inativa" só vale para empresas
+  // hardcoded (ex: F2 Móveis antes de Abril).
+  const inativa =
+    !empresa.id && temProjecao && meta === 0 && investimento === 0
 
   const metaAcumulada = metaAcumuladaAteHoje(meta, mes, ano)
   const temReal = typeof faturamentoReal === "number" && faturamentoReal > 0
