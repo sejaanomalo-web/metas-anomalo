@@ -7,14 +7,40 @@ import type {
   Colaborador,
   Comissionamento,
   ConfiguracaoComissao,
+  Faixa,
   GatilhoConfig,
 } from "@/lib/supabase"
 import type { Ano, Mes } from "@/lib/data"
 import { formatBRL } from "@/lib/data"
 
+type ModoRender = "escala" | "gatilhos" | "fixo"
+
+function modoRender(config: ConfiguracaoComissao): ModoRender {
+  if (config.tipo === "escala") return "escala"
+  if (config.tipo === "gatilhos") return "gatilhos"
+  return config.modelo
+}
+
+function faixasDe(config: ConfiguracaoComissao): Faixa[] {
+  if (config.tipo === "escala") return config.faixas
+  if (config.tipo === "personalizado" && config.modelo === "escala") {
+    return config.escala ?? []
+  }
+  return []
+}
+
+function gatilhosDe(config: ConfiguracaoComissao): GatilhoConfig[] {
+  if (config.tipo === "gatilhos") return config.gatilhos
+  if (config.tipo === "personalizado" && config.modelo === "gatilhos") {
+    return config.gatilhos ?? []
+  }
+  return []
+}
+
 function calcularBonusEscala(entregas: number, config: ConfiguracaoComissao) {
-  if (config.tipo !== "escala") return 0
-  const ordenado = [...config.faixas].sort((a, b) => a.minimo - b.minimo)
+  const faixas = faixasDe(config)
+  if (faixas.length === 0) return 0
+  const ordenado = [...faixas].sort((a, b) => a.minimo - b.minimo)
   let bonus = 0
   for (const f of ordenado) {
     if (entregas >= f.minimo) bonus = f.bonus
@@ -34,9 +60,9 @@ function calcularBonusGatilhos(
   detalhes: Record<string, boolean>,
   config: ConfiguracaoComissao
 ): number {
-  if (config.tipo !== "gatilhos") return 0
+  const gatilhos = gatilhosDe(config)
   let total = 0
-  for (const g of config.gatilhos) {
+  for (const g of gatilhos) {
     if (detalhes[g.chave]) total += g.valor
   }
   return total
@@ -62,23 +88,31 @@ export default function CardColaboradorDinamico({
   const [status, setStatus] = useState<string | null>(null)
   const router = useRouter()
 
+  const modo = modoRender(configuracao)
+  const faixas = faixasDe(configuracao)
+  const gatilhos = gatilhosDe(configuracao)
+  const valorFixo =
+    configuracao.tipo === "personalizado" && configuracao.modelo === "fixo"
+      ? configuracao.valor_fixo ?? 0
+      : 0
+
   const [entregas, setEntregas] = useState<number>(
     existente?.entregas_validas ?? 0
   )
   const [flags, setFlags] = useState<Record<string, boolean>>(() => {
     const base: Record<string, boolean> = {}
-    if (configuracao.tipo === "gatilhos") {
-      for (const g of configuracao.gatilhos) {
-        base[g.chave] = Boolean(existente?.detalhes?.[g.chave])
-      }
+    for (const g of gatilhos) {
+      base[g.chave] = Boolean(existente?.detalhes?.[g.chave])
     }
     return base
   })
 
   const bonusPreview =
-    configuracao.tipo === "escala"
+    modo === "escala"
       ? calcularBonusEscala(entregas, configuracao)
-      : calcularBonusGatilhos(flags, configuracao)
+      : modo === "gatilhos"
+      ? calcularBonusGatilhos(flags, configuracao)
+      : valorFixo
   const bonusSalvo = existente?.bonus_calculado ?? 0
 
   async function salvar() {
@@ -86,9 +120,9 @@ export default function CardColaboradorDinamico({
     fd.set("colaborador", key)
     fd.set("mes", mes)
     fd.set("ano", String(ano))
-    if (configuracao.tipo === "escala") {
+    if (modo === "escala") {
       fd.set("entregas_validas", String(entregas))
-    } else {
+    } else if (modo === "gatilhos") {
       for (const [chave, v] of Object.entries(flags)) {
         if (v) fd.set(chave, "on")
       }
@@ -97,6 +131,18 @@ export default function CardColaboradorDinamico({
     setStatus(r.ok ? "Salvo ✓" : r.erro ?? "Erro")
     if (r.ok) router.refresh()
   }
+
+  const badge =
+    configuracao.tipo === "personalizado"
+      ? configuracao.nome_tipo
+      : colaborador.funcao
+  const descricaoExibida =
+    configuracao.tipo === "personalizado"
+      ? configuracao.descricao
+      : colaborador.descricao ??
+        (modo === "escala"
+          ? "Bônus por entregas válidas no mês"
+          : "Bônus por gatilhos de performance")
 
   return (
     <div className="glass" style={{ padding: 24 }}>
@@ -113,7 +159,7 @@ export default function CardColaboradorDinamico({
             fontWeight: 500,
           }}
         >
-          {colaborador.funcao}
+          {badge}
         </span>
       </div>
       <p
@@ -124,10 +170,7 @@ export default function CardColaboradorDinamico({
           marginTop: 4,
         }}
       >
-        {colaborador.descricao ??
-          (configuracao.tipo === "escala"
-            ? "Bônus por entregas válidas no mês"
-            : "Bônus por gatilhos de performance")}
+        {descricaoExibida}
       </p>
 
       {colaborador.data_entrada && (
@@ -159,9 +202,9 @@ export default function CardColaboradorDinamico({
 
       <div style={{ marginBottom: 16 }} />
 
-      {configuracao.tipo === "escala" && (
+      {modo === "escala" && (
         <div className="space-y-1" style={{ marginBottom: 14 }}>
-          {configuracao.faixas.map((f, i) => {
+          {faixas.map((f, i) => {
             const ativa = bonusSalvo === f.bonus && f.bonus > 0
             return (
               <div
@@ -199,9 +242,9 @@ export default function CardColaboradorDinamico({
         </div>
       )}
 
-      {configuracao.tipo === "gatilhos" && (
+      {modo === "gatilhos" && (
         <div className="space-y-2" style={{ marginBottom: 14 }}>
-          {configuracao.gatilhos.map((g: GatilhoConfig) => (
+          {gatilhos.map((g: GatilhoConfig) => (
             <label
               key={g.chave}
               className="flex items-center justify-between gap-3 cursor-pointer"
@@ -249,7 +292,7 @@ export default function CardColaboradorDinamico({
         </div>
       )}
 
-      {configuracao.tipo === "escala" && (
+      {modo === "escala" && (
         <label className="block" style={{ marginBottom: 14 }}>
           <span
             style={{
@@ -276,6 +319,42 @@ export default function CardColaboradorDinamico({
             }}
           />
         </label>
+      )}
+
+      {modo === "fixo" && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: "14px 16px",
+            border: "0.5px solid rgba(201,149,58,0.25)",
+            background: "rgba(201,149,58,0.04)",
+            borderRadius: 8,
+            textAlign: "center",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 9,
+              letterSpacing: "2px",
+              color: "rgba(255,255,255,0.35)",
+              textTransform: "uppercase",
+              fontWeight: 500,
+              marginBottom: 6,
+            }}
+          >
+            Valor fixo mensal
+          </p>
+          <p
+            style={{
+              fontSize: 18,
+              color: "#C9953A",
+              fontWeight: 600,
+              letterSpacing: "-0.2px",
+            }}
+          >
+            {formatBRL(valorFixo)}
+          </p>
+        </div>
       )}
 
       <div

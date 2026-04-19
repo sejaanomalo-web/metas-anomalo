@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation"
 import type {
   Colaborador,
   ConfiguracaoComissao,
+  ConfiguracaoPersonalizada,
   Faixa,
   GatilhoConfig,
   MetaComissionamento,
+  ModeloPersonalizado,
 } from "@/lib/supabase"
 import type { Mes } from "@/lib/data"
 import { formatBRL } from "@/lib/data"
@@ -351,7 +353,9 @@ function EditorMetaColab({
           >
             {config.tipo === "gatilhos"
               ? "Bônus por gatilhos"
-              : "Escala por entregas"}
+              : config.tipo === "escala"
+              ? "Escala por entregas"
+              : config.nome_tipo}
           </p>
         </div>
         <button
@@ -375,6 +379,13 @@ function EditorMetaColab({
 
           {config.tipo === "escala" && (
             <EditorEscala
+              config={config}
+              onChange={(c) => setConfig(c)}
+            />
+          )}
+
+          {config.tipo === "personalizado" && (
+            <EditorPersonalizadoMeta
               config={config}
               onChange={(c) => setConfig(c)}
             />
@@ -1051,7 +1062,9 @@ function AbaPessoas({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [nome, setNome] = useState("")
   const [funcao, setFuncao] = useState("")
-  const [tipo, setTipo] = useState<"escala" | "gatilhos">("escala")
+  const [tipo, setTipo] = useState<"escala" | "gatilhos" | "personalizado">(
+    "escala"
+  )
   const [dataEntrada, setDataEntrada] = useState<string>("")
   const [observacoes, setObservacoes] = useState<string>("")
   const [descricao, setDescricao] = useState<string>("")
@@ -1061,13 +1074,18 @@ function AbaPessoas({
   const [gatilhos, setGatilhos] = useState<GatilhoConfig[]>([
     { chave: "g1", rotulo: "Novo gatilho", valor: 100 },
   ])
+  const [nomeTipo, setNomeTipo] = useState<string>("")
+  const [descricaoTipo, setDescricaoTipo] = useState<string>("")
+  const [modeloPersonalizado, setModeloPersonalizado] =
+    useState<ModeloPersonalizado>("escala")
+  const [valorFixo, setValorFixo] = useState<number>(0)
   const [modalExcluir, setModalExcluir] = useState<Colaborador | null>(null)
   const [inativosAbertos, setInativosAbertos] = useState(false)
   const [pending, startTransition] = useTransition()
   const [status, setStatus] = useState<string | null>(null)
   const [criacao, setCriacao] = useState<{
     nome: string
-    tipo: "escala" | "gatilhos"
+    tipo: "escala" | "gatilhos" | "personalizado"
   } | null>(null)
   const router = useRouter()
 
@@ -1082,6 +1100,10 @@ function AbaPessoas({
     setDescricao("")
     setFaixas([{ minimo: 0, bonus: 0 }])
     setGatilhos([{ chave: "g1", rotulo: "Novo gatilho", valor: 100 }])
+    setNomeTipo("")
+    setDescricaoTipo("")
+    setModeloPersonalizado("escala")
+    setValorFixo(0)
     setStatus(null)
     setFormAberto(false)
   }
@@ -1096,10 +1118,24 @@ function AbaPessoas({
     setObservacoes(c.observacoes ?? "")
     setDescricao(c.descricao ?? "")
     setFormAberto(true)
-    if (c.configuracao_padrao.tipo === "escala") {
-      setFaixas(c.configuracao_padrao.faixas)
+    const cfg = c.configuracao_padrao
+    if (cfg.tipo === "escala") {
+      setFaixas(cfg.faixas)
+    } else if (cfg.tipo === "gatilhos") {
+      setGatilhos(cfg.gatilhos)
     } else {
-      setGatilhos(c.configuracao_padrao.gatilhos)
+      setNomeTipo(cfg.nome_tipo)
+      setDescricaoTipo(cfg.descricao)
+      setModeloPersonalizado(cfg.modelo)
+      if (cfg.modelo === "escala") {
+        setFaixas(cfg.escala ?? [{ minimo: 0, bonus: 0 }])
+      } else if (cfg.modelo === "gatilhos") {
+        setGatilhos(
+          cfg.gatilhos ?? [{ chave: "g1", rotulo: "Novo gatilho", valor: 100 }]
+        )
+      } else {
+        setValorFixo(cfg.valor_fixo ?? 0)
+      }
     }
     setStatus(null)
     if (typeof window !== "undefined") {
@@ -1107,11 +1143,31 @@ function AbaPessoas({
     }
   }
 
+  function montarConfiguracao(): ConfiguracaoComissao | null {
+    if (tipo === "escala") return { tipo: "escala", faixas }
+    if (tipo === "gatilhos") return { tipo: "gatilhos", gatilhos }
+    const nomeT = nomeTipo.trim()
+    const descT = descricaoTipo.trim()
+    if (!nomeT || !descT) return null
+    const base: ConfiguracaoPersonalizada = {
+      tipo: "personalizado",
+      tipo_personalizado: true,
+      nome_tipo: nomeT,
+      descricao: descT,
+      modelo: modeloPersonalizado,
+    }
+    if (modeloPersonalizado === "escala") base.escala = faixas
+    if (modeloPersonalizado === "gatilhos") base.gatilhos = gatilhos
+    if (modeloPersonalizado === "fixo") base.valor_fixo = valorFixo
+    return base
+  }
+
   async function salvar() {
-    const configuracao: ConfiguracaoComissao =
-      tipo === "escala"
-        ? { tipo: "escala", faixas }
-        : { tipo: "gatilhos", gatilhos }
+    const configuracao = montarConfiguracao()
+    if (!configuracao) {
+      setStatus("Preencha nome e descrição do tipo personalizado.")
+      return
+    }
     const fd = new FormData()
     fd.set("nome", nome)
     fd.set("funcao", funcao)
@@ -1200,8 +1256,12 @@ function AbaPessoas({
           </p>
           <p>
             Bloco de comissionamento criado com metas padrão para{" "}
-            {criacao.tipo === "escala" ? "escala de entregas" : "gatilhos"}.
-            Você pode editar as metas a qualquer momento.
+            {criacao.tipo === "escala"
+              ? "escala de entregas"
+              : criacao.tipo === "gatilhos"
+              ? "gatilhos"
+              : "tipo personalizado"}
+            . Você pode editar as metas a qualquer momento.
           </p>
         </div>
       )}
@@ -1388,8 +1448,163 @@ function AbaPessoas({
                   Por gatilhos
                 </span>
               </label>
+              <label
+                className="flex items-center gap-1.5 cursor-pointer"
+                title="Tipo personalizado"
+              >
+                <input
+                  type="radio"
+                  checked={tipo === "personalizado"}
+                  onChange={() => setTipo("personalizado")}
+                  style={{ accentColor: "#C9953A" }}
+                />
+                <span
+                  style={{
+                    fontSize: 14,
+                    color:
+                      tipo === "personalizado"
+                        ? "#C9953A"
+                        : "rgba(255,255,255,0.5)",
+                    lineHeight: 1,
+                  }}
+                >
+                  ·
+                </span>
+              </label>
             </div>
           </div>
+
+          {tipo === "personalizado" && (
+            <div
+              style={{
+                marginTop: 4,
+                padding: 14,
+                border: "0.5px solid rgba(201,149,58,0.25)",
+                background: "rgba(201,149,58,0.03)",
+                borderRadius: 10,
+              }}
+              className="space-y-3"
+            >
+              <label className="block">
+                <LabelSmall>Nome do tipo</LabelSmall>
+                <input
+                  value={nomeTipo}
+                  onChange={(e) => setNomeTipo(e.target.value)}
+                  placeholder="Ex: Por projetos entregues"
+                  className="glass-input"
+                  style={{
+                    marginTop: 6,
+                    width: "100%",
+                    padding: "8px 12px",
+                    fontSize: 13,
+                  }}
+                />
+              </label>
+
+              <label className="block">
+                <LabelSmall>Descrição (aparece no card)</LabelSmall>
+                <input
+                  value={descricaoTipo}
+                  onChange={(e) => setDescricaoTipo(e.target.value)}
+                  placeholder="Ex: Bônus por projeto finalizado no mês"
+                  className="glass-input"
+                  style={{
+                    marginTop: 6,
+                    width: "100%",
+                    padding: "8px 12px",
+                    fontSize: 13,
+                  }}
+                />
+              </label>
+
+              <div>
+                <LabelSmall>Modelo de cálculo</LabelSmall>
+                <div
+                  style={{
+                    marginTop: 6,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
+                  }}
+                >
+                  <RadioModelo
+                    label="Por escala de entregas"
+                    hint="usa tabela de faixas"
+                    ativo={modeloPersonalizado === "escala"}
+                    onClick={() => setModeloPersonalizado("escala")}
+                  />
+                  <RadioModelo
+                    label="Por gatilhos"
+                    hint="usa lista de checks"
+                    ativo={modeloPersonalizado === "gatilhos"}
+                    onClick={() => setModeloPersonalizado("gatilhos")}
+                  />
+                  <RadioModelo
+                    label="Valor fixo mensal"
+                    hint="campo único de valor"
+                    ativo={modeloPersonalizado === "fixo"}
+                    onClick={() => setModeloPersonalizado("fixo")}
+                  />
+                </div>
+              </div>
+
+              {modeloPersonalizado === "escala" && (
+                <EditorEscala
+                  config={{ tipo: "escala", faixas }}
+                  onChange={(c) => {
+                    if (c.tipo === "escala") setFaixas(c.faixas)
+                  }}
+                />
+              )}
+
+              {modeloPersonalizado === "gatilhos" && (
+                <EditorGatilhos
+                  config={{ tipo: "gatilhos", gatilhos }}
+                  onChange={(c) => {
+                    if (c.tipo === "gatilhos") setGatilhos(c.gatilhos)
+                  }}
+                />
+              )}
+
+              {modeloPersonalizado === "fixo" && (
+                <label className="block">
+                  <LabelSmall>Valor do bônus mensal</LabelSmall>
+                  <div
+                    style={{
+                      marginTop: 6,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "rgba(255,255,255,0.4)",
+                      }}
+                    >
+                      R$
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={valorFixo}
+                      onChange={(e) =>
+                        setValorFixo(Math.max(0, Number(e.target.value) || 0))
+                      }
+                      className="glass-input"
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                </label>
+              )}
+            </div>
+          )}
 
           {tipo === "escala" && (
             <EditorEscala
@@ -1413,11 +1628,25 @@ function AbaPessoas({
             <button
               type="button"
               onClick={() => startTransition(() => salvar())}
-              disabled={pending || !supabaseOk || !nome || !funcao}
+              disabled={
+                pending ||
+                !supabaseOk ||
+                !nome ||
+                !funcao ||
+                (tipo === "personalizado" &&
+                  (!nomeTipo.trim() || !descricaoTipo.trim()))
+              }
               className="btn-gold-filled uppercase"
               style={{
                 opacity:
-                  pending || !supabaseOk || !nome || !funcao ? 0.5 : 1,
+                  pending ||
+                  !supabaseOk ||
+                  !nome ||
+                  !funcao ||
+                  (tipo === "personalizado" &&
+                    (!nomeTipo.trim() || !descricaoTipo.trim()))
+                    ? 0.5
+                    : 1,
               }}
             >
               {pending
@@ -1957,6 +2186,117 @@ function SecaoFuncoes({ funcoes }: { funcoes: FuncaoComContagem[] }) {
         })}
       </div>
     </div>
+  )
+}
+
+function RadioModelo({
+  label,
+  hint,
+  ativo,
+  onClick,
+}: {
+  label: string
+  hint: string
+  ativo: boolean
+  onClick: () => void
+}) {
+  return (
+    <label
+      className="flex items-center gap-2 cursor-pointer"
+      style={{
+        padding: "6px 8px",
+        borderRadius: 6,
+        background: ativo ? "rgba(201,149,58,0.08)" : "transparent",
+      }}
+    >
+      <input
+        type="radio"
+        checked={ativo}
+        onChange={onClick}
+        style={{ accentColor: "#C9953A", flexShrink: 0 }}
+      />
+      <span
+        style={{
+          fontSize: 12,
+          color: ativo ? "#C9953A" : "rgba(255,255,255,0.75)",
+          fontWeight: ativo ? 500 : 400,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: 10,
+          color: "rgba(255,255,255,0.3)",
+          fontWeight: 300,
+        }}
+      >
+        ({hint})
+      </span>
+    </label>
+  )
+}
+
+function EditorPersonalizadoMeta({
+  config,
+  onChange,
+}: {
+  config: ConfiguracaoPersonalizada
+  onChange: (c: ConfiguracaoComissao) => void
+}) {
+  if (config.modelo === "escala") {
+    const faixas = config.escala ?? []
+    return (
+      <EditorEscala
+        config={{ tipo: "escala", faixas }}
+        onChange={(c) => {
+          if (c.tipo === "escala") onChange({ ...config, escala: c.faixas })
+        }}
+      />
+    )
+  }
+  if (config.modelo === "gatilhos") {
+    const gatilhos = config.gatilhos ?? []
+    return (
+      <EditorGatilhos
+        config={{ tipo: "gatilhos", gatilhos }}
+        onChange={(c) => {
+          if (c.tipo === "gatilhos")
+            onChange({ ...config, gatilhos: c.gatilhos })
+        }}
+      />
+    )
+  }
+  return (
+    <label className="block">
+      <LabelSmall>Valor do bônus mensal</LabelSmall>
+      <div
+        style={{
+          marginTop: 6,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
+          R$
+        </span>
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={config.valor_fixo ?? 0}
+          onChange={(e) =>
+            onChange({
+              ...config,
+              valor_fixo: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="glass-input"
+          style={{ flex: 1, padding: "8px 12px", fontSize: 13 }}
+        />
+      </div>
+    </label>
   )
 }
 

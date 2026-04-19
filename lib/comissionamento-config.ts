@@ -23,12 +23,39 @@ function mesValido(m: string): m is Mes {
 
 function parseConfiguracao(raw: string): ConfiguracaoComissao | null {
   try {
-    const parsed = JSON.parse(raw) as ConfiguracaoComissao
+    const parsed = JSON.parse(raw)
     if (parsed.tipo === "gatilhos" && Array.isArray(parsed.gatilhos)) {
       return { tipo: "gatilhos", gatilhos: parsed.gatilhos }
     }
     if (parsed.tipo === "escala" && Array.isArray(parsed.faixas)) {
       return { tipo: "escala", faixas: parsed.faixas }
+    }
+    if (parsed.tipo === "personalizado" && parsed.tipo_personalizado === true) {
+      const modelo = parsed.modelo
+      if (modelo !== "escala" && modelo !== "gatilhos" && modelo !== "fixo") {
+        return null
+      }
+      const nomeTipo = String(parsed.nome_tipo ?? "").trim()
+      const descricao = String(parsed.descricao ?? "").trim()
+      if (!nomeTipo || !descricao) return null
+      const base: ConfiguracaoComissao = {
+        tipo: "personalizado",
+        tipo_personalizado: true,
+        nome_tipo: nomeTipo,
+        descricao,
+        modelo,
+      }
+      if (modelo === "escala" && Array.isArray(parsed.escala)) {
+        base.escala = parsed.escala
+      }
+      if (modelo === "gatilhos" && Array.isArray(parsed.gatilhos)) {
+        base.gatilhos = parsed.gatilhos
+      }
+      if (modelo === "fixo") {
+        const n = Number(parsed.valor_fixo ?? 0)
+        base.valor_fixo = Number.isFinite(n) ? n : 0
+      }
+      return base
     }
     return null
   } catch {
@@ -168,7 +195,11 @@ export async function salvarColaboradorAction(
   if (!nome || !funcao) {
     return { ok: false, erro: "Nome e função são obrigatórios." }
   }
-  if (tipoRaw !== "gatilhos" && tipoRaw !== "escala") {
+  if (
+    tipoRaw !== "gatilhos" &&
+    tipoRaw !== "escala" &&
+    tipoRaw !== "personalizado"
+  ) {
     return { ok: false, erro: "Tipo inválido." }
   }
   if (!configuracao) {
@@ -203,7 +234,11 @@ export async function salvarColaboradorAction(
   // Cria bloco de comissionamento para o mês atual se ainda não existir.
   if (mes) {
     const presetConfig: ConfiguracaoComissao =
-      tipoRaw === "escala" ? ESCALA_PADRAO : GATILHOS_PADRAO
+      tipoRaw === "personalizado"
+        ? configuracao
+        : tipoRaw === "escala"
+        ? ESCALA_PADRAO
+        : GATILHOS_PADRAO
     const presetPayload: MetaComissionamento = {
       colaborador: nome.toLowerCase(),
       mes,
@@ -290,7 +325,11 @@ export async function atualizarColaboradorAction(
   if (!nome || !funcao) {
     return { ok: false, erro: "Nome e função são obrigatórios." }
   }
-  if (tipoRaw !== "gatilhos" && tipoRaw !== "escala") {
+  if (
+    tipoRaw !== "gatilhos" &&
+    tipoRaw !== "escala" &&
+    tipoRaw !== "personalizado"
+  ) {
     return { ok: false, erro: "Tipo inválido." }
   }
   if (!configuracao) {

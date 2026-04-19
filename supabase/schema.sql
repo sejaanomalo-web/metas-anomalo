@@ -142,6 +142,14 @@ alter table public.colaboradores
 alter table public.colaboradores
   add column if not exists descricao text;
 
+-- Relaxa o check constraint de colaboradores.tipo para aceitar
+-- 'personalizado' (além de 'gatilhos' e 'escala').
+alter table public.colaboradores
+  drop constraint if exists colaboradores_tipo_check;
+alter table public.colaboradores
+  add constraint colaboradores_tipo_check
+  check (tipo in ('gatilhos', 'escala', 'personalizado'));
+
 -- Remove duplicatas antigas em colaboradores: mantém o registro mais
 -- recente de cada nome e apaga os demais (seguro — só deleta duplicatas
 -- com mesmo nome).

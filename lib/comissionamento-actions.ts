@@ -111,6 +111,13 @@ export async function salvarComissaoAction(
     const config = meta?.configuracao as
       | { tipo: "escala"; faixas: { minimo: number; bonus: number }[] }
       | { tipo: "gatilhos"; gatilhos: { chave: string; valor: number }[] }
+      | {
+          tipo: "personalizado"
+          modelo: "escala" | "gatilhos" | "fixo"
+          escala?: { minimo: number; bonus: number }[]
+          gatilhos?: { chave: string; valor: number }[]
+          valor_fixo?: number
+        }
       | undefined
     if (config?.tipo === "gatilhos") {
       const flags: Record<string, boolean> = {}
@@ -130,6 +137,28 @@ export async function salvarComissaoAction(
         if (entregas_validas >= f.minimo) bonus = f.bonus
       }
       bonus_calculado = bonus
+    } else if (config?.tipo === "personalizado") {
+      if (config.modelo === "gatilhos" && Array.isArray(config.gatilhos)) {
+        const flags: Record<string, boolean> = {}
+        for (const g of config.gatilhos) {
+          flags[g.chave] = formData.get(g.chave) === "on"
+        }
+        detalhes = flags
+        bonus_calculado = config.gatilhos.reduce(
+          (acc, g) => acc + (flags[g.chave] ? g.valor : 0),
+          0
+        )
+      } else if (config.modelo === "escala" && Array.isArray(config.escala)) {
+        entregas_validas = parseInt0(formData.get("entregas_validas")) ?? 0
+        const ordenado = [...config.escala].sort((a, b) => a.minimo - b.minimo)
+        let bonus = 0
+        for (const f of ordenado) {
+          if (entregas_validas >= f.minimo) bonus = f.bonus
+        }
+        bonus_calculado = bonus
+      } else if (config.modelo === "fixo") {
+        bonus_calculado = Number(config.valor_fixo ?? 0)
+      }
     }
   }
 

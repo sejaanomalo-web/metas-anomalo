@@ -42,9 +42,23 @@ export interface GatilhoConfig {
   alvoRoas?: number
 }
 
+export type ModeloPersonalizado = "escala" | "gatilhos" | "fixo"
+
+export interface ConfiguracaoPersonalizada {
+  tipo: "personalizado"
+  tipo_personalizado: true
+  nome_tipo: string
+  descricao: string
+  modelo: ModeloPersonalizado
+  escala?: Faixa[]
+  gatilhos?: GatilhoConfig[]
+  valor_fixo?: number
+}
+
 export type ConfiguracaoComissao =
   | { tipo: "gatilhos"; gatilhos: GatilhoConfig[] }
   | { tipo: "escala"; faixas: Faixa[] }
+  | ConfiguracaoPersonalizada
 
 export interface MetaComissionamento {
   id?: string
@@ -59,7 +73,7 @@ export interface Colaborador {
   id?: string
   nome: string
   funcao: string
-  tipo: "gatilhos" | "escala"
+  tipo: "gatilhos" | "escala" | "personalizado"
   configuracao_padrao: ConfiguracaoComissao
   ativo: boolean
   data_entrada?: string | null
