@@ -2,7 +2,6 @@ import Image from "next/image"
 import Link from "next/link"
 import logo from "@/public/logo-anomalo.png"
 import { sairAction } from "@/app/login/actions"
-import BotaoSemanal from "./BotaoSemanal"
 
 export default function Header({ children }: { children?: React.ReactNode }) {
   return (
@@ -43,7 +42,6 @@ export default function Header({ children }: { children?: React.ReactNode }) {
 
         <div className="flex items-center gap-3">
           {children}
-          <BotaoSemanal />
           <Link
             href="/dashboard/configuracoes"
             aria-label="Configurações"

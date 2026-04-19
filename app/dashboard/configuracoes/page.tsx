@@ -24,14 +24,9 @@ export default async function ConfiguracoesPage({
   const mes = mesValido(searchParams?.mes)
   const config = await getConfigResumos()
 
-  const origin =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "")
-  const linkSemanal = origin ? `${origin}/dashboard/semanal` : undefined
-
   const [mensagemDiario, mensagemSemanal, mensagemMensal] = await Promise.all([
     montarResumoDiario(),
-    montarResumoSemanal(linkSemanal),
+    montarResumoSemanal(),
     montarResumoMensal(),
   ])
 
