@@ -99,39 +99,44 @@ export default function FormConfig({
           {contatos.map((c, idx) => (
             <div
               key={idx}
-              className="grid grid-cols-[1fr_1fr_32px] gap-2 items-center"
+              className="flex flex-col sm:flex-row gap-2 sm:items-center"
             >
               <input
                 value={c.nome}
                 onChange={(e) => setContato(idx, { nome: e.target.value })}
                 placeholder="Nome"
-                className="glass-input"
+                className="glass-input w-full sm:flex-1"
                 style={{ padding: "10px 12px", fontSize: 13 }}
               />
-              <input
-                value={c.numero}
-                onChange={(e) =>
-                  setContato(idx, { numero: sanitizarNumero(e.target.value) })
-                }
-                placeholder="5545999999999"
-                className="glass-input"
-                inputMode="numeric"
-                style={{ padding: "10px 12px", fontSize: 13 }}
-              />
-              <button
-                type="button"
-                onClick={() => remover(idx)}
-                aria-label="Remover"
-                style={{
-                  color: "rgba(255,255,255,0.3)",
-                  fontSize: 18,
-                  padding: "0 8px",
-                  lineHeight: 1,
-                }}
-                className="hover:text-[#e24b4a] transition"
-              >
-                ×
-              </button>
+              <div className="flex items-center gap-2 sm:flex-1">
+                <input
+                  value={c.numero}
+                  onChange={(e) =>
+                    setContato(idx, {
+                      numero: sanitizarNumero(e.target.value),
+                    })
+                  }
+                  placeholder="5545999999999"
+                  className="glass-input flex-1 min-w-0"
+                  inputMode="numeric"
+                  style={{ padding: "10px 12px", fontSize: 13 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => remover(idx)}
+                  aria-label="Remover"
+                  style={{
+                    color: "rgba(255,255,255,0.3)",
+                    fontSize: 18,
+                    padding: "0 8px",
+                    lineHeight: 1,
+                    flexShrink: 0,
+                  }}
+                  className="hover:text-[#e24b4a] transition"
+                >
+                  ×
+                </button>
+              </div>
             </div>
           ))}
           <button
