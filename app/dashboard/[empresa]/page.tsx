@@ -4,7 +4,6 @@ import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CenarioReal from "@/components/CenarioReal"
 import DrawerEditarMeta from "@/components/DrawerEditarMeta"
-import TrafegoStrip from "@/components/TrafegoStrip"
 import GraficoFaturamento from "@/components/GraficoFaturamento"
 import TabelaMeses from "@/components/TabelaMeses"
 import DrawerDadosReais from "@/components/DrawerDadosReais"
@@ -187,16 +186,6 @@ export default async function EmpresaPage({
               </div>
             )}
           </section>
-        )}
-
-        {empresa.tipo !== "diego" && (
-          <TrafegoStrip
-            empresaSlug={empresa.slug}
-            empresaDb={empresa.db}
-            mes={mes}
-            ano={ano}
-            dadosReais={real}
-          />
         )}
 
         {empresa.tipo === "diego" && temProjecao && pontos.length > 0 && (
