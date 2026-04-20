@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { EmpresaDb, Mes } from "@/lib/data"
-import { MESES, formatBRL } from "@/lib/data"
+import { ANOS_DISPONIVEIS, MESES, formatBRL } from "@/lib/data"
 import { salvarMetaEmpresaAction } from "@/lib/metas-empresa"
 
 type TipoEmpresa = "leads-reunioes-contratos" | "aton" | "hato" | "diego"
@@ -17,7 +17,7 @@ interface Campo {
 function camposPorTipo(tipo: TipoEmpresa): Campo[] {
   if (tipo === "hato") {
     return [
-      { chave: "verba", rotulo: "Verba de mídia (R$)", tipo: "brl" },
+      { chave: "verba", rotulo: "Investimento (R$)", tipo: "brl" },
       { chave: "criativos", rotulo: "Criativos no mês", tipo: "numero" },
       { chave: "influenciadores", rotulo: "Influenciadores", tipo: "numero" },
       {
@@ -37,7 +37,7 @@ function camposPorTipo(tipo: TipoEmpresa): Campo[] {
   }
   if (tipo === "aton") {
     return [
-      { chave: "verba", rotulo: "Verba (R$)", tipo: "brl" },
+      { chave: "verba", rotulo: "Investimento (R$)", tipo: "brl" },
       { chave: "criativos", rotulo: "Criativos no mês", tipo: "numero" },
       { chave: "leads", rotulo: "Leads", tipo: "numero" },
       { chave: "orcamentos", rotulo: "Orçamentos", tipo: "numero" },
@@ -58,7 +58,7 @@ function camposPorTipo(tipo: TipoEmpresa): Campo[] {
     ]
   }
   return [
-    { chave: "verba", rotulo: "Verba (R$)", tipo: "brl" },
+    { chave: "verba", rotulo: "Investimento (R$)", tipo: "brl" },
     { chave: "criativos", rotulo: "Criativos no mês", tipo: "numero" },
     { chave: "leads", rotulo: "Leads", tipo: "numero" },
     { chave: "reunioes", rotulo: "Reuniões", tipo: "numero" },
@@ -87,34 +87,45 @@ export default function DrawerEditarMeta({
 }) {
   const [aberto, setAberto] = useState(false)
   const [mesSelecionado, setMesSelecionado] = useState<Mes>(mesInicial)
+  const [anoSelecionado, setAnoSelecionado] = useState<number>(ano)
   const [valores, setValores] = useState<Record<string, string>>({})
   const [pending, startTransition] = useTransition()
   const [status, setStatus] = useState<string | null>(null)
   const router = useRouter()
 
   const campos = camposPorTipo(tipoEmpresa)
-  const linhaMes = linhasPorMes[mesSelecionado] ?? {}
+  // linhasPorMes só corresponde ao `ano` que a página carregou no servidor.
+  // Se o usuário escolher outro ano, não temos os projetados aqui — mostra
+  // apenas os campos sem hint.
+  const temProjecao = anoSelecionado === ano
+  const linhaMes = temProjecao ? linhasPorMes[mesSelecionado] ?? {} : {}
 
-  function abrir() {
+  function preencherValoresPara(mes: Mes, anoAtual: number) {
+    const linha =
+      anoAtual === ano ? linhasPorMes[mes] ?? {} : {}
     const iniciais: Record<string, string> = {}
     for (const c of campos) {
-      const v = linhaMes[c.chave]
+      const v = linha[c.chave]
       iniciais[c.chave] = typeof v === "number" ? String(v) : ""
     }
     setValores(iniciais)
+  }
+
+  function abrir() {
+    preencherValoresPara(mesSelecionado, anoSelecionado)
     setAberto(true)
     setStatus(null)
   }
 
   function trocarMes(novoMes: Mes) {
     setMesSelecionado(novoMes)
-    const novaLinha = linhasPorMes[novoMes] ?? {}
-    const iniciais: Record<string, string> = {}
-    for (const c of campos) {
-      const v = novaLinha[c.chave]
-      iniciais[c.chave] = typeof v === "number" ? String(v) : ""
-    }
-    setValores(iniciais)
+    preencherValoresPara(novoMes, anoSelecionado)
+    setStatus(null)
+  }
+
+  function trocarAno(novoAno: number) {
+    setAnoSelecionado(novoAno)
+    preencherValoresPara(mesSelecionado, novoAno)
     setStatus(null)
   }
 
@@ -122,7 +133,7 @@ export default function DrawerEditarMeta({
     const fd = new FormData()
     fd.set("empresa", empresa)
     fd.set("mes", mesSelecionado)
-    fd.set("ano", String(ano))
+    fd.set("ano", String(anoSelecionado))
     for (const c of campos) {
       const v = valores[c.chave]
       if (v !== undefined && v !== "") fd.set(c.chave, v)
@@ -220,37 +231,90 @@ export default function DrawerEditarMeta({
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap mt-3">
-                {MESES.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => trocarMes(m)}
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <label className="block">
+                  <span
                     style={{
-                      padding: "4px 10px",
-                      borderRadius: 999,
                       fontSize: 9,
-                      letterSpacing: "0.3px",
-                      background:
-                        mesSelecionado === m
-                          ? "rgba(201,149,58,0.15)"
-                          : "transparent",
-                      border: `0.5px solid ${
-                        mesSelecionado === m
-                          ? "#C9953A"
-                          : "rgba(255,255,255,0.08)"
-                      }`,
-                      color:
-                        mesSelecionado === m
-                          ? "#C9953A"
-                          : "rgba(255,255,255,0.35)",
+                      letterSpacing: "2px",
+                      color: "rgba(255,255,255,0.4)",
+                      textTransform: "uppercase",
                       fontWeight: 500,
                     }}
                   >
-                    {m}
-                  </button>
-                ))}
+                    Mês
+                  </span>
+                  <select
+                    value={mesSelecionado}
+                    onChange={(e) => trocarMes(e.target.value as Mes)}
+                    className="glass-input"
+                    style={{
+                      marginTop: 6,
+                      width: "100%",
+                      padding: "8px 12px",
+                      fontSize: 13,
+                    }}
+                  >
+                    {MESES.map((m) => (
+                      <option
+                        key={m}
+                        value={m}
+                        style={{ background: "#0a0a0a" }}
+                      >
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: "2px",
+                      color: "rgba(255,255,255,0.4)",
+                      textTransform: "uppercase",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Ano
+                  </span>
+                  <select
+                    value={anoSelecionado}
+                    onChange={(e) => trocarAno(Number(e.target.value))}
+                    className="glass-input"
+                    style={{
+                      marginTop: 6,
+                      width: "100%",
+                      padding: "8px 12px",
+                      fontSize: 13,
+                    }}
+                  >
+                    {ANOS_DISPONIVEIS.map((a) => (
+                      <option
+                        key={a}
+                        value={a}
+                        style={{ background: "#0a0a0a" }}
+                      >
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
+              {!temProjecao && (
+                <p
+                  style={{
+                    fontSize: 10,
+                    color: "rgba(255,255,255,0.35)",
+                    fontWeight: 300,
+                    marginTop: 8,
+                    fontStyle: "italic",
+                  }}
+                >
+                  Editando um ano diferente do atual — valores projetados não
+                  disponíveis aqui.
+                </p>
+              )}
             </div>
 
             <div style={{ padding: 24 }}>

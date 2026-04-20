@@ -324,7 +324,7 @@ function construirTabela(
     return {
       colunas: [
         { chave: "mes", titulo: "Mês" },
-        { chave: "verba", titulo: "Verba", tipo: "brl" as const },
+        { chave: "verba", titulo: "Investimento", tipo: "brl" as const },
         { chave: "criativos", titulo: "Criativos" },
         { chave: "leads", titulo: "Leads" },
         { chave: "reunioes", titulo: "Reuniões" },
@@ -341,7 +341,7 @@ function construirTabela(
     return {
       colunas: [
         { chave: "mes", titulo: "Mês" },
-        { chave: "verba", titulo: "Verba", tipo: "brl" as const },
+        { chave: "verba", titulo: "Investimento", tipo: "brl" as const },
         { chave: "criativos", titulo: "Criativos" },
         { chave: "leads", titulo: "Leads" },
         { chave: "orcamentos", titulo: "Orçamentos" },
@@ -357,7 +357,7 @@ function construirTabela(
     return {
       colunas: [
         { chave: "mes", titulo: "Mês" },
-        { chave: "verba", titulo: "Verba", tipo: "brl" as const },
+        { chave: "verba", titulo: "Investimento", tipo: "brl" as const },
         { chave: "criativos", titulo: "Criativos" },
         { chave: "influenciadores", titulo: "Influ." },
         { chave: "vendas_influenciador", titulo: "Vendas Influ." },
