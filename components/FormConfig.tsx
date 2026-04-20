@@ -183,7 +183,7 @@ export default function FormConfig({
 
       <SecaoResumo
         titulo="Resumo diário"
-        legenda="☀️ Foto do status de hoje — use toda manhã, depois que os dados reais do dia estiverem no Supabase."
+        legenda="☕ Status do dia para usar todo fim de dia, depois que os dados reais do dia estiverem no Supabase."
         mensagem={mensagemDiario}
         contatos={contatosValidos}
         tipo="diario"
