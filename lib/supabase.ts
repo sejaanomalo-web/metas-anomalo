@@ -26,7 +26,9 @@ export interface Comissionamento {
   ano: number
   entregas_validas: number | null
   bonus_calculado: number
-  detalhes: Record<string, boolean> | null
+  // JSONB livre — inclui flags booleanas (gatilhos) e também números auxiliares
+  // como valor_vendas quando o tipo de comissão é "percentual".
+  detalhes: Record<string, boolean | number> | null
   updated_at?: string
 }
 
@@ -42,7 +44,16 @@ export interface GatilhoConfig {
   alvoRoas?: number
 }
 
-export type ModeloPersonalizado = "escala" | "gatilhos" | "fixo"
+/**
+ * Faixa de comissão percentual: atinge `minimoVendas` → ganha `percentual`%
+ * aplicado sobre o valor total de vendas informado pelo colaborador no mês.
+ */
+export interface FaixaPercentual {
+  minimoVendas: number
+  percentual: number
+}
+
+export type ModeloPersonalizado = "escala" | "gatilhos" | "fixo" | "percentual"
 
 export interface ConfiguracaoPersonalizada {
   tipo: "personalizado"
@@ -53,11 +64,13 @@ export interface ConfiguracaoPersonalizada {
   escala?: Faixa[]
   gatilhos?: GatilhoConfig[]
   valor_fixo?: number
+  percentual?: FaixaPercentual[]
 }
 
 export type ConfiguracaoComissao =
   | { tipo: "gatilhos"; gatilhos: GatilhoConfig[] }
   | { tipo: "escala"; faixas: Faixa[] }
+  | { tipo: "percentual"; faixas: FaixaPercentual[] }
   | ConfiguracaoPersonalizada
 
 export interface MetaComissionamento {
@@ -73,7 +86,7 @@ export interface Colaborador {
   id?: string
   nome: string
   funcao: string
-  tipo: "gatilhos" | "escala" | "personalizado"
+  tipo: "gatilhos" | "escala" | "personalizado" | "percentual"
   configuracao_padrao: ConfiguracaoComissao
   ativo: boolean
   data_entrada?: string | null

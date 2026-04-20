@@ -8,16 +8,18 @@ import type {
   Comissionamento,
   ConfiguracaoComissao,
   Faixa,
+  FaixaPercentual,
   GatilhoConfig,
 } from "@/lib/supabase"
 import type { Ano, Mes } from "@/lib/data"
 import { formatBRL } from "@/lib/data"
 
-type ModoRender = "escala" | "gatilhos" | "fixo"
+type ModoRender = "escala" | "gatilhos" | "fixo" | "percentual"
 
 function modoRender(config: ConfiguracaoComissao): ModoRender {
   if (config.tipo === "escala") return "escala"
   if (config.tipo === "gatilhos") return "gatilhos"
+  if (config.tipo === "percentual") return "percentual"
   return config.modelo
 }
 
@@ -35,6 +37,28 @@ function gatilhosDe(config: ConfiguracaoComissao): GatilhoConfig[] {
     return config.gatilhos ?? []
   }
   return []
+}
+
+function percentualDe(config: ConfiguracaoComissao): FaixaPercentual[] {
+  if (config.tipo === "percentual") return config.faixas
+  if (config.tipo === "personalizado" && config.modelo === "percentual") {
+    return config.percentual ?? []
+  }
+  return []
+}
+
+function calcularBonusPercentual(
+  faixas: FaixaPercentual[],
+  vendas: number,
+  valorVendas: number
+): { bonus: number; percentualAplicado: number } {
+  if (faixas.length === 0) return { bonus: 0, percentualAplicado: 0 }
+  const ordenado = [...faixas].sort((a, b) => a.minimoVendas - b.minimoVendas)
+  let pct = 0
+  for (const f of ordenado) {
+    if (vendas >= f.minimoVendas) pct = f.percentual
+  }
+  return { bonus: (pct / 100) * valorVendas, percentualAplicado: pct }
 }
 
 function calcularBonusEscala(entregas: number, config: ConfiguracaoComissao) {
@@ -91,6 +115,7 @@ export default function CardColaboradorDinamico({
   const modo = modoRender(configuracao)
   const faixas = faixasDe(configuracao)
   const gatilhos = gatilhosDe(configuracao)
+  const faixasPercentual = percentualDe(configuracao)
   const valorFixo =
     configuracao.tipo === "personalizado" && configuracao.modelo === "fixo"
       ? configuracao.valor_fixo ?? 0
@@ -99,6 +124,10 @@ export default function CardColaboradorDinamico({
   const [entregas, setEntregas] = useState<number>(
     existente?.entregas_validas ?? 0
   )
+  const [valorVendas, setValorVendas] = useState<number>(() => {
+    const raw = existente?.detalhes?.valor_vendas
+    return typeof raw === "number" ? raw : 0
+  })
   const [flags, setFlags] = useState<Record<string, boolean>>(() => {
     const base: Record<string, boolean> = {}
     for (const g of gatilhos) {
@@ -107,11 +136,18 @@ export default function CardColaboradorDinamico({
     return base
   })
 
+  const resultadoPercentual =
+    modo === "percentual"
+      ? calcularBonusPercentual(faixasPercentual, entregas, valorVendas)
+      : null
+
   const bonusPreview =
     modo === "escala"
       ? calcularBonusEscala(entregas, configuracao)
       : modo === "gatilhos"
       ? calcularBonusGatilhos(flags, configuracao)
+      : modo === "percentual"
+      ? resultadoPercentual?.bonus ?? 0
       : valorFixo
   const bonusSalvo = existente?.bonus_calculado ?? 0
 
@@ -126,6 +162,9 @@ export default function CardColaboradorDinamico({
       for (const [chave, v] of Object.entries(flags)) {
         if (v) fd.set(chave, "on")
       }
+    } else if (modo === "percentual") {
+      fd.set("entregas_validas", String(entregas))
+      fd.set("valor_vendas", String(valorVendas))
     }
     const r = await salvarComissaoAction(fd)
     setStatus(r.ok ? "Salvo ✓" : r.erro ?? "Erro")
@@ -142,6 +181,8 @@ export default function CardColaboradorDinamico({
       : colaborador.descricao ??
         (modo === "escala"
           ? "Bônus por entregas válidas no mês"
+          : modo === "percentual"
+          ? "% sobre as vendas do mês"
           : "Bônus por gatilhos de performance")
 
   return (
@@ -319,6 +360,127 @@ export default function CardColaboradorDinamico({
             }}
           />
         </label>
+      )}
+
+      {modo === "percentual" && (
+        <>
+          <div className="space-y-1" style={{ marginBottom: 14 }}>
+            {faixasPercentual.map((f, i) => {
+              const ativa =
+                resultadoPercentual?.percentualAplicado === f.percentual &&
+                f.percentual > 0
+              return (
+                <div
+                  key={i}
+                  className="flex items-center justify-between"
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    background: ativa ? "rgba(201,149,58,0.08)" : "transparent",
+                    border: `0.5px solid ${
+                      ativa ? "rgba(201,149,58,0.4)" : "rgba(255,255,255,0.04)"
+                    }`,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: ativa ? "#C9953A" : "rgba(255,255,255,0.35)",
+                    }}
+                  >
+                    A partir de {f.minimoVendas} vendas
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: ativa ? "#C9953A" : "rgba(255,255,255,0.25)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {f.percentual}% sobre vendas
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+
+          <div
+            className="grid grid-cols-2 gap-3"
+            style={{ marginBottom: 14 }}
+          >
+            <label className="block">
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "2px",
+                  color: "rgba(255,255,255,0.35)",
+                  textTransform: "uppercase",
+                  fontWeight: 500,
+                }}
+              >
+                Vendas no mês
+              </span>
+              <input
+                type="number"
+                value={entregas}
+                min={0}
+                onChange={(e) =>
+                  setEntregas(Math.max(0, Number(e.target.value) || 0))
+                }
+                className="glass-input"
+                style={{
+                  marginTop: 6,
+                  width: "100%",
+                  padding: "8px 12px",
+                  fontSize: 13,
+                }}
+              />
+            </label>
+            <label className="block">
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "2px",
+                  color: "rgba(255,255,255,0.35)",
+                  textTransform: "uppercase",
+                  fontWeight: 500,
+                }}
+              >
+                Valor das vendas (R$)
+              </span>
+              <input
+                type="number"
+                value={valorVendas}
+                min={0}
+                step="0.01"
+                onChange={(e) =>
+                  setValorVendas(Math.max(0, Number(e.target.value) || 0))
+                }
+                className="glass-input"
+                style={{
+                  marginTop: 6,
+                  width: "100%",
+                  padding: "8px 12px",
+                  fontSize: 13,
+                }}
+              />
+            </label>
+          </div>
+
+          {resultadoPercentual && resultadoPercentual.percentualAplicado > 0 && (
+            <p
+              style={{
+                fontSize: 10,
+                color: "rgba(255,255,255,0.4)",
+                fontWeight: 300,
+                marginBottom: 10,
+              }}
+            >
+              Aplicando {resultadoPercentual.percentualAplicado}% sobre{" "}
+              {formatBRL(valorVendas)}
+            </p>
+          )}
+        </>
       )}
 
       {modo === "fixo" && (

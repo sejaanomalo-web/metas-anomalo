@@ -24,6 +24,33 @@ function parseInt0(v: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function parseFloat0(v: FormDataEntryValue | null): number | null {
+  if (v === null) return null
+  const s = String(v).trim().replace(/\./g, "").replace(",", ".")
+  if (s === "") return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Regras de cálculo do tipo "percentual":
+ * - Dada a lista de faixas e o número de vendas, escolhe a faixa mais alta
+ *   cujo `minimoVendas` ≤ vendas.
+ * - bonus = percentual% × valor_vendas.
+ */
+function calcularBonusPercentual(
+  faixas: { minimoVendas: number; percentual: number }[],
+  vendas: number,
+  valorVendas: number
+): number {
+  const ordenado = [...faixas].sort((a, b) => a.minimoVendas - b.minimoVendas)
+  let pct = 0
+  for (const f of ordenado) {
+    if (vendas >= f.minimoVendas) pct = f.percentual
+  }
+  return (pct / 100) * valorVendas
+}
+
 function mesValido(mes: string): mes is Mes {
   return (MESES as readonly string[]).includes(mes)
 }
@@ -81,7 +108,7 @@ export async function salvarComissaoAction(
 
   let entregas_validas: number | null = null
   let bonus_calculado = 0
-  let detalhes: Record<string, boolean> | null = null
+  let detalhes: Record<string, boolean | number> | null = null
 
   if (colaborador === "felipe") {
     const flags: Record<string, boolean> = {}
@@ -112,11 +139,16 @@ export async function salvarComissaoAction(
       | { tipo: "escala"; faixas: { minimo: number; bonus: number }[] }
       | { tipo: "gatilhos"; gatilhos: { chave: string; valor: number }[] }
       | {
+          tipo: "percentual"
+          faixas: { minimoVendas: number; percentual: number }[]
+        }
+      | {
           tipo: "personalizado"
-          modelo: "escala" | "gatilhos" | "fixo"
+          modelo: "escala" | "gatilhos" | "fixo" | "percentual"
           escala?: { minimo: number; bonus: number }[]
           gatilhos?: { chave: string; valor: number }[]
           valor_fixo?: number
+          percentual?: { minimoVendas: number; percentual: number }[]
         }
       | undefined
     if (config?.tipo === "gatilhos") {
@@ -137,6 +169,15 @@ export async function salvarComissaoAction(
         if (entregas_validas >= f.minimo) bonus = f.bonus
       }
       bonus_calculado = bonus
+    } else if (config?.tipo === "percentual") {
+      entregas_validas = parseInt0(formData.get("entregas_validas")) ?? 0
+      const valorVendas = parseFloat0(formData.get("valor_vendas")) ?? 0
+      bonus_calculado = calcularBonusPercentual(
+        config.faixas,
+        entregas_validas,
+        valorVendas
+      )
+      detalhes = { valor_vendas: valorVendas }
     } else if (config?.tipo === "personalizado") {
       if (config.modelo === "gatilhos" && Array.isArray(config.gatilhos)) {
         const flags: Record<string, boolean> = {}
@@ -158,6 +199,18 @@ export async function salvarComissaoAction(
         bonus_calculado = bonus
       } else if (config.modelo === "fixo") {
         bonus_calculado = Number(config.valor_fixo ?? 0)
+      } else if (
+        config.modelo === "percentual" &&
+        Array.isArray(config.percentual)
+      ) {
+        entregas_validas = parseInt0(formData.get("entregas_validas")) ?? 0
+        const valorVendas = parseFloat0(formData.get("valor_vendas")) ?? 0
+        bonus_calculado = calcularBonusPercentual(
+          config.percentual,
+          entregas_validas,
+          valorVendas
+        )
+        detalhes = { valor_vendas: valorVendas }
       }
     }
   }

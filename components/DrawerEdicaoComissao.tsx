@@ -7,6 +7,7 @@ import type {
   ConfiguracaoComissao,
   ConfiguracaoPersonalizada,
   Faixa,
+  FaixaPercentual,
   GatilhoConfig,
   MetaComissionamento,
   ModeloPersonalizado,
@@ -355,6 +356,8 @@ function EditorMetaColab({
               ? "Bônus por gatilhos"
               : config.tipo === "escala"
               ? "Escala por entregas"
+              : config.tipo === "percentual"
+              ? "% sobre vendas"
               : config.nome_tipo}
           </p>
         </div>
@@ -379,6 +382,13 @@ function EditorMetaColab({
 
           {config.tipo === "escala" && (
             <EditorEscala
+              config={config}
+              onChange={(c) => setConfig(c)}
+            />
+          )}
+
+          {config.tipo === "percentual" && (
+            <EditorPercentual
               config={config}
               onChange={(c) => setConfig(c)}
             />
@@ -1039,6 +1049,307 @@ function EditorEscala({
   )
 }
 
+// -------- Editor de percentual sobre vendas --------
+
+function EditorPercentual({
+  config,
+  onChange,
+}: {
+  config: Extract<ConfiguracaoComissao, { tipo: "percentual" }>
+  onChange: (c: ConfiguracaoComissao) => void
+}) {
+  const [modos, setModos] = useState<Record<number, ModoLinha>>({})
+  const [rascunhos, setRascunhos] = useState<Record<number, FaixaPercentual>>({})
+  const [erroExclusao, setErroExclusao] = useState<string | null>(null)
+
+  function setModo(idx: number, modo: ModoLinha) {
+    setModos({ ...modos, [idx]: modo })
+  }
+
+  function iniciarEdicao(idx: number) {
+    setRascunhos({ ...rascunhos, [idx]: { ...config.faixas[idx] } })
+    setModo(idx, "editar")
+  }
+
+  function confirmarEdicao(idx: number) {
+    const r = rascunhos[idx]
+    if (r) {
+      onChange({
+        ...config,
+        faixas: config.faixas.map((f, i) => (i === idx ? r : f)),
+      })
+    }
+    setModo(idx, "leitura")
+  }
+
+  function tentarExcluir(idx: number) {
+    if (config.faixas.length <= 1) {
+      setErroExclusao("É necessário manter ao menos uma faixa")
+      setTimeout(() => setErroExclusao(null), 2500)
+      return
+    }
+    setModo(idx, "confirmar_excluir")
+  }
+
+  function excluir(idx: number) {
+    onChange({
+      ...config,
+      faixas: config.faixas.filter((_, i) => i !== idx),
+    })
+    const novos = { ...modos }
+    delete novos[idx]
+    setModos(novos)
+  }
+
+  function adicionar() {
+    const ultima = config.faixas[config.faixas.length - 1]
+    const novaMin = (ultima?.minimoVendas ?? 0) + 5
+    const nova: FaixaPercentual = { minimoVendas: novaMin, percentual: 0 }
+    const novoIdx = config.faixas.length
+    onChange({ ...config, faixas: [...config.faixas, nova] })
+    setRascunhos({ ...rascunhos, [novoIdx]: nova })
+    setModo(novoIdx, "editar")
+  }
+
+  return (
+    <div className="space-y-2">
+      <div
+        className="grid grid-cols-[1fr_1fr_auto] gap-2"
+        style={{ marginBottom: 2 }}
+      >
+        <LabelSmall>A partir de</LabelSmall>
+        <LabelSmall>% sobre vendas</LabelSmall>
+        <span style={{ width: 58 }} />
+      </div>
+
+      {config.faixas.map((f, idx) => {
+        const modo = modos[idx] ?? "leitura"
+
+        if (modo === "confirmar_excluir") {
+          return (
+            <div
+              key={idx}
+              className="flex items-center justify-between gap-2"
+              style={{
+                padding: "6px 10px",
+                background: "rgba(226,75,74,0.08)",
+                border: "0.5px solid rgba(226,75,74,0.2)",
+                borderRadius: 6,
+              }}
+            >
+              <span
+                style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}
+              >
+                Excluir esta faixa?
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => excluir(idx)}
+                  style={{
+                    fontSize: 10,
+                    color: "#e24b4a",
+                    border: "0.5px solid rgba(226,75,74,0.4)",
+                    borderRadius: 4,
+                    padding: "2px 8px",
+                  }}
+                >
+                  Sim
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModo(idx, "leitura")}
+                  style={{
+                    fontSize: 10,
+                    color: "rgba(255,255,255,0.3)",
+                    padding: "2px 8px",
+                  }}
+                >
+                  Não
+                </button>
+              </div>
+            </div>
+          )
+        }
+
+        if (modo === "editar") {
+          const r = rascunhos[idx] ?? f
+          return (
+            <div
+              key={idx}
+              className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center"
+              style={{
+                padding: 6,
+                border: "0.5px solid rgba(201,149,58,0.35)",
+                borderRadius: 8,
+                background: "rgba(201,149,58,0.04)",
+              }}
+            >
+              <input
+                type="number"
+                min={0}
+                value={r.minimoVendas}
+                onChange={(e) =>
+                  setRascunhos({
+                    ...rascunhos,
+                    [idx]: {
+                      ...r,
+                      minimoVendas: Math.max(0, Number(e.target.value) || 0),
+                    },
+                  })
+                }
+                placeholder="vendas"
+                className="glass-input"
+                style={{ padding: "6px 10px", fontSize: 12 }}
+              />
+              <div
+                style={{ display: "flex", alignItems: "center", gap: 4 }}
+              >
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.1"
+                  value={r.percentual}
+                  onChange={(e) =>
+                    setRascunhos({
+                      ...rascunhos,
+                      [idx]: {
+                        ...r,
+                        percentual: Math.min(
+                          100,
+                          Math.max(0, Number(e.target.value) || 0)
+                        ),
+                      },
+                    })
+                  }
+                  placeholder="%"
+                  className="glass-input"
+                  style={{ padding: "6px 10px", fontSize: 12, width: "100%" }}
+                />
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+                  %
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => confirmarEdicao(idx)}
+                  style={{ fontSize: 11, color: "#C9953A", padding: "2px 6px" }}
+                  title="Confirmar"
+                >
+                  ✓
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModo(idx, "leitura")}
+                  style={{
+                    fontSize: 11,
+                    color: "rgba(255,255,255,0.3)",
+                    padding: "2px 6px",
+                  }}
+                  title="Cancelar"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )
+        }
+
+        return (
+          <div
+            key={idx}
+            className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center"
+            style={{ padding: "6px 10px" }}
+          >
+            <span
+              className="font-mono"
+              style={{ fontSize: 12, color: "rgba(255,255,255,0.65)" }}
+            >
+              {f.minimoVendas}
+            </span>
+            <span
+              className="font-mono"
+              style={{
+                fontSize: 12,
+                color: f.percentual > 0 ? "#C9953A" : "rgba(255,255,255,0.3)",
+              }}
+            >
+              {f.percentual}%
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => iniciarEdicao(idx)}
+                title="Editar"
+                style={{ ...BTN_ICON, color: "rgba(255,255,255,0.3)" }}
+                className="hover:text-[#C9953A] transition"
+              >
+                ✎
+              </button>
+              <button
+                type="button"
+                onClick={() => tentarExcluir(idx)}
+                title={
+                  config.faixas.length <= 1
+                    ? "É necessário manter ao menos uma faixa"
+                    : "Excluir"
+                }
+                style={{
+                  ...BTN_ICON,
+                  color: "rgba(255,255,255,0.2)",
+                  opacity: config.faixas.length <= 1 ? 0.3 : 1,
+                }}
+                className="hover:text-[#e24b4a] transition"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )
+      })}
+
+      {erroExclusao && (
+        <p style={{ fontSize: 10, color: "#e24b4a", marginTop: 2 }}>
+          {erroExclusao}
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={adicionar}
+        style={{
+          marginTop: 8,
+          width: "100%",
+          padding: "8px 0",
+          border: "0.5px dashed rgba(255,255,255,0.15)",
+          borderRadius: 8,
+          fontSize: 11,
+          color: "rgba(255,255,255,0.4)",
+        }}
+        className="hover:text-[#C9953A] hover:border-[#C9953A55] transition"
+      >
+        + Adicionar faixa
+      </button>
+
+      <p
+        style={{
+          fontSize: 10,
+          color: "rgba(255,255,255,0.35)",
+          fontWeight: 300,
+          marginTop: 8,
+          lineHeight: 1.4,
+        }}
+      >
+        A faixa aplicada é a mais alta cujo mínimo de vendas foi atingido. O
+        bônus é calculado como <em>percentual × valor das vendas informado
+        no mês</em>.
+      </p>
+    </div>
+  )
+}
+
 // ===================== ABA PESSOAS =====================
 
 type ModoForm = "novo" | "editando"
@@ -1062,9 +1373,9 @@ function AbaPessoas({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [nome, setNome] = useState("")
   const [funcao, setFuncao] = useState("")
-  const [tipo, setTipo] = useState<"escala" | "gatilhos" | "personalizado">(
-    "escala"
-  )
+  const [tipo, setTipo] = useState<
+    "escala" | "gatilhos" | "personalizado" | "percentual"
+  >("escala")
   const [dataEntrada, setDataEntrada] = useState<string>("")
   const [observacoes, setObservacoes] = useState<string>("")
   const [descricao, setDescricao] = useState<string>("")
@@ -1073,6 +1384,9 @@ function AbaPessoas({
   const [faixas, setFaixas] = useState<Faixa[]>([{ minimo: 0, bonus: 0 }])
   const [gatilhos, setGatilhos] = useState<GatilhoConfig[]>([
     { chave: "g1", rotulo: "Novo gatilho", valor: 100 },
+  ])
+  const [percentualFaixas, setPercentualFaixas] = useState<FaixaPercentual[]>([
+    { minimoVendas: 0, percentual: 0 },
   ])
   const [nomeTipo, setNomeTipo] = useState<string>("")
   const [descricaoTipo, setDescricaoTipo] = useState<string>("")
@@ -1085,7 +1399,7 @@ function AbaPessoas({
   const [status, setStatus] = useState<string | null>(null)
   const [criacao, setCriacao] = useState<{
     nome: string
-    tipo: "escala" | "gatilhos" | "personalizado"
+    tipo: "escala" | "gatilhos" | "personalizado" | "percentual"
   } | null>(null)
   const router = useRouter()
 
@@ -1100,6 +1414,7 @@ function AbaPessoas({
     setDescricao("")
     setFaixas([{ minimo: 0, bonus: 0 }])
     setGatilhos([{ chave: "g1", rotulo: "Novo gatilho", valor: 100 }])
+    setPercentualFaixas([{ minimoVendas: 0, percentual: 0 }])
     setNomeTipo("")
     setDescricaoTipo("")
     setModeloPersonalizado("escala")
@@ -1123,6 +1438,8 @@ function AbaPessoas({
       setFaixas(cfg.faixas)
     } else if (cfg.tipo === "gatilhos") {
       setGatilhos(cfg.gatilhos)
+    } else if (cfg.tipo === "percentual") {
+      setPercentualFaixas(cfg.faixas)
     } else {
       setNomeTipo(cfg.nome_tipo)
       setDescricaoTipo(cfg.descricao)
@@ -1132,6 +1449,10 @@ function AbaPessoas({
       } else if (cfg.modelo === "gatilhos") {
         setGatilhos(
           cfg.gatilhos ?? [{ chave: "g1", rotulo: "Novo gatilho", valor: 100 }]
+        )
+      } else if (cfg.modelo === "percentual") {
+        setPercentualFaixas(
+          cfg.percentual ?? [{ minimoVendas: 0, percentual: 0 }]
         )
       } else {
         setValorFixo(cfg.valor_fixo ?? 0)
@@ -1146,6 +1467,10 @@ function AbaPessoas({
   function montarConfiguracao(): ConfiguracaoComissao | null {
     if (tipo === "escala") return { tipo: "escala", faixas }
     if (tipo === "gatilhos") return { tipo: "gatilhos", gatilhos }
+    if (tipo === "percentual") {
+      if (percentualFaixas.length === 0) return null
+      return { tipo: "percentual", faixas: percentualFaixas }
+    }
     const nomeT = nomeTipo.trim()
     const descT = descricaoTipo.trim()
     if (!nomeT || !descT) return null
@@ -1159,6 +1484,7 @@ function AbaPessoas({
     if (modeloPersonalizado === "escala") base.escala = faixas
     if (modeloPersonalizado === "gatilhos") base.gatilhos = gatilhos
     if (modeloPersonalizado === "fixo") base.valor_fixo = valorFixo
+    if (modeloPersonalizado === "percentual") base.percentual = percentualFaixas
     return base
   }
 
@@ -1421,7 +1747,7 @@ function AbaPessoas({
           </label>
           <div>
             <LabelSmall>Tipo</LabelSmall>
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
               <label className="flex items-center gap-1.5 cursor-pointer">
                 <input
                   type="radio"
@@ -1446,6 +1772,19 @@ function AbaPessoas({
                   style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}
                 >
                   Por gatilhos
+                </span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={tipo === "percentual"}
+                  onChange={() => setTipo("percentual")}
+                  style={{ accentColor: "#C9953A" }}
+                />
+                <span
+                  style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}
+                >
+                  Por % de vendas
                 </span>
               </label>
               <label
@@ -1540,6 +1879,12 @@ function AbaPessoas({
                     onClick={() => setModeloPersonalizado("gatilhos")}
                   />
                   <RadioModelo
+                    label="Por % de vendas"
+                    hint="escala de percentuais"
+                    ativo={modeloPersonalizado === "percentual"}
+                    onClick={() => setModeloPersonalizado("percentual")}
+                  />
+                  <RadioModelo
                     label="Valor fixo mensal"
                     hint="campo único de valor"
                     ativo={modeloPersonalizado === "fixo"}
@@ -1562,6 +1907,15 @@ function AbaPessoas({
                   config={{ tipo: "gatilhos", gatilhos }}
                   onChange={(c) => {
                     if (c.tipo === "gatilhos") setGatilhos(c.gatilhos)
+                  }}
+                />
+              )}
+
+              {modeloPersonalizado === "percentual" && (
+                <EditorPercentual
+                  config={{ tipo: "percentual", faixas: percentualFaixas }}
+                  onChange={(c) => {
+                    if (c.tipo === "percentual") setPercentualFaixas(c.faixas)
                   }}
                 />
               )}
@@ -1620,6 +1974,15 @@ function AbaPessoas({
               config={{ tipo: "gatilhos", gatilhos }}
               onChange={(c) => {
                 if (c.tipo === "gatilhos") setGatilhos(c.gatilhos)
+              }}
+            />
+          )}
+
+          {tipo === "percentual" && (
+            <EditorPercentual
+              config={{ tipo: "percentual", faixas: percentualFaixas }}
+              onChange={(c) => {
+                if (c.tipo === "percentual") setPercentualFaixas(c.faixas)
               }}
             />
           )}
@@ -2263,6 +2626,18 @@ function EditorPersonalizadoMeta({
         onChange={(c) => {
           if (c.tipo === "gatilhos")
             onChange({ ...config, gatilhos: c.gatilhos })
+        }}
+      />
+    )
+  }
+  if (config.modelo === "percentual") {
+    const faixas = config.percentual ?? []
+    return (
+      <EditorPercentual
+        config={{ tipo: "percentual", faixas }}
+        onChange={(c) => {
+          if (c.tipo === "percentual")
+            onChange({ ...config, percentual: c.faixas })
         }}
       />
     )

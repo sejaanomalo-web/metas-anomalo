@@ -27,3 +27,16 @@ export const GATILHOS_PADRAO: ConfiguracaoComissao = {
     { chave: "posts_prazo", rotulo: "100% posts no prazo", valor: 150 },
   ],
 }
+
+// Escala de % sobre o valor de vendas. A faixa vencedora é a mais alta
+// cujo `minimoVendas` for ≤ ao número de vendas realizadas no mês.
+// Ex: 10 vendas → 2%; 20 → 3%; 30 → 5% aplicado sobre `valor_vendas`.
+export const PERCENTUAL_PADRAO: ConfiguracaoComissao = {
+  tipo: "percentual",
+  faixas: [
+    { minimoVendas: 0, percentual: 0 },
+    { minimoVendas: 10, percentual: 2 },
+    { minimoVendas: 20, percentual: 3 },
+    { minimoVendas: 30, percentual: 5 },
+  ],
+}

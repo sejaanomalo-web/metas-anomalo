@@ -10,7 +10,11 @@ import {
   supabaseConfigurado,
 } from "./supabase"
 import { ANO_PADRAO, type Mes, MESES } from "./data"
-import { ESCALA_PADRAO, GATILHOS_PADRAO } from "./comissionamento-presets"
+import {
+  ESCALA_PADRAO,
+  GATILHOS_PADRAO,
+  PERCENTUAL_PADRAO,
+} from "./comissionamento-presets"
 
 export interface ResultadoConfig {
   ok: boolean
@@ -19,6 +23,22 @@ export interface ResultadoConfig {
 
 function mesValido(m: string): m is Mes {
   return (MESES as readonly string[]).includes(m)
+}
+
+function sanitizarFaixasPercentual(
+  raw: unknown
+): { minimoVendas: number; percentual: number }[] | null {
+  if (!Array.isArray(raw)) return null
+  const faixas: { minimoVendas: number; percentual: number }[] = []
+  for (const f of raw) {
+    if (typeof f !== "object" || f === null) continue
+    const min = Number((f as { minimoVendas?: unknown }).minimoVendas)
+    const pct = Number((f as { percentual?: unknown }).percentual)
+    if (!Number.isFinite(min) || min < 0) continue
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) continue
+    faixas.push({ minimoVendas: min, percentual: pct })
+  }
+  return faixas
 }
 
 function parseConfiguracao(raw: string): ConfiguracaoComissao | null {
@@ -30,9 +50,19 @@ function parseConfiguracao(raw: string): ConfiguracaoComissao | null {
     if (parsed.tipo === "escala" && Array.isArray(parsed.faixas)) {
       return { tipo: "escala", faixas: parsed.faixas }
     }
+    if (parsed.tipo === "percentual") {
+      const faixas = sanitizarFaixasPercentual(parsed.faixas)
+      if (!faixas || faixas.length === 0) return null
+      return { tipo: "percentual", faixas }
+    }
     if (parsed.tipo === "personalizado" && parsed.tipo_personalizado === true) {
       const modelo = parsed.modelo
-      if (modelo !== "escala" && modelo !== "gatilhos" && modelo !== "fixo") {
+      if (
+        modelo !== "escala" &&
+        modelo !== "gatilhos" &&
+        modelo !== "fixo" &&
+        modelo !== "percentual"
+      ) {
         return null
       }
       const nomeTipo = String(parsed.nome_tipo ?? "").trim()
@@ -54,6 +84,11 @@ function parseConfiguracao(raw: string): ConfiguracaoComissao | null {
       if (modelo === "fixo") {
         const n = Number(parsed.valor_fixo ?? 0)
         base.valor_fixo = Number.isFinite(n) ? n : 0
+      }
+      if (modelo === "percentual") {
+        const faixas = sanitizarFaixasPercentual(parsed.percentual)
+        if (!faixas || faixas.length === 0) return null
+        base.percentual = faixas
       }
       return base
     }
@@ -198,7 +233,8 @@ export async function salvarColaboradorAction(
   if (
     tipoRaw !== "gatilhos" &&
     tipoRaw !== "escala" &&
-    tipoRaw !== "personalizado"
+    tipoRaw !== "personalizado" &&
+    tipoRaw !== "percentual"
   ) {
     return { ok: false, erro: "Tipo inválido." }
   }
@@ -238,6 +274,8 @@ export async function salvarColaboradorAction(
         ? configuracao
         : tipoRaw === "escala"
         ? ESCALA_PADRAO
+        : tipoRaw === "percentual"
+        ? PERCENTUAL_PADRAO
         : GATILHOS_PADRAO
     const presetPayload: MetaComissionamento = {
       colaborador: nome.toLowerCase(),
@@ -328,7 +366,8 @@ export async function atualizarColaboradorAction(
   if (
     tipoRaw !== "gatilhos" &&
     tipoRaw !== "escala" &&
-    tipoRaw !== "personalizado"
+    tipoRaw !== "personalizado" &&
+    tipoRaw !== "percentual"
   ) {
     return { ok: false, erro: "Tipo inválido." }
   }
