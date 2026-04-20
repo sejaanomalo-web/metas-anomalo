@@ -1,16 +1,33 @@
 import {
   ANO_PADRAO,
   MESES,
-  empresas,
+  empresas as empresasHardcoded,
   formatBRL,
   formatNumero,
-  getFaturamentoMes,
+  getFaturamentoMesComOverride,
   getResumoGrupo,
   metaAcumuladaAteHoje,
+  type EmpresaMeta,
   type Mes,
 } from "./data"
 import { getDadosReaisDoMes, getDadosReais } from "./dados-reais"
 import { getComissionamentoMes } from "./comissionamento-actions"
+import { listarEmpresas } from "./empresas-actions"
+import { getOverridesTodasEmpresasMes } from "./metas-empresa"
+
+async function carregarContexto(mes: Mes, ano: number): Promise<{
+  empresas: EmpresaMeta[]
+  overridesMes: Map<string, Record<string, number>>
+}> {
+  const [empresasList, overridesMes] = await Promise.all([
+    listarEmpresas(true).catch(() => empresasHardcoded),
+    getOverridesTodasEmpresasMes(mes, ano).catch(
+      () => new Map<string, Record<string, number>>()
+    ),
+  ])
+  const emp = empresasList.length > 0 ? empresasList : empresasHardcoded
+  return { empresas: emp, overridesMes }
+}
 
 const BRL_TZ_OFFSET = -3 // BRT
 
@@ -52,7 +69,8 @@ export async function montarResumoDiario(): Promise<string> {
   const diaSemanaCap =
     diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1).replace("-feira", "")
 
-  const resumo = getResumoGrupo(mes, ano)
+  const { empresas, overridesMes } = await carregarContexto(mes, ano)
+  const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const reaisDoMes = await getDadosReaisDoMes(mes, ano)
 
   let somaFat = 0
@@ -86,7 +104,12 @@ export async function montarResumoDiario(): Promise<string> {
   const alertas: { nome: string; texto: string }[] = []
   for (const empresa of empresas) {
     if (empresa.tipo === "diego") continue
-    const metaMes = getFaturamentoMes(empresa.slug, mes, ano)
+    const metaMes = getFaturamentoMesComOverride(
+      empresa,
+      mes,
+      ano,
+      overridesMes.get(empresa.db)
+    )
     if (metaMes === 0) continue
     const real = reaisDoMes.get(empresa.db)
     const fatReal = real?.faturamento_real ?? null
@@ -163,7 +186,8 @@ export async function montarResumoSemanal(
   const fimSemana = new Date(hoje)
   const semana = Math.ceil(hoje.getDate() / 7)
 
-  const resumo = getResumoGrupo(mes, ano)
+  const { empresas, overridesMes } = await carregarContexto(mes, ano)
+  const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const reaisDoMes = await getDadosReaisDoMes(mes, ano)
   const comissoes = await getComissionamentoMes(mes, ano)
 
@@ -216,7 +240,12 @@ export async function montarResumoSemanal(
 
   const nomeLen = Math.max(...empresas.map((e) => e.nome.length))
   for (const empresa of empresas) {
-    const metaMes = getFaturamentoMes(empresa.slug, mes, ano)
+    const metaMes = getFaturamentoMesComOverride(
+      empresa,
+      mes,
+      ano,
+      overridesMes.get(empresa.db)
+    )
     const real = reaisDoMes.get(empresa.db)
     const fatReal = real?.faturamento_real ?? null
     const cls = classificar(fatReal, metaMes)
@@ -275,7 +304,8 @@ export async function montarResumoSemanal(
 
 export async function montarResumoMensal(): Promise<string> {
   const { mes, ano, hoje } = mesAtual()
-  const resumo = getResumoGrupo(mes, ano)
+  const { empresas, overridesMes } = await carregarContexto(mes, ano)
+  const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const reaisDoMes = await getDadosReaisDoMes(mes, ano)
   const comissoes = await getComissionamentoMes(mes, ano)
 
@@ -321,7 +351,12 @@ export async function montarResumoMensal(): Promise<string> {
 
   const nomeLen = Math.max(...empresas.map((e) => e.nome.length))
   for (const empresa of empresas) {
-    const metaMes = getFaturamentoMes(empresa.slug, mes, ano)
+    const metaMes = getFaturamentoMesComOverride(
+      empresa,
+      mes,
+      ano,
+      overridesMes.get(empresa.db)
+    )
     const real = reaisDoMes.get(empresa.db)?.faturamento_real ?? 0
     const pct = metaMes > 0 ? Math.round((real / metaMes) * 100) : 0
     const label =

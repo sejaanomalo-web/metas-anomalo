@@ -19,6 +19,7 @@ import {
   listarEmpresas,
   listarEmpresasInativas,
 } from "@/lib/empresas-actions"
+import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
 import { getTimeDoHub } from "@/lib/strip"
 import { supabaseConfigurado } from "@/lib/supabase"
 
@@ -34,13 +35,15 @@ export default async function DashboardPage({
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
   const temProjecao = anoTemProjecao(ano)
-  const resumo = getResumoGrupo(mes, ano)
-  const [reaisDoMes, time, empresas, empresasInativas] = await Promise.all([
-    getDadosReaisDoMes(mes, ano),
-    getTimeDoHub(),
-    listarEmpresas(true),
-    listarEmpresasInativas(),
-  ])
+  const [reaisDoMes, time, empresas, empresasInativas, overridesMes] =
+    await Promise.all([
+      getDadosReaisDoMes(mes, ano),
+      getTimeDoHub(),
+      listarEmpresas(true),
+      listarEmpresasInativas(),
+      getOverridesTodasEmpresasMes(mes, ano),
+    ])
+  const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const supabaseOk = supabaseConfigurado()
 
   let somaFat = 0
@@ -329,6 +332,7 @@ export default async function DashboardPage({
                 investimentoReal={
                   reaisDoMes.get(empresa.db)?.investimento_real ?? null
                 }
+                override={overridesMes.get(empresa.db)}
               />
             ))}
           </div>

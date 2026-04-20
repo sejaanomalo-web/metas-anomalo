@@ -6,8 +6,8 @@ import {
   anoTemProjecao,
   corStatusMeta,
   formatBRL,
-  getFaturamentoMes,
-  getVerbaMes,
+  getFaturamentoMesComOverride,
+  getVerbaMesComOverride,
   metaAcumuladaAteHoje,
   subtituloDaEmpresa,
 } from "@/lib/data"
@@ -18,16 +18,18 @@ export default function CardEmpresa({
   ano,
   faturamentoReal,
   investimentoReal,
+  override,
 }: {
   empresa: EmpresaMeta
   mes: Mes
   ano: Ano
   faturamentoReal: number | null
   investimentoReal: number | null
+  override?: Record<string, number>
 }) {
   const temProjecao = anoTemProjecao(ano)
-  const investimento = getVerbaMes(empresa.slug, mes, ano)
-  const meta = getFaturamentoMes(empresa.slug, mes, ano)
+  const investimento = getVerbaMesComOverride(empresa, mes, ano, override)
+  const meta = getFaturamentoMesComOverride(empresa, mes, ano, override)
   // Empresas vindas do Supabase (com id) são sempre ativas — o filtro já
   // foi aplicado na listagem. A lógica "inativa" só vale para empresas
   // hardcoded (ex: F2 Móveis antes de Abril).

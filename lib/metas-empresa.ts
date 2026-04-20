@@ -59,6 +59,40 @@ export async function getMetasOverrideEmpresa(
   return map
 }
 
+/**
+ * Carrega em lote os overrides de metas_empresa para um dado mes/ano,
+ * agrupados por empresa (db). Usado pela dashboard para compor o resumo
+ * do Hub e os cards de empresa sem precisar de uma query por empresa.
+ */
+export async function getOverridesTodasEmpresasMes(
+  mes: Mes,
+  ano: number
+): Promise<Map<EmpresaDb, MetaOverride>> {
+  const supabase = getSupabase()
+  if (!supabase) return new Map()
+  const { data, error } = await supabase
+    .from("metas_empresa")
+    .select("empresa, overrides")
+    .eq("mes", mes)
+    .eq("ano", ano)
+  if (error) {
+    console.error("[metas_empresa] get por mes error", error.message)
+    return new Map()
+  }
+  const map = new Map<EmpresaDb, MetaOverride>()
+  for (const row of (data ?? []) as {
+    empresa: string
+    overrides: Record<string, unknown>
+  }[]) {
+    const limpo: MetaOverride = {}
+    for (const [k, v] of Object.entries(row.overrides ?? {})) {
+      if (typeof v === "number" && Number.isFinite(v)) limpo[k] = v
+    }
+    map.set(row.empresa, limpo)
+  }
+  return map
+}
+
 export async function salvarMetaEmpresaAction(
   formData: FormData
 ): Promise<ResultadoMeta> {

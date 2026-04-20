@@ -286,6 +286,23 @@ export function getVerbaMes(
   return linha?.verba ?? 0
 }
 
+/**
+ * Versão de getVerbaMes que aceita overrides vindos de metas_empresa.
+ * Se houver override para `verba`, ele vence sobre o valor projetado.
+ * Funciona para empresas sem hardcoded (slug dinâmico) — nesse caso o base é 0.
+ */
+export function getVerbaMesComOverride(
+  empresa: EmpresaMeta,
+  mes: Mes,
+  ano: number = ANO_PROJETADO,
+  override?: Record<string, number>
+): number {
+  if (empresa.tipo === "diego") return 0
+  const base = getVerbaMes(empresa.slug, mes, ano)
+  const ov = override?.verba
+  return typeof ov === "number" ? ov : base
+}
+
 export function getCriativosMes(
   slug: EmpresaSlug,
   mes: Mes,
@@ -363,6 +380,31 @@ export function getFaturamentoDezembro(
   return getFaturamentoMes(slug, "Dezembro", ano)
 }
 
+/**
+ * Versão de getFaturamentoMes que aceita overrides vindos de metas_empresa.
+ * Cada tipo de funil lê de um campo diferente no override:
+ *   - leads-reunioes-contratos / aton → `faturamento`
+ *   - hato → `receita`
+ *   - diego → `receita_hub`
+ * Se houver override para o campo correspondente, ele vence sobre o projetado.
+ */
+export function getFaturamentoMesComOverride(
+  empresa: EmpresaMeta,
+  mes: Mes,
+  ano: number = ANO_PROJETADO,
+  override?: Record<string, number>
+): number {
+  const base = getFaturamentoMes(empresa.slug, mes, ano)
+  if (!override) return base
+  if (empresa.tipo === "hato") {
+    return typeof override.receita === "number" ? override.receita : base
+  }
+  if (empresa.tipo === "diego") {
+    return typeof override.receita_hub === "number" ? override.receita_hub : base
+  }
+  return typeof override.faturamento === "number" ? override.faturamento : base
+}
+
 export interface ResumoGrupo {
   faturamento: number
   investimento: number
@@ -373,9 +415,21 @@ export interface ResumoGrupo {
   contratos: number
 }
 
+/**
+ * Resume as metas agregadas do grupo para um mes/ano.
+ *
+ * Aceita opcionalmente uma lista dinâmica de empresas (vinda de
+ * empresas_config no Supabase) e um mapa de overrides por empresa
+ * (vindo de metas_empresa). Quando houver override para um campo,
+ * ele substitui o valor projetado — isto garante que metas editadas
+ * no drawer de cada empresa sejam refletidas no card de "Visão geral
+ * do Hub" e nos resumos enviados por automações.
+ */
 export function getResumoGrupo(
   mes: Mes,
-  ano: number = ANO_PROJETADO
+  ano: number = ANO_PROJETADO,
+  empresasList: EmpresaMeta[] = empresas,
+  overridesPorEmpresa: Map<EmpresaDb, Record<string, number>> = new Map()
 ): ResumoGrupo {
   let faturamento = 0
   let investimento = 0
@@ -385,55 +439,58 @@ export function getResumoGrupo(
   let reunioes = 0
   let contratos = 0
 
-  if (!anoTemProjecao(ano)) {
-    return {
-      faturamento,
-      investimento,
-      leads,
-      criativos,
-      criativosSemana,
-      reunioes,
-      contratos,
-    }
-  }
+  const temProj = anoTemProjecao(ano)
 
-  for (const empresa of empresas) {
-    faturamento += getFaturamentoMes(empresa.slug, mes, ano)
+  for (const empresa of empresasList) {
+    const ov = overridesPorEmpresa.get(empresa.db)
+    // Em anos sem projeção respeitamos apenas overrides — sem base hardcoded.
+    const temOv = ov !== undefined
+    if (!temProj && !temOv) continue
 
     if (empresa.tipo === "leads-reunioes-contratos") {
-      const linha = (getDadosEmpresa(empresa.slug, ano) as LinhaPadrao[]).find(
-        (l) => l.mes === mes
-      )
-      if (linha) {
-        investimento += linha.verba
-        leads += linha.leads
-        reunioes += linha.reunioes
-        contratos += linha.contratos
-        criativos += linha.criativos
-        criativosSemana += linha.criativos_semana
-      }
+      const base = temProj
+        ? (getDadosEmpresa(empresa.slug, ano) as LinhaPadrao[]).find(
+            (l) => l.mes === mes
+          )
+        : undefined
+      faturamento += ov?.faturamento ?? base?.faturamento ?? 0
+      investimento += ov?.verba ?? base?.verba ?? 0
+      leads += ov?.leads ?? base?.leads ?? 0
+      reunioes += ov?.reunioes ?? base?.reunioes ?? 0
+      contratos += ov?.contratos ?? base?.contratos ?? 0
+      criativos += ov?.criativos ?? base?.criativos ?? 0
+      criativosSemana += ov?.criativos_semana ?? base?.criativos_semana ?? 0
     } else if (empresa.tipo === "aton") {
-      const linha = (getDadosEmpresa(empresa.slug, ano) as LinhaAton[]).find(
-        (l) => l.mes === mes
-      )
-      if (linha) {
-        investimento += linha.verba
-        leads += linha.leads
-        reunioes += linha.orcamentos
-        contratos += linha.vendas
-        criativos += linha.criativos
-        criativosSemana += linha.criativos_semana
-      }
+      const base = temProj
+        ? (getDadosEmpresa(empresa.slug, ano) as LinhaAton[]).find(
+            (l) => l.mes === mes
+          )
+        : undefined
+      faturamento += ov?.faturamento ?? base?.faturamento ?? 0
+      investimento += ov?.verba ?? base?.verba ?? 0
+      leads += ov?.leads ?? base?.leads ?? 0
+      reunioes += ov?.orcamentos ?? base?.orcamentos ?? 0
+      contratos += ov?.vendas ?? base?.vendas ?? 0
+      criativos += ov?.criativos ?? base?.criativos ?? 0
+      criativosSemana += ov?.criativos_semana ?? base?.criativos_semana ?? 0
     } else if (empresa.tipo === "hato") {
-      const linha = (getDadosEmpresa(empresa.slug, ano) as LinhaHato[]).find(
-        (l) => l.mes === mes
-      )
-      if (linha) {
-        investimento += linha.verba
-        criativos += linha.criativos
-        criativosSemana += linha.criativos_semana
-        contratos += linha.total_vendas
-      }
+      const base = temProj
+        ? (getDadosEmpresa(empresa.slug, ano) as LinhaHato[]).find(
+            (l) => l.mes === mes
+          )
+        : undefined
+      faturamento += ov?.receita ?? base?.receita ?? 0
+      investimento += ov?.verba ?? base?.verba ?? 0
+      criativos += ov?.criativos ?? base?.criativos ?? 0
+      criativosSemana += ov?.criativos_semana ?? base?.criativos_semana ?? 0
+      contratos += ov?.total_vendas ?? base?.total_vendas ?? 0
+    } else if (empresa.tipo === "diego") {
+      const base = temProj
+        ? (getDadosEmpresa(empresa.slug, ano) as LinhaDiego[]).find(
+            (l) => l.mes === mes
+          )
+        : undefined
+      faturamento += ov?.receita_hub ?? base?.receita_hub ?? 0
     }
   }
 
