@@ -79,7 +79,7 @@ export default function CardEmpresa({
         opacity: inativa ? 0.35 : 1,
       }}
     >
-      <div style={{ padding: "18px 20px 14px" }}>
+      <div style={{ padding: "24px 24px 18px" }}>
         <div
           className="flex items-center justify-between"
           style={{ marginBottom: 10 }}
@@ -96,7 +96,7 @@ export default function CardEmpresa({
             />
             <span
               style={{
-                fontSize: 9,
+                fontSize: 10,
                 letterSpacing: "2px",
                 color: "rgba(255,255,255,0.35)",
                 textTransform: "uppercase",
@@ -110,7 +110,7 @@ export default function CardEmpresa({
 
         <h3
           style={{
-            fontSize: 18,
+            fontSize: 24,
             fontWeight: 600,
             color: "#ffffff",
             letterSpacing: "-0.3px",
@@ -123,7 +123,7 @@ export default function CardEmpresa({
         {!inativa && (
           <p
             style={{
-              fontSize: 11,
+              fontSize: 13,
               color: "rgba(255,255,255,0.35)",
               fontWeight: 300,
               marginTop: 4,
@@ -176,7 +176,7 @@ export default function CardEmpresa({
 
           <div className="divider-h" />
 
-          <div style={{ padding: "14px 20px 16px" }}>
+          <div style={{ padding: "18px 24px 20px" }}>
             <div className="flex items-center gap-3">
               <span
                 style={{
@@ -258,10 +258,10 @@ function BlocoMetrica({
   esvaziado?: boolean
 }) {
   return (
-    <div style={{ padding: "14px 20px" }}>
+    <div style={{ padding: "20px 24px" }}>
       <p
         style={{
-          fontSize: 9,
+          fontSize: 10,
           letterSpacing: "2px",
           color: "rgba(255,255,255,0.3)",
           textTransform: "uppercase",
@@ -272,7 +272,7 @@ function BlocoMetrica({
       </p>
       <p
         style={{
-          fontSize: 17,
+          fontSize: 22,
           fontWeight: destaque ? 600 : 400,
           color: esvaziado
             ? "rgba(255,255,255,0.2)"

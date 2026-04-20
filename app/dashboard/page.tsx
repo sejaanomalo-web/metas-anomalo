@@ -172,7 +172,7 @@ export default async function DashboardPage({
 
         <section
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-12"
-          style={{ gap: 10 }}
+          style={{ gap: 14 }}
         >
           {celulas.map((c) => {
             const cor = temProjecao
@@ -186,11 +186,11 @@ export default async function DashboardPage({
               <div
                 key={c.rotulo}
                 className="glass"
-                style={{ padding: "18px 22px" }}
+                style={{ padding: "24px 28px" }}
               >
                 <p
                   style={{
-                    fontSize: 9,
+                    fontSize: 10,
                     letterSpacing: "2px",
                     textTransform: "uppercase",
                     color: "rgba(255,255,255,0.4)",
@@ -201,7 +201,7 @@ export default async function DashboardPage({
                 </p>
                 <p
                   style={{
-                    fontSize: 28,
+                    fontSize: 34,
                     fontWeight: 700,
                     color: "#ffffff",
                     marginTop: 10,
@@ -318,7 +318,7 @@ export default async function DashboardPage({
 
           <div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-            style={{ gap: 14 }}
+            style={{ gap: 20 }}
           >
             {empresas.map((empresa) => (
               <CardEmpresa
