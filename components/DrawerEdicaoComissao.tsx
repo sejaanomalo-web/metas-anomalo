@@ -6,20 +6,23 @@ import type {
   Colaborador,
   ConfiguracaoComissao,
   ConfiguracaoPersonalizada,
+  EscopoMeta,
   Faixa,
   FaixaPercentual,
   GatilhoConfig,
+  MesAplicavel,
   MetaComissionamento,
   ModeloPersonalizado,
 } from "@/lib/supabase"
 import type { Mes } from "@/lib/data"
-import { formatBRL } from "@/lib/data"
+import { ANOS_DISPONIVEIS, MESES, formatBRL } from "@/lib/data"
 import {
   atualizarColaboradorAction,
   criarFuncaoAction,
   desativarColaboradorAction,
   excluirColaboradorAction,
   excluirFuncaoAction,
+  excluirMetaComissaoAction,
   reativarColaboradorAction,
   renomearFuncaoAction,
   salvarColaboradorAction,
@@ -280,6 +283,7 @@ function AbaMetas({
             mes={mes}
             ano={ano}
             configInicial={padrao}
+            metaAtual={meta ?? null}
             supabaseOk={supabaseOk}
           />
         )
@@ -293,19 +297,50 @@ function EditorMetaColab({
   mes,
   ano,
   configInicial,
+  metaAtual,
   supabaseOk,
 }: {
   colaborador: string
   mes: Mes
   ano: number
   configInicial: ConfiguracaoComissao
+  metaAtual: MetaComissionamento | null
   supabaseOk: boolean
 }) {
   const [config, setConfig] = useState<ConfiguracaoComissao>(configInicial)
   const [aberto, setAberto] = useState(false)
   const [pending, startTransition] = useTransition()
+  const [excluindo, startExcluir] = useTransition()
   const [status, setStatus] = useState<string | null>(null)
   const router = useRouter()
+
+  const escopoInicial: EscopoMeta =
+    metaAtual?.escopo === "permanente" ? "permanente" : "mensal"
+  const mesesInicial: MesAplicavel[] = Array.isArray(
+    metaAtual?.meses_aplicaveis
+  )
+    ? (metaAtual?.meses_aplicaveis as MesAplicavel[])
+    : []
+  const tipoAlcanceInicial: AlcanceMeta =
+    escopoInicial === "permanente"
+      ? "permanente"
+      : mesesInicial.length > 0
+      ? "meses_especificos"
+      : "mes_atual"
+
+  const [alcance, setAlcance] = useState<AlcanceMeta>(tipoAlcanceInicial)
+  const [mesesSelecionados, setMesesSelecionados] =
+    useState<MesAplicavel[]>(mesesInicial)
+
+  const rotuloAlcance =
+    metaAtual == null
+      ? "Sem meta salva"
+      : metaAtual.escopo === "permanente"
+      ? "Permanente · todos os meses"
+      : Array.isArray(metaAtual.meses_aplicaveis) &&
+        metaAtual.meses_aplicaveis.length > 0
+      ? `${metaAtual.meses_aplicaveis.length} meses selecionados`
+      : `Apenas ${metaAtual.mes} de ${metaAtual.ano}`
 
   async function salvar() {
     const fd = new FormData()
@@ -313,6 +348,10 @@ function EditorMetaColab({
     fd.set("mes", mes)
     fd.set("ano", String(ano))
     fd.set("configuracao", JSON.stringify(config))
+    fd.set("escopo", alcance === "permanente" ? "permanente" : "mensal")
+    if (alcance === "meses_especificos") {
+      fd.set("meses_aplicaveis", JSON.stringify(mesesSelecionados))
+    }
     const r = await salvarMetaComissaoAction(fd)
     setStatus(r.ok ? "Salvo ✓" : r.erro ?? "Erro")
     if (r.ok) {
@@ -321,6 +360,21 @@ function EditorMetaColab({
         setStatus(null)
         setAberto(false)
       }, 1500)
+    }
+  }
+
+  async function excluir() {
+    if (!metaAtual?.id) return
+    const fd = new FormData()
+    fd.set("id", metaAtual.id)
+    const r = await excluirMetaComissaoAction(fd)
+    setStatus(r.ok ? "Removida" : r.erro ?? "Erro")
+    if (r.ok) {
+      router.refresh()
+      setTimeout(() => {
+        setStatus(null)
+        setAberto(false)
+      }, 1200)
     }
   }
 
@@ -359,6 +413,10 @@ function EditorMetaColab({
               : config.tipo === "percentual"
               ? "% sobre vendas"
               : config.nome_tipo}
+            {" · "}
+            <span style={{ color: "rgba(201,149,58,0.7)" }}>
+              {rotuloAlcance}
+            </span>
           </p>
         </div>
         <button
@@ -373,6 +431,15 @@ function EditorMetaColab({
 
       {!aberto ? null : (
         <div style={{ marginTop: 14 }}>
+          <SeletorAlcance
+            alcance={alcance}
+            mesAtual={mes}
+            anoAtual={ano}
+            mesesSelecionados={mesesSelecionados}
+            onChangeAlcance={setAlcance}
+            onChangeMeses={setMesesSelecionados}
+          />
+
           {config.tipo === "gatilhos" && (
             <EditorGatilhos
               config={config}
@@ -401,21 +468,61 @@ function EditorMetaColab({
             />
           )}
 
-          <div className="flex items-center gap-3 pt-3">
+          <div className="flex items-center gap-3 pt-3 flex-wrap">
             <button
               type="button"
               onClick={() => startTransition(() => salvar())}
-              disabled={pending || !supabaseOk}
+              disabled={
+                pending ||
+                excluindo ||
+                !supabaseOk ||
+                (alcance === "meses_especificos" &&
+                  mesesSelecionados.length === 0)
+              }
               className="btn-gold-filled uppercase"
-              style={{ opacity: pending || !supabaseOk ? 0.5 : 1 }}
+              style={{
+                opacity:
+                  pending ||
+                  excluindo ||
+                  !supabaseOk ||
+                  (alcance === "meses_especificos" &&
+                    mesesSelecionados.length === 0)
+                    ? 0.5
+                    : 1,
+              }}
             >
               {pending ? "Salvando..." : "Salvar"}
             </button>
+
+            {metaAtual?.id && (
+              <button
+                type="button"
+                onClick={() => startExcluir(() => excluir())}
+                disabled={pending || excluindo || !supabaseOk}
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  color: "#e24b4a",
+                  border: "0.5px solid rgba(226,75,74,0.4)",
+                  borderRadius: 6,
+                  padding: "6px 12px",
+                  background: "transparent",
+                  opacity: pending || excluindo || !supabaseOk ? 0.5 : 1,
+                }}
+              >
+                {excluindo ? "Removendo..." : "Remover meta"}
+              </button>
+            )}
+
             {status && (
               <span
                 style={{
                   fontSize: 11,
-                  color: status === "Salvo ✓" ? "#4caf50" : "#e24b4a",
+                  color:
+                    status === "Salvo ✓" || status === "Removida"
+                      ? "#4caf50"
+                      : "#e24b4a",
                 }}
               >
                 {status}
@@ -425,6 +532,176 @@ function EditorMetaColab({
         </div>
       )}
     </div>
+  )
+}
+
+// ==================== Seletor de alcance da meta ====================
+
+type AlcanceMeta = "mes_atual" | "permanente" | "meses_especificos"
+
+function SeletorAlcance({
+  alcance,
+  mesAtual,
+  anoAtual,
+  mesesSelecionados,
+  onChangeAlcance,
+  onChangeMeses,
+}: {
+  alcance: AlcanceMeta
+  mesAtual: Mes
+  anoAtual: number
+  mesesSelecionados: MesAplicavel[]
+  onChangeAlcance: (a: AlcanceMeta) => void
+  onChangeMeses: (m: MesAplicavel[]) => void
+}) {
+  function estaSelecionado(mes: Mes, ano: number) {
+    return mesesSelecionados.some((p) => p.mes === mes && p.ano === ano)
+  }
+
+  function toggle(mes: Mes, ano: number) {
+    if (estaSelecionado(mes, ano)) {
+      onChangeMeses(
+        mesesSelecionados.filter((p) => !(p.mes === mes && p.ano === ano))
+      )
+    } else {
+      onChangeMeses([...mesesSelecionados, { mes, ano }])
+    }
+  }
+
+  return (
+    <div
+      style={{
+        marginBottom: 14,
+        padding: 12,
+        border: "0.5px solid rgba(255,255,255,0.06)",
+        borderRadius: 10,
+        background: "rgba(255,255,255,0.02)",
+      }}
+    >
+      <div style={{ marginBottom: 8 }}>
+        <LabelSmall>Aplicar esta meta em</LabelSmall>
+      </div>
+      <div className="flex flex-wrap gap-2" style={{ marginBottom: 10 }}>
+        <OpcaoAlcance
+          ativo={alcance === "mes_atual"}
+          onClick={() => onChangeAlcance("mes_atual")}
+        >
+          Apenas {mesAtual}/{anoAtual}
+        </OpcaoAlcance>
+        <OpcaoAlcance
+          ativo={alcance === "permanente"}
+          onClick={() => onChangeAlcance("permanente")}
+        >
+          Permanente (todos os meses)
+        </OpcaoAlcance>
+        <OpcaoAlcance
+          ativo={alcance === "meses_especificos"}
+          onClick={() => onChangeAlcance("meses_especificos")}
+        >
+          Meses específicos
+        </OpcaoAlcance>
+      </div>
+
+      {alcance === "meses_especificos" && (
+        <div style={{ marginTop: 6 }}>
+          <p
+            style={{
+              fontSize: 10,
+              color: "rgba(255,255,255,0.4)",
+              marginBottom: 8,
+            }}
+          >
+            Selecione os meses em que esta meta deve valer. Você pode alterar
+            depois.
+          </p>
+          <div className="space-y-3">
+            {(ANOS_DISPONIVEIS as readonly number[]).map((ano) => (
+              <div key={ano}>
+                <p
+                  style={{
+                    fontSize: 9,
+                    letterSpacing: "2px",
+                    color: "rgba(255,255,255,0.35)",
+                    textTransform: "uppercase",
+                    fontWeight: 500,
+                    marginBottom: 6,
+                  }}
+                >
+                  {ano}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(MESES as readonly Mes[]).map((m) => {
+                    const sel = estaSelecionado(m, ano)
+                    return (
+                      <button
+                        key={`${m}-${ano}`}
+                        type="button"
+                        onClick={() => toggle(m, ano)}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 999,
+                          fontSize: 10,
+                          fontWeight: 500,
+                          background: sel
+                            ? "rgba(201,149,58,0.18)"
+                            : "transparent",
+                          border: `0.5px solid ${
+                            sel ? "#C9953A" : "rgba(255,255,255,0.1)"
+                          }`,
+                          color: sel ? "#C9953A" : "rgba(255,255,255,0.45)",
+                        }}
+                      >
+                        {m.slice(0, 3)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          {mesesSelecionados.length === 0 && (
+            <p
+              style={{
+                fontSize: 10,
+                color: "#e24b4a",
+                marginTop: 8,
+              }}
+            >
+              Selecione pelo menos um mês.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OpcaoAlcance({
+  ativo,
+  onClick,
+  children,
+}: {
+  ativo: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: "6px 12px",
+        borderRadius: 999,
+        fontSize: 10,
+        fontWeight: 500,
+        letterSpacing: "0.3px",
+        background: ativo ? "rgba(201,149,58,0.15)" : "transparent",
+        border: `0.5px solid ${ativo ? "#C9953A" : "rgba(255,255,255,0.12)"}`,
+        color: ativo ? "#C9953A" : "rgba(255,255,255,0.55)",
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
