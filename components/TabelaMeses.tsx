@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import type { DadosReais } from "@/lib/supabase"
+import type { DiaDetalhado } from "@/lib/dados-diarios"
 import {
   ORIGEM_PADRAO,
   type Mes,
@@ -17,6 +18,7 @@ interface Coluna {
 }
 
 type Modo = "meta" | "cenario"
+type ResumoCenario = "mensal" | "diario"
 
 // Cor de fundo do card — mesma aparência da glass sobre fundo preto
 const STICKY_BG = "#0b0b0b"
@@ -40,12 +42,28 @@ const CHAVE_TO_REAL: Record<string, keyof DadosReais> = {
   criativos: "criativos_entregues",
 }
 
+// Mapeia chave da coluna para campo do delta diário (DiaDetalhado).
+// Só as colunas com correspondência aparecem no modo Diário.
+const CHAVE_TO_DIARIO: Record<string, keyof DiaDetalhado> = {
+  verba: "investimento",
+  leads: "leads",
+  reunioes: "reunioes",
+  orcamentos: "reunioes",
+  contratos: "contratos",
+  vendas: "contratos",
+  faturamento: "faturamento",
+  receita: "faturamento",
+  receita_hub: "faturamento",
+  criativos: "criativos",
+}
+
 export default function TabelaMeses({
   colunas,
   linhas,
   reais,
   mesAtual,
   origem = ORIGEM_PADRAO,
+  dadosDiarios,
   acao,
 }: {
   colunas: Coluna[]
@@ -53,13 +71,48 @@ export default function TabelaMeses({
   reais?: Map<string, DadosReais>
   mesAtual?: Mes
   origem?: OrigemDadosReais
+  dadosDiarios?: DiaDetalhado[]
   acao?: React.ReactNode
 }) {
   const [modo, setModo] = useState<Modo>("meta")
-  const colunasVisiveis =
-    origem === "organico"
-      ? colunas.filter((c) => !COLUNAS_APENAS_PAGO.has(c.chave))
-      : colunas
+  const [resumo, setResumo] = useState<ResumoCenario>("mensal")
+  const temDiarios = Array.isArray(dadosDiarios) && dadosDiarios.length > 0
+  const modoDiario = modo === "cenario" && resumo === "diario" && temDiarios
+
+  const colunasVisiveis = (() => {
+    const filtradas =
+      origem === "organico"
+        ? colunas.filter((c) => !COLUNAS_APENAS_PAGO.has(c.chave))
+        : colunas
+    if (!modoDiario) return filtradas
+    // No modo diário, só primeira coluna + colunas com mapping em
+    // CHAVE_TO_DIARIO. A primeira vira "Dia".
+    const out: Coluna[] = []
+    for (const [idx, c] of filtradas.entries()) {
+      if (idx === 0) {
+        out.push({ chave: "__dia", titulo: "Dia" })
+        continue
+      }
+      if (c.chave in CHAVE_TO_DIARIO) out.push(c)
+    }
+    return out
+  })()
+
+  const linhasRender: Record<string, string | number>[] = modoDiario
+    ? (dadosDiarios ?? []).map((d) => ({
+        __dia: String(d.diaMes).padStart(2, "0"),
+        verba: d.investimento,
+        leads: d.leads,
+        reunioes: d.reunioes,
+        orcamentos: d.reunioes,
+        contratos: d.contratos,
+        vendas: d.contratos,
+        faturamento: d.faturamento,
+        receita: d.faturamento,
+        receita_hub: d.faturamento,
+        criativos: d.criativos,
+      }))
+    : linhas
 
   function valorCelula(
     linha: Record<string, string | number>,
@@ -70,9 +123,23 @@ export default function TabelaMeses({
       coluna.chave === "receita" ||
       coluna.chave === "receita_hub"
 
+    if (coluna.chave === "__dia") {
+      const v = linha.__dia
+      return { conteudo: String(v ?? ""), ehFat: false }
+    }
+
     if (coluna.chave === "mes") {
       const v = linha[coluna.chave]
       return { conteudo: String(v ?? ""), ehFat: false }
+    }
+
+    if (modoDiario) {
+      const v = linha[coluna.chave]
+      if (typeof v !== "number" || v === 0) {
+        return { conteudo: "—", ehFat }
+      }
+      if (coluna.tipo === "brl") return { conteudo: formatBRL(v), ehFat }
+      return { conteudo: formatNumero(v), ehFat }
     }
 
     if (modo === "cenario") {
@@ -104,7 +171,7 @@ export default function TabelaMeses({
   return (
     <div className="glass" style={{ padding: 24 }}>
       <div
-        className="flex items-center justify-between"
+        className="flex items-center justify-between flex-wrap gap-3"
         style={{ marginBottom: 16 }}
       >
         <p
@@ -116,9 +183,11 @@ export default function TabelaMeses({
             fontWeight: 500,
           }}
         >
-          Detalhamento Mensal
+          {modoDiario
+            ? `Detalhamento Diário · ${mesAtual ?? ""}`
+            : "Detalhamento Mensal"}
         </p>
-        <div className="flex items-center gap-1.5 flex-nowrap">
+        <div className="flex items-center gap-1.5 flex-nowrap flex-wrap">
           <BotaoModo
             ativo={modo === "meta"}
             onClick={() => setModo("meta")}
@@ -129,6 +198,30 @@ export default function TabelaMeses({
             onClick={() => setModo("cenario")}
             label="Cenário"
           />
+          {modo === "cenario" && temDiarios && (
+            <span
+              style={{
+                display: "inline-flex",
+                gap: 2,
+                marginLeft: 6,
+                padding: 2,
+                borderRadius: 999,
+                border: "0.5px solid rgba(255,255,255,0.08)",
+                background: "rgba(255,255,255,0.02)",
+              }}
+            >
+              <SubBotao
+                ativo={resumo === "mensal"}
+                onClick={() => setResumo("mensal")}
+                label="Mensal"
+              />
+              <SubBotao
+                ativo={resumo === "diario"}
+                onClick={() => setResumo("diario")}
+                label="Diário"
+              />
+            </span>
+          )}
           {acao}
         </div>
       </div>
@@ -180,9 +273,11 @@ export default function TabelaMeses({
             </tr>
           </thead>
           <tbody>
-            {linhas.map((linha, i) => {
+            {linhasRender.map((linha, i) => {
               const destacado =
-                mesAtual !== undefined && linha.mes === mesAtual
+                !modoDiario &&
+                mesAtual !== undefined &&
+                linha.mes === mesAtual
               const rowBg = destacado ? "rgba(201,149,58,0.03)" : "transparent"
               return (
                 <tr key={i} style={{ background: rowBg }}>
@@ -221,10 +316,107 @@ export default function TabelaMeses({
                 </tr>
               )
             })}
+            {modoDiario && linhasRender.length > 0 && (() => {
+              const totais: Record<string, number> = {}
+              for (const l of linhasRender) {
+                for (const c of colunasVisiveis) {
+                  if (c.chave === "__dia") continue
+                  const v = l[c.chave]
+                  if (typeof v === "number") {
+                    totais[c.chave] = (totais[c.chave] ?? 0) + v
+                  }
+                }
+              }
+              return (
+                <tr
+                  style={{
+                    background: "rgba(201,149,58,0.04)",
+                  }}
+                >
+                  {colunasVisiveis.map((c, idx) => {
+                    const eMes = idx === 0
+                    const ehFat =
+                      c.chave === "faturamento" ||
+                      c.chave === "receita" ||
+                      c.chave === "receita_hub"
+                    const v = totais[c.chave]
+                    const conteudo =
+                      c.chave === "__dia"
+                        ? "Total do mês"
+                        : typeof v === "number"
+                        ? c.tipo === "brl"
+                          ? formatBRL(v)
+                          : formatNumero(v)
+                        : ""
+                    return (
+                      <td
+                        key={c.chave}
+                        style={{
+                          fontSize: 12,
+                          color: ehFat ? "#C9953A" : "rgba(255,255,255,0.75)",
+                          fontWeight: 600,
+                          padding: "14px 14px",
+                          borderTop: "0.5px solid rgba(201,149,58,0.25)",
+                          whiteSpace: "nowrap",
+                          textTransform: eMes ? "uppercase" : undefined,
+                          letterSpacing: eMes ? "1px" : undefined,
+                          ...(eMes
+                            ? {
+                                position: "sticky",
+                                left: 0,
+                                zIndex: 2,
+                                background: "rgba(201,149,58,0.05)",
+                                borderRight:
+                                  "0.5px solid rgba(255,255,255,0.06)",
+                                fontSize: 9,
+                                color: "rgba(201,149,58,0.8)",
+                              }
+                            : null),
+                        }}
+                      >
+                        {conteudo}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })()}
           </tbody>
         </table>
       </div>
     </div>
+  )
+}
+
+function SubBotao({
+  ativo,
+  onClick,
+  label,
+}: {
+  ativo: boolean
+  onClick: () => void
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: "4px 10px",
+        borderRadius: 999,
+        fontSize: 9,
+        fontWeight: 600,
+        letterSpacing: "1.2px",
+        textTransform: "uppercase",
+        background: ativo ? "rgba(201,149,58,0.18)" : "transparent",
+        color: ativo ? "#C9953A" : "rgba(255,255,255,0.45)",
+        border: `0.5px solid ${
+          ativo ? "rgba(201,149,58,0.4)" : "transparent"
+        }`,
+      }}
+    >
+      {label}
+    </button>
   )
 }
 
