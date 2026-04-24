@@ -116,6 +116,24 @@ function statusTexto(real: number, meta: number, metaAcum: number): string {
   return "atrasado"
 }
 
+/**
+ * Sanitização final para WhatsApp:
+ *  - Colapsa múltiplos espaços em um
+ *  - Colapsa 3+ quebras de linha em 2 (mantém parágrafos, elimina gaps)
+ *  - Remove espaços no fim de cada linha
+ *
+ * Formatação *negrito*, _itálico_ e emojis passam intactos pelo clipboard
+ * e pelo encodeURIComponent do link wa.me — nenhum é tocado aqui.
+ */
+function sanitizarParaWa(texto: string): string {
+  return texto
+    .split("\n")
+    .map((linha) => linha.replace(/[ \t]+/g, " ").replace(/[ \t]+$/g, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 export async function montarResumoDiario(): Promise<string> {
   const { mes, ano, hoje } = mesAtual()
   const dd = String(hoje.getDate()).padStart(2, "0")
@@ -212,14 +230,11 @@ export async function montarResumoDiario(): Promise<string> {
   if (empresasAtivasRanking.length > 0) {
     linhas.push("")
     linhas.push(`🏢 *POR EMPRESA*`)
-    const nomeLen = Math.max(...empresasAtivasRanking.map((e) => e.nome.length))
     for (const e of empresasAtivasRanking) {
       if (e.fat === null) {
-        linhas.push(`• ${e.nome.padEnd(nomeLen)}  sem dados`)
+        linhas.push(`• ${e.nome} · sem dados`)
       } else {
-        linhas.push(
-          `• ${e.nome.padEnd(nomeLen)}  ${formatBRL(e.fat)}  (${e.pct}%)`
-        )
+        linhas.push(`• ${e.nome} · ${formatBRL(e.fat)} · ${e.pct}%`)
       }
     }
   }
@@ -240,7 +255,7 @@ export async function montarResumoDiario(): Promise<string> {
     linhas.push("_Nenhum dado real inserido ainda neste mês._")
   }
 
-  return linhas.join("\n")
+  return sanitizarParaWa(linhas.join("\n"))
 }
 
 export async function montarResumoSemanal(
@@ -306,7 +321,6 @@ export async function montarResumoSemanal(
 
   linhas.push("")
   linhas.push(`🏢 *POR EMPRESA*`)
-  const nomeLen = Math.max(...empresas.map((e) => e.nome.length))
   for (const empresa of empresas) {
     const metaMes = getFaturamentoMesComOverride(
       empresa,
@@ -316,12 +330,11 @@ export async function montarResumoSemanal(
     )
     const fatReal = faturamentoTotalDoBucket(reaisDoMes.get(empresa.db))
     const cls = classificar(fatReal, metaMes)
-    const nomePad = empresa.nome.padEnd(nomeLen)
     if (fatReal === null) {
-      linhas.push(`• ${nomePad}  ${cls.label}`)
+      linhas.push(`• ${empresa.nome} · ${cls.label}`)
     } else {
       linhas.push(
-        `• ${nomePad}  ${formatBRL(fatReal)}  (${cls.pct}%)  ${cls.label}`
+        `• ${empresa.nome} · ${formatBRL(fatReal)} · ${cls.pct}% · ${cls.label}`
       )
     }
   }
@@ -354,7 +367,7 @@ export async function montarResumoSemanal(
     linhas.push(linkFormulario)
   }
 
-  return linhas.join("\n")
+  return sanitizarParaWa(linhas.join("\n"))
 }
 
 export async function montarResumoMensal(): Promise<string> {
@@ -383,7 +396,6 @@ export async function montarResumoMensal(): Promise<string> {
   let crescimentoPct = -1
 
   const linhasEmpresa: string[] = []
-  const nomeLen = Math.max(...empresas.map((e) => e.nome.length))
   for (const empresa of empresas) {
     const metaMes = getFaturamentoMesComOverride(
       empresa,
@@ -395,8 +407,7 @@ export async function montarResumoMensal(): Promise<string> {
     const pct = metaMes > 0 ? Math.round((real / metaMes) * 100) : 0
     const label =
       pct >= 100 ? "meta batida" : pct >= 70 ? `${pct}% da meta` : "abaixo"
-    const nomePad = empresa.nome.padEnd(nomeLen)
-    linhasEmpresa.push(`• ${nomePad}  ${formatBRL(real)}  ${label}`)
+    linhasEmpresa.push(`• ${empresa.nome} · ${formatBRL(real)} · ${label}`)
 
     if (pct > melhorPct) {
       melhorPct = pct
@@ -483,7 +494,7 @@ export async function montarResumoMensal(): Promise<string> {
   linhas.push("")
   linhas.push("_Bom trabalho a todos._")
 
-  return linhas.join("\n")
+  return sanitizarParaWa(linhas.join("\n"))
 }
 
 export function ehUltimoDiaMes(hoje: Date = new Date()): boolean {
