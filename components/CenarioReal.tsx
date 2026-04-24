@@ -12,6 +12,7 @@ import {
 interface MetaComparavel {
   investimento?: number
   leads?: number
+  respostas?: number
   reunioes?: number
   contratos?: number
   faturamento?: number
@@ -20,6 +21,7 @@ interface MetaComparavel {
 type ChaveReal =
   | "investimento_real"
   | "leads_real"
+  | "respostas"
   | "reunioes_real"
   | "contratos_real"
   | "faturamento_real"
@@ -30,6 +32,7 @@ interface LinhaMetricaReal {
   metaKey: keyof MetaComparavel
   tipo: "moeda" | "numero"
   apenasPago?: boolean
+  apenasOrganico?: boolean
 }
 
 const LINHAS: LinhaMetricaReal[] = [
@@ -41,6 +44,13 @@ const LINHAS: LinhaMetricaReal[] = [
     apenasPago: true,
   },
   { rotulo: "Leads", chave: "leads_real", metaKey: "leads", tipo: "numero" },
+  {
+    rotulo: "Respostas",
+    chave: "respostas",
+    metaKey: "respostas",
+    tipo: "numero",
+    apenasOrganico: true,
+  },
   {
     rotulo: "Reuniões",
     chave: "reunioes_real",
@@ -75,7 +85,11 @@ export default function CenarioReal({
   origem?: OrigemDadosReais
 }) {
   const ehPago = origem === "pago"
-  const linhasVisiveis = LINHAS.filter((l) => !l.apenasPago || ehPago)
+  const linhasVisiveis = LINHAS.filter((l) => {
+    if (l.apenasPago && !ehPago) return false
+    if (l.apenasOrganico && ehPago) return false
+    return true
+  })
   const rotuloOrigem = ehPago ? "Tráfego pago" : "Prospecção orgânica"
   const cpl =
     dados?.investimento_real !== null &&
