@@ -169,6 +169,12 @@ export default async function DashboardPage({
               supabaseOk={supabaseOk}
             />
             <Link
+              href="/dashboard/preenchedores"
+              className="btn-gold-filled uppercase"
+            >
+              Formulários diários →
+            </Link>
+            <Link
               href={`/dashboard/comissionamento?mes=${mes}&ano=${ano}`}
               className="btn-gold-filled uppercase"
             >
