@@ -21,11 +21,13 @@ import { getOverridesTodasEmpresasMes } from "./metas-empresa"
 
 // Soma dos reais do mês respeitando a semântica por origem:
 //   - investimento/CPL     → só 'pago' (orgânico não tem verba)
-//   - faturamento/leads    → 'pago' + 'organico' (o Hub vê o total)
+//   - faturamento/leads/reunioes/contratos → 'pago' + 'organico'
 function agregarReaisDoMes(mapa: Map<string, DadosReaisPorOrigem>) {
   let somaFat = 0
   let somaInv = 0
   let somaLeads = 0
+  let somaReunioes = 0
+  let somaContratos = 0
   let temFat = false
   let temInv = false
   let temLeads = false
@@ -44,9 +46,20 @@ function agregarReaisDoMes(mapa: Map<string, DadosReaisPorOrigem>) {
         somaLeads += d.leads_real
         temLeads = true
       }
+      if (d.reunioes_real !== null) somaReunioes += d.reunioes_real
+      if (d.contratos_real !== null) somaContratos += d.contratos_real
     }
   }
-  return { somaFat, somaInv, somaLeads, temFat, temInv, temLeads }
+  return {
+    somaFat,
+    somaInv,
+    somaLeads,
+    somaReunioes,
+    somaContratos,
+    temFat,
+    temInv,
+    temLeads,
+  }
 }
 
 function faturamentoTotalDoBucket(b: DadosReaisPorOrigem | undefined): number | null {
@@ -107,6 +120,7 @@ export async function montarResumoDiario(): Promise<string> {
   const { mes, ano, hoje } = mesAtual()
   const dd = String(hoje.getDate()).padStart(2, "0")
   const mm = String(hoje.getMonth() + 1).padStart(2, "0")
+  const aaaa = hoje.getFullYear()
   const diaSemana = hoje.toLocaleDateString("pt-BR", { weekday: "long" })
   const diaSemanaCap =
     diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1).replace("-feira", "")
@@ -115,20 +129,30 @@ export async function montarResumoDiario(): Promise<string> {
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const reaisDoMes = await getDadosReaisDoMes(mes, ano)
 
-  const { somaFat, somaInv, somaLeads, temFat, temInv, temLeads } =
-    agregarReaisDoMes(reaisDoMes)
+  const {
+    somaFat,
+    somaInv,
+    somaLeads,
+    somaReunioes,
+    somaContratos,
+    temFat,
+    temInv,
+    temLeads,
+  } = agregarReaisDoMes(reaisDoMes)
   const temDado = temFat || temInv || temLeads
 
   const metaFatAcum = metaAcumuladaAteHoje(resumo.faturamento, mes, ano, hoje)
-  const situacao = statusTexto(somaFat, resumo.faturamento, metaFatAcum)
   const progresso =
     resumo.faturamento > 0
       ? Math.min(100, Math.round((somaFat / resumo.faturamento) * 100))
       : 0
-  const blocos = Math.round(progresso / 10)
-  const barra = "█".repeat(blocos) + "░".repeat(10 - blocos)
 
   const alertas: { nome: string; texto: string }[] = []
+  const empresasAtivasRanking: {
+    nome: string
+    fat: number | null
+    pct: number
+  }[] = []
   for (const empresa of empresas) {
     if (empresa.tipo === "diego") continue
     const metaMes = getFaturamentoMesComOverride(
@@ -137,8 +161,14 @@ export async function montarResumoDiario(): Promise<string> {
       ano,
       overridesMes.get(empresa.db)
     )
-    if (metaMes === 0) continue
     const fatReal = faturamentoTotalDoBucket(reaisDoMes.get(empresa.db))
+    const pct =
+      metaMes > 0 && fatReal !== null
+        ? Math.round((fatReal / metaMes) * 100)
+        : 0
+    empresasAtivasRanking.push({ nome: empresa.nome, fat: fatReal, pct })
+
+    if (metaMes === 0) continue
     const metaAcum = metaAcumuladaAteHoje(metaMes, mes, ano, hoje)
     if (fatReal === null) {
       alertas.push({ nome: empresa.nome, texto: "sem dados" })
@@ -151,53 +181,63 @@ export async function montarResumoDiario(): Promise<string> {
   }
 
   const cpl = somaLeads > 0 ? somaInv / somaLeads : 0
+  const cpa = somaContratos > 0 ? somaInv / somaContratos : 0
   const atualizado = hoje.toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
   })
 
-  const divisor = "—".repeat(24)
   const linhas: string[] = [
-    "*ANÔMALO HUB*",
-    `Resumo Diário · ${diaSemanaCap}, ${dd}/${mm}`,
-    divisor,
+    `🛒 *CONVERSÕES Diário - Anômalo Hub*`,
+    `📅 ${diaSemanaCap}, ${dd}/${mm}/${aaaa}`,
     "",
-    "*STATUS DO GRUPO*",
-    `Real:          ${formatBRL(somaFat)}`,
-    `Meta do mês:   ${formatBRL(resumo.faturamento)}`,
-    `Esperado hoje: ${formatBRL(metaFatAcum)}`,
-    `Progresso:     ${progresso}% [${barra}]`,
-    `Situação:      ${situacao}`,
+    `💰 *INVESTIMENTO*`,
+    `${formatBRL(somaInv)} investido no mês`,
     "",
-    divisor,
+    `🎯 *RESULTADOS*`,
+    `• ${formatNumero(somaContratos)} contratos = ${formatBRL(somaFat)}`,
+    `• Meta do mês: ${formatBRL(resumo.faturamento)} (${progresso}%)`,
+    `• Esperado hoje: ${formatBRL(metaFatAcum)}`,
     "",
-    "*ALERTAS*",
+    `📊 *FUNIL DO HUB*`,
+    `👥 ${formatNumero(somaLeads)} leads captados`,
+    `📞 ${formatNumero(somaReunioes)} reuniões marcadas`,
+    `✅ ${formatNumero(somaContratos)} contratos fechados`,
+    "",
+    `💡 *EFICIÊNCIA*`,
+    `• CPL: ${cpl > 0 ? formatBRL(cpl) : "—"}`,
+    `• CPA: ${cpa > 0 ? formatBRL(cpa) : "—"}`,
   ]
 
-  if (alertas.length === 0) {
-    linhas.push("Todas as empresas no ritmo.")
-  } else {
-    const nomeLen = Math.max(...alertas.map((a) => a.nome.length))
+  if (empresasAtivasRanking.length > 0) {
+    linhas.push("")
+    linhas.push(`🏢 *POR EMPRESA*`)
+    const nomeLen = Math.max(...empresasAtivasRanking.map((e) => e.nome.length))
+    for (const e of empresasAtivasRanking) {
+      if (e.fat === null) {
+        linhas.push(`• ${e.nome.padEnd(nomeLen)}  sem dados`)
+      } else {
+        linhas.push(
+          `• ${e.nome.padEnd(nomeLen)}  ${formatBRL(e.fat)}  (${e.pct}%)`
+        )
+      }
+    }
+  }
+
+  if (alertas.length > 0) {
+    linhas.push("")
+    linhas.push(`⚠️ *ATENÇÃO*`)
     for (const a of alertas) {
-      linhas.push(`${a.nome.padEnd(nomeLen)}  ·  ${a.texto}`)
+      linhas.push(`• ${a.nome}: ${a.texto}`)
     }
   }
 
   linhas.push("")
-  linhas.push(divisor)
-  linhas.push("")
-  linhas.push("*TRÁFEGO PAGO HOJE*")
-  linhas.push(`Investido:  ${formatBRL(somaInv)}`)
-  linhas.push(`Leads:      ${formatNumero(somaLeads)}`)
-  linhas.push(`CPL:        ${formatBRL(cpl)}`)
-  linhas.push("")
-  linhas.push(divisor)
-  linhas.push("")
-  linhas.push(`Atualizado em ${atualizado}`)
+  linhas.push(`_Atualizado ${atualizado}_`)
 
   if (!temDado) {
     linhas.push("")
-    linhas.push("Nenhum dado real inserido ainda neste mês.")
+    linhas.push("_Nenhum dado real inserido ainda neste mês._")
   }
 
   return linhas.join("\n")
@@ -217,33 +257,13 @@ export async function montarResumoSemanal(
   const reaisDoMes = await getDadosReaisDoMes(mes, ano)
   const comissoes = await getComissionamentoMes(mes, ano)
 
-  const { somaFat, somaInv, somaLeads } = agregarReaisDoMes(reaisDoMes)
+  const { somaFat, somaInv, somaLeads, somaReunioes, somaContratos } =
+    agregarReaisDoMes(reaisDoMes)
 
   const progresso =
     resumo.faturamento > 0
       ? Math.min(100, Math.round((somaFat / resumo.faturamento) * 100))
       : 0
-  const blocos = Math.round(progresso / 10)
-  const barra = "█".repeat(blocos) + "░".repeat(10 - blocos)
-
-  const divisor = "—".repeat(24)
-  const linhas: string[] = [
-    "*ANÔMALO HUB*",
-    `Resumo Semanal · Semana ${semana}`,
-    `${inicioSemana
-      .toLocaleDateString("pt-BR")
-      .slice(0, 5)} a ${fimSemana.toLocaleDateString("pt-BR")}`,
-    divisor,
-    "",
-    "*FATURAMENTO DO HUB*",
-    `Real:         ${formatBRL(somaFat)}`,
-    `Meta do mês:  ${formatBRL(resumo.faturamento)}`,
-    `Progresso:    ${progresso}% [${barra}]`,
-    "",
-    divisor,
-    "",
-    "*POR EMPRESA*",
-  ]
 
   function classificar(
     fat: number | null,
@@ -257,6 +277,35 @@ export async function montarResumoSemanal(
     return { label: "atrasado", pct }
   }
 
+  const cpl = somaLeads > 0 ? somaInv / somaLeads : 0
+  const cpa = somaContratos > 0 ? somaInv / somaContratos : 0
+
+  const periodo = `${inicioSemana
+    .toLocaleDateString("pt-BR")} - ${fimSemana.toLocaleDateString("pt-BR")}`
+
+  const linhas: string[] = [
+    `🛒 *CONVERSÕES Semanal - Anômalo Hub*`,
+    `📅 Semana ${semana} · ${periodo}`,
+    "",
+    `💰 *INVESTIMENTO*`,
+    `${formatBRL(somaInv)} investido no mês`,
+    "",
+    `🎯 *RESULTADOS*`,
+    `• ${formatNumero(somaContratos)} contratos = ${formatBRL(somaFat)}`,
+    `• Meta do mês: ${formatBRL(resumo.faturamento)} (${progresso}%)`,
+    "",
+    `📊 *FUNIL DO HUB*`,
+    `👥 ${formatNumero(somaLeads)} leads captados`,
+    `📞 ${formatNumero(somaReunioes)} reuniões marcadas`,
+    `✅ ${formatNumero(somaContratos)} contratos fechados`,
+    "",
+    `💡 *EFICIÊNCIA*`,
+    `• CPL: ${cpl > 0 ? formatBRL(cpl) : "—"}`,
+    `• CPA: ${cpa > 0 ? formatBRL(cpa) : "—"}`,
+  ]
+
+  linhas.push("")
+  linhas.push(`🏢 *POR EMPRESA*`)
   const nomeLen = Math.max(...empresas.map((e) => e.nome.length))
   for (const empresa of empresas) {
     const metaMes = getFaturamentoMesComOverride(
@@ -269,26 +318,16 @@ export async function montarResumoSemanal(
     const cls = classificar(fatReal, metaMes)
     const nomePad = empresa.nome.padEnd(nomeLen)
     if (fatReal === null) {
-      linhas.push(`${nomePad}  ·  ${cls.label}`)
+      linhas.push(`• ${nomePad}  ${cls.label}`)
     } else {
       linhas.push(
-        `${nomePad}  ${formatBRL(fatReal)}  (${cls.pct}%)  ·  ${cls.label}`
+        `• ${nomePad}  ${formatBRL(fatReal)}  (${cls.pct}%)  ${cls.label}`
       )
     }
   }
 
-  const cpl = somaLeads > 0 ? somaInv / somaLeads : 0
   linhas.push("")
-  linhas.push(divisor)
-  linhas.push("")
-  linhas.push("*TRÁFEGO PAGO NA SEMANA*")
-  linhas.push(`Investido:   ${formatBRL(somaInv)}`)
-  linhas.push(`Leads:       ${formatNumero(somaLeads)}`)
-  linhas.push(`CPL médio:   ${formatBRL(cpl)}`)
-  linhas.push("")
-  linhas.push(divisor)
-  linhas.push("")
-  linhas.push("*COMISSIONAMENTO ESTIMADO*")
+  linhas.push(`💼 *COMISSIONAMENTO ESTIMADO*`)
   const felipe = comissoes.find((c) => c.colaborador === "felipe")
   const vinicius = comissoes.find((c) => c.colaborador === "vinicius")
   const emanuel = comissoes.find((c) => c.colaborador === "emanuel")
@@ -296,24 +335,22 @@ export async function montarResumoSemanal(
     ? Object.values(felipe.detalhes).filter(Boolean).length
     : 0
   linhas.push(
-    `Felipe:    ${formatBRL(felipe?.bonus_calculado ?? 0)}  (${gatilhosFelipe}/4 gatilhos)`
+    `• Felipe: ${formatBRL(felipe?.bonus_calculado ?? 0)} (${gatilhosFelipe}/4 gatilhos)`
   )
   linhas.push(
-    `Vinicius:  ${formatBRL(vinicius?.bonus_calculado ?? 0)}  (${
+    `• Vinicius: ${formatBRL(vinicius?.bonus_calculado ?? 0)} (${
       vinicius?.entregas_validas ?? 0
     } entregas)`
   )
   linhas.push(
-    `Emanuel:   ${formatBRL(emanuel?.bonus_calculado ?? 0)}  (${
+    `• Emanuel: ${formatBRL(emanuel?.bonus_calculado ?? 0)} (${
       emanuel?.entregas_validas ?? 0
     } entregas)`
   )
 
   if (linkFormulario) {
     linhas.push("")
-    linhas.push(divisor)
-    linhas.push("")
-    linhas.push("*INSERIR DADOS DA SEMANA*")
+    linhas.push(`📝 *INSERIR DADOS DA SEMANA*`)
     linhas.push(linkFormulario)
   }
 
@@ -321,7 +358,7 @@ export async function montarResumoSemanal(
 }
 
 export async function montarResumoMensal(): Promise<string> {
-  const { mes, ano, hoje } = mesAtual()
+  const { mes, ano } = mesAtual()
   const { empresas, overridesMes } = await carregarContexto(mes, ano)
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const reaisDoMes = await getDadosReaisDoMes(mes, ano)
@@ -330,7 +367,8 @@ export async function montarResumoMensal(): Promise<string> {
   const mesAnteriorIdx = MESES.indexOf(mes) - 1
   const mesAnterior = mesAnteriorIdx >= 0 ? MESES[mesAnteriorIdx] : null
 
-  const { somaFat, somaInv, somaLeads } = agregarReaisDoMes(reaisDoMes)
+  const { somaFat, somaInv, somaLeads, somaReunioes, somaContratos } =
+    agregarReaisDoMes(reaisDoMes)
 
   const atingido =
     resumo.faturamento > 0
@@ -339,27 +377,12 @@ export async function montarResumoMensal(): Promise<string> {
   const statusGlobal =
     atingido >= 100 ? "meta batida" : atingido >= 70 ? "parcial" : "abaixo"
 
-  const divisor = "—".repeat(24)
-  const linhas: string[] = [
-    "*ANÔMALO HUB*",
-    `Fechamento · ${mes} ${ano}`,
-    divisor,
-    "",
-    "*RESULTADO DO GRUPO*",
-    `Faturamento:  ${formatBRL(somaFat)}`,
-    `Meta:         ${formatBRL(resumo.faturamento)}`,
-    `Atingido:     ${atingido}%  ·  ${statusGlobal}`,
-    "",
-    divisor,
-    "",
-    "*EMPRESAS*",
-  ]
-
   let melhorNome = ""
   let melhorPct = -1
   let crescimentoNome = ""
   let crescimentoPct = -1
 
+  const linhasEmpresa: string[] = []
   const nomeLen = Math.max(...empresas.map((e) => e.nome.length))
   for (const empresa of empresas) {
     const metaMes = getFaturamentoMesComOverride(
@@ -373,7 +396,7 @@ export async function montarResumoMensal(): Promise<string> {
     const label =
       pct >= 100 ? "meta batida" : pct >= 70 ? `${pct}% da meta` : "abaixo"
     const nomePad = empresa.nome.padEnd(nomeLen)
-    linhas.push(`${nomePad}  ${formatBRL(real)}  ·  ${label}`)
+    linhasEmpresa.push(`• ${nomePad}  ${formatBRL(real)}  ${label}`)
 
     if (pct > melhorPct) {
       melhorPct = pct
@@ -381,8 +404,6 @@ export async function montarResumoMensal(): Promise<string> {
     }
 
     if (mesAnterior) {
-      // Para crescimento pago vs orgânico, usamos faturamento pago + orgânico
-      // do mês anterior como um todo (mesma regra do mês atual).
       const [pagoAnt, organicoAnt] = await Promise.all([
         getDadosReais(empresa.db, ano, "pago").then(
           (rs) => rs.find((r) => r.mes === mesAnterior)?.faturamento_real ?? 0
@@ -403,17 +424,8 @@ export async function montarResumoMensal(): Promise<string> {
   }
 
   const cpl = somaLeads > 0 ? somaInv / somaLeads : 0
-  linhas.push("")
-  linhas.push(divisor)
-  linhas.push("")
-  linhas.push("*TRÁFEGO PAGO NO MÊS*")
-  linhas.push(`Investido:  ${formatBRL(somaInv)}`)
-  linhas.push(`Leads:      ${formatNumero(somaLeads)}`)
-  linhas.push(`CPL:        ${formatBRL(cpl)}`)
-  linhas.push("")
-  linhas.push(divisor)
-  linhas.push("")
-  linhas.push("*COMISSIONAMENTO FINAL*")
+  const cpa = somaContratos > 0 ? somaInv / somaContratos : 0
+
   const felipe = comissoes.find((c) => c.colaborador === "felipe")
   const vinicius = comissoes.find((c) => c.colaborador === "vinicius")
   const emanuel = comissoes.find((c) => c.colaborador === "emanuel")
@@ -421,29 +433,55 @@ export async function montarResumoMensal(): Promise<string> {
     (felipe?.bonus_calculado ?? 0) +
     (vinicius?.bonus_calculado ?? 0) +
     (emanuel?.bonus_calculado ?? 0)
-  linhas.push(`Felipe:    ${formatBRL(felipe?.bonus_calculado ?? 0)}`)
-  linhas.push(`Vinicius:  ${formatBRL(vinicius?.bonus_calculado ?? 0)}`)
-  linhas.push(`Emanuel:   ${formatBRL(emanuel?.bonus_calculado ?? 0)}`)
-  linhas.push(`Total:     ${formatBRL(totalComissao)}`)
-  linhas.push("")
-  linhas.push(divisor)
-  linhas.push("")
-  linhas.push("*DESTAQUES*")
+
+  const linhas: string[] = [
+    `🛒 *FECHAMENTO - Anômalo Hub*`,
+    `📅 ${mes} ${ano}`,
+    "",
+    `💰 *INVESTIMENTO*`,
+    `${formatBRL(somaInv)} investido no mês`,
+    "",
+    `🎯 *RESULTADO FINAL*`,
+    `• ${formatNumero(somaContratos)} contratos = ${formatBRL(somaFat)}`,
+    `• Meta: ${formatBRL(resumo.faturamento)} (${atingido}% · ${statusGlobal})`,
+    "",
+    `📊 *FUNIL DO HUB*`,
+    `👥 ${formatNumero(somaLeads)} leads captados`,
+    `📞 ${formatNumero(somaReunioes)} reuniões marcadas`,
+    `✅ ${formatNumero(somaContratos)} contratos fechados`,
+    "",
+    `💡 *EFICIÊNCIA*`,
+    `• CPL: ${cpl > 0 ? formatBRL(cpl) : "—"}`,
+    `• CPA: ${cpa > 0 ? formatBRL(cpa) : "—"}`,
+    "",
+    `🏢 *EMPRESAS*`,
+    ...linhasEmpresa,
+    "",
+    `🏆 *DESTAQUES*`,
+  ]
+
   if (melhorNome) {
     const acima = Math.max(0, melhorPct - 100)
     linhas.push(
-      `Melhor empresa:     ${melhorNome} (${
+      `• Melhor empresa: ${melhorNome} (${
         acima > 0 ? `${acima}% acima` : `${melhorPct}% da`
       } meta)`
     )
   }
   if (crescimentoNome) {
     linhas.push(
-      `Maior crescimento:  ${crescimentoNome} (+${crescimentoPct}% vs ${mesAnterior})`
+      `• Maior crescimento: ${crescimentoNome} (+${crescimentoPct}% vs ${mesAnterior})`
     )
   }
+
   linhas.push("")
-  linhas.push("Bom trabalho a todos.")
+  linhas.push(`💼 *COMISSIONAMENTO FINAL*`)
+  linhas.push(`• Felipe: ${formatBRL(felipe?.bonus_calculado ?? 0)}`)
+  linhas.push(`• Vinicius: ${formatBRL(vinicius?.bonus_calculado ?? 0)}`)
+  linhas.push(`• Emanuel: ${formatBRL(emanuel?.bonus_calculado ?? 0)}`)
+  linhas.push(`• Total: ${formatBRL(totalComissao)}`)
+  linhas.push("")
+  linhas.push("_Bom trabalho a todos._")
 
   return linhas.join("\n")
 }
