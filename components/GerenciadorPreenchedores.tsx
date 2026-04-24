@@ -182,7 +182,7 @@ function NovoPreenchedor({
       >
         Novo {papel === "gestor_trafego" ? "gestor de tráfego" : "SDR"}
       </p>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <input
           autoFocus
           value={nome}
@@ -194,6 +194,7 @@ function NovoPreenchedor({
             if (e.key === "Enter" && nome.trim()) salvar()
           }}
         />
+        <div className="flex items-center gap-3 justify-end">
         <button
           type="button"
           onClick={salvar}
@@ -214,6 +215,7 @@ function NovoPreenchedor({
         >
           Cancelar
         </button>
+        </div>
       </div>
       {erro && (
         <p style={{ fontSize: 12, color: "#e24b4a", marginTop: 8 }}>{erro}</p>

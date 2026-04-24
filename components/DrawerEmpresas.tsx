@@ -23,13 +23,21 @@ const TIPOS: { chave: TipoFunil; label: string; hint: string }[] = [
     label: "Leads · Reuniões · Contratos",
     hint: "funil padrão de agência",
   },
-  { chave: "aton", label: "Leads · Orçamentos · Vendas", hint: "estilo Aton" },
+  {
+    chave: "aton",
+    label: "Leads · Orçamentos · Vendas",
+    hint: "funil de orçamentos e vendas",
+  },
   {
     chave: "hato",
     label: "Influenciadores · Vendas",
-    hint: "estilo Hato",
+    hint: "funil com rede de influenciadores",
   },
-  { chave: "diego", label: "Participação no faturamento", hint: "estilo Diego" },
+  {
+    chave: "diego",
+    label: "Participação no faturamento",
+    hint: "revenue share com parceiro",
+  },
 ]
 
 export default function DrawerEmpresas({
