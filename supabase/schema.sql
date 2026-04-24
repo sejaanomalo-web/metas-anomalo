@@ -387,3 +387,77 @@ select 'diego-knebel', 'diego', 'Diego Knebel',
   'Participação no faturamento',
   6
 where not exists (select 1 from public.empresas_config where slug = 'diego-knebel');
+
+-- ===========================================================================
+-- Formulários diários: preenchedores (gestores de tráfego + SDRs) que
+-- alimentam dados_reais pelo /preencher/[token]. dados_reais permanece
+-- como fonte da verdade dos totais mensais (cumulativos); o log abaixo
+-- registra cada submissão para auditoria.
+-- ===========================================================================
+create table if not exists public.preenchedores (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  papel text not null check (papel in ('gestor_trafego','sdr')),
+  ativo boolean not null default true,
+  token text not null unique,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.preenchedor_empresas (
+  id uuid primary key default gen_random_uuid(),
+  preenchedor_id uuid not null references public.preenchedores(id) on delete cascade,
+  empresa text not null,
+  created_at timestamptz not null default now(),
+  unique (preenchedor_id, empresa)
+);
+
+create table if not exists public.dados_diarios_log (
+  id uuid primary key default gen_random_uuid(),
+  empresa text not null,
+  data date not null default current_date,
+  origem text not null check (origem in ('pago','organico')),
+  preenchedor_id uuid references public.preenchedores(id) on delete set null,
+  preenchedor_nome text,
+  -- valores novos enviados
+  investimento_real numeric,
+  leads_real int,
+  reunioes_real int,
+  contratos_real int,
+  faturamento_real numeric,
+  criativos_entregues int,
+  clientes_ativos int,
+  observacoes text,
+  -- valores anteriores (antes desta submissão) para auditoria
+  investimento_anterior numeric,
+  leads_anterior int,
+  reunioes_anterior int,
+  contratos_anterior int,
+  faturamento_anterior numeric,
+  criativos_anterior int,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists dados_diarios_log_empresa_idx
+  on public.dados_diarios_log (empresa, data);
+create index if not exists dados_diarios_log_preenchedor_idx
+  on public.dados_diarios_log (preenchedor_id, data);
+
+alter table public.preenchedores enable row level security;
+alter table public.preenchedor_empresas enable row level security;
+alter table public.dados_diarios_log enable row level security;
+
+drop policy if exists preenchedores_all on public.preenchedores;
+create policy preenchedores_all
+  on public.preenchedores for all
+  to anon, authenticated using (true) with check (true);
+
+drop policy if exists preenchedor_empresas_all on public.preenchedor_empresas;
+create policy preenchedor_empresas_all
+  on public.preenchedor_empresas for all
+  to anon, authenticated using (true) with check (true);
+
+drop policy if exists dados_diarios_log_all on public.dados_diarios_log;
+create policy dados_diarios_log_all
+  on public.dados_diarios_log for all
+  to anon, authenticated using (true) with check (true);

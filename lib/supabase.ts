@@ -114,6 +114,49 @@ export interface FuncaoTime {
   criada_em?: string
 }
 
+export type PapelPreenchedor = "gestor_trafego" | "sdr"
+
+export interface Preenchedor {
+  id?: string
+  nome: string
+  papel: PapelPreenchedor
+  ativo: boolean
+  token: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PreenchedorEmpresa {
+  id?: string
+  preenchedor_id: string
+  empresa: string
+  created_at?: string
+}
+
+export interface DadosDiariosLog {
+  id?: string
+  empresa: string
+  data: string
+  origem: OrigemDados
+  preenchedor_id: string | null
+  preenchedor_nome: string | null
+  investimento_real: number | null
+  leads_real: number | null
+  reunioes_real: number | null
+  contratos_real: number | null
+  faturamento_real: number | null
+  criativos_entregues: number | null
+  clientes_ativos: number | null
+  observacoes: string | null
+  investimento_anterior: number | null
+  leads_anterior: number | null
+  reunioes_anterior: number | null
+  contratos_anterior: number | null
+  faturamento_anterior: number | null
+  criativos_anterior: number | null
+  created_at?: string
+}
+
 let cliente: SupabaseClient | null = null
 
 export function getSupabase(): SupabaseClient | null {
