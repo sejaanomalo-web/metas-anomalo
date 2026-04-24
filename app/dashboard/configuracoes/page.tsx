@@ -5,7 +5,6 @@ import SeletorPeriodo from "@/components/SeletorPeriodo"
 import FormConfig from "@/components/FormConfig"
 import { estaAutenticado } from "@/lib/auth"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
-import { getConfigResumos } from "@/lib/configuracoes"
 import {
   montarResumoDiario,
   montarResumoMensal,
@@ -22,7 +21,6 @@ export default async function ConfiguracoesPage({
   }
 
   const mes = mesValido(searchParams?.mes)
-  const config = await getConfigResumos()
 
   const [mensagemDiario, mensagemSemanal, mensagemMensal] = await Promise.all([
     montarResumoDiario(),
@@ -74,12 +72,11 @@ export default async function ConfiguracoesPage({
               fontWeight: 300,
             }}
           >
-            Contatos + envio manual de resumos via WhatsApp
+            Resumos para enviar no WhatsApp · clique em copiar e cole no chat
           </p>
         </div>
 
         <FormConfig
-          configInicial={config}
           mensagemDiario={mensagemDiario}
           mensagemSemanal={mensagemSemanal}
           mensagemMensal={mensagemMensal}
