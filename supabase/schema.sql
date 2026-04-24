@@ -131,6 +131,25 @@ create policy comissionamento_all
 alter table public.dados_reais
   add column if not exists clientes_ativos int;
 
+-- Origem dos dados: separa tráfego pago de prospecção orgânica.
+-- Ao existirem as duas origens, cada (empresa, mes, ano) passa a ter até
+-- duas linhas — uma por origem. Leituras e agregações filtram/somam de
+-- acordo com a métrica (investimento/CPL só fazem sentido em 'pago').
+alter table public.dados_reais
+  add column if not exists origem text not null default 'pago';
+alter table public.dados_reais
+  drop constraint if exists dados_reais_origem_check;
+alter table public.dados_reais
+  add constraint dados_reais_origem_check
+  check (origem in ('pago','organico'));
+
+-- Substitui o unique (empresa, mes, ano) — sem origem na chave, não seria
+-- possível manter duas linhas por mês.
+alter table public.dados_reais
+  drop constraint if exists dados_reais_empresa_mes_ano_key;
+create unique index if not exists dados_reais_empresa_mes_ano_origem_key
+  on public.dados_reais (empresa, mes, ano, origem);
+
 -- Afrouxa a constraint de colaborador em comissionamento para aceitar
 -- nomes livres cadastrados pelo drawer de Pessoas.
 alter table public.comissionamento

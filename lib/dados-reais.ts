@@ -8,12 +8,20 @@ import {
 } from "./supabase"
 import {
   ANO_PADRAO,
+  ORIGEM_PADRAO,
   type EmpresaDb,
   type Mes,
   MESES,
+  type OrigemDadosReais,
   empresas,
   getEmpresaPorDb,
+  origemValida,
 } from "./data"
+
+export interface DadosReaisPorOrigem {
+  pago: DadosReais | null
+  organico: DadosReais | null
+}
 
 function parseNumero(v: FormDataEntryValue | null): number | null {
   if (v === null) return null
@@ -43,7 +51,8 @@ function mesValido(mes: string): mes is Mes {
 
 export async function getDadosReais(
   empresa: EmpresaDb,
-  ano: number = ANO_PADRAO
+  ano: number = ANO_PADRAO,
+  origem: OrigemDadosReais = ORIGEM_PADRAO
 ): Promise<DadosReais[]> {
   const supabase = getSupabase()
   if (!supabase) return []
@@ -52,6 +61,7 @@ export async function getDadosReais(
     .select("*")
     .eq("empresa", empresa)
     .eq("ano", ano)
+    .eq("origem", origem)
   if (error) {
     console.error("[dados_reais] get error", error.message)
     return []
@@ -62,7 +72,8 @@ export async function getDadosReais(
 export async function getDadosReaisMes(
   empresa: EmpresaDb,
   mes: Mes,
-  ano: number = ANO_PADRAO
+  ano: number = ANO_PADRAO,
+  origem: OrigemDadosReais = ORIGEM_PADRAO
 ): Promise<DadosReais | null> {
   const supabase = getSupabase()
   if (!supabase) return null
@@ -72,6 +83,7 @@ export async function getDadosReaisMes(
     .eq("empresa", empresa)
     .eq("ano", ano)
     .eq("mes", mes)
+    .eq("origem", origem)
     .maybeSingle()
   if (error) {
     console.error("[dados_reais] getMes error", error.message)
@@ -83,7 +95,7 @@ export async function getDadosReaisMes(
 export async function getDadosReaisDoMes(
   mes: Mes,
   ano: number = ANO_PADRAO
-): Promise<Map<string, DadosReais>> {
+): Promise<Map<string, DadosReaisPorOrigem>> {
   const supabase = getSupabase()
   if (!supabase) return new Map()
   const { data, error } = await supabase
@@ -95,9 +107,15 @@ export async function getDadosReaisDoMes(
     console.error("[dados_reais] getDoMes error", error.message)
     return new Map()
   }
-  const map = new Map<string, DadosReais>()
+  const map = new Map<string, DadosReaisPorOrigem>()
   for (const d of (data ?? []) as DadosReais[]) {
-    map.set(d.empresa, d)
+    const bucket = map.get(d.empresa) ?? { pago: null, organico: null }
+    if (d.origem === "organico") {
+      bucket.organico = d
+    } else {
+      bucket.pago = d
+    }
+    map.set(d.empresa, bucket)
   }
   return map
 }
@@ -140,22 +158,29 @@ export async function salvarDadosReaisAction(
   const empresa = String(formData.get("empresa") ?? "")
   const mes = String(formData.get("mes") ?? "")
   const ano = parseInt0(formData.get("ano")) ?? ANO_PADRAO
+  const origem = origemValida(String(formData.get("origem") ?? ""))
 
   if (!empresaValida(empresa) || !mesValido(mes)) {
     return { ok: false, erro: "Empresa ou mês inválidos." }
   }
 
-  const investimento_real = parseNumero(formData.get("investimento_real"))
   const leads_real = parseInt0(formData.get("leads_real"))
   const reunioes_real = parseInt0(formData.get("reunioes_real"))
   const contratos_real = parseInt0(formData.get("contratos_real"))
   const faturamento_real = parseNumero(formData.get("faturamento_real"))
-  const criativos_entregues = parseInt0(formData.get("criativos_entregues"))
   const observacoes = String(formData.get("observacoes") ?? "").trim() || null
   const clientes_ativos = parseInt0(formData.get("clientes_ativos"))
 
+  // Campos só-pago — orgânico nunca os aceita, mesmo se vierem no FormData.
+  const investimento_real =
+    origem === "pago" ? parseNumero(formData.get("investimento_real")) : null
+  const criativos_entregues =
+    origem === "pago" ? parseInt0(formData.get("criativos_entregues")) : null
   const cpl_real =
-    investimento_real !== null && leads_real !== null && leads_real > 0
+    origem === "pago" &&
+    investimento_real !== null &&
+    leads_real !== null &&
+    leads_real > 0
       ? Number((investimento_real / leads_real).toFixed(2))
       : null
 
@@ -163,6 +188,7 @@ export async function salvarDadosReaisAction(
     empresa,
     mes,
     ano,
+    origem,
     investimento_real,
     leads_real,
     reunioes_real,
@@ -180,7 +206,7 @@ export async function salvarDadosReaisAction(
 
   const { error } = await supabase
     .from("dados_reais")
-    .upsert(payload, { onConflict: "empresa,mes,ano" })
+    .upsert(payload, { onConflict: "empresa,mes,ano,origem" })
 
   if (error) {
     console.error("[dados_reais] upsert error", error.message)

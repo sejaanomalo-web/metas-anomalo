@@ -46,24 +46,31 @@ export default async function DashboardPage({
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const supabaseOk = supabaseConfigurado()
 
+  // Agregações do Hub:
+  // - Investimento em ads → só 'pago' (orgânico por definição não tem verba)
+  // - Leads e faturamento → soma 'pago' + 'organico' (o Hub vê o total)
   let somaFat = 0
   let somaInv = 0
   let somaLeads = 0
   let temFat = false
   let temInv = false
   let temLeads = false
-  for (const d of reaisDoMes.values()) {
-    if (d.faturamento_real !== null) {
-      somaFat += d.faturamento_real
-      temFat = true
-    }
-    if (d.investimento_real !== null) {
-      somaInv += d.investimento_real
+  for (const bucket of reaisDoMes.values()) {
+    const { pago, organico } = bucket
+    if (pago?.investimento_real !== null && pago?.investimento_real !== undefined) {
+      somaInv += pago.investimento_real
       temInv = true
     }
-    if (d.leads_real !== null) {
-      somaLeads += d.leads_real
-      temLeads = true
+    for (const d of [pago, organico]) {
+      if (!d) continue
+      if (d.faturamento_real !== null) {
+        somaFat += d.faturamento_real
+        temFat = true
+      }
+      if (d.leads_real !== null) {
+        somaLeads += d.leads_real
+        temLeads = true
+      }
     }
   }
 
@@ -320,21 +327,33 @@ export default async function DashboardPage({
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
             style={{ gap: 20 }}
           >
-            {empresas.map((empresa) => (
-              <CardEmpresa
-                key={empresa.slug}
-                empresa={empresa}
-                mes={mes}
-                ano={ano}
-                faturamentoReal={
-                  reaisDoMes.get(empresa.db)?.faturamento_real ?? null
-                }
-                investimentoReal={
-                  reaisDoMes.get(empresa.db)?.investimento_real ?? null
-                }
-                override={overridesMes.get(empresa.db)}
-              />
-            ))}
+            {empresas.map((empresa) => {
+              const bucket = reaisDoMes.get(empresa.db)
+              const pago = bucket?.pago ?? null
+              const organico = bucket?.organico ?? null
+              const faturamentoSoma =
+                (pago?.faturamento_real ?? 0) +
+                (organico?.faturamento_real ?? 0)
+              const faturamentoReal =
+                pago?.faturamento_real === null &&
+                organico?.faturamento_real === null
+                  ? null
+                  : pago?.faturamento_real !== undefined ||
+                    organico?.faturamento_real !== undefined
+                  ? faturamentoSoma
+                  : null
+              return (
+                <CardEmpresa
+                  key={empresa.slug}
+                  empresa={empresa}
+                  mes={mes}
+                  ano={ano}
+                  faturamentoReal={faturamentoReal}
+                  investimentoReal={pago?.investimento_real ?? null}
+                  override={overridesMes.get(empresa.db)}
+                />
+              )
+            })}
           </div>
         </section>
       </main>

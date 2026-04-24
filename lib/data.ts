@@ -36,6 +36,15 @@ export function mesValido(m: string | undefined | null): Mes {
   return "Abril"
 }
 
+export const ORIGENS_DADOS = ["pago", "organico"] as const
+export type OrigemDadosReais = (typeof ORIGENS_DADOS)[number]
+export const ORIGEM_PADRAO: OrigemDadosReais = "pago"
+
+export function origemValida(o: string | undefined | null): OrigemDadosReais {
+  if (o === "organico") return "organico"
+  return ORIGEM_PADRAO
+}
+
 // EmpresaSlug e EmpresaDb são identificadores livres (text) desde que empresas
 // podem ser adicionadas dinamicamente via UI. TipoFunil continua union literal
 // porque é validado em check constraint no Supabase.

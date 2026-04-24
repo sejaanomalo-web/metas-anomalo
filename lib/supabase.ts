@@ -1,10 +1,13 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
+export type OrigemDados = "pago" | "organico"
+
 export interface DadosReais {
   id?: string
   empresa: string
   mes: string
   ano: number
+  origem?: OrigemDados
   investimento_real: number | null
   leads_real: number | null
   reunioes_real: number | null
