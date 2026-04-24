@@ -10,10 +10,52 @@ import {
   type EmpresaMeta,
   type Mes,
 } from "./data"
-import { getDadosReaisDoMes, getDadosReais } from "./dados-reais"
+import {
+  type DadosReaisPorOrigem,
+  getDadosReaisDoMes,
+  getDadosReais,
+} from "./dados-reais"
 import { getComissionamentoMes } from "./comissionamento-actions"
 import { listarEmpresas } from "./empresas-actions"
 import { getOverridesTodasEmpresasMes } from "./metas-empresa"
+
+// Soma dos reais do mês respeitando a semântica por origem:
+//   - investimento/CPL     → só 'pago' (orgânico não tem verba)
+//   - faturamento/leads    → 'pago' + 'organico' (o Hub vê o total)
+function agregarReaisDoMes(mapa: Map<string, DadosReaisPorOrigem>) {
+  let somaFat = 0
+  let somaInv = 0
+  let somaLeads = 0
+  let temFat = false
+  let temInv = false
+  let temLeads = false
+  for (const { pago, organico } of mapa.values()) {
+    if (pago?.investimento_real !== null && pago?.investimento_real !== undefined) {
+      somaInv += pago.investimento_real
+      temInv = true
+    }
+    for (const d of [pago, organico]) {
+      if (!d) continue
+      if (d.faturamento_real !== null) {
+        somaFat += d.faturamento_real
+        temFat = true
+      }
+      if (d.leads_real !== null) {
+        somaLeads += d.leads_real
+        temLeads = true
+      }
+    }
+  }
+  return { somaFat, somaInv, somaLeads, temFat, temInv, temLeads }
+}
+
+function faturamentoTotalDoBucket(b: DadosReaisPorOrigem | undefined): number | null {
+  if (!b) return null
+  const p = b.pago?.faturamento_real ?? null
+  const o = b.organico?.faturamento_real ?? null
+  if (p === null && o === null) return null
+  return (p ?? 0) + (o ?? 0)
+}
 
 async function carregarContexto(mes: Mes, ano: number): Promise<{
   empresas: EmpresaMeta[]
@@ -73,24 +115,9 @@ export async function montarResumoDiario(): Promise<string> {
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const reaisDoMes = await getDadosReaisDoMes(mes, ano)
 
-  let somaFat = 0
-  let somaInv = 0
-  let somaLeads = 0
-  let temDado = false
-  for (const d of reaisDoMes.values()) {
-    if (d.faturamento_real !== null) {
-      somaFat += d.faturamento_real
-      temDado = true
-    }
-    if (d.investimento_real !== null) {
-      somaInv += d.investimento_real
-      temDado = true
-    }
-    if (d.leads_real !== null) {
-      somaLeads += d.leads_real
-      temDado = true
-    }
-  }
+  const { somaFat, somaInv, somaLeads, temFat, temInv, temLeads } =
+    agregarReaisDoMes(reaisDoMes)
+  const temDado = temFat || temInv || temLeads
 
   const metaFatAcum = metaAcumuladaAteHoje(resumo.faturamento, mes, ano, hoje)
   const situacao = statusTexto(somaFat, resumo.faturamento, metaFatAcum)
@@ -111,8 +138,7 @@ export async function montarResumoDiario(): Promise<string> {
       overridesMes.get(empresa.db)
     )
     if (metaMes === 0) continue
-    const real = reaisDoMes.get(empresa.db)
-    const fatReal = real?.faturamento_real ?? null
+    const fatReal = faturamentoTotalDoBucket(reaisDoMes.get(empresa.db))
     const metaAcum = metaAcumuladaAteHoje(metaMes, mes, ano, hoje)
     if (fatReal === null) {
       alertas.push({ nome: empresa.nome, texto: "sem dados" })
@@ -191,14 +217,7 @@ export async function montarResumoSemanal(
   const reaisDoMes = await getDadosReaisDoMes(mes, ano)
   const comissoes = await getComissionamentoMes(mes, ano)
 
-  let somaFat = 0
-  let somaInv = 0
-  let somaLeads = 0
-  for (const d of reaisDoMes.values()) {
-    if (d.faturamento_real !== null) somaFat += d.faturamento_real
-    if (d.investimento_real !== null) somaInv += d.investimento_real
-    if (d.leads_real !== null) somaLeads += d.leads_real
-  }
+  const { somaFat, somaInv, somaLeads } = agregarReaisDoMes(reaisDoMes)
 
   const progresso =
     resumo.faturamento > 0
@@ -246,8 +265,7 @@ export async function montarResumoSemanal(
       ano,
       overridesMes.get(empresa.db)
     )
-    const real = reaisDoMes.get(empresa.db)
-    const fatReal = real?.faturamento_real ?? null
+    const fatReal = faturamentoTotalDoBucket(reaisDoMes.get(empresa.db))
     const cls = classificar(fatReal, metaMes)
     const nomePad = empresa.nome.padEnd(nomeLen)
     if (fatReal === null) {
@@ -312,14 +330,7 @@ export async function montarResumoMensal(): Promise<string> {
   const mesAnteriorIdx = MESES.indexOf(mes) - 1
   const mesAnterior = mesAnteriorIdx >= 0 ? MESES[mesAnteriorIdx] : null
 
-  let somaFat = 0
-  let somaInv = 0
-  let somaLeads = 0
-  for (const d of reaisDoMes.values()) {
-    if (d.faturamento_real !== null) somaFat += d.faturamento_real
-    if (d.investimento_real !== null) somaInv += d.investimento_real
-    if (d.leads_real !== null) somaLeads += d.leads_real
-  }
+  const { somaFat, somaInv, somaLeads } = agregarReaisDoMes(reaisDoMes)
 
   const atingido =
     resumo.faturamento > 0
@@ -357,7 +368,7 @@ export async function montarResumoMensal(): Promise<string> {
       ano,
       overridesMes.get(empresa.db)
     )
-    const real = reaisDoMes.get(empresa.db)?.faturamento_real ?? 0
+    const real = faturamentoTotalDoBucket(reaisDoMes.get(empresa.db)) ?? 0
     const pct = metaMes > 0 ? Math.round((real / metaMes) * 100) : 0
     const label =
       pct >= 100 ? "meta batida" : pct >= 70 ? `${pct}% da meta` : "abaixo"
@@ -370,10 +381,17 @@ export async function montarResumoMensal(): Promise<string> {
     }
 
     if (mesAnterior) {
-      const realAnterior =
-        (await getDadosReais(empresa.db, ano)).find(
-          (r) => r.mes === mesAnterior
-        )?.faturamento_real ?? 0
+      // Para crescimento pago vs orgânico, usamos faturamento pago + orgânico
+      // do mês anterior como um todo (mesma regra do mês atual).
+      const [pagoAnt, organicoAnt] = await Promise.all([
+        getDadosReais(empresa.db, ano, "pago").then(
+          (rs) => rs.find((r) => r.mes === mesAnterior)?.faturamento_real ?? 0
+        ),
+        getDadosReais(empresa.db, ano, "organico").then(
+          (rs) => rs.find((r) => r.mes === mesAnterior)?.faturamento_real ?? 0
+        ),
+      ])
+      const realAnterior = pagoAnt + organicoAnt
       if (realAnterior > 0) {
         const cresc = Math.round(((real - realAnterior) / realAnterior) * 100)
         if (cresc > crescimentoPct) {

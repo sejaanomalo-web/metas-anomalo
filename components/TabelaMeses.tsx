@@ -2,7 +2,13 @@
 
 import { useState } from "react"
 import type { DadosReais } from "@/lib/supabase"
-import { type Mes, formatBRL, formatNumero } from "@/lib/data"
+import {
+  ORIGEM_PADRAO,
+  type Mes,
+  type OrigemDadosReais,
+  formatBRL,
+  formatNumero,
+} from "@/lib/data"
 
 interface Coluna {
   chave: string
@@ -14,6 +20,10 @@ type Modo = "meta" | "cenario"
 
 // Cor de fundo do card — mesma aparência da glass sobre fundo preto
 const STICKY_BG = "#0b0b0b"
+
+// Colunas que só fazem sentido quando origem = pago. No modo orgânico
+// elas somem da tabela.
+const COLUNAS_APENAS_PAGO = new Set(["verba", "criativos"])
 
 // Mapeia chave da coluna de meta para o campo equivalente em dados_reais.
 // Colunas sem equivalente ficam vazias no modo Cenário.
@@ -35,15 +45,21 @@ export default function TabelaMeses({
   linhas,
   reais,
   mesAtual,
+  origem = ORIGEM_PADRAO,
   acao,
 }: {
   colunas: Coluna[]
   linhas: Record<string, string | number>[]
   reais?: Map<string, DadosReais>
   mesAtual?: Mes
+  origem?: OrigemDadosReais
   acao?: React.ReactNode
 }) {
   const [modo, setModo] = useState<Modo>("meta")
+  const colunasVisiveis =
+    origem === "organico"
+      ? colunas.filter((c) => !COLUNAS_APENAS_PAGO.has(c.chave))
+      : colunas
 
   function valorCelula(
     linha: Record<string, string | number>,
@@ -130,7 +146,7 @@ export default function TabelaMeses({
         >
           <thead>
             <tr>
-              {colunas.map((c, idx) => {
+              {colunasVisiveis.map((c, idx) => {
                 const eMes = idx === 0
                 return (
                   <th
@@ -170,7 +186,7 @@ export default function TabelaMeses({
               const rowBg = destacado ? "rgba(201,149,58,0.03)" : "transparent"
               return (
                 <tr key={i} style={{ background: rowBg }}>
-                  {colunas.map((c, idx) => {
+                  {colunasVisiveis.map((c, idx) => {
                     const { conteudo, ehFat } = valorCelula(linha, c)
                     const eMes = idx === 0
                     return (

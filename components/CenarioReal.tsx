@@ -1,7 +1,9 @@
 import { type DadosReais } from "@/lib/supabase"
 import {
+  ORIGEM_PADRAO,
   type Ano,
   type Mes,
+  type OrigemDadosReais,
   corStatusMeta,
   formatBRL,
   formatNumero,
@@ -22,17 +24,21 @@ type ChaveReal =
   | "contratos_real"
   | "faturamento_real"
 
-const LINHAS: {
+interface LinhaMetricaReal {
   rotulo: string
   chave: ChaveReal
   metaKey: keyof MetaComparavel
   tipo: "moeda" | "numero"
-}[] = [
+  apenasPago?: boolean
+}
+
+const LINHAS: LinhaMetricaReal[] = [
   {
     rotulo: "Investimento",
     chave: "investimento_real",
     metaKey: "investimento",
     tipo: "moeda",
+    apenasPago: true,
   },
   { rotulo: "Leads", chave: "leads_real", metaKey: "leads", tipo: "numero" },
   {
@@ -60,12 +66,17 @@ export default function CenarioReal({
   meta,
   mes,
   ano,
+  origem = ORIGEM_PADRAO,
 }: {
   dados: DadosReais | null
   meta: MetaComparavel
   mes: Mes
   ano: Ano
+  origem?: OrigemDadosReais
 }) {
+  const ehPago = origem === "pago"
+  const linhasVisiveis = LINHAS.filter((l) => !l.apenasPago || ehPago)
+  const rotuloOrigem = ehPago ? "Tráfego pago" : "Prospecção orgânica"
   const cpl =
     dados?.investimento_real !== null &&
     dados?.investimento_real !== undefined &&
@@ -89,23 +100,40 @@ export default function CenarioReal({
       className="glass h-full flex flex-col"
       style={{ padding: 24 }}
     >
-      <p
-        style={{
-          fontSize: 9,
-          letterSpacing: "2px",
-          color: "rgba(255,255,255,0.35)",
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        Cenário Real · {mes} {ano}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p
+          style={{
+            fontSize: 9,
+            letterSpacing: "2px",
+            color: "rgba(255,255,255,0.35)",
+            textTransform: "uppercase",
+            fontWeight: 500,
+          }}
+        >
+          Cenário Real · {mes} {ano}
+        </p>
+        <span
+          style={{
+            fontSize: 9,
+            letterSpacing: "1.5px",
+            color: "#C9953A",
+            textTransform: "uppercase",
+            fontWeight: 600,
+            padding: "3px 9px",
+            borderRadius: 999,
+            border: "0.5px solid rgba(201,149,58,0.4)",
+            background: "rgba(201,149,58,0.08)",
+          }}
+        >
+          {rotuloOrigem}
+        </span>
+      </div>
 
       <div
         className="grid grid-cols-2 flex-1"
         style={{ gap: 10, marginTop: 18 }}
       >
-        {LINHAS.map((l) => {
+        {linhasVisiveis.map((l) => {
           const real = dados ? dados[l.chave] : null
           const metaValor = meta[l.metaKey]
           const temReal = typeof real === "number"
@@ -177,6 +205,7 @@ export default function CenarioReal({
           )
         })}
 
+        {ehPago && (
         <div
           className="glass"
           style={{ padding: "14px 16px", borderRadius: 12 }}
@@ -229,7 +258,9 @@ export default function CenarioReal({
             invest. ÷ leads
           </p>
         </div>
+        )}
 
+        {ehPago && (
         <div
           className="glass"
           style={{ padding: "14px 16px", borderRadius: 12 }}
@@ -282,7 +313,9 @@ export default function CenarioReal({
             invest. ÷ contratos
           </p>
         </div>
+        )}
 
+        {ehPago && (
         <div
           className="glass"
           style={{ padding: "14px 16px", borderRadius: 12 }}
@@ -336,6 +369,7 @@ export default function CenarioReal({
             entregues no mês
           </p>
         </div>
+        )}
       </div>
 
       {dados?.observacoes && (

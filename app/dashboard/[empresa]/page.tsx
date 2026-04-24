@@ -7,6 +7,7 @@ import DrawerEditarMeta from "@/components/DrawerEditarMeta"
 import GraficoFaturamento from "@/components/GraficoFaturamento"
 import TabelaMeses from "@/components/TabelaMeses"
 import DrawerDadosReais from "@/components/DrawerDadosReais"
+import ToggleOrigem from "@/components/ToggleOrigem"
 import { estaAutenticado } from "@/lib/auth"
 import {
   MESES,
@@ -20,6 +21,7 @@ import {
   type Mes,
   getDadosEmpresa,
   mesValido,
+  origemValida,
   subtituloDaEmpresa,
 } from "@/lib/data"
 import { supabaseConfigurado } from "@/lib/supabase"
@@ -32,7 +34,7 @@ export default async function EmpresaPage({
   searchParams,
 }: {
   params: { empresa: string }
-  searchParams: { mes?: string; ano?: string }
+  searchParams: { mes?: string; ano?: string; origem?: string }
 }) {
   if (!estaAutenticado()) {
     redirect("/login")
@@ -45,13 +47,14 @@ export default async function EmpresaPage({
 
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
+  const origem = origemValida(searchParams?.origem)
   const temProjecao = anoTemProjecao(ano)
 
   const dadosHardcoded = getDadosEmpresa(empresa.slug as EmpresaSlug, ano)
 
   const [real, todosReais, overrides] = await Promise.all([
-    getDadosReaisMes(empresa.db, mes, ano),
-    getDadosReais(empresa.db, ano),
+    getDadosReaisMes(empresa.db, mes, ano, origem),
+    getDadosReais(empresa.db, ano, origem),
     getMetasOverrideEmpresa(empresa.db, ano),
   ])
 
@@ -140,12 +143,18 @@ export default async function EmpresaPage({
               }
               subtitulo={subtituloDaEmpresa(empresa)}
             />
+            {empresa.tipo !== "diego" && (
+              <div style={{ marginTop: 14 }}>
+                <ToggleOrigem origem={origem} />
+              </div>
+            )}
           </div>
           {empresa.tipo !== "diego" && (
             <DrawerDadosReais
               empresa={empresa.db}
               mes={mes}
               ano={ano}
+              origem={origem}
               supabaseOk={supabaseOk}
               tipoEmpresa={empresa.tipo}
               existentes={real}
@@ -163,6 +172,7 @@ export default async function EmpresaPage({
               meta={metaComparavel}
               mes={mes}
               ano={ano}
+              origem={origem}
             />
             {temProjecao && pontos.length > 0 && (
               <GraficoFaturamento dados={pontos} />
@@ -201,6 +211,7 @@ export default async function EmpresaPage({
               linhas={linhas}
               reais={mapaReais}
               mesAtual={mes}
+              origem={origem}
               acao={
                 <DrawerEditarMeta
                   empresa={empresa.db}

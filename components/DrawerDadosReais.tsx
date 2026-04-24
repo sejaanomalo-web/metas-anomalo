@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { salvarDadosReaisAction } from "@/lib/dados-reais"
 import type { DadosReais } from "@/lib/supabase"
-import type { Ano, EmpresaDb, Mes } from "@/lib/data"
+import { ORIGEM_PADRAO, type Ano, type EmpresaDb, type Mes, type OrigemDadosReais } from "@/lib/data"
 
 interface Props {
   empresa: EmpresaDb
@@ -13,6 +13,7 @@ interface Props {
   supabaseOk: boolean
   tipoEmpresa: "leads-reunioes-contratos" | "hato" | "aton" | "diego"
   existentes: DadosReais | null
+  origem?: OrigemDadosReais
 }
 
 export default function DrawerDadosReais({
@@ -22,6 +23,7 @@ export default function DrawerDadosReais({
   supabaseOk,
   tipoEmpresa,
   existentes,
+  origem = ORIGEM_PADRAO,
 }: Props) {
   const [aberto, setAberto] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -50,6 +52,9 @@ export default function DrawerDadosReais({
     tipoEmpresa === "aton" || tipoEmpresa === "hato"
       ? "Vendas reais"
       : "Contratos reais"
+
+  const ehPago = origem === "pago"
+  const rotuloOrigem = ehPago ? "Tráfego pago" : "Prospecção orgânica"
 
   return (
     <>
@@ -112,6 +117,18 @@ export default function DrawerDadosReais({
                   >
                     {empresa}
                   </p>
+                  <p
+                    style={{
+                      fontSize: 10,
+                      letterSpacing: "1.2px",
+                      color: "#C9953A",
+                      fontWeight: 600,
+                      marginTop: 6,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {rotuloOrigem}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -153,14 +170,17 @@ export default function DrawerDadosReais({
               <input type="hidden" name="empresa" value={empresa} />
               <input type="hidden" name="mes" value={mes} />
               <input type="hidden" name="ano" value={ano} />
+              <input type="hidden" name="origem" value={origem} />
 
-              <Campo
-                label="Investimento real (R$)"
-                name="investimento_real"
-                tipo="number"
-                step="0.01"
-                defaultValue={existentes?.investimento_real ?? ""}
-              />
+              {ehPago && (
+                <Campo
+                  label="Investimento real (R$)"
+                  name="investimento_real"
+                  tipo="number"
+                  step="0.01"
+                  defaultValue={existentes?.investimento_real ?? ""}
+                />
+              )}
               <Campo
                 label="Leads reais"
                 name="leads_real"
@@ -186,12 +206,14 @@ export default function DrawerDadosReais({
                 step="0.01"
                 defaultValue={existentes?.faturamento_real ?? ""}
               />
-              <Campo
-                label="Criativos entregues"
-                name="criativos_entregues"
-                tipo="number"
-                defaultValue={existentes?.criativos_entregues ?? ""}
-              />
+              {ehPago && (
+                <Campo
+                  label="Criativos entregues"
+                  name="criativos_entregues"
+                  tipo="number"
+                  defaultValue={existentes?.criativos_entregues ?? ""}
+                />
+              )}
 
               <label className="block">
                 <span
