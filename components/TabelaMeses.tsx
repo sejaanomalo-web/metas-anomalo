@@ -388,6 +388,9 @@ export default function TabelaMeses({
       {modoDiario && origem === "pago" && (
         <SecaoCriativosPorDia dias={dadosDiarios ?? []} />
       )}
+      {modoDiario && origem === "organico" && (
+        <SecaoAtividadeOrganicaPorDia dias={dadosDiarios ?? []} />
+      )}
     </div>
   )
 }
@@ -470,6 +473,120 @@ function SecaoCriativosPorDia({
                   </span>
                 </span>
               ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SecaoAtividadeOrganicaPorDia({
+  dias,
+}: {
+  dias: DiaDetalhado[]
+}) {
+  const diasComAtividade = dias.filter(
+    (d) =>
+      d.preenchedores.length > 0 ||
+      (d.observacoes && d.observacoes.trim().length > 0)
+  )
+  if (diasComAtividade.length === 0) return null
+
+  return (
+    <div
+      style={{
+        marginTop: 24,
+        paddingTop: 20,
+        borderTop: "0.5px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      <p
+        style={{
+          fontSize: 9,
+          letterSpacing: "2px",
+          color: "rgba(255,255,255,0.35)",
+          textTransform: "uppercase",
+          fontWeight: 500,
+          marginBottom: 12,
+        }}
+      >
+        Atividade dos SDRs · detalhe por dia
+      </p>
+      <div className="space-y-3">
+        {diasComAtividade.map((d) => (
+          <div
+            key={d.data}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "auto 1fr",
+              gap: 14,
+              alignItems: "start",
+              padding: "10px 0",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: "#8cb4dc",
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                minWidth: 44,
+              }}
+            >
+              Dia {String(d.diaMes).padStart(2, "0")}
+            </div>
+            <div className="space-y-2">
+              {d.preenchedores.length > 0 && (
+                <div className="flex flex-wrap" style={{ gap: 6 }}>
+                  {d.preenchedores.map((nome, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        fontSize: 11,
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        border: "0.5px solid rgba(140,180,220,0.25)",
+                        background: "rgba(140,180,220,0.08)",
+                        color: "#8cb4dc",
+                        fontWeight: 500,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {nome}
+                    </span>
+                  ))}
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: "rgba(255,255,255,0.3)",
+                      alignSelf: "center",
+                      marginLeft: 2,
+                    }}
+                  >
+                    · {d.submissoes}{" "}
+                    {d.submissoes === 1 ? "submissão" : "submissões"}
+                  </span>
+                </div>
+              )}
+              {d.observacoes && d.observacoes.trim().length > 0 && (
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(255,255,255,0.65)",
+                    fontWeight: 300,
+                    lineHeight: 1.45,
+                    whiteSpace: "pre-wrap",
+                    padding: "6px 10px",
+                    background: "rgba(255,255,255,0.02)",
+                    borderLeft: "2px solid rgba(140,180,220,0.3)",
+                    borderRadius: 4,
+                  }}
+                >
+                  {d.observacoes}
+                </p>
+              )}
             </div>
           </div>
         ))}
