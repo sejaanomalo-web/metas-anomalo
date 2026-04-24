@@ -26,12 +26,16 @@ const STICKY_BG = "#0b0b0b"
 // Colunas que só fazem sentido quando origem = pago. No modo orgânico
 // elas somem da tabela.
 const COLUNAS_APENAS_PAGO = new Set(["verba", "criativos"])
+// Colunas que só fazem sentido quando origem = organico (ex: respostas
+// são lançadas pelo SDR). No pago elas somem da tabela.
+const COLUNAS_APENAS_ORGANICO = new Set(["respostas"])
 
 // Mapeia chave da coluna de meta para o campo equivalente em dados_reais.
 // Colunas sem equivalente ficam vazias no modo Cenário.
 const CHAVE_TO_REAL: Record<string, keyof DadosReais> = {
   verba: "investimento_real",
   leads: "leads_real",
+  respostas: "respostas",
   reunioes: "reunioes_real",
   orcamentos: "reunioes_real",
   contratos: "contratos_real",
@@ -47,6 +51,7 @@ const CHAVE_TO_REAL: Record<string, keyof DadosReais> = {
 const CHAVE_TO_DIARIO: Record<string, keyof DiaDetalhado> = {
   verba: "investimento",
   leads: "leads",
+  respostas: "respostas",
   reunioes: "reunioes",
   orcamentos: "reunioes",
   contratos: "contratos",
@@ -80,10 +85,13 @@ export default function TabelaMeses({
   const modoDiario = modo === "cenario" && resumo === "diario" && temDiarios
 
   const colunasVisiveis = (() => {
-    const filtradas =
-      origem === "organico"
-        ? colunas.filter((c) => !COLUNAS_APENAS_PAGO.has(c.chave))
-        : colunas
+    const filtradas = colunas.filter((c) => {
+      if (origem === "organico" && COLUNAS_APENAS_PAGO.has(c.chave))
+        return false
+      if (origem === "pago" && COLUNAS_APENAS_ORGANICO.has(c.chave))
+        return false
+      return true
+    })
     if (!modoDiario) return filtradas
     // No modo diário, só primeira coluna + colunas com mapping em
     // CHAVE_TO_DIARIO. A primeira vira "Dia".
@@ -103,6 +111,7 @@ export default function TabelaMeses({
         __dia: String(d.diaMes).padStart(2, "0"),
         verba: d.investimento,
         leads: d.leads,
+        respostas: d.respostas,
         reunioes: d.reunioes,
         orcamentos: d.reunioes,
         contratos: d.contratos,
