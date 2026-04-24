@@ -1,6 +1,6 @@
 "use server"
 
-import type { DadosDiariosLog } from "./supabase"
+import type { CriativoDetalhe, DadosDiariosLog } from "./supabase"
 import { getSupabase } from "./supabase"
 import {
   ANO_PADRAO,
@@ -11,8 +11,11 @@ import {
 
 /**
  * Detalhamento do dia — soma dos deltas de cada métrica reportados em
- * submissões daquele dia. Snapshots (clientes_ativos) e texto
- * (observacoes) ficam com o último valor não-nulo do dia.
+ * submissões daquele dia. Snapshots (clientes_ativos, CPL, CPA) ficam
+ * com o último valor não-nulo do dia; texto (observacoes) idem.
+ * criativosAdicionados lista os novos pares {nome, publico} incluídos
+ * naquele dia (comparação entre o detalhe novo e o anterior em cada
+ * submissão).
  */
 export interface DiaDetalhado {
   data: string // YYYY-MM-DD
@@ -23,8 +26,12 @@ export interface DiaDetalhado {
   contratos: number
   faturamento: number
   criativos: number
+  criativosUsados: number
+  cpl: number | null
+  cpa: number | null
   clientesAtivos: number | null
   observacoes: string | null
+  criativosAdicionados: CriativoDetalhe[]
   submissoes: number
   preenchedores: string[]
 }
@@ -56,6 +63,22 @@ function delta(novo: number | null, anterior: number | null): number {
   const ant = anterior ?? 0
   const d = novo - ant
   return d > 0 ? d : 0
+}
+
+function chaveCriativo(c: CriativoDetalhe): string {
+  return `${c.nome.trim().toLowerCase()}|${c.publico.trim().toLowerCase()}`
+}
+
+function diferencaCriativos(
+  novo: CriativoDetalhe[] | null,
+  anterior: CriativoDetalhe[] | null
+): CriativoDetalhe[] {
+  const novos = Array.isArray(novo) ? novo : []
+  const antigos = Array.isArray(anterior) ? anterior : []
+  const setAnt = new Set(antigos.map(chaveCriativo))
+  return novos.filter(
+    (c) => (c.nome.trim() || c.publico.trim()) && !setAnt.has(chaveCriativo(c))
+  )
 }
 
 export async function getDadosDiariosDoMes(
@@ -96,8 +119,12 @@ export async function getDadosDiariosDoMes(
       contratos: 0,
       faturamento: 0,
       criativos: 0,
+      criativosUsados: 0,
+      cpl: null,
+      cpa: null,
       clientesAtivos: null,
       observacoes: null,
+      criativosAdicionados: [] as CriativoDetalhe[],
       submissoes: 0,
       preenchedores: [],
     }
@@ -108,13 +135,36 @@ export async function getDadosDiariosDoMes(
     atual.contratos += delta(l.contratos_real, l.contratos_anterior)
     atual.faturamento += delta(l.faturamento_real, l.faturamento_anterior)
     atual.criativos += delta(l.criativos_entregues, l.criativos_anterior)
+    atual.criativosUsados += delta(
+      l.criativos_usados,
+      l.criativos_usados_anterior
+    )
 
+    if (l.cpl_real !== null && l.cpl_real !== undefined) atual.cpl = l.cpl_real
+    if (l.cpa_real !== null && l.cpa_real !== undefined) atual.cpa = l.cpa_real
     if (l.clientes_ativos !== null && l.clientes_ativos !== undefined) {
       atual.clientesAtivos = l.clientes_ativos
     }
     if (l.observacoes && l.observacoes.trim().length > 0) {
       atual.observacoes = l.observacoes
     }
+
+    // Acumula criativos adicionados: compara detalhe novo com o anterior
+    // em cada submissão, deduplicando entre submissões do mesmo dia.
+    const adicionadosNaSubmissao = diferencaCriativos(
+      l.criativos_detalhe as CriativoDetalhe[] | null,
+      l.criativos_detalhe_anterior as CriativoDetalhe[] | null
+    )
+    if (adicionadosNaSubmissao.length > 0) {
+      const jaNoDia = new Set(atual.criativosAdicionados.map(chaveCriativo))
+      for (const c of adicionadosNaSubmissao) {
+        if (!jaNoDia.has(chaveCriativo(c))) {
+          atual.criativosAdicionados.push(c)
+          jaNoDia.add(chaveCriativo(c))
+        }
+      }
+    }
+
     atual.submissoes += 1
     if (l.preenchedor_nome && !atual.preenchedores.includes(l.preenchedor_nome)) {
       atual.preenchedores.push(l.preenchedor_nome)

@@ -150,6 +150,16 @@ alter table public.dados_reais
 create unique index if not exists dados_reais_empresa_mes_ano_origem_key
   on public.dados_reais (empresa, mes, ano, origem);
 
+-- Campos extras do formulário do gestor de tráfego:
+-- CPA real (manual), criativos usados (cumulativo) e detalhe jsonb
+-- [{nome, publico}] com a lista de criativos rodados no mês.
+alter table public.dados_reais
+  add column if not exists cpa_real numeric;
+alter table public.dados_reais
+  add column if not exists criativos_usados int;
+alter table public.dados_reais
+  add column if not exists criativos_detalhe jsonb default '[]'::jsonb;
+
 -- Afrouxa a constraint de colaborador em comissionamento para aceitar
 -- nomes livres cadastrados pelo drawer de Pessoas.
 alter table public.comissionamento
@@ -442,6 +452,27 @@ create index if not exists dados_diarios_log_empresa_idx
   on public.dados_diarios_log (empresa, data);
 create index if not exists dados_diarios_log_preenchedor_idx
   on public.dados_diarios_log (preenchedor_id, data);
+
+-- Campos extras do formulário do gestor. CPL/CPA são snapshots, usados
+-- é cumulativo. O detalhe (lista de criativos+público) é sobrescrito em
+-- cada submissão; o *_anterior preserva a lista antes da submissão para
+-- calcular deltas diários (criativos adicionados no dia).
+alter table public.dados_diarios_log
+  add column if not exists cpl_real numeric;
+alter table public.dados_diarios_log
+  add column if not exists cpl_anterior numeric;
+alter table public.dados_diarios_log
+  add column if not exists cpa_real numeric;
+alter table public.dados_diarios_log
+  add column if not exists cpa_anterior numeric;
+alter table public.dados_diarios_log
+  add column if not exists criativos_usados int;
+alter table public.dados_diarios_log
+  add column if not exists criativos_usados_anterior int;
+alter table public.dados_diarios_log
+  add column if not exists criativos_detalhe jsonb default '[]'::jsonb;
+alter table public.dados_diarios_log
+  add column if not exists criativos_detalhe_anterior jsonb default '[]'::jsonb;
 
 alter table public.preenchedores enable row level security;
 alter table public.preenchedor_empresas enable row level security;

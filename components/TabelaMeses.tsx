@@ -384,6 +384,96 @@ export default function TabelaMeses({
           </tbody>
         </table>
       </div>
+
+      {modoDiario && origem === "pago" && (
+        <SecaoCriativosPorDia dias={dadosDiarios ?? []} />
+      )}
+    </div>
+  )
+}
+
+function SecaoCriativosPorDia({
+  dias,
+}: {
+  dias: DiaDetalhado[]
+}) {
+  const diasComCriativos = dias.filter(
+    (d) => d.criativosAdicionados.length > 0
+  )
+  if (diasComCriativos.length === 0) return null
+
+  return (
+    <div
+      style={{
+        marginTop: 24,
+        paddingTop: 20,
+        borderTop: "0.5px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      <p
+        style={{
+          fontSize: 9,
+          letterSpacing: "2px",
+          color: "rgba(255,255,255,0.35)",
+          textTransform: "uppercase",
+          fontWeight: 500,
+          marginBottom: 12,
+        }}
+      >
+        Criativos rodados · detalhe por dia
+      </p>
+      <div className="space-y-3">
+        {diasComCriativos.map((d) => (
+          <div
+            key={d.data}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "auto 1fr",
+              gap: 14,
+              alignItems: "start",
+              padding: "10px 0",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: "#C9953A",
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                minWidth: 44,
+              }}
+            >
+              Dia {String(d.diaMes).padStart(2, "0")}
+            </div>
+            <div className="flex flex-wrap" style={{ gap: 6 }}>
+              {d.criativosAdicionados.map((c, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    fontSize: 11,
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    border: "0.5px solid rgba(255,255,255,0.08)",
+                    background: "rgba(255,255,255,0.02)",
+                    color: "rgba(255,255,255,0.75)",
+                    fontWeight: 400,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <span style={{ color: "#C9953A", fontWeight: 600 }}>
+                    {c.nome || "(sem nome)"}
+                  </span>{" "}
+                  <span style={{ color: "rgba(255,255,255,0.3)" }}>→</span>{" "}
+                  <span style={{ color: "rgba(255,255,255,0.55)" }}>
+                    {c.publico || "(sem público)"}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

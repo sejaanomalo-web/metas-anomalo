@@ -2,6 +2,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
 export type OrigemDados = "pago" | "organico"
 
+export interface CriativoDetalhe {
+  nome: string
+  publico: string
+}
+
 export interface DadosReais {
   id?: string
   empresa: string
@@ -15,6 +20,9 @@ export interface DadosReais {
   faturamento_real: number | null
   criativos_entregues: number | null
   cpl_real: number | null
+  cpa_real?: number | null
+  criativos_usados?: number | null
+  criativos_detalhe?: CriativoDetalhe[] | null
   observacoes: string | null
   clientes_ativos: number | null
   updated_at?: string
@@ -148,12 +156,20 @@ export interface DadosDiariosLog {
   criativos_entregues: number | null
   clientes_ativos: number | null
   observacoes: string | null
+  cpl_real: number | null
+  cpa_real: number | null
+  criativos_usados: number | null
+  criativos_detalhe: CriativoDetalhe[] | null
   investimento_anterior: number | null
   leads_anterior: number | null
   reunioes_anterior: number | null
   contratos_anterior: number | null
   faturamento_anterior: number | null
   criativos_anterior: number | null
+  cpl_anterior: number | null
+  cpa_anterior: number | null
+  criativos_usados_anterior: number | null
+  criativos_detalhe_anterior: CriativoDetalhe[] | null
   created_at?: string
 }
 
