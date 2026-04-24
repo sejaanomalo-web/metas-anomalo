@@ -26,6 +26,7 @@ import {
 } from "@/lib/data"
 import { supabaseConfigurado } from "@/lib/supabase"
 import { getDadosReais, getDadosReaisMes } from "@/lib/dados-reais"
+import { getDadosDiariosDoMes } from "@/lib/dados-diarios"
 import { getMetasOverrideEmpresa } from "@/lib/metas-empresa"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 
@@ -52,10 +53,11 @@ export default async function EmpresaPage({
 
   const dadosHardcoded = getDadosEmpresa(empresa.slug as EmpresaSlug, ano)
 
-  const [real, todosReais, overrides] = await Promise.all([
+  const [real, todosReais, overrides, dadosDiarios] = await Promise.all([
     getDadosReaisMes(empresa.db, mes, ano, origem),
     getDadosReais(empresa.db, ano, origem),
     getMetasOverrideEmpresa(empresa.db, ano),
+    getDadosDiariosDoMes(empresa.db, mes, ano, origem),
   ])
 
   // Para empresas sem projeções hardcoded (adicionadas via UI), gera
@@ -212,6 +214,7 @@ export default async function EmpresaPage({
               reais={mapaReais}
               mesAtual={mes}
               origem={origem}
+              dadosDiarios={dadosDiarios}
               acao={
                 <DrawerEditarMeta
                   empresa={empresa.db}
