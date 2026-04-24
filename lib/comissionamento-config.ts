@@ -4,12 +4,14 @@ import { revalidatePath } from "next/cache"
 import {
   type Colaborador,
   type ConfiguracaoComissao,
+  type EscopoMeta,
   type FuncaoTime,
+  type MesAplicavel,
   type MetaComissionamento,
   getSupabase,
   supabaseConfigurado,
 } from "./supabase"
-import { ANO_PADRAO, type Mes, MESES } from "./data"
+import { ANO_PADRAO, ANOS_DISPONIVEIS, type Mes, MESES } from "./data"
 import {
   ESCALA_PADRAO,
   GATILHOS_PADRAO,
@@ -23,6 +25,55 @@ export interface ResultadoConfig {
 
 function mesValido(m: string): m is Mes {
   return (MESES as readonly string[]).includes(m)
+}
+
+function sanitizarMesesAplicaveis(raw: unknown): MesAplicavel[] | null {
+  if (!Array.isArray(raw)) return null
+  const anosValidos = new Set<number>(ANOS_DISPONIVEIS as readonly number[])
+  const vistos = new Set<string>()
+  const resultado: MesAplicavel[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue
+    const mes = String((item as { mes?: unknown }).mes ?? "")
+    const ano = Number((item as { ano?: unknown }).ano)
+    if (!mesValido(mes)) continue
+    if (!Number.isFinite(ano) || !anosValidos.has(ano)) continue
+    const chave = `${mes}-${ano}`
+    if (vistos.has(chave)) continue
+    vistos.add(chave)
+    resultado.push({ mes, ano })
+  }
+  return resultado.length > 0 ? resultado : null
+}
+
+function metaAplicavel(
+  meta: MetaComissionamento,
+  mes: Mes,
+  ano: number
+): boolean {
+  if (meta.escopo === "permanente") return true
+  if (meta.mes === mes && meta.ano === ano) return true
+  const lista = Array.isArray(meta.meses_aplicaveis) ? meta.meses_aplicaveis : []
+  return lista.some((p) => p.mes === mes && p.ano === ano)
+}
+
+function prioridadeMeta(
+  meta: MetaComissionamento,
+  mes: Mes,
+  ano: number
+): number {
+  // menor = maior prioridade; exato > lista > permanente
+  if (meta.escopo !== "permanente" && meta.mes === mes && meta.ano === ano) {
+    return 0
+  }
+  const lista = Array.isArray(meta.meses_aplicaveis) ? meta.meses_aplicaveis : []
+  if (
+    meta.escopo !== "permanente" &&
+    lista.some((p) => p.mes === mes && p.ano === ano)
+  ) {
+    return 1
+  }
+  return 2
 }
 
 function sanitizarFaixasPercentual(
@@ -109,14 +160,18 @@ export async function getMetaComissionamento(
     .from("metas_comissionamento")
     .select("*")
     .eq("colaborador", colaborador)
-    .eq("mes", mes)
-    .eq("ano", ano)
-    .maybeSingle()
   if (error) {
     console.error("[metas_comissionamento] get error", error.message)
     return null
   }
-  return (data ?? null) as MetaComissionamento | null
+  const candidatas = ((data ?? []) as MetaComissionamento[]).filter((m) =>
+    metaAplicavel(m, mes, ano)
+  )
+  if (candidatas.length === 0) return null
+  candidatas.sort(
+    (a, b) => prioridadeMeta(a, mes, ano) - prioridadeMeta(b, mes, ano)
+  )
+  return candidatas[0]
 }
 
 export async function listarMetasDoMes(
@@ -128,17 +183,42 @@ export async function listarMetasDoMes(
   const { data, error } = await supabase
     .from("metas_comissionamento")
     .select("*")
-    .eq("mes", mes)
-    .eq("ano", ano)
   if (error) {
     console.error("[metas_comissionamento] list error", error.message)
     return new Map()
   }
-  const map = new Map<string, MetaComissionamento>()
+  const porColaborador = new Map<string, MetaComissionamento[]>()
   for (const d of (data ?? []) as MetaComissionamento[]) {
-    map.set(d.colaborador, d)
+    if (!metaAplicavel(d, mes, ano)) continue
+    const lista = porColaborador.get(d.colaborador) ?? []
+    lista.push(d)
+    porColaborador.set(d.colaborador, lista)
+  }
+  const map = new Map<string, MetaComissionamento>()
+  for (const [chave, lista] of porColaborador) {
+    lista.sort(
+      (a, b) => prioridadeMeta(a, mes, ano) - prioridadeMeta(b, mes, ano)
+    )
+    map.set(chave, lista[0])
   }
   return map
+}
+
+export async function listarTodasMetasDoColaborador(
+  colaborador: string
+): Promise<MetaComissionamento[]> {
+  const supabase = getSupabase()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("metas_comissionamento")
+    .select("*")
+    .eq("colaborador", colaborador)
+    .order("updated_at", { ascending: false })
+  if (error) {
+    console.error("[metas_comissionamento] colaborador error", error.message)
+    return []
+  }
+  return (data ?? []) as MetaComissionamento[]
 }
 
 export async function salvarMetaComissaoAction(
@@ -153,6 +233,18 @@ export async function salvarMetaComissaoAction(
   const ano = parseInt(anoRaw, 10) || ANO_PADRAO
   const configuracaoRaw = String(formData.get("configuracao") ?? "")
   const configuracao = parseConfiguracao(configuracaoRaw)
+  const escopoRaw = String(formData.get("escopo") ?? "mensal")
+  const escopo: EscopoMeta =
+    escopoRaw === "permanente" ? "permanente" : "mensal"
+  const mesesRaw = String(formData.get("meses_aplicaveis") ?? "")
+  let mesesAplicaveis: MesAplicavel[] | null = null
+  if (mesesRaw && escopo === "mensal") {
+    try {
+      mesesAplicaveis = sanitizarMesesAplicaveis(JSON.parse(mesesRaw))
+    } catch {
+      mesesAplicaveis = null
+    }
+  }
 
   if (!colaborador || !mesValido(mes) || !configuracao) {
     return { ok: false, erro: "Dados inválidos." }
@@ -161,24 +253,76 @@ export async function salvarMetaComissaoAction(
   const supabase = getSupabase()
   if (!supabase) return { ok: false, erro: "Supabase indisponível." }
 
-  const payload: MetaComissionamento = {
-    colaborador,
-    mes,
-    ano,
-    configuracao,
-    updated_at: new Date().toISOString(),
-  }
+  if (escopo === "permanente") {
+    // Uma só meta permanente por colaborador — remove qualquer outra antes
+    // de gravar esta, para não colidir com o índice parcial.
+    await supabase
+      .from("metas_comissionamento")
+      .delete()
+      .eq("colaborador", colaborador)
+      .eq("escopo", "permanente")
 
-  const { error } = await supabase
-    .from("metas_comissionamento")
-    .upsert(payload, { onConflict: "colaborador,mes,ano" })
-
-  if (error) {
-    console.error("[metas_comissionamento] upsert error", error.message)
-    return { ok: false, erro: error.message }
+    const payload: MetaComissionamento = {
+      colaborador,
+      mes,
+      ano,
+      configuracao,
+      escopo: "permanente",
+      meses_aplicaveis: null,
+      updated_at: new Date().toISOString(),
+    }
+    const { error } = await supabase
+      .from("metas_comissionamento")
+      .upsert(payload, { onConflict: "colaborador,mes,ano" })
+    if (error) {
+      console.error("[metas_comissionamento] upsert perm error", error.message)
+      return { ok: false, erro: error.message }
+    }
+  } else {
+    const payload: MetaComissionamento = {
+      colaborador,
+      mes,
+      ano,
+      configuracao,
+      escopo: "mensal",
+      meses_aplicaveis: mesesAplicaveis,
+      updated_at: new Date().toISOString(),
+    }
+    const { error } = await supabase
+      .from("metas_comissionamento")
+      .upsert(payload, { onConflict: "colaborador,mes,ano" })
+    if (error) {
+      console.error("[metas_comissionamento] upsert error", error.message)
+      return { ok: false, erro: error.message }
+    }
   }
 
   revalidatePath("/dashboard/comissionamento")
+  revalidatePath("/dashboard")
+  return { ok: true }
+}
+
+export async function excluirMetaComissaoAction(
+  formData: FormData
+): Promise<ResultadoConfig> {
+  if (!supabaseConfigurado()) {
+    return { ok: false, erro: "Supabase não configurado." }
+  }
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, erro: "ID inválido." }
+  const supabase = getSupabase()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const { error } = await supabase
+    .from("metas_comissionamento")
+    .delete()
+    .eq("id", id)
+  if (error) {
+    console.error("[metas_comissionamento] delete error", error.message)
+    return { ok: false, erro: error.message }
+  }
+  revalidatePath("/dashboard/comissionamento")
+  revalidatePath("/dashboard")
   return { ok: true }
 }
 

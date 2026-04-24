@@ -58,6 +58,23 @@ create table if not exists public.metas_comissionamento (
   unique (colaborador, mes, ano)
 );
 
+-- Escopo da meta: 'mensal' aplica só ao (mes, ano) da linha (ou aos pares
+-- listados em meses_aplicaveis); 'permanente' aplica a todos os meses.
+alter table public.metas_comissionamento
+  add column if not exists escopo text not null default 'mensal';
+alter table public.metas_comissionamento
+  drop constraint if exists metas_comissionamento_escopo_check;
+alter table public.metas_comissionamento
+  add constraint metas_comissionamento_escopo_check
+  check (escopo in ('mensal', 'permanente'));
+alter table public.metas_comissionamento
+  add column if not exists meses_aplicaveis jsonb;
+
+-- Índice parcial: só uma meta permanente por colaborador.
+create unique index if not exists metas_permanentes_unique_idx
+  on public.metas_comissionamento (colaborador)
+  where escopo = 'permanente';
+
 create table if not exists public.colaboradores (
   id uuid primary key default gen_random_uuid(),
   nome text not null,

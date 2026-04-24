@@ -73,12 +73,21 @@ export type ConfiguracaoComissao =
   | { tipo: "percentual"; faixas: FaixaPercentual[] }
   | ConfiguracaoPersonalizada
 
+export type EscopoMeta = "mensal" | "permanente"
+
+export interface MesAplicavel {
+  mes: string
+  ano: number
+}
+
 export interface MetaComissionamento {
   id?: string
   colaborador: string
   mes: string
   ano: number
   configuracao: ConfiguracaoComissao
+  escopo?: EscopoMeta
+  meses_aplicaveis?: MesAplicavel[] | null
   updated_at?: string
 }
 
