@@ -1,6 +1,10 @@
 "use server"
 
-import type { CriativoDetalhe, DadosDiariosLog } from "./supabase"
+import type {
+  CriativoDetalhe,
+  DadosDiariosLog,
+  PublicoProspectado,
+} from "./supabase"
 import { getSupabase } from "./supabase"
 import {
   ANO_PADRAO,
@@ -27,11 +31,13 @@ export interface DiaDetalhado {
   faturamento: number
   criativos: number
   criativosUsados: number
+  respostas: number
   cpl: number | null
   cpa: number | null
   clientesAtivos: number | null
   observacoes: string | null
   criativosAdicionados: CriativoDetalhe[]
+  publicosAdicionados: PublicoProspectado[]
   submissoes: number
   preenchedores: string[]
 }
@@ -81,6 +87,37 @@ function diferencaCriativos(
   )
 }
 
+function chavePublico(p: PublicoProspectado): string {
+  return p.publico.trim().toLowerCase()
+}
+
+function diferencaPublicos(
+  novo: PublicoProspectado[] | null,
+  anterior: PublicoProspectado[] | null
+): PublicoProspectado[] {
+  const novos = Array.isArray(novo) ? novo : []
+  const antigos = Array.isArray(anterior) ? anterior : []
+  const antMap = new Map<string, number>()
+  for (const a of antigos) {
+    if (!a.publico.trim()) continue
+    antMap.set(
+      chavePublico(a),
+      (antMap.get(chavePublico(a)) ?? 0) + (a.leads || 0)
+    )
+  }
+  const out: PublicoProspectado[] = []
+  for (const n of novos) {
+    if (!n.publico.trim()) continue
+    const ant = antMap.get(chavePublico(n)) ?? 0
+    const diff = (n.leads || 0) - ant
+    if (diff > 0 || ant === 0) {
+      // Novo público ou incremento de leads nele no dia.
+      out.push({ publico: n.publico, leads: diff > 0 ? diff : n.leads || 0 })
+    }
+  }
+  return out
+}
+
 export async function getDadosDiariosDoMes(
   empresa: string,
   mes: Mes,
@@ -120,11 +157,13 @@ export async function getDadosDiariosDoMes(
       faturamento: 0,
       criativos: 0,
       criativosUsados: 0,
+      respostas: 0,
       cpl: null,
       cpa: null,
       clientesAtivos: null,
       observacoes: null,
       criativosAdicionados: [] as CriativoDetalhe[],
+      publicosAdicionados: [] as PublicoProspectado[],
       submissoes: 0,
       preenchedores: [],
     }
@@ -139,6 +178,7 @@ export async function getDadosDiariosDoMes(
       l.criativos_usados,
       l.criativos_usados_anterior
     )
+    atual.respostas += delta(l.respostas, l.respostas_anterior)
 
     if (l.cpl_real !== null && l.cpl_real !== undefined) atual.cpl = l.cpl_real
     if (l.cpa_real !== null && l.cpa_real !== undefined) atual.cpa = l.cpa_real
@@ -161,6 +201,26 @@ export async function getDadosDiariosDoMes(
         if (!jaNoDia.has(chaveCriativo(c))) {
           atual.criativosAdicionados.push(c)
           jaNoDia.add(chaveCriativo(c))
+        }
+      }
+    }
+
+    // Públicos prospectados: registra novos públicos ou incrementos de
+    // leads sobre públicos já existentes. Agrupa por nome do público no
+    // mesmo dia.
+    const publicosNaSubmissao = diferencaPublicos(
+      l.publicos_prospectados as PublicoProspectado[] | null,
+      l.publicos_prospectados_anterior as PublicoProspectado[] | null
+    )
+    if (publicosNaSubmissao.length > 0) {
+      for (const p of publicosNaSubmissao) {
+        const existente = atual.publicosAdicionados.find(
+          (x) => chavePublico(x) === chavePublico(p)
+        )
+        if (existente) {
+          existente.leads += p.leads
+        } else {
+          atual.publicosAdicionados.push({ ...p })
         }
       }
     }

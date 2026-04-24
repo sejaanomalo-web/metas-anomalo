@@ -160,6 +160,14 @@ alter table public.dados_reais
 alter table public.dados_reais
   add column if not exists criativos_detalhe jsonb default '[]'::jsonb;
 
+-- Campos extras do formulário do SDR:
+-- respostas cumulativas e lista de públicos prospectados jsonb
+-- [{publico, leads}] com a qtd de leads gerados por público.
+alter table public.dados_reais
+  add column if not exists respostas int;
+alter table public.dados_reais
+  add column if not exists publicos_prospectados jsonb default '[]'::jsonb;
+
 -- Afrouxa a constraint de colaborador em comissionamento para aceitar
 -- nomes livres cadastrados pelo drawer de Pessoas.
 alter table public.comissionamento
@@ -473,6 +481,18 @@ alter table public.dados_diarios_log
   add column if not exists criativos_detalhe jsonb default '[]'::jsonb;
 alter table public.dados_diarios_log
   add column if not exists criativos_detalhe_anterior jsonb default '[]'::jsonb;
+
+-- Campos extras do SDR no log de auditoria. respostas é cumulativo
+-- (monotônico). publicos_prospectados é sobrescrito; o *_anterior
+-- preserva a lista antes da submissão para calcular o delta diário.
+alter table public.dados_diarios_log
+  add column if not exists respostas int;
+alter table public.dados_diarios_log
+  add column if not exists respostas_anterior int;
+alter table public.dados_diarios_log
+  add column if not exists publicos_prospectados jsonb default '[]'::jsonb;
+alter table public.dados_diarios_log
+  add column if not exists publicos_prospectados_anterior jsonb default '[]'::jsonb;
 
 alter table public.preenchedores enable row level security;
 alter table public.preenchedor_empresas enable row level security;

@@ -9,6 +9,7 @@ import {
   type PapelPreenchedor,
   type Preenchedor,
   type PreenchedorEmpresa,
+  type PublicoProspectado,
   getSupabase,
   supabaseConfigurado,
 } from "./supabase"
@@ -306,6 +307,25 @@ function sanitizarCriativosDetalhe(raw: unknown): CriativoDetalhe[] {
   return out
 }
 
+function sanitizarPublicosProspectados(
+  raw: unknown
+): PublicoProspectado[] {
+  if (!Array.isArray(raw)) return []
+  const out: PublicoProspectado[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue
+    const publico = String((item as { publico?: unknown }).publico ?? "").trim()
+    const leadsRaw = (item as { leads?: unknown }).leads
+    const leads = Number(leadsRaw)
+    if (!publico && (!Number.isFinite(leads) || leads <= 0)) continue
+    out.push({
+      publico,
+      leads: Number.isFinite(leads) && leads > 0 ? Math.floor(leads) : 0,
+    })
+  }
+  return out
+}
+
 export interface ResultadoSubmissao {
   ok: boolean
   erro?: string
@@ -371,8 +391,10 @@ export async function submeterFormularioAction(
   // 5. Lê campos do form
   // - Gestor (pago): investimento, leads, criativos disponíveis, criativos
   //   usados, CPL, CPA, detalhe. NÃO envia reuniões/contratos/faturamento/
-  //   clientes (esses ficam só no orgânico).
-  // - SDR (orgânico): leads, reuniões, contratos, faturamento, observações.
+  //   clientes.
+  // - SDR (orgânico): leads, respostas, reuniões, lista de públicos
+  //   prospectados e observações. NÃO envia mais contratos nem
+  //   faturamento.
   const investimento_real = ehPago
     ? parseNumeroBR(formData.get("investimento_real"))
     : null
@@ -380,12 +402,8 @@ export async function submeterFormularioAction(
   const reunioes_real = ehPago
     ? null
     : parseIntNull(formData.get("reunioes_real"))
-  const contratos_real = ehPago
-    ? null
-    : parseIntNull(formData.get("contratos_real"))
-  const faturamento_real = ehPago
-    ? null
-    : parseNumeroBR(formData.get("faturamento_real"))
+  const contratos_real = null
+  const faturamento_real = null
   const criativos_entregues = ehPago
     ? parseIntNull(formData.get("criativos_entregues"))
     : null
@@ -405,13 +423,25 @@ export async function submeterFormularioAction(
         }
       })()
     : null
+  const respostas = ehPago ? null : parseIntNull(formData.get("respostas"))
+  const publicos_prospectados: PublicoProspectado[] | null = ehPago
+    ? null
+    : (() => {
+        const raw = String(formData.get("publicos_prospectados") ?? "")
+        if (!raw) return []
+        try {
+          return sanitizarPublicosProspectados(JSON.parse(raw))
+        } catch {
+          return []
+        }
+      })()
   // Snapshot: gestor não envia mais clientes_ativos; preserva o atual.
   const clientes_ativos = atual?.clientes_ativos ?? null
   const observacoes = String(formData.get("observacoes") ?? "").trim() || null
 
   // 6. Monotonicidade — só cresce (investimento, leads, reuniões, contratos,
-  //    faturamento, criativos entregues/disponíveis, criativos usados).
-  //    CPL e CPA são snapshots (podem oscilar).
+  //    faturamento, criativos entregues/disponíveis, criativos usados,
+  //    respostas). CPL e CPA são snapshots (podem oscilar).
   type CampoCumul =
     | "investimento_real"
     | "leads_real"
@@ -420,6 +450,7 @@ export async function submeterFormularioAction(
     | "faturamento_real"
     | "criativos_entregues"
     | "criativos_usados"
+    | "respostas"
   const cumulativos: { campo: CampoCumul; novo: number | null }[] = [
     { campo: "investimento_real", novo: investimento_real },
     { campo: "leads_real", novo: leads_real },
@@ -428,6 +459,7 @@ export async function submeterFormularioAction(
     { campo: "faturamento_real", novo: faturamento_real },
     { campo: "criativos_entregues", novo: criativos_entregues },
     { campo: "criativos_usados", novo: criativos_usados },
+    { campo: "respostas", novo: respostas },
   ]
   for (const { campo, novo } of cumulativos) {
     if (novo === null) continue
@@ -465,6 +497,13 @@ export async function submeterFormularioAction(
     criativos_detalhe: ehPago
       ? criativos_detalhe
       : atual?.criativos_detalhe ?? null,
+    respostas: ehPago
+      ? atual?.respostas ?? null
+      : respostas ?? atual?.respostas ?? null,
+    // Públicos prospectados: SDR sobrescreve a lista; pago preserva.
+    publicos_prospectados: ehPago
+      ? atual?.publicos_prospectados ?? null
+      : publicos_prospectados,
     clientes_ativos,
     observacoes: observacoes ?? atual?.observacoes ?? null,
     updated_at: new Date().toISOString(),
@@ -509,6 +548,12 @@ export async function submeterFormularioAction(
     criativos_detalhe_anterior: ehPago
       ? atual?.criativos_detalhe ?? []
       : null,
+    respostas: ehPago ? null : respostas,
+    respostas_anterior: atual?.respostas ?? null,
+    publicos_prospectados: ehPago ? null : publicos_prospectados,
+    publicos_prospectados_anterior: ehPago
+      ? null
+      : atual?.publicos_prospectados ?? [],
   }
   const { error: erroLog } = await supabase
     .from("dados_diarios_log")
@@ -535,6 +580,7 @@ function rotuloCampo(campo: string): string {
     faturamento_real: "Faturamento",
     criativos_entregues: "Criativos disponíveis",
     criativos_usados: "Criativos usados",
+    respostas: "Respostas",
   }
   return mapa[campo] ?? campo
 }
