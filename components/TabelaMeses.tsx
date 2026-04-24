@@ -489,6 +489,8 @@ function SecaoAtividadeOrganicaPorDia({
   const diasComAtividade = dias.filter(
     (d) =>
       d.preenchedores.length > 0 ||
+      d.publicosAdicionados.length > 0 ||
+      d.respostas > 0 ||
       (d.observacoes && d.observacoes.trim().length > 0)
   )
   if (diasComAtividade.length === 0) return null
@@ -567,7 +569,41 @@ function SecaoAtividadeOrganicaPorDia({
                   >
                     · {d.submissoes}{" "}
                     {d.submissoes === 1 ? "submissão" : "submissões"}
+                    {d.respostas > 0 && (
+                      <>
+                        {" "}· {formatNumero(d.respostas)}{" "}
+                        {d.respostas === 1 ? "resposta" : "respostas"}
+                      </>
+                    )}
                   </span>
+                </div>
+              )}
+              {d.publicosAdicionados.length > 0 && (
+                <div className="flex flex-wrap" style={{ gap: 6 }}>
+                  {d.publicosAdicionados.map((p, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        fontSize: 11,
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        border: "0.5px solid rgba(255,255,255,0.08)",
+                        background: "rgba(255,255,255,0.02)",
+                        color: "rgba(255,255,255,0.75)",
+                        fontWeight: 400,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <span style={{ color: "#8cb4dc", fontWeight: 600 }}>
+                        {p.publico || "(sem público)"}
+                      </span>{" "}
+                      <span style={{ color: "rgba(255,255,255,0.3)" }}>→</span>{" "}
+                      <span style={{ color: "rgba(255,255,255,0.55)" }}>
+                        {formatNumero(p.leads)}{" "}
+                        {p.leads === 1 ? "lead" : "leads"}
+                      </span>
+                    </span>
+                  ))}
                 </div>
               )}
               {d.observacoes && d.observacoes.trim().length > 0 && (

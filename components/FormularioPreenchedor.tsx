@@ -6,6 +6,7 @@ import type {
   CriativoDetalhe,
   DadosReais,
   PapelPreenchedor,
+  PublicoProspectado,
 } from "@/lib/supabase"
 import { submeterFormularioAction } from "@/lib/preenchedores"
 import { type TipoFunil, formatBRL, formatNumero } from "@/lib/data"
@@ -91,12 +92,6 @@ function CardEmpresa({
   const [reunioes, setReunioes] = useState<string>(
     empresa.atual?.reunioes_real?.toString() ?? ""
   )
-  const [contratos, setContratos] = useState<string>(
-    empresa.atual?.contratos_real?.toString() ?? ""
-  )
-  const [faturamento, setFaturamento] = useState<string>(
-    empresa.atual?.faturamento_real?.toString() ?? ""
-  )
   const [criativos, setCriativos] = useState<string>(
     empresa.atual?.criativos_entregues?.toString() ?? ""
   )
@@ -112,6 +107,16 @@ function CardEmpresa({
   const [criativosDetalhe, setCriativosDetalhe] = useState<CriativoDetalhe[]>(
     Array.isArray(empresa.atual?.criativos_detalhe)
       ? (empresa.atual?.criativos_detalhe as CriativoDetalhe[])
+      : []
+  )
+  const [respostas, setRespostas] = useState<string>(
+    empresa.atual?.respostas?.toString() ?? ""
+  )
+  const [publicosProspectados, setPublicosProspectados] = useState<
+    PublicoProspectado[]
+  >(
+    Array.isArray(empresa.atual?.publicos_prospectados)
+      ? (empresa.atual?.publicos_prospectados as PublicoProspectado[])
       : []
   )
   const [observacoes, setObservacoes] = useState<string>(
@@ -147,8 +152,17 @@ function CardEmpresa({
       )
     } else {
       fd.set("reunioes_real", reunioes)
-      fd.set("contratos_real", contratos)
-      fd.set("faturamento_real", faturamento)
+      fd.set("respostas", respostas)
+      fd.set(
+        "publicos_prospectados",
+        JSON.stringify(
+          publicosProspectados.filter(
+            (p) =>
+              p.publico.trim() !== "" ||
+              (Number.isFinite(p.leads) && p.leads > 0)
+          )
+        )
+      )
     }
     startTransition(async () => {
       const r = await submeterFormularioAction(fd)
@@ -258,26 +272,18 @@ function CardEmpresa({
               onChange={setLeads}
             />
             <CampoNumero
+              label="Respostas"
+              valor={respostas}
+              atual={empresa.atual?.respostas ?? null}
+              tipoAtual="numero"
+              onChange={setRespostas}
+            />
+            <CampoNumero
               label={rots.reunioes}
               valor={reunioes}
               atual={empresa.atual?.reunioes_real ?? null}
               tipoAtual="numero"
               onChange={setReunioes}
-            />
-            <CampoNumero
-              label={rots.contratos}
-              valor={contratos}
-              atual={empresa.atual?.contratos_real ?? null}
-              tipoAtual="numero"
-              onChange={setContratos}
-            />
-            <CampoNumero
-              label="Faturamento (R$)"
-              valor={faturamento}
-              atual={empresa.atual?.faturamento_real ?? null}
-              tipoAtual="moeda"
-              onChange={setFaturamento}
-              step="0.01"
             />
           </>
         )}
@@ -287,6 +293,12 @@ function CardEmpresa({
         <DetalheCriativos
           itens={criativosDetalhe}
           onChange={setCriativosDetalhe}
+        />
+      )}
+      {!ehPago && (
+        <DetalhePublicos
+          itens={publicosProspectados}
+          onChange={setPublicosProspectados}
         />
       )}
 
@@ -565,6 +577,178 @@ function DetalheCriativos({
         + Adicionar criativo
       </button>
     </div>
+  )
+}
+
+function DetalhePublicos({
+  itens,
+  onChange,
+}: {
+  itens: PublicoProspectado[]
+  onChange: (v: PublicoProspectado[]) => void
+}) {
+  function atualizar(idx: number, patch: Partial<PublicoProspectado>) {
+    onChange(itens.map((c, i) => (i === idx ? { ...c, ...patch } : c)))
+  }
+  function remover(idx: number) {
+    onChange(itens.filter((_, i) => i !== idx))
+  }
+  function adicionar() {
+    onChange([...itens, { publico: "", leads: 0 }])
+  }
+
+  const totalLeads = itens.reduce(
+    (acc, i) => acc + (Number.isFinite(i.leads) ? i.leads : 0),
+    0
+  )
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div
+        className="flex items-center justify-between"
+        style={{ marginBottom: 8 }}
+      >
+        <span
+          style={{
+            fontSize: 9,
+            letterSpacing: "2px",
+            color: "rgba(255,255,255,0.4)",
+            textTransform: "uppercase",
+            fontWeight: 500,
+          }}
+        >
+          Públicos prospectados · leads gerados
+        </span>
+        <span
+          style={{
+            fontSize: 10,
+            color: "rgba(255,255,255,0.3)",
+            fontWeight: 400,
+          }}
+        >
+          {totalLeads > 0
+            ? `${totalLeads} ${totalLeads === 1 ? "lead" : "leads"}`
+            : `${itens.length} ${itens.length === 1 ? "público" : "públicos"}`}
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {itens.map((c, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-2"
+            style={{ padding: 2 }}
+          >
+            <div className="flex-1" style={{ position: "relative" }}>
+              <TagBadgeAzul>público</TagBadgeAzul>
+              <input
+                value={c.publico}
+                onChange={(e) => atualizar(i, { publico: e.target.value })}
+                className="glass-input"
+                style={{
+                  width: "100%",
+                  padding: "9px 12px 9px 76px",
+                  fontSize: 13,
+                }}
+                placeholder="Ex: Decisores indústria"
+              />
+            </div>
+            <span
+              style={{
+                fontSize: 13,
+                color: "rgba(255,255,255,0.25)",
+                flexShrink: 0,
+              }}
+            >
+              →
+            </span>
+            <div
+              style={{ position: "relative", width: 140, flexShrink: 0 }}
+            >
+              <TagBadgeAzul>leads</TagBadgeAzul>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={Number.isFinite(c.leads) && c.leads > 0 ? c.leads : ""}
+                onChange={(e) =>
+                  atualizar(i, {
+                    leads: parseInt(e.target.value, 10) || 0,
+                  })
+                }
+                className="glass-input"
+                style={{
+                  width: "100%",
+                  padding: "9px 12px 9px 62px",
+                  fontSize: 13,
+                }}
+                placeholder="0"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => remover(i)}
+              aria-label="Remover público"
+              style={{
+                color: "rgba(255,255,255,0.3)",
+                padding: "6px 8px",
+                fontSize: 16,
+                lineHeight: 1,
+                flexShrink: 0,
+              }}
+              className="hover:text-[#e24b4a] transition"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={adicionar}
+        style={{
+          marginTop: 8,
+          width: "100%",
+          padding: "8px 0",
+          border: "0.5px dashed rgba(140,180,220,0.3)",
+          borderRadius: 8,
+          fontSize: 11,
+          letterSpacing: "1px",
+          textTransform: "uppercase",
+          color: "rgba(140,180,220,0.7)",
+          fontWeight: 500,
+          background: "transparent",
+        }}
+        className="hover:text-[#8cb4dc] hover:border-[#8cb4dc55] transition"
+      >
+        + Adicionar público
+      </button>
+    </div>
+  )
+}
+
+function TagBadgeAzul({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        position: "absolute",
+        left: 8,
+        top: "50%",
+        transform: "translateY(-50%)",
+        fontSize: 8,
+        letterSpacing: "1.2px",
+        textTransform: "uppercase",
+        color: "rgba(140,180,220,0.85)",
+        fontWeight: 600,
+        background: "rgba(140,180,220,0.1)",
+        padding: "2px 7px",
+        borderRadius: 999,
+        border: "0.5px solid rgba(140,180,220,0.22)",
+        pointerEvents: "none",
+      }}
+    >
+      {children}
+    </span>
   )
 }
 

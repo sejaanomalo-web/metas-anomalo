@@ -7,6 +7,11 @@ export interface CriativoDetalhe {
   publico: string
 }
 
+export interface PublicoProspectado {
+  publico: string
+  leads: number
+}
+
 export interface DadosReais {
   id?: string
   empresa: string
@@ -23,6 +28,8 @@ export interface DadosReais {
   cpa_real?: number | null
   criativos_usados?: number | null
   criativos_detalhe?: CriativoDetalhe[] | null
+  respostas?: number | null
+  publicos_prospectados?: PublicoProspectado[] | null
   observacoes: string | null
   clientes_ativos: number | null
   updated_at?: string
@@ -170,6 +177,10 @@ export interface DadosDiariosLog {
   cpa_anterior: number | null
   criativos_usados_anterior: number | null
   criativos_detalhe_anterior: CriativoDetalhe[] | null
+  respostas: number | null
+  respostas_anterior: number | null
+  publicos_prospectados: PublicoProspectado[] | null
+  publicos_prospectados_anterior: PublicoProspectado[] | null
   created_at?: string
 }
 
