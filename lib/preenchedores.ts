@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { randomBytes } from "crypto"
 import {
+  type CriativoDetalhe,
   type DadosDiariosLog,
   type DadosReais,
   type PapelPreenchedor,
@@ -292,6 +293,19 @@ function parseIntNull(v: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function sanitizarCriativosDetalhe(raw: unknown): CriativoDetalhe[] {
+  if (!Array.isArray(raw)) return []
+  const out: CriativoDetalhe[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue
+    const nome = String((item as { nome?: unknown }).nome ?? "").trim()
+    const publico = String((item as { publico?: unknown }).publico ?? "").trim()
+    if (!nome && !publico) continue
+    out.push({ nome, publico })
+  }
+  return out
+}
+
 export interface ResultadoSubmissao {
   ok: boolean
   erro?: string
@@ -355,22 +369,49 @@ export async function submeterFormularioAction(
   const atual = (atualRow ?? null) as DadosReais | null
 
   // 5. Lê campos do form
+  // - Gestor (pago): investimento, leads, criativos disponíveis, criativos
+  //   usados, CPL, CPA, detalhe. NÃO envia reuniões/contratos/faturamento/
+  //   clientes (esses ficam só no orgânico).
+  // - SDR (orgânico): leads, reuniões, contratos, faturamento, observações.
   const investimento_real = ehPago
     ? parseNumeroBR(formData.get("investimento_real"))
     : null
   const leads_real = parseIntNull(formData.get("leads_real"))
-  const reunioes_real = parseIntNull(formData.get("reunioes_real"))
-  const contratos_real = parseIntNull(formData.get("contratos_real"))
-  const faturamento_real = parseNumeroBR(formData.get("faturamento_real"))
+  const reunioes_real = ehPago
+    ? null
+    : parseIntNull(formData.get("reunioes_real"))
+  const contratos_real = ehPago
+    ? null
+    : parseIntNull(formData.get("contratos_real"))
+  const faturamento_real = ehPago
+    ? null
+    : parseNumeroBR(formData.get("faturamento_real"))
   const criativos_entregues = ehPago
     ? parseIntNull(formData.get("criativos_entregues"))
     : null
-  const clientes_ativos = ehPago
-    ? parseIntNull(formData.get("clientes_ativos"))
-    : atual?.clientes_ativos ?? null
+  const criativos_usados = ehPago
+    ? parseIntNull(formData.get("criativos_usados"))
+    : null
+  const cpl_real = ehPago ? parseNumeroBR(formData.get("cpl_real")) : null
+  const cpa_real = ehPago ? parseNumeroBR(formData.get("cpa_real")) : null
+  const criativos_detalhe: CriativoDetalhe[] | null = ehPago
+    ? (() => {
+        const raw = String(formData.get("criativos_detalhe") ?? "")
+        if (!raw) return []
+        try {
+          return sanitizarCriativosDetalhe(JSON.parse(raw))
+        } catch {
+          return []
+        }
+      })()
+    : null
+  // Snapshot: gestor não envia mais clientes_ativos; preserva o atual.
+  const clientes_ativos = atual?.clientes_ativos ?? null
   const observacoes = String(formData.get("observacoes") ?? "").trim() || null
 
-  // 6. Monotonicidade — só cresce
+  // 6. Monotonicidade — só cresce (investimento, leads, reuniões, contratos,
+  //    faturamento, criativos entregues/disponíveis, criativos usados).
+  //    CPL e CPA são snapshots (podem oscilar).
   type CampoCumul =
     | "investimento_real"
     | "leads_real"
@@ -378,6 +419,7 @@ export async function submeterFormularioAction(
     | "contratos_real"
     | "faturamento_real"
     | "criativos_entregues"
+    | "criativos_usados"
   const cumulativos: { campo: CampoCumul; novo: number | null }[] = [
     { campo: "investimento_real", novo: investimento_real },
     { campo: "leads_real", novo: leads_real },
@@ -385,6 +427,7 @@ export async function submeterFormularioAction(
     { campo: "contratos_real", novo: contratos_real },
     { campo: "faturamento_real", novo: faturamento_real },
     { campo: "criativos_entregues", novo: criativos_entregues },
+    { campo: "criativos_usados", novo: criativos_usados },
   ]
   for (const { campo, novo } of cumulativos) {
     if (novo === null) continue
@@ -398,16 +441,7 @@ export async function submeterFormularioAction(
     }
   }
 
-  // 7. Calcula CPL quando pago
-  const cpl_real =
-    ehPago &&
-    investimento_real !== null &&
-    leads_real !== null &&
-    leads_real > 0
-      ? Number((investimento_real / leads_real).toFixed(2))
-      : null
-
-  // 8. Monta payload, preservando o atual para campos não enviados (null)
+  // 7. Monta payload, preservando o atual para campos não enviados (null)
   const payload: DadosReais = {
     empresa,
     mes,
@@ -421,7 +455,16 @@ export async function submeterFormularioAction(
     faturamento_real: faturamento_real ?? atual?.faturamento_real ?? null,
     criativos_entregues:
       criativos_entregues ?? atual?.criativos_entregues ?? null,
-    cpl_real,
+    cpl_real: ehPago ? cpl_real ?? atual?.cpl_real ?? null : atual?.cpl_real ?? null,
+    cpa_real: ehPago ? cpa_real ?? atual?.cpa_real ?? null : atual?.cpa_real ?? null,
+    criativos_usados: ehPago
+      ? criativos_usados ?? atual?.criativos_usados ?? null
+      : atual?.criativos_usados ?? null,
+    // Detalhe de criativos: gestor sobrescreve a lista inteira a cada
+    // submissão; orgânico preserva o que já estava (caso exista).
+    criativos_detalhe: ehPago
+      ? criativos_detalhe
+      : atual?.criativos_detalhe ?? null,
     clientes_ativos,
     observacoes: observacoes ?? atual?.observacoes ?? null,
     updated_at: new Date().toISOString(),
@@ -435,7 +478,7 @@ export async function submeterFormularioAction(
     return { ok: false, erro: erroUpsert.message }
   }
 
-  // 9. Log de auditoria
+  // 8. Log de auditoria
   const logPayload: Partial<DadosDiariosLog> = {
     empresa,
     data: new Date().toISOString().slice(0, 10),
@@ -450,12 +493,22 @@ export async function submeterFormularioAction(
     criativos_entregues,
     clientes_ativos,
     observacoes,
+    cpl_real,
+    cpa_real,
+    criativos_usados,
+    criativos_detalhe: ehPago ? criativos_detalhe : null,
     investimento_anterior: atual?.investimento_real ?? null,
     leads_anterior: atual?.leads_real ?? null,
     reunioes_anterior: atual?.reunioes_real ?? null,
     contratos_anterior: atual?.contratos_real ?? null,
     faturamento_anterior: atual?.faturamento_real ?? null,
     criativos_anterior: atual?.criativos_entregues ?? null,
+    cpl_anterior: atual?.cpl_real ?? null,
+    cpa_anterior: atual?.cpa_real ?? null,
+    criativos_usados_anterior: atual?.criativos_usados ?? null,
+    criativos_detalhe_anterior: ehPago
+      ? atual?.criativos_detalhe ?? []
+      : null,
   }
   const { error: erroLog } = await supabase
     .from("dados_diarios_log")
@@ -480,7 +533,8 @@ function rotuloCampo(campo: string): string {
     reunioes_real: "Reuniões",
     contratos_real: "Contratos",
     faturamento_real: "Faturamento",
-    criativos_entregues: "Criativos entregues",
+    criativos_entregues: "Criativos disponíveis",
+    criativos_usados: "Criativos usados",
   }
   return mapa[campo] ?? campo
 }
