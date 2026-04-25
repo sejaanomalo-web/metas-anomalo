@@ -14,6 +14,7 @@ export default function LoginPage({
   }
 
   const comErro = searchParams?.erro === "1"
+  const bloqueado = searchParams?.erro === "bloqueado"
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6">
@@ -85,6 +86,11 @@ export default function LoginPage({
           {comErro && (
             <p style={{ fontSize: 12, color: "#e24b4a", marginTop: 12 }}>
               Senha incorreta. Tente novamente.
+            </p>
+          )}
+          {bloqueado && (
+            <p style={{ fontSize: 12, color: "#e24b4a", marginTop: 12 }}>
+              Muitas tentativas. Aguarde 5 minutos antes de tentar de novo.
             </p>
           )}
 
