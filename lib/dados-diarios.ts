@@ -237,3 +237,112 @@ export async function getDadosDiariosDoMes(
     a.data.localeCompare(b.data)
   )
 }
+
+/**
+ * Agrega os deltas de todas as submissões registradas em um intervalo
+ * fechado de datas (formato YYYY-MM-DD), independentemente da empresa
+ * ou da origem. Usado pelos resumos para mostrar "o que aconteceu hoje"
+ * ou "o que aconteceu na semana", em contraste ao acumulado mensal.
+ *
+ * - Cumulativos (investimento, leads, reuniões, contratos, faturamento,
+ *   criativos, respostas) = soma de (novo - anterior) das submissões.
+ *   investimento só conta na origem 'pago'.
+ *   leads/reuniões/contratos/faturamento contam pago + orgânico.
+ */
+export interface DeltaEmpresaPeriodo {
+  empresa: string
+  investimento: number
+  leads: number
+  reunioes: number
+  contratos: number
+  faturamento: number
+  criativos: number
+  respostas: number
+}
+
+export interface AgregadoPeriodo {
+  somaInvestimento: number
+  somaLeads: number
+  somaReunioes: number
+  somaContratos: number
+  somaFaturamento: number
+  somaCriativos: number
+  somaRespostas: number
+  porEmpresa: Map<string, DeltaEmpresaPeriodo>
+}
+
+export async function getDeltasDoPeriodo(
+  dataInicioISO: string,
+  dataFimISO: string
+): Promise<AgregadoPeriodo> {
+  const vazio: AgregadoPeriodo = {
+    somaInvestimento: 0,
+    somaLeads: 0,
+    somaReunioes: 0,
+    somaContratos: 0,
+    somaFaturamento: 0,
+    somaCriativos: 0,
+    somaRespostas: 0,
+    porEmpresa: new Map(),
+  }
+
+  const supabase = getSupabase()
+  if (!supabase) return vazio
+  const { data, error } = await supabase
+    .from("dados_diarios_log")
+    .select("*")
+    .gte("data", dataInicioISO)
+    .lte("data", dataFimISO)
+    .order("created_at", { ascending: true })
+  if (error) {
+    console.error("[dados_diarios] periodo error", error.message)
+    return vazio
+  }
+  const logs = (data ?? []) as DadosDiariosLog[]
+  if (logs.length === 0) return vazio
+
+  const acc: AgregadoPeriodo = { ...vazio, porEmpresa: new Map() }
+  for (const l of logs) {
+    const ehPago = l.origem === "pago"
+
+    const dInv = ehPago
+      ? delta(l.investimento_real, l.investimento_anterior)
+      : 0
+    const dCri = ehPago
+      ? delta(l.criativos_entregues, l.criativos_anterior)
+      : 0
+    const dLeads = delta(l.leads_real, l.leads_anterior)
+    const dReu = delta(l.reunioes_real, l.reunioes_anterior)
+    const dCon = delta(l.contratos_real, l.contratos_anterior)
+    const dFat = delta(l.faturamento_real, l.faturamento_anterior)
+    const dResp = delta(l.respostas, l.respostas_anterior)
+
+    acc.somaInvestimento += dInv
+    acc.somaCriativos += dCri
+    acc.somaLeads += dLeads
+    acc.somaReunioes += dReu
+    acc.somaContratos += dCon
+    acc.somaFaturamento += dFat
+    acc.somaRespostas += dResp
+
+    const ag = acc.porEmpresa.get(l.empresa) ?? {
+      empresa: l.empresa,
+      investimento: 0,
+      leads: 0,
+      reunioes: 0,
+      contratos: 0,
+      faturamento: 0,
+      criativos: 0,
+      respostas: 0,
+    }
+    ag.investimento += dInv
+    ag.criativos += dCri
+    ag.leads += dLeads
+    ag.reunioes += dReu
+    ag.contratos += dCon
+    ag.faturamento += dFat
+    ag.respostas += dResp
+    acc.porEmpresa.set(l.empresa, ag)
+  }
+  return acc
+}
