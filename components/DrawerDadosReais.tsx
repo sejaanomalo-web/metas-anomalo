@@ -187,6 +187,14 @@ export default function DrawerDadosReais({
                 tipo="number"
                 defaultValue={existentes?.leads_real ?? ""}
               />
+              {!ehPago && (
+                <Campo
+                  label="Respostas"
+                  name="respostas"
+                  tipo="number"
+                  defaultValue={existentes?.respostas ?? ""}
+                />
+              )}
               <Campo
                 label={rotuloReunioes}
                 name="reunioes_real"
