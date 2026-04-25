@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 
 type TipoResumo = "diario" | "semanal" | "mensal"
 
@@ -52,6 +53,9 @@ function SecaoResumo({
 }) {
   const [copiado, setCopiado] = useState(false)
   const [erro, setErro] = useState(false)
+  const [atualizado, setAtualizado] = useState(false)
+  const [atualizando, startAtualizacao] = useTransition()
+  const router = useRouter()
 
   async function copiar() {
     setErro(false)
@@ -63,6 +67,20 @@ function SecaoResumo({
       setErro(true)
       setTimeout(() => setErro(false), 2500)
     }
+  }
+
+  function atualizar() {
+    setAtualizado(false)
+    startAtualizacao(() => {
+      router.refresh()
+      // router.refresh dispara re-render do Server Component; o
+      // useTransition mantém atualizando=true até a árvore terminar
+      // de re-renderizar, daí o feedback "Atualizado ✓".
+      setTimeout(() => {
+        setAtualizado(true)
+        setTimeout(() => setAtualizado(false), 1800)
+      }, 200)
+    })
   }
 
   return (
@@ -132,6 +150,32 @@ function SecaoResumo({
           className="btn-gold-filled uppercase"
         >
           {copiado ? "Copiado ✓" : "Copiar mensagem"}
+        </button>
+        <button
+          type="button"
+          onClick={atualizar}
+          disabled={atualizando}
+          style={{
+            padding: "9px 16px",
+            fontSize: 11,
+            letterSpacing: "0.5px",
+            textTransform: "uppercase",
+            color: atualizado ? "#4caf50" : "rgba(255,255,255,0.55)",
+            border: `0.5px solid ${
+              atualizado ? "rgba(76,175,80,0.45)" : "rgba(255,255,255,0.15)"
+            }`,
+            borderRadius: 6,
+            background: "transparent",
+            fontWeight: 500,
+            opacity: atualizando ? 0.6 : 1,
+          }}
+          className="hover:text-[#C9953A] hover:border-[#C9953A55] transition"
+        >
+          {atualizando
+            ? "Atualizando..."
+            : atualizado
+            ? "Atualizado ✓"
+            : "Atualizar dados"}
         </button>
         {erro && (
           <span style={{ fontSize: 11, color: "#e24b4a" }}>
