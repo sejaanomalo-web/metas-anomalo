@@ -62,7 +62,11 @@ export async function getTimeDoHub(): Promise<TimeDoHub> {
       total: ativos.length,
       subLabel: montarSubLabel(contagens),
     }
-  } catch {
+  } catch (e) {
+    console.error(
+      "[strip] getTimeDoHub error",
+      e instanceof Error ? e.message : String(e)
+    )
     return { total: 0, subLabel: "colaboradores ativos" }
   }
 }

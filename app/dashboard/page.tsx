@@ -329,6 +329,31 @@ export default async function DashboardPage({
             </p>
           </div>
 
+          {empresas.length === 0 && (
+            <div
+              className="glass"
+              style={{
+                padding: "32px 28px",
+                textAlign: "center",
+                border: "0.5px dashed rgba(201,149,58,0.35)",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.55)",
+                  fontWeight: 300,
+                  marginBottom: 16,
+                  lineHeight: 1.5,
+                }}
+              >
+                Nenhuma empresa cadastrada ainda. Comece criando sua primeira
+                — clique em <strong>Gerenciar empresas</strong> no topo da
+                página.
+              </p>
+            </div>
+          )}
+
           <div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
             style={{ gap: 20 }}

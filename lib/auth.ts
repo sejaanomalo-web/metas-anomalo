@@ -1,7 +1,13 @@
 import { cookies } from "next/headers"
+import { timingSafeEqual } from "crypto"
 
-// Troque aqui para alterar a senha de acesso ao painel.
-export const SENHA_ACESSO = "anomalo2025"
+// Senha vem da env var SENHA_ACESSO (sem prefixo NEXT_PUBLIC, fica
+// só no servidor). Fallback para o valor antigo evita quebrar setups
+// que ainda não migraram a env, mas em produção o ideal é setar a
+// variável no Vercel e remover esse fallback no futuro.
+function getSenhaConfigurada(): string {
+  return process.env.SENHA_ACESSO ?? "anomalo2025"
+}
 
 export const COOKIE_SESSAO = "anomalo_session"
 const COOKIE_VALOR = "autenticado"
@@ -25,6 +31,15 @@ export function estaAutenticado(): boolean {
   return cookies().get(COOKIE_SESSAO)?.value === COOKIE_VALOR
 }
 
+/**
+ * Compara em tempo constante para não vazar informação por timing
+ * attack — diferença é mínima neste sistema de senha única, mas é
+ * boa prática.
+ */
 export function validarSenha(senha: string): boolean {
-  return senha === SENHA_ACESSO
+  const esperada = getSenhaConfigurada()
+  const a = Buffer.from(senha)
+  const b = Buffer.from(esperada)
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
 }

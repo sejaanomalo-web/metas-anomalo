@@ -460,6 +460,47 @@ create index if not exists dados_diarios_log_empresa_idx
   on public.dados_diarios_log (empresa, data);
 create index if not exists dados_diarios_log_preenchedor_idx
   on public.dados_diarios_log (preenchedor_id, data);
+-- Filtro mais comum em getDeltasDoPeriodo + agregadores: data + origem.
+create index if not exists dados_diarios_log_data_origem_idx
+  on public.dados_diarios_log (data, origem);
+
+-- Filtros frequentes em dados_reais: por (mes, ano) no dashboard e por
+-- empresa nos resumos. O unique constraint composto não cobre essas
+-- buscas isoladas.
+create index if not exists dados_reais_mes_ano_idx
+  on public.dados_reais (mes, ano);
+create index if not exists dados_reais_empresa_ano_idx
+  on public.dados_reais (empresa, ano);
+
+-- preenchedores: lookup por token é a query mais frequente do app
+-- (toda visita a /preencher/<token>). Sem índice = scan a cada hit.
+create index if not exists preenchedores_token_idx
+  on public.preenchedores (token)
+  where ativo = true;
+
+-- comissionamento: histórico por colaborador é leitura comum.
+create index if not exists comissionamento_colaborador_ano_idx
+  on public.comissionamento (colaborador, ano);
+
+-- Rate limit do /login. Cada tentativa registra uma linha com IP +
+-- timestamp; a action conta as últimas N e bloqueia se exceder.
+create table if not exists public.tentativas_login (
+  id uuid primary key default gen_random_uuid(),
+  ip text not null,
+  sucesso boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists tentativas_login_ip_created_idx
+  on public.tentativas_login (ip, created_at desc);
+
+alter table public.tentativas_login enable row level security;
+drop policy if exists tentativas_login_all on public.tentativas_login;
+create policy tentativas_login_all
+  on public.tentativas_login
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);
 
 -- Campos extras do formulário do gestor. CPL/CPA são snapshots, usados
 -- é cumulativo. O detalhe (lista de criativos+público) é sobrescrito em

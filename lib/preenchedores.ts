@@ -225,7 +225,11 @@ export async function atribuirEmpresasAction(
     empresas = parsed
       .map((e) => String(e).trim())
       .filter((e) => e.length > 0)
-  } catch {
+  } catch (e) {
+    console.error(
+      "[preenchedores] parse empresas error",
+      e instanceof Error ? e.message : String(e)
+    )
     return { ok: false, erro: "Lista de empresas inválida." }
   }
 
@@ -418,7 +422,11 @@ export async function submeterFormularioAction(
         if (!raw) return []
         try {
           return sanitizarCriativosDetalhe(JSON.parse(raw))
-        } catch {
+        } catch (e) {
+          console.error(
+            "[preenchedores] parse criativos_detalhe error",
+            e instanceof Error ? e.message : String(e)
+          )
           return []
         }
       })()
@@ -431,7 +439,11 @@ export async function submeterFormularioAction(
         if (!raw) return []
         try {
           return sanitizarPublicosProspectados(JSON.parse(raw))
-        } catch {
+        } catch (e) {
+          console.error(
+            "[preenchedores] parse publicos_prospectados error",
+            e instanceof Error ? e.message : String(e)
+          )
           return []
         }
       })()

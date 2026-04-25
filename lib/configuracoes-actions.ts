@@ -29,7 +29,11 @@ export async function salvarConfigAction(
       const numero = sanitizarNumero(String(parsed.numero ?? ""))
       if (numero.length === 0) continue
       contatos.push({ nome, numero })
-    } catch {
+    } catch (e) {
+      console.error(
+        "[configuracoes] parse contato error",
+        e instanceof Error ? e.message : String(e)
+      )
       // ignora entradas inválidas
     }
   }

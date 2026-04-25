@@ -150,6 +150,11 @@ export async function getDadosDiariosDoMes(
   if (logs.length === 0) return []
 
   const mapa = new Map<string, DiaDetalhado>()
+  // Índices auxiliares por dia para deduplicar/agregar em O(1) ao
+  // longo de N submissões. Não fazem parte do retorno.
+  const indiceCriativos = new Map<string, Set<string>>()
+  const indicePublicos = new Map<string, Map<string, PublicoProspectado>>()
+  const indicePreenchedores = new Map<string, Set<string>>()
   for (const l of logs) {
     const data = l.data
     const diaMes = Number(data.slice(8, 10))
@@ -197,43 +202,62 @@ export async function getDadosDiariosDoMes(
 
     // Acumula criativos adicionados: compara detalhe novo com o anterior
     // em cada submissão, deduplicando entre submissões do mesmo dia.
+    // Usa Map auxiliar por dia para lookups O(1) (antes era O(n) com
+    // Array.find / Array.includes em cada submissão).
     const adicionadosNaSubmissao = diferencaCriativos(
       l.criativos_detalhe as CriativoDetalhe[] | null,
       l.criativos_detalhe_anterior as CriativoDetalhe[] | null
     )
     if (adicionadosNaSubmissao.length > 0) {
-      const jaNoDia = new Set(atual.criativosAdicionados.map(chaveCriativo))
+      let setCriativos = indiceCriativos.get(data)
+      if (!setCriativos) {
+        setCriativos = new Set<string>()
+        indiceCriativos.set(data, setCriativos)
+      }
       for (const c of adicionadosNaSubmissao) {
-        if (!jaNoDia.has(chaveCriativo(c))) {
+        const k = chaveCriativo(c)
+        if (!setCriativos.has(k)) {
           atual.criativosAdicionados.push(c)
-          jaNoDia.add(chaveCriativo(c))
+          setCriativos.add(k)
         }
       }
     }
 
     // Públicos prospectados: registra novos públicos ou incrementos de
-    // leads sobre públicos já existentes. Agrupa por nome do público no
-    // mesmo dia.
+    // leads sobre públicos já existentes. Agrupa por chave do público no
+    // mesmo dia via Map auxiliar (lookup O(1)).
     const publicosNaSubmissao = diferencaPublicos(
       l.publicos_prospectados as PublicoProspectado[] | null,
       l.publicos_prospectados_anterior as PublicoProspectado[] | null
     )
     if (publicosNaSubmissao.length > 0) {
+      let mapPublicos = indicePublicos.get(data)
+      if (!mapPublicos) {
+        mapPublicos = new Map<string, PublicoProspectado>()
+        indicePublicos.set(data, mapPublicos)
+      }
       for (const p of publicosNaSubmissao) {
-        const existente = atual.publicosAdicionados.find(
-          (x) => chavePublico(x) === chavePublico(p)
-        )
+        const k = chavePublico(p)
+        const existente = mapPublicos.get(k)
         if (existente) {
           existente.leads += p.leads
         } else {
-          atual.publicosAdicionados.push({ ...p })
+          const copia = { ...p }
+          mapPublicos.set(k, copia)
+          atual.publicosAdicionados.push(copia)
         }
       }
     }
 
     atual.submissoes += 1
-    if (l.preenchedor_nome && !atual.preenchedores.includes(l.preenchedor_nome)) {
+    let setPreench = indicePreenchedores.get(data)
+    if (!setPreench) {
+      setPreench = new Set<string>()
+      indicePreenchedores.set(data, setPreench)
+    }
+    if (l.preenchedor_nome && !setPreench.has(l.preenchedor_nome)) {
       atual.preenchedores.push(l.preenchedor_nome)
+      setPreench.add(l.preenchedor_nome)
     }
 
     mapa.set(data, atual)

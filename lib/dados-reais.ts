@@ -86,14 +86,9 @@ export async function gravarDadosReaisComLog(
     .maybeSingle()
   const anterior = (anteriorRow ?? null) as DadosReais | null
 
-  const { error: erroUpsert } = await supabase
-    .from("dados_reais")
-    .upsert(payload, { onConflict: "empresa,mes,ano,origem" })
-  if (erroUpsert) {
-    console.error("[dados_reais] upsert error", erroUpsert.message)
-    return { ok: false, erro: erroUpsert.message, anterior }
-  }
-
+  // Grava o log ANTES do upsert: se o log falhar, o upsert não acontece.
+  // Reduz divergência entre dashboard (lê dados_reais) e resumos (somam
+  // log) — sem transação Postgres real ainda, mas é o próximo melhor.
   const log = {
     empresa: payload.empresa,
     data: new Date().toISOString().slice(0, 10),
@@ -132,9 +127,29 @@ export async function gravarDadosReaisComLog(
     .from("dados_diarios_log")
     .insert(log)
   if (erroLog) {
-    // Log é trilha de auditoria, não bloqueia a gravação principal —
-    // mas avisa em runtime caso a inserção falhe.
     console.error("[dados_diarios_log] insert error", erroLog.message)
+    return { ok: false, erro: erroLog.message, anterior }
+  }
+
+  const { error: erroUpsert } = await supabase
+    .from("dados_reais")
+    .upsert(payload, { onConflict: "empresa,mes,ano,origem" })
+  if (erroUpsert) {
+    console.error("[dados_reais] upsert error", erroUpsert.message)
+    // Tenta compensar removendo o log que acabou de gravar — sem
+    // transação real, é o melhor que dá. Se a remoção falhar também,
+    // log fica órfão mas o erro principal é retornado.
+    await supabase
+      .from("dados_diarios_log")
+      .delete()
+      .eq("empresa", payload.empresa)
+      .eq("data", log.data)
+      .eq("origem", log.origem)
+      .gte(
+        "created_at",
+        new Date(Date.now() - 5000).toISOString()
+      )
+    return { ok: false, erro: erroUpsert.message, anterior }
   }
 
   return { ok: true, anterior }
@@ -209,26 +224,6 @@ export async function getDadosReaisDoMes(
     map.set(d.empresa, bucket)
   }
   return map
-}
-
-export async function getMesesComDadosReais(
-  ano: number = ANO_PADRAO
-): Promise<Set<string>> {
-  const supabase = getSupabase()
-  if (!supabase) return new Set()
-  const { data, error } = await supabase
-    .from("dados_reais")
-    .select("empresa, mes")
-    .eq("ano", ano)
-  if (error) {
-    console.error("[dados_reais] getMesesComDados error", error.message)
-    return new Set()
-  }
-  const s = new Set<string>()
-  for (const d of data ?? []) {
-    s.add(`${d.empresa}:${d.mes}`)
-  }
-  return s
 }
 
 export interface ResultadoSalvar {
