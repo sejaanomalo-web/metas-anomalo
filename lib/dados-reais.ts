@@ -183,6 +183,9 @@ export async function salvarDadosReaisAction(
     leads_real > 0
       ? Number((investimento_real / leads_real).toFixed(2))
       : null
+  // Campos só-orgânico — pago ignora.
+  const respostas =
+    origem === "organico" ? parseInt0(formData.get("respostas")) : null
 
   const payload: DadosReais = {
     empresa,
@@ -196,6 +199,7 @@ export async function salvarDadosReaisAction(
     faturamento_real,
     criativos_entregues,
     cpl_real,
+    respostas,
     observacoes,
     clientes_ativos,
     updated_at: new Date().toISOString(),
