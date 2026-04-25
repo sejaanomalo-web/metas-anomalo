@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache"
 import { randomBytes } from "crypto"
 import {
   type CriativoDetalhe,
-  type DadosDiariosLog,
   type DadosReais,
   type PapelPreenchedor,
   type Preenchedor,
@@ -18,6 +17,7 @@ import {
   type OrigemDadosReais,
   getEmpresaPorDb,
 } from "./data"
+import { gravarDadosReaisComLog } from "./dados-reais"
 
 export interface ResultadoPreenchedor {
   ok: boolean
@@ -509,61 +509,16 @@ export async function submeterFormularioAction(
     updated_at: new Date().toISOString(),
   }
 
-  const { error: erroUpsert } = await supabase
-    .from("dados_reais")
-    .upsert(payload, { onConflict: "empresa,mes,ano,origem" })
-  if (erroUpsert) {
-    console.error("[form] upsert dados_reais", erroUpsert.message)
-    return { ok: false, erro: erroUpsert.message }
+  // 8. Centraliza upsert + log via helper compartilhada com o drawer.
+  const resultado = await gravarDadosReaisComLog(payload, {
+    id: preenchedor.id ?? null,
+    nome: preenchedor.nome,
+  })
+  if (!resultado.ok) {
+    return { ok: false, erro: resultado.erro }
   }
 
-  // 8. Log de auditoria
-  const logPayload: Partial<DadosDiariosLog> = {
-    empresa,
-    data: new Date().toISOString().slice(0, 10),
-    origem,
-    preenchedor_id: preenchedor.id ?? null,
-    preenchedor_nome: preenchedor.nome,
-    investimento_real,
-    leads_real,
-    reunioes_real,
-    contratos_real,
-    faturamento_real,
-    criativos_entregues,
-    clientes_ativos,
-    observacoes,
-    cpl_real,
-    cpa_real,
-    criativos_usados,
-    criativos_detalhe: ehPago ? criativos_detalhe : null,
-    investimento_anterior: atual?.investimento_real ?? null,
-    leads_anterior: atual?.leads_real ?? null,
-    reunioes_anterior: atual?.reunioes_real ?? null,
-    contratos_anterior: atual?.contratos_real ?? null,
-    faturamento_anterior: atual?.faturamento_real ?? null,
-    criativos_anterior: atual?.criativos_entregues ?? null,
-    cpl_anterior: atual?.cpl_real ?? null,
-    cpa_anterior: atual?.cpa_real ?? null,
-    criativos_usados_anterior: atual?.criativos_usados ?? null,
-    criativos_detalhe_anterior: ehPago
-      ? atual?.criativos_detalhe ?? []
-      : null,
-    respostas: ehPago ? null : respostas,
-    respostas_anterior: atual?.respostas ?? null,
-    publicos_prospectados: ehPago ? null : publicos_prospectados,
-    publicos_prospectados_anterior: ehPago
-      ? null
-      : atual?.publicos_prospectados ?? [],
-  }
-  const { error: erroLog } = await supabase
-    .from("dados_diarios_log")
-    .insert(logPayload)
-  if (erroLog) {
-    console.error("[form] insert log", erroLog.message)
-    // Não falha a submissão principal por conta do log.
-  }
-
-  // 10. Revalida dashboards
+  // 9. Revalida dashboards
   revalidatePath("/dashboard")
   const emp = getEmpresaPorDb(empresa)
   if (emp) revalidatePath(`/dashboard/${emp.slug}`)

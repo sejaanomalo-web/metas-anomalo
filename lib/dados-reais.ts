@@ -49,6 +49,97 @@ function mesValido(mes: string): mes is Mes {
   return (MESES as readonly string[]).includes(mes)
 }
 
+export interface IdentidadeEscrita {
+  id: string | null
+  nome: string
+}
+
+/**
+ * Helper único de escrita em dados_reais. Garante atomicidade lógica
+ * entre o estado mensal (dados_reais) e a trilha de auditoria
+ * (dados_diarios_log):
+ *   1. Lê o estado anterior daquela linha
+ *   2. Faz upsert do novo estado
+ *   3. Registra delta no log com identidade do preenchedor
+ *
+ * Toda escrita em dados_reais que vier do app deve passar por aqui —
+ * isso evita divergência entre o dashboard (que lê dados_reais) e os
+ * resumos diário/semanal (que somam deltas do log). Se for adicionar
+ * uma terceira action que escreve em dados_reais, use esta helper.
+ */
+export async function gravarDadosReaisComLog(
+  payload: DadosReais,
+  identidade: IdentidadeEscrita
+): Promise<{ ok: boolean; erro?: string; anterior: DadosReais | null }> {
+  const supabase = getSupabase()
+  if (!supabase) {
+    return { ok: false, erro: "Supabase indisponível.", anterior: null }
+  }
+
+  const { data: anteriorRow } = await supabase
+    .from("dados_reais")
+    .select("*")
+    .eq("empresa", payload.empresa)
+    .eq("mes", payload.mes)
+    .eq("ano", payload.ano)
+    .eq("origem", payload.origem ?? ORIGEM_PADRAO)
+    .maybeSingle()
+  const anterior = (anteriorRow ?? null) as DadosReais | null
+
+  const { error: erroUpsert } = await supabase
+    .from("dados_reais")
+    .upsert(payload, { onConflict: "empresa,mes,ano,origem" })
+  if (erroUpsert) {
+    console.error("[dados_reais] upsert error", erroUpsert.message)
+    return { ok: false, erro: erroUpsert.message, anterior }
+  }
+
+  const log = {
+    empresa: payload.empresa,
+    data: new Date().toISOString().slice(0, 10),
+    origem: payload.origem ?? ORIGEM_PADRAO,
+    preenchedor_id: identidade.id,
+    preenchedor_nome: identidade.nome,
+    investimento_real: payload.investimento_real,
+    leads_real: payload.leads_real,
+    reunioes_real: payload.reunioes_real,
+    contratos_real: payload.contratos_real,
+    faturamento_real: payload.faturamento_real,
+    criativos_entregues: payload.criativos_entregues,
+    clientes_ativos: payload.clientes_ativos,
+    observacoes: payload.observacoes,
+    cpl_real: payload.cpl_real,
+    cpa_real: payload.cpa_real ?? null,
+    criativos_usados: payload.criativos_usados ?? null,
+    criativos_detalhe: payload.criativos_detalhe ?? null,
+    respostas: payload.respostas ?? null,
+    publicos_prospectados: payload.publicos_prospectados ?? null,
+    investimento_anterior: anterior?.investimento_real ?? null,
+    leads_anterior: anterior?.leads_real ?? null,
+    reunioes_anterior: anterior?.reunioes_real ?? null,
+    contratos_anterior: anterior?.contratos_real ?? null,
+    faturamento_anterior: anterior?.faturamento_real ?? null,
+    criativos_anterior: anterior?.criativos_entregues ?? null,
+    cpl_anterior: anterior?.cpl_real ?? null,
+    cpa_anterior: anterior?.cpa_real ?? null,
+    criativos_usados_anterior: anterior?.criativos_usados ?? null,
+    criativos_detalhe_anterior: anterior?.criativos_detalhe ?? null,
+    respostas_anterior: anterior?.respostas ?? null,
+    publicos_prospectados_anterior:
+      anterior?.publicos_prospectados ?? null,
+  }
+  const { error: erroLog } = await supabase
+    .from("dados_diarios_log")
+    .insert(log)
+  if (erroLog) {
+    // Log é trilha de auditoria, não bloqueia a gravação principal —
+    // mas avisa em runtime caso a inserção falhe.
+    console.error("[dados_diarios_log] insert error", erroLog.message)
+  }
+
+  return { ok: true, anterior }
+}
+
 export async function getDadosReais(
   empresa: EmpresaDb,
   ano: number = ANO_PADRAO,
@@ -205,74 +296,12 @@ export async function salvarDadosReaisAction(
     updated_at: new Date().toISOString(),
   }
 
-  const supabase = getSupabase()
-  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
-
-  // 1. Lê o estado atual de dados_reais (antes do upsert) — usado pra
-  //    montar a entrada de auditoria em dados_diarios_log com os valores
-  //    "anterior". Sem isso, o resumo diário/semanal divergiria do
-  //    dashboard quando alguém edita pelo drawer.
-  const { data: anteriorRow } = await supabase
-    .from("dados_reais")
-    .select("*")
-    .eq("empresa", empresa)
-    .eq("mes", mes)
-    .eq("ano", ano)
-    .eq("origem", origem)
-    .maybeSingle()
-  const anterior = (anteriorRow ?? null) as DadosReais | null
-
-  const { error } = await supabase
-    .from("dados_reais")
-    .upsert(payload, { onConflict: "empresa,mes,ano,origem" })
-
-  if (error) {
-    console.error("[dados_reais] upsert error", error.message)
-    return { ok: false, erro: error.message }
-  }
-
-  // 2. Trilha de auditoria — todo lançamento via drawer também aparece
-  //    em dados_diarios_log, com preenchedor_nome = 'Drawer admin'
-  //    pra distinguir do que veio dos formulários do gestor/SDR.
-  const logPayload = {
-    empresa,
-    data: new Date().toISOString().slice(0, 10),
-    origem,
-    preenchedor_id: null,
-    preenchedor_nome: "Drawer admin",
-    investimento_real,
-    leads_real,
-    reunioes_real,
-    contratos_real,
-    faturamento_real,
-    criativos_entregues,
-    clientes_ativos,
-    observacoes,
-    cpl_real,
-    cpa_real: null,
-    criativos_usados: null,
-    criativos_detalhe: null,
-    respostas,
-    publicos_prospectados: null,
-    investimento_anterior: anterior?.investimento_real ?? null,
-    leads_anterior: anterior?.leads_real ?? null,
-    reunioes_anterior: anterior?.reunioes_real ?? null,
-    contratos_anterior: anterior?.contratos_real ?? null,
-    faturamento_anterior: anterior?.faturamento_real ?? null,
-    criativos_anterior: anterior?.criativos_entregues ?? null,
-    cpl_anterior: anterior?.cpl_real ?? null,
-    cpa_anterior: anterior?.cpa_real ?? null,
-    criativos_usados_anterior: anterior?.criativos_usados ?? null,
-    criativos_detalhe_anterior: null,
-    respostas_anterior: anterior?.respostas ?? null,
-    publicos_prospectados_anterior: null,
-  }
-  const { error: erroLog } = await supabase
-    .from("dados_diarios_log")
-    .insert(logPayload)
-  if (erroLog) {
-    // Não falha a gravação principal por causa do log — só registra.
-    console.error("[dados_reais] insert log error", erroLog.message)
+  const resultado = await gravarDadosReaisComLog(payload, {
+    id: null,
+    nome: "Drawer admin",
+  })
+  if (!resultado.ok) {
+    return { ok: false, erro: resultado.erro }
   }
 
   const empresaMeta = getEmpresaPorDb(empresa)

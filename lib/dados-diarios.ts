@@ -64,11 +64,17 @@ function rangeDoMes(mes: Mes, ano: number): { inicio: string; fim: string } {
   return { inicio, fim }
 }
 
+/**
+ * Delta de uma submissão. Permite valores negativos: se alguém corrigir
+ * um total pra baixo via drawer, o resumo do dia desconta a diferença e
+ * o somatório segue batendo com o estado atual de dados_reais. Sem o
+ * negativo, correções gerariam divergência entre o resumo e o
+ * dashboard.
+ */
 function delta(novo: number | null, anterior: number | null): number {
   if (novo === null || novo === undefined) return 0
   const ant = anterior ?? 0
-  const d = novo - ant
-  return d > 0 ? d : 0
+  return novo - ant
 }
 
 function chaveCriativo(c: CriativoDetalhe): string {
