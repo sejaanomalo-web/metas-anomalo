@@ -144,7 +144,11 @@ function parseConfiguracao(raw: string): ConfiguracaoComissao | null {
       return base
     }
     return null
-  } catch {
+  } catch (e) {
+    console.error(
+      "[comissionamento] parseConfiguracao error",
+      e instanceof Error ? e.message : String(e)
+    )
     return null
   }
 }
@@ -241,7 +245,11 @@ export async function salvarMetaComissaoAction(
   if (mesesRaw && escopo === "mensal") {
     try {
       mesesAplicaveis = sanitizarMesesAplicaveis(JSON.parse(mesesRaw))
-    } catch {
+    } catch (e) {
+      console.error(
+        "[comissionamento] parse meses_aplicaveis error",
+        e instanceof Error ? e.message : String(e)
+      )
       mesesAplicaveis = null
     }
   }
