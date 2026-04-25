@@ -13,7 +13,6 @@ import {
 import {
   type DadosReaisPorOrigem,
   getDadosReaisDoMes,
-  getDadosReais,
 } from "./dados-reais"
 import { getDeltasDoPeriodo } from "./dados-diarios"
 import { getComissionamentoMes } from "./comissionamento-actions"
@@ -383,11 +382,19 @@ export async function montarResumoMensal(): Promise<string> {
   const { mes, ano } = mesAtual()
   const { empresas, overridesMes } = await carregarContexto(mes, ano)
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
-  const reaisDoMes = await getDadosReaisDoMes(mes, ano)
-  const comissoes = await getComissionamentoMes(mes, ano)
-
   const mesAnteriorIdx = MESES.indexOf(mes) - 1
   const mesAnterior = mesAnteriorIdx >= 0 ? MESES[mesAnteriorIdx] : null
+
+  // Carrega tudo em paralelo: mes atual, mes anterior (se houver) e
+  // comissionamento. Antes era N+1 — uma chamada de getDadosReais por
+  // empresa por origem dentro do loop.
+  const [reaisDoMes, reaisMesAnterior, comissoes] = await Promise.all([
+    getDadosReaisDoMes(mes, ano),
+    mesAnterior
+      ? getDadosReaisDoMes(mesAnterior, ano)
+      : Promise.resolve(new Map<string, DadosReaisPorOrigem>()),
+    getComissionamentoMes(mes, ano),
+  ])
 
   const { somaFat, somaInv, somaLeads, somaReunioes, somaContratos } =
     agregarReaisDoMes(reaisDoMes)
@@ -424,15 +431,8 @@ export async function montarResumoMensal(): Promise<string> {
     }
 
     if (mesAnterior) {
-      const [pagoAnt, organicoAnt] = await Promise.all([
-        getDadosReais(empresa.db, ano, "pago").then(
-          (rs) => rs.find((r) => r.mes === mesAnterior)?.faturamento_real ?? 0
-        ),
-        getDadosReais(empresa.db, ano, "organico").then(
-          (rs) => rs.find((r) => r.mes === mesAnterior)?.faturamento_real ?? 0
-        ),
-      ])
-      const realAnterior = pagoAnt + organicoAnt
+      const realAnterior =
+        faturamentoTotalDoBucket(reaisMesAnterior.get(empresa.db)) ?? 0
       if (realAnterior > 0) {
         const cresc = Math.round(((real - realAnterior) / realAnterior) * 100)
         if (cresc > crescimentoPct) {
