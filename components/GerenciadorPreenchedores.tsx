@@ -182,38 +182,40 @@ function NovoPreenchedor({
       >
         Novo {papel === "gestor_trafego" ? "gestor de tráfego" : "SDR"}
       </p>
-      <div className="flex items-center gap-3">
+      <div className="space-y-3">
         <input
           autoFocus
           value={nome}
           onChange={(e) => setNome(e.target.value)}
           placeholder="Nome completo"
-          className="glass-input flex-1"
+          className="glass-input w-full"
           style={{ padding: "10px 14px", fontSize: 13 }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && nome.trim()) salvar()
           }}
         />
-        <button
-          type="button"
-          onClick={salvar}
-          disabled={pending || !nome.trim()}
-          className="btn-gold-filled uppercase"
-          style={{ opacity: pending || !nome.trim() ? 0.5 : 1 }}
-        >
-          {pending ? "Criando..." : "Criar"}
-        </button>
-        <button
-          type="button"
-          onClick={onFechar}
-          style={{
-            fontSize: 12,
-            color: "rgba(255,255,255,0.45)",
-            padding: "8px 12px",
-          }}
-        >
-          Cancelar
-        </button>
+        <div className="flex items-center gap-3 justify-end">
+          <button
+            type="button"
+            onClick={onFechar}
+            style={{
+              fontSize: 12,
+              color: "rgba(255,255,255,0.45)",
+              padding: "8px 12px",
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvar}
+            disabled={pending || !nome.trim()}
+            className="btn-gold-filled uppercase"
+            style={{ opacity: pending || !nome.trim() ? 0.5 : 1 }}
+          >
+            {pending ? "Criando..." : "Criar"}
+          </button>
+        </div>
       </div>
       {erro && (
         <p style={{ fontSize: 12, color: "#e24b4a", marginTop: 8 }}>{erro}</p>
