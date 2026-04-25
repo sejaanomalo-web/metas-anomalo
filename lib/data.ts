@@ -127,77 +127,69 @@ export interface LinhaDiego {
   receita_hub: number
 }
 
-export const a2Marketing: LinhaPadrao[] = [
-  { mes: "Abril",    verba: 400,  criativos: 20, criativos_semana: 5, leads: 66,  reunioes: 6,  contratos: 3, churn: 1, clientes: 9,  ticket: 1600, faturamento: 14400 },
-  { mes: "Maio",     verba: 500,  criativos: 20, criativos_semana: 5, leads: 83,  reunioes: 8,  contratos: 4, churn: 1, clientes: 12, ticket: 1700, faturamento: 20400 },
-  { mes: "Junho",    verba: 600,  criativos: 20, criativos_semana: 5, leads: 100, reunioes: 10, contratos: 5, churn: 1, clientes: 16, ticket: 1800, faturamento: 28800 },
-  { mes: "Julho",    verba: 700,  criativos: 20, criativos_semana: 5, leads: 116, reunioes: 11, contratos: 5, churn: 2, clientes: 19, ticket: 1900, faturamento: 36100 },
-  { mes: "Agosto",   verba: 800,  criativos: 20, criativos_semana: 5, leads: 133, reunioes: 13, contratos: 6, churn: 2, clientes: 23, ticket: 1900, faturamento: 43700 },
-  { mes: "Setembro", verba: 900,  criativos: 20, criativos_semana: 5, leads: 150, reunioes: 15, contratos: 7, churn: 2, clientes: 28, ticket: 2000, faturamento: 56000 },
-  { mes: "Outubro",  verba: 1000, criativos: 20, criativos_semana: 5, leads: 166, reunioes: 16, contratos: 7, churn: 2, clientes: 33, ticket: 2000, faturamento: 66000 },
-  { mes: "Novembro", verba: 1000, criativos: 20, criativos_semana: 5, leads: 166, reunioes: 16, contratos: 7, churn: 2, clientes: 38, ticket: 2000, faturamento: 76000 },
-  { mes: "Dezembro", verba: 1000, criativos: 20, criativos_semana: 5, leads: 166, reunioes: 16, contratos: 6, churn: 2, clientes: 42, ticket: 2000, faturamento: 84000 },
-]
+// Metas projetadas zeradas — preencha pela UI (DrawerEditarMeta) ou via
+// metas_empresa no Supabase. Os arrays seguem exportados com a estrutura
+// completa pra que páginas, gráficos e tabelas continuem renderizando.
+function linhaPadraoZerada(mes: Mes): LinhaPadrao {
+  return {
+    mes,
+    verba: 0,
+    criativos: 0,
+    criativos_semana: 0,
+    leads: 0,
+    reunioes: 0,
+    contratos: 0,
+    churn: 0,
+    clientes: 0,
+    ticket: 0,
+    faturamento: 0,
+  }
+}
 
-export const f2Sports: LinhaPadrao[] = [
-  { mes: "Abril",    verba: 200, criativos: 20, criativos_semana: 5, leads: 40, reunioes: 4, contratos: 1, clientes: 2,  ticket: 1200, faturamento: 2400  },
-  { mes: "Maio",     verba: 200, criativos: 20, criativos_semana: 5, leads: 40, reunioes: 4, contratos: 1, clientes: 3,  ticket: 1200, faturamento: 3600  },
-  { mes: "Junho",    verba: 250, criativos: 20, criativos_semana: 5, leads: 50, reunioes: 5, contratos: 2, clientes: 4,  ticket: 1200, faturamento: 4800  },
-  { mes: "Julho",    verba: 250, criativos: 20, criativos_semana: 5, leads: 50, reunioes: 5, contratos: 2, clientes: 5,  ticket: 1200, faturamento: 6000  },
-  { mes: "Agosto",   verba: 300, criativos: 20, criativos_semana: 5, leads: 60, reunioes: 6, contratos: 2, clientes: 6,  ticket: 1200, faturamento: 7200  },
-  { mes: "Setembro", verba: 300, criativos: 20, criativos_semana: 5, leads: 60, reunioes: 6, contratos: 2, clientes: 7,  ticket: 1200, faturamento: 8400  },
-  { mes: "Outubro",  verba: 350, criativos: 20, criativos_semana: 5, leads: 70, reunioes: 7, contratos: 2, clientes: 8,  ticket: 1200, faturamento: 9600  },
-  { mes: "Novembro", verba: 350, criativos: 20, criativos_semana: 5, leads: 70, reunioes: 7, contratos: 2, clientes: 9,  ticket: 1200, faturamento: 10800 },
-  { mes: "Dezembro", verba: 400, criativos: 20, criativos_semana: 5, leads: 80, reunioes: 8, contratos: 3, clientes: 10, ticket: 1200, faturamento: 12000 },
-]
+function linhaHatoZerada(mes: Mes): LinhaHato {
+  return {
+    mes,
+    verba: 0,
+    criativos: 0,
+    criativos_semana: 0,
+    influenciadores: 0,
+    vendas_influenciador: 0,
+    vendas_direto: 0,
+    total_vendas: 0,
+    receita: 0,
+    custo_influenciadores: 0,
+  }
+}
 
-export const f2Moveis: LinhaPadrao[] = [
-  { mes: "Abril",    verba: 100, criativos: 20, criativos_semana: 5, leads: 5,  reunioes: 1, contratos: 0, clientes: 0, ticket: 2000, faturamento: 0     },
-  { mes: "Maio",     verba: 150, criativos: 20, criativos_semana: 5, leads: 7,  reunioes: 1, contratos: 1, clientes: 1, ticket: 2000, faturamento: 2000  },
-  { mes: "Junho",    verba: 200, criativos: 20, criativos_semana: 5, leads: 10, reunioes: 1, contratos: 1, clientes: 1, ticket: 2000, faturamento: 2000  },
-  { mes: "Julho",    verba: 200, criativos: 20, criativos_semana: 5, leads: 10, reunioes: 1, contratos: 1, clientes: 1, ticket: 2000, faturamento: 2000  },
-  { mes: "Agosto",   verba: 250, criativos: 20, criativos_semana: 5, leads: 12, reunioes: 1, contratos: 1, clientes: 2, ticket: 2000, faturamento: 4000  },
-  { mes: "Setembro", verba: 300, criativos: 20, criativos_semana: 5, leads: 15, reunioes: 2, contratos: 1, clientes: 3, ticket: 2000, faturamento: 6000  },
-  { mes: "Outubro",  verba: 350, criativos: 20, criativos_semana: 5, leads: 17, reunioes: 2, contratos: 2, clientes: 4, ticket: 2000, faturamento: 8000  },
-  { mes: "Novembro", verba: 400, criativos: 20, criativos_semana: 5, leads: 20, reunioes: 2, contratos: 2, clientes: 5, ticket: 2000, faturamento: 10000 },
-  { mes: "Dezembro", verba: 400, criativos: 20, criativos_semana: 5, leads: 20, reunioes: 2, contratos: 2, clientes: 6, ticket: 2000, faturamento: 12000 },
-]
+function linhaAtonZerada(mes: Mes): LinhaAton {
+  return {
+    mes,
+    verba: 0,
+    criativos: 0,
+    criativos_semana: 0,
+    leads: 0,
+    orcamentos: 0,
+    vendas: 0,
+    ticket: 0,
+    faturamento: 0,
+  }
+}
 
-export const hato: LinhaHato[] = [
-  { mes: "Abril",    verba: 400,  criativos: 20, criativos_semana: 5, influenciadores: 3,  vendas_influenciador: 15, vendas_direto: 20, total_vendas: 35,  receita: 4515,  custo_influenciadores: 150 },
-  { mes: "Maio",     verba: 500,  criativos: 20, criativos_semana: 5, influenciadores: 4,  vendas_influenciador: 20, vendas_direto: 22, total_vendas: 42,  receita: 5418,  custo_influenciadores: 200 },
-  { mes: "Junho",    verba: 600,  criativos: 20, criativos_semana: 5, influenciadores: 5,  vendas_influenciador: 25, vendas_direto: 22, total_vendas: 47,  receita: 6063,  custo_influenciadores: 250 },
-  { mes: "Julho",    verba: 700,  criativos: 20, criativos_semana: 5, influenciadores: 6,  vendas_influenciador: 30, vendas_direto: 25, total_vendas: 55,  receita: 7095,  custo_influenciadores: 300 },
-  { mes: "Agosto",   verba: 800,  criativos: 20, criativos_semana: 5, influenciadores: 8,  vendas_influenciador: 40, vendas_direto: 27, total_vendas: 67,  receita: 8643,  custo_influenciadores: 400 },
-  { mes: "Setembro", verba: 900,  criativos: 20, criativos_semana: 5, influenciadores: 10, vendas_influenciador: 50, vendas_direto: 30, total_vendas: 80,  receita: 10320, custo_influenciadores: 500 },
-  { mes: "Outubro",  verba: 1000, criativos: 20, criativos_semana: 5, influenciadores: 12, vendas_influenciador: 60, vendas_direto: 35, total_vendas: 95,  receita: 12255, custo_influenciadores: 600 },
-  { mes: "Novembro", verba: 1500, criativos: 20, criativos_semana: 5, influenciadores: 15, vendas_influenciador: 75, vendas_direto: 50, total_vendas: 125, receita: 16125, custo_influenciadores: 750 },
-  { mes: "Dezembro", verba: 1500, criativos: 20, criativos_semana: 5, influenciadores: 15, vendas_influenciador: 75, vendas_direto: 55, total_vendas: 130, receita: 16770, custo_influenciadores: 750 },
-]
+function linhaDiegoZerada(mes: Mes): LinhaDiego {
+  return {
+    mes,
+    faturamento_diego: 0,
+    percentual: 0,
+    receita_hub: 0,
+  }
+}
 
-export const aton: LinhaAton[] = [
-  { mes: "Abril",    verba: 300, criativos: 20, criativos_semana: 5, leads: 20, orcamentos: 5,  vendas: 2, ticket: 4000, faturamento: 8000  },
-  { mes: "Maio",     verba: 350, criativos: 20, criativos_semana: 5, leads: 23, orcamentos: 6,  vendas: 3, ticket: 4000, faturamento: 12000 },
-  { mes: "Junho",    verba: 400, criativos: 20, criativos_semana: 5, leads: 26, orcamentos: 7,  vendas: 3, ticket: 4200, faturamento: 12600 },
-  { mes: "Julho",    verba: 450, criativos: 20, criativos_semana: 5, leads: 30, orcamentos: 8,  vendas: 4, ticket: 4200, faturamento: 16800 },
-  { mes: "Agosto",   verba: 500, criativos: 20, criativos_semana: 5, leads: 33, orcamentos: 8,  vendas: 4, ticket: 4500, faturamento: 18000 },
-  { mes: "Setembro", verba: 600, criativos: 20, criativos_semana: 5, leads: 40, orcamentos: 10, vendas: 5, ticket: 4500, faturamento: 22500 },
-  { mes: "Outubro",  verba: 700, criativos: 20, criativos_semana: 5, leads: 46, orcamentos: 12, vendas: 6, ticket: 4800, faturamento: 28800 },
-  { mes: "Novembro", verba: 800, criativos: 20, criativos_semana: 5, leads: 53, orcamentos: 13, vendas: 6, ticket: 4800, faturamento: 28800 },
-  { mes: "Dezembro", verba: 900, criativos: 20, criativos_semana: 5, leads: 60, orcamentos: 15, vendas: 7, ticket: 4800, faturamento: 33600 },
-]
-
-export const diego: LinhaDiego[] = [
-  { mes: "Abril",    faturamento_diego: 25000, percentual: 15, receita_hub: 3750  },
-  { mes: "Maio",     faturamento_diego: 28000, percentual: 15, receita_hub: 4200  },
-  { mes: "Junho",    faturamento_diego: 33000, percentual: 20, receita_hub: 6600  },
-  { mes: "Julho",    faturamento_diego: 37000, percentual: 20, receita_hub: 7400  },
-  { mes: "Agosto",   faturamento_diego: 43000, percentual: 25, receita_hub: 10750 },
-  { mes: "Setembro", faturamento_diego: 48000, percentual: 25, receita_hub: 12000 },
-  { mes: "Outubro",  faturamento_diego: 50000, percentual: 25, receita_hub: 12500 },
-  { mes: "Novembro", faturamento_diego: 55000, percentual: 30, receita_hub: 16500 },
-  { mes: "Dezembro", faturamento_diego: 45000, percentual: 25, receita_hub: 11250 },
-]
+export const a2Marketing: LinhaPadrao[] = MESES.map(linhaPadraoZerada)
+export const f2Sports: LinhaPadrao[] = MESES.map(linhaPadraoZerada)
+export const f2Moveis: LinhaPadrao[] = MESES.map(linhaPadraoZerada)
+export const hato: LinhaHato[] = MESES.map(linhaHatoZerada)
+export const aton: LinhaAton[] = MESES.map(linhaAtonZerada)
+export const diego: LinhaDiego[] = MESES.map(linhaDiegoZerada)
 
 export const empresas: EmpresaMeta[] = [
   {
