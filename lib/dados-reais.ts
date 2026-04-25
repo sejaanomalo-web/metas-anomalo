@@ -208,6 +208,20 @@ export async function salvarDadosReaisAction(
   const supabase = getSupabase()
   if (!supabase) return { ok: false, erro: "Supabase indisponível." }
 
+  // 1. Lê o estado atual de dados_reais (antes do upsert) — usado pra
+  //    montar a entrada de auditoria em dados_diarios_log com os valores
+  //    "anterior". Sem isso, o resumo diário/semanal divergiria do
+  //    dashboard quando alguém edita pelo drawer.
+  const { data: anteriorRow } = await supabase
+    .from("dados_reais")
+    .select("*")
+    .eq("empresa", empresa)
+    .eq("mes", mes)
+    .eq("ano", ano)
+    .eq("origem", origem)
+    .maybeSingle()
+  const anterior = (anteriorRow ?? null) as DadosReais | null
+
   const { error } = await supabase
     .from("dados_reais")
     .upsert(payload, { onConflict: "empresa,mes,ano,origem" })
@@ -215,6 +229,50 @@ export async function salvarDadosReaisAction(
   if (error) {
     console.error("[dados_reais] upsert error", error.message)
     return { ok: false, erro: error.message }
+  }
+
+  // 2. Trilha de auditoria — todo lançamento via drawer também aparece
+  //    em dados_diarios_log, com preenchedor_nome = 'Drawer admin'
+  //    pra distinguir do que veio dos formulários do gestor/SDR.
+  const logPayload = {
+    empresa,
+    data: new Date().toISOString().slice(0, 10),
+    origem,
+    preenchedor_id: null,
+    preenchedor_nome: "Drawer admin",
+    investimento_real,
+    leads_real,
+    reunioes_real,
+    contratos_real,
+    faturamento_real,
+    criativos_entregues,
+    clientes_ativos,
+    observacoes,
+    cpl_real,
+    cpa_real: null,
+    criativos_usados: null,
+    criativos_detalhe: null,
+    respostas,
+    publicos_prospectados: null,
+    investimento_anterior: anterior?.investimento_real ?? null,
+    leads_anterior: anterior?.leads_real ?? null,
+    reunioes_anterior: anterior?.reunioes_real ?? null,
+    contratos_anterior: anterior?.contratos_real ?? null,
+    faturamento_anterior: anterior?.faturamento_real ?? null,
+    criativos_anterior: anterior?.criativos_entregues ?? null,
+    cpl_anterior: anterior?.cpl_real ?? null,
+    cpa_anterior: anterior?.cpa_real ?? null,
+    criativos_usados_anterior: anterior?.criativos_usados ?? null,
+    criativos_detalhe_anterior: null,
+    respostas_anterior: anterior?.respostas ?? null,
+    publicos_prospectados_anterior: null,
+  }
+  const { error: erroLog } = await supabase
+    .from("dados_diarios_log")
+    .insert(logPayload)
+  if (erroLog) {
+    // Não falha a gravação principal por causa do log — só registra.
+    console.error("[dados_reais] insert log error", erroLog.message)
   }
 
   const empresaMeta = getEmpresaPorDb(empresa)
