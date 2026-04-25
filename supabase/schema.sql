@@ -460,6 +460,27 @@ create index if not exists dados_diarios_log_empresa_idx
   on public.dados_diarios_log (empresa, data);
 create index if not exists dados_diarios_log_preenchedor_idx
   on public.dados_diarios_log (preenchedor_id, data);
+-- Filtro mais comum em getDeltasDoPeriodo + agregadores: data + origem.
+create index if not exists dados_diarios_log_data_origem_idx
+  on public.dados_diarios_log (data, origem);
+
+-- Filtros frequentes em dados_reais: por (mes, ano) no dashboard e por
+-- empresa nos resumos. O unique constraint composto não cobre essas
+-- buscas isoladas.
+create index if not exists dados_reais_mes_ano_idx
+  on public.dados_reais (mes, ano);
+create index if not exists dados_reais_empresa_ano_idx
+  on public.dados_reais (empresa, ano);
+
+-- preenchedores: lookup por token é a query mais frequente do app
+-- (toda visita a /preencher/<token>). Sem índice = scan a cada hit.
+create index if not exists preenchedores_token_idx
+  on public.preenchedores (token)
+  where ativo = true;
+
+-- comissionamento: histórico por colaborador é leitura comum.
+create index if not exists comissionamento_colaborador_ano_idx
+  on public.comissionamento (colaborador, ano);
 
 -- Campos extras do formulário do gestor. CPL/CPA são snapshots, usados
 -- é cumulativo. O detalhe (lista de criativos+público) é sobrescrito em
