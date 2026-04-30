@@ -66,8 +66,10 @@
   --card-border-hover: rgba(255, 255, 255, 0.14);
   --card-fg: #ffffff;
 
-  /* Cabeçalho preto (igual ao Preto): */
-  --header-bg: rgba(0, 0, 0, 0.65);
+  /* Cabeçalho preto sólido (sobre fundo branco precisa ser opaco
+   * pra não virar cinza translúcido — o Preto puro do tema usa rgba
+   * porque sobre página #000 isso já dá preto). */
+  --header-bg: #000000;
   --header-border: rgba(255, 255, 255, 0.06);
 
   --input-bg: rgba(255, 255, 255, 0.92);
