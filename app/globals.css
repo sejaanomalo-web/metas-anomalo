@@ -52,38 +52,42 @@
   --toggle-fg: #ffffff;
 }
 
-/* ---------- Branco: fundo branco, cards pretos ---------- */
+/* ---------- Branco: fundo branco + cards/cabeçalho/botões iguais ao Preto ---------- */
 [data-theme="light"] {
   color-scheme: light;
   --bg: #faf7f0;
-  --fg: #1a1410;
-  --accent: #B07F25;
-  --accent-rgb: 176, 127, 37;
+  --fg: #1a1410;            /* texto da PÁGINA (fora dos cards) — escuro sobre branco */
+  --accent: #C9953A;        /* dourado da marca igual ao Preto */
+  --accent-rgb: 201, 149, 58;
 
+  /* Cards pretos (igual visual do Preto): */
   --card-bg: #0a0a0a;
-  --card-border: rgba(201, 149, 58, 0.25);
-  --card-border-hover: rgba(201, 149, 58, 0.5);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --card-border-hover: rgba(255, 255, 255, 0.14);
   --card-fg: #ffffff;
 
-  --header-bg: rgba(255, 255, 255, 0.78);
-  --header-border: rgba(0, 0, 0, 0.08);
+  /* Cabeçalho preto (igual ao Preto): */
+  --header-bg: rgba(0, 0, 0, 0.65);
+  --header-border: rgba(255, 255, 255, 0.06);
+
   --input-bg: rgba(255, 255, 255, 0.92);
   --input-border: rgba(0, 0, 0, 0.14);
   --divider: rgba(0, 0, 0, 0.08);
 
-  --shadow-glass: 0 0 0 0.5px rgba(201, 149, 58, 0.18) inset,
-    0 10px 28px rgba(20, 14, 6, 0.18),
-    0 0 60px rgba(201, 149, 58, 0.06) inset;
-  --shadow-glass-hover: 0 0 0 0.5px rgba(201, 149, 58, 0.35) inset,
-    0 14px 36px rgba(20, 14, 6, 0.25),
-    0 0 80px rgba(201, 149, 58, 0.10) inset;
+  --shadow-glass: 0 0 0 0.5px rgba(201, 149, 58, 0.08) inset,
+    0 10px 28px rgba(0, 0, 0, 0.18),
+    0 0 80px rgba(201, 149, 58, 0.04) inset;
+  --shadow-glass-hover: 0 0 0 0.5px rgba(201, 149, 58, 0.15) inset,
+    0 14px 36px rgba(0, 0, 0, 0.25),
+    0 0 100px rgba(201, 149, 58, 0.07) inset;
 
-  --selection-bg: #B07F25;
-  --selection-fg: #fff;
+  --selection-bg: #C9953A;
+  --selection-fg: #000;
 
-  --toggle-bg: rgba(0, 0, 0, 0.06);
-  --toggle-border: rgba(0, 0, 0, 0.16);
-  --toggle-fg: #1a1410;
+  /* Toggle do cabeçalho — em pílula branca-translúcida sobre header preto */
+  --toggle-bg: rgba(255, 255, 255, 0.06);
+  --toggle-border: rgba(255, 255, 255, 0.18);
+  --toggle-fg: #ffffff;
 }
 
 /* ---------- Contraste: fundo preto, cards brancos ---------- */
@@ -553,6 +557,50 @@ table {
 [data-theme="light"] .glass [style*="color: #C9953A"],
 [data-theme="light"] .glass [style*="color:#C9953A"] { color: #C9953A !important; }
 
+/* DENTRO do cabeçalho preto (.glass-header) — texto volta ao look do Preto */
+[data-theme="light"] .glass-header [style*="color: #ffffff"],
+[data-theme="light"] .glass-header [style*="color:#ffffff"],
+[data-theme="light"] .glass-header [style*="color: #fff\""],
+[data-theme="light"] .glass-header [style*="color:#fff\""],
+[data-theme="light"] .glass-header [style*="color: rgb(255, 255, 255)"],
+[data-theme="light"] .glass-header [style*="color: rgb(255,255,255)"] { color: #ffffff !important; }
+
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.15)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.15)"] { color: rgba(255,255,255,0.15) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.18)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.18)"] { color: rgba(255,255,255,0.18) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.2)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.2)"] { color: rgba(255,255,255,0.20) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.25)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.25)"] { color: rgba(255,255,255,0.25) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.3)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.3)"] { color: rgba(255,255,255,0.30) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.35)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.35)"] { color: rgba(255,255,255,0.35) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.4)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.4)"] { color: rgba(255,255,255,0.40) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.45)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.45)"] { color: rgba(255,255,255,0.45) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.5)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.5)"] { color: rgba(255,255,255,0.50) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.55)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.55)"] { color: rgba(255,255,255,0.55) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.6)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.6)"] { color: rgba(255,255,255,0.60) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.65)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.65)"] { color: rgba(255,255,255,0.65) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.7)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.7)"] { color: rgba(255,255,255,0.70) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.75)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.75)"] { color: rgba(255,255,255,0.75) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.78)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.78)"] { color: rgba(255,255,255,0.78) !important; }
+[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.8)"],
+[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.8)"] { color: rgba(255,255,255,0.80) !important; }
+
+[data-theme="light"] .glass-header [style*="color: #C9953A"],
+[data-theme="light"] .glass-header [style*="color:#C9953A"] { color: #C9953A !important; }
+
 
 /* ---------- MONO (fundo preto + cards brancos) ----------
  * Página: cores se mantêm brancas (fundo é preto).
@@ -674,24 +722,9 @@ table {
 
 
 /* ---------- Botões theme-aware ----------
- * Em LIGHT, os botões dourados ganham um tom mais escuro (mais legível
- * em fundo branco). Nos demais temas, os botões mantêm a cor da marca.
+ * Botões dourados mantêm o C9953A em todos os temas (sem override).
+ * No tema Branco usam o mesmo acento da marca, exatamente como no Preto.
  */
-[data-theme="light"] .btn-gold-filled,
-[data-theme="light"] .btn-gold-solid,
-[data-theme="light"] .btn-semanal-pulse {
-  background: #B07F25;
-  border-color: #B07F25;
-  color: #ffffff;
-}
-[data-theme="light"] .btn-gold-outline {
-  border-color: rgba(176, 127, 37, 0.45);
-  color: #B07F25;
-}
-[data-theme="light"] .btn-gold-outline:hover {
-  background: rgba(176, 127, 37, 0.10);
-  border-color: rgba(176, 127, 37, 0.7);
-}
 
 
 /* ============ Theme toggle pílula no cabeçalho ============ */
