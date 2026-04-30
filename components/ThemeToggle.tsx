@@ -2,23 +2,41 @@
 
 import { useEffect, useState } from "react"
 
-type Theme = "dark" | "light" | "yellow"
+type Theme = "dark" | "light" | "mono" | "gold"
 
-const ORDER: Theme[] = ["dark", "light", "yellow"]
+const ORDER: Theme[] = ["dark", "light", "mono", "gold"]
 
 const META: Record<
   Theme,
   { label: string; swatch: string; next: string }
 > = {
-  dark: { label: "Preto", swatch: "#000000", next: "Branco" },
-  light: { label: "Branco", swatch: "#faf7f0", next: "Amarelo" },
-  yellow: { label: "Amarelo", swatch: "#C9953A", next: "Preto" },
+  dark: {
+    label: "Preto",
+    swatch: "linear-gradient(135deg, #000 50%, #1a1410 50%)",
+    next: "Branco",
+  },
+  light: {
+    label: "Branco",
+    swatch: "linear-gradient(135deg, #faf7f0 50%, #0a0a0a 50%)",
+    next: "Contraste",
+  },
+  mono: {
+    label: "Contraste",
+    swatch: "linear-gradient(135deg, #000 50%, #ffffff 50%)",
+    next: "Dourado",
+  },
+  gold: {
+    label: "Dourado",
+    swatch: "linear-gradient(135deg, #000 50%, #C9953A 50%)",
+    next: "Preto",
+  },
 }
 
 function readTheme(): Theme {
   if (typeof document === "undefined") return "dark"
   const t = document.documentElement.getAttribute("data-theme")
-  return t === "light" || t === "yellow" ? t : "dark"
+  if (t === "light" || t === "mono" || t === "gold" || t === "dark") return t
+  return "dark"
 }
 
 export default function ThemeToggle() {

@@ -34,7 +34,7 @@ export default function RootLayout({
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('anomalo-theme');if(t==='light'||t==='yellow'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('anomalo-theme');if(t==='light'||t==='mono'||t==='gold'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`,
           }}
         />
       </head>
