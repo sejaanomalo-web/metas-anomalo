@@ -20,24 +20,20 @@ export default function Header({ children }: { children?: React.ReactNode }) {
             <p
               style={{
                 fontSize: 13,
-                letterSpacing: "1.17px",
-                color: "#f0f0fa",
-                fontWeight: 700,
+                letterSpacing: "0.5px",
+                color: "#C9953A",
+                fontWeight: 600,
                 textTransform: "uppercase",
-                lineHeight: 0.94,
               }}
             >
               Anômalo Hub
             </p>
             <p
               style={{
-                fontSize: 10,
-                color: "rgba(240,240,250,0.55)",
-                fontWeight: 400,
-                marginTop: 4,
-                letterSpacing: "1px",
-                textTransform: "uppercase",
-                lineHeight: 0.94,
+                fontSize: 11,
+                color: "rgba(255,255,255,0.35)",
+                fontWeight: 300,
+                marginTop: 2,
               }}
             >
               Painel de Metas
@@ -53,11 +49,11 @@ export default function Header({ children }: { children?: React.ReactNode }) {
             aria-label="Configurações"
             style={{
               fontSize: 18,
-              color: "rgba(240,240,250,0.4)",
+              color: "rgba(255,255,255,0.3)",
               lineHeight: 1,
               padding: "4px 6px",
             }}
-            className="hover:text-[#f0f0fa] transition no-ds"
+            className="hover:text-[#C9953A] transition"
           >
             ⚙
           </Link>
@@ -66,11 +62,11 @@ export default function Header({ children }: { children?: React.ReactNode }) {
               type="submit"
               style={{
                 fontSize: 11,
-                color: "rgba(240,240,250,0.55)",
-                fontWeight: 600,
-                letterSpacing: "1.17px",
+                color: "rgba(255,255,255,0.35)",
+                fontWeight: 500,
+                letterSpacing: "0.5px",
               }}
-              className="hover:text-[#f0f0fa] transition uppercase"
+              className="hover:text-[#C9953A] transition uppercase"
             >
               Sair
             </button>

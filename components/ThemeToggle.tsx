@@ -12,12 +12,12 @@ const META: Record<
 > = {
   dark: {
     label: "Preto",
-    swatch: "linear-gradient(135deg, #000 50%, #f0f0fa 50%)",
+    swatch: "linear-gradient(135deg, #000 50%, #1a1410 50%)",
     next: "Branco",
   },
   light: {
     label: "Branco",
-    swatch: "linear-gradient(135deg, #ffffff 50%, #000 50%)",
+    swatch: "linear-gradient(135deg, #faf7f0 50%, #0a0a0a 50%)",
     next: "Contraste",
   },
   mono: {
