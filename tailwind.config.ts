@@ -20,6 +20,8 @@ const config: Config = {
       fontFamily: {
         sans: [
           "Inter",
+          "Helvetica Neue",
+          "Helvetica",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",

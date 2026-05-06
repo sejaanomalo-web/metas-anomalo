@@ -259,6 +259,48 @@ export async function reativarEmpresaAction(
 }
 
 /**
+ * Reordena as empresas ativas. Recebe `ids` como uma string com os IDs
+ * separados por vírgula, na ordem em que devem aparecer. Cada empresa
+ * recebe `ordem = index` (0..n-1), o que faz o `select().order("ordem")`
+ * usado pelo dashboard refletir a nova ordem sem cache.
+ */
+export async function reordenarEmpresasAction(
+  formData: FormData
+): Promise<{ ok: boolean; erro?: string }> {
+  if (!supabaseConfigurado()) {
+    return { ok: false, erro: "Supabase não configurado." }
+  }
+  const idsRaw = String(formData.get("ids") ?? "").trim()
+  if (!idsRaw) return { ok: false, erro: "Lista de IDs vazia." }
+
+  const ids = idsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+  if (ids.length === 0) return { ok: false, erro: "Lista de IDs vazia." }
+
+  const supabase = getSupabase()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const now = new Date().toISOString()
+  // Updates em paralelo: cada id recebe ordem = seu índice na lista enviada.
+  const results = await Promise.all(
+    ids.map((id, index) =>
+      supabase
+        .from("empresas_config")
+        .update({ ordem: index, updated_at: now })
+        .eq("id", id)
+    )
+  )
+
+  const erro = results.find((r) => r.error)?.error
+  if (erro) {
+    console.error("[empresas_config] reorder error", erro.message)
+    return { ok: false, erro: erro.message }
+  }
+
+  revalidatePath("/dashboard")
+  return { ok: true }
+}
+
+/**
  * Exclusão permanente. Bloqueia se houver histórico em dados_reais ou
  * metas_empresa — nesses casos, usar desativar.
  */

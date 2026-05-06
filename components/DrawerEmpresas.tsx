@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { EmpresaMeta, TipoFunil } from "@/lib/data"
 import {
@@ -9,6 +9,7 @@ import {
   desativarEmpresaAction,
   excluirEmpresaAction,
   reativarEmpresaAction,
+  reordenarEmpresasAction,
 } from "@/lib/empresas-actions"
 
 interface Props {
@@ -211,6 +212,7 @@ function Conteudo({
         }}
         onSolicitarExcluir={(e) => setModalExcluir(e)}
         supabaseOk={supabaseOk}
+        reordenavel
       />
 
       {empresasInativas.length > 0 && (
@@ -449,12 +451,14 @@ function SecaoListaEmpresas({
   onEditar,
   onSolicitarExcluir,
   supabaseOk,
+  reordenavel,
 }: {
   titulo: string
   empresas: EmpresaMeta[]
   onEditar: (e: EmpresaMeta) => void
   onSolicitarExcluir: (e: EmpresaMeta) => void
   supabaseOk: boolean
+  reordenavel?: boolean
 }) {
   if (empresas.length === 0) return null
   return (
@@ -470,12 +474,25 @@ function SecaoListaEmpresas({
         }}
       >
         {titulo}
+        {reordenavel && (
+          <span
+            style={{
+              marginLeft: 8,
+              color: "rgba(255,255,255,0.25)",
+              fontWeight: 400,
+              letterSpacing: "0.5px",
+            }}
+          >
+            · use ↑↓ para reordenar
+          </span>
+        )}
       </p>
       <ListaEmpresas
         empresas={empresas}
         onEditar={onEditar}
         onSolicitarExcluir={onSolicitarExcluir}
         supabaseOk={supabaseOk}
+        reordenavel={reordenavel}
       />
     </div>
   )
@@ -487,15 +504,29 @@ function ListaEmpresas({
   onEditar,
   onSolicitarExcluir,
   supabaseOk,
+  reordenavel,
 }: {
   empresas: EmpresaMeta[]
   inativa?: boolean
   onEditar: (e: EmpresaMeta) => void
   onSolicitarExcluir: (e: EmpresaMeta) => void
   supabaseOk: boolean
+  reordenavel?: boolean
 }) {
   const [pending, startTransition] = useTransition()
+  // Ordem local otimista — começa = empresas (já ordenadas pelo servidor).
+  // Ao reordenar, atualizamos isso na hora pra UI responder, e disparamos
+  // o action em background; quando o router.refresh() volta com a nova
+  // lista do servidor, o useEffect resincroniza.
+  const [ordem, setOrdem] = useState<EmpresaMeta[]>(empresas)
+  const [salvandoOrdem, setSalvandoOrdem] = useState(false)
   const router = useRouter()
+
+  // Mantém a ordem local em sync quando o servidor atualiza a lista
+  // (após reload, criação, edição, desativação, etc.).
+  useEffect(() => {
+    setOrdem(empresas)
+  }, [empresas])
 
   async function desativar(e: EmpresaMeta) {
     const id = e.id
@@ -515,10 +546,36 @@ function ListaEmpresas({
     if (r.ok) router.refresh()
   }
 
+  async function persistirOrdem(novaOrdem: EmpresaMeta[]) {
+    const ids = novaOrdem.map((e) => e.id).filter((id): id is string => Boolean(id))
+    // Se alguma empresa da lista não tem id (fallback hardcoded sem
+    // sincronização com Supabase), aborta a persistência sem reverter
+    // a UI — ela ainda é válida visualmente, só não vira durável.
+    if (ids.length !== novaOrdem.length) return
+    setSalvandoOrdem(true)
+    const fd = new FormData()
+    fd.set("ids", ids.join(","))
+    const r = await reordenarEmpresasAction(fd)
+    setSalvandoOrdem(false)
+    if (r.ok) router.refresh()
+  }
+
+  function mover(index: number, direcao: -1 | 1) {
+    const destino = index + direcao
+    if (destino < 0 || destino >= ordem.length) return
+    const nova = [...ordem]
+    ;[nova[index], nova[destino]] = [nova[destino], nova[index]]
+    setOrdem(nova)
+    persistirOrdem(nova)
+  }
+
+  const lista = reordenavel ? ordem : empresas
+
   return (
     <div className="space-y-2">
-      {empresas.map((e) => {
+      {lista.map((e, idx) => {
         const semId = !e.id
+        const podeReordenar = reordenavel && supabaseOk && !semId
         return (
           <div
             key={e.slug}
@@ -530,7 +587,81 @@ function ListaEmpresas({
               opacity: inativa ? 0.65 : 1,
             }}
           >
-            <div className="min-w-0">
+            {reordenavel && (
+              <div
+                className="flex flex-col items-center justify-center flex-shrink-0"
+                style={{ gap: 2 }}
+              >
+                <button
+                  type="button"
+                  onClick={() => mover(idx, -1)}
+                  disabled={
+                    !podeReordenar || idx === 0 || salvandoOrdem || pending
+                  }
+                  title={
+                    semId
+                      ? "Rode o schema.sql para sincronizar"
+                      : idx === 0
+                      ? "Já está no topo"
+                      : "Mover para cima"
+                  }
+                  style={{
+                    fontSize: 11,
+                    lineHeight: 1,
+                    width: 22,
+                    height: 18,
+                    color:
+                      !podeReordenar || idx === 0
+                        ? "rgba(255,255,255,0.15)"
+                        : "rgba(255,255,255,0.55)",
+                    border: "0.5px solid rgba(255,255,255,0.10)",
+                    borderRadius: 4,
+                    cursor:
+                      !podeReordenar || idx === 0 ? "default" : "pointer",
+                  }}
+                  className="hover:text-[#C9953A] transition"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  onClick={() => mover(idx, 1)}
+                  disabled={
+                    !podeReordenar ||
+                    idx === lista.length - 1 ||
+                    salvandoOrdem ||
+                    pending
+                  }
+                  title={
+                    semId
+                      ? "Rode o schema.sql para sincronizar"
+                      : idx === lista.length - 1
+                      ? "Já está no fim"
+                      : "Mover para baixo"
+                  }
+                  style={{
+                    fontSize: 11,
+                    lineHeight: 1,
+                    width: 22,
+                    height: 18,
+                    color:
+                      !podeReordenar || idx === lista.length - 1
+                        ? "rgba(255,255,255,0.15)"
+                        : "rgba(255,255,255,0.55)",
+                    border: "0.5px solid rgba(255,255,255,0.10)",
+                    borderRadius: 4,
+                    cursor:
+                      !podeReordenar || idx === lista.length - 1
+                        ? "default"
+                        : "pointer",
+                  }}
+                  className="hover:text-[#C9953A] transition"
+                >
+                  ▼
+                </button>
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
               <p
                 style={{
                   fontSize: 13,
