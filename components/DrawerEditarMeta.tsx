@@ -60,9 +60,13 @@ function camposPorTipo(
       { chave: "faturamento", rotulo: "Faturamento (R$)", tipo: "brl" },
     ]
     if (ehOrganico) {
+      // Leads vem antes de Respostas no orgânico (a métrica de captação
+      // tem prioridade visual sobre a métrica de engajamento).
+      const [primeiro, ...resto] = base
       return [
+        primeiro,
         { chave: "respostas", rotulo: "Respostas", tipo: "numero" },
-        ...base,
+        ...resto,
       ]
     }
     return [
@@ -93,7 +97,14 @@ function camposPorTipo(
     { chave: "faturamento", rotulo: "Faturamento (R$)", tipo: "brl" },
   ]
   if (ehOrganico) {
-    return [{ chave: "respostas", rotulo: "Respostas", tipo: "numero" }, ...base]
+    // Leads vem antes de Respostas no orgânico — a métrica de captação
+    // tem prioridade visual sobre a métrica de engajamento.
+    const [primeiro, ...resto] = base
+    return [
+      primeiro,
+      { chave: "respostas", rotulo: "Respostas", tipo: "numero" },
+      ...resto,
+    ]
   }
   return [
     { chave: "verba", rotulo: "Investimento (R$)", tipo: "brl" },
