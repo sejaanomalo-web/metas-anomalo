@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { EmpresaDb, Mes } from "@/lib/data"
-import { ANOS_DISPONIVEIS, MESES, formatBRL } from "@/lib/data"
+import type { EmpresaDb, Mes, OrigemDadosReais } from "@/lib/data"
+import { ANOS_DISPONIVEIS, MESES, ORIGEM_PADRAO, formatBRL } from "@/lib/data"
 import { salvarMetaEmpresaAction } from "@/lib/metas-empresa"
 
 type TipoEmpresa = "leads-reunioes-contratos" | "aton" | "hato" | "diego"
@@ -14,11 +14,21 @@ interface Campo {
   tipo: "brl" | "numero" | "percent"
 }
 
-function camposPorTipo(tipo: TipoEmpresa): Campo[] {
+/**
+ * Define quais campos aparecem no editor de metas por (tipo de funil, origem).
+ * Para origem 'organico' (prospecção fria) retiramos os campos exclusivos
+ * de tráfego pago (verba/criativos) e adicionamos `respostas` no funil
+ * leads-reunioes-contratos. O tipo 'diego' não tem origem (é participação
+ * no faturamento) — sempre devolve a mesma lista.
+ */
+function camposPorTipo(
+  tipo: TipoEmpresa,
+  origem: OrigemDadosReais = ORIGEM_PADRAO
+): Campo[] {
+  const ehOrganico = origem === "organico"
+
   if (tipo === "hato") {
-    return [
-      { chave: "verba", rotulo: "Investimento (R$)", tipo: "brl" },
-      { chave: "criativos", rotulo: "Criativos no mês", tipo: "numero" },
+    const base: Campo[] = [
       { chave: "influenciadores", rotulo: "Influenciadores", tipo: "numero" },
       {
         chave: "vendas_influenciador",
@@ -34,16 +44,31 @@ function camposPorTipo(tipo: TipoEmpresa): Campo[] {
         tipo: "brl",
       },
     ]
-  }
-  if (tipo === "aton") {
+    if (ehOrganico) return base
     return [
       { chave: "verba", rotulo: "Investimento (R$)", tipo: "brl" },
       { chave: "criativos", rotulo: "Criativos no mês", tipo: "numero" },
+      ...base,
+    ]
+  }
+  if (tipo === "aton") {
+    const base: Campo[] = [
       { chave: "leads", rotulo: "Leads", tipo: "numero" },
       { chave: "orcamentos", rotulo: "Orçamentos", tipo: "numero" },
       { chave: "vendas", rotulo: "Vendas", tipo: "numero" },
       { chave: "ticket", rotulo: "Ticket médio (R$)", tipo: "brl" },
       { chave: "faturamento", rotulo: "Faturamento (R$)", tipo: "brl" },
+    ]
+    if (ehOrganico) {
+      return [
+        { chave: "respostas", rotulo: "Respostas", tipo: "numero" },
+        ...base,
+      ]
+    }
+    return [
+      { chave: "verba", rotulo: "Investimento (R$)", tipo: "brl" },
+      { chave: "criativos", rotulo: "Criativos no mês", tipo: "numero" },
+      ...base,
     ]
   }
   if (tipo === "diego") {
@@ -57,9 +82,8 @@ function camposPorTipo(tipo: TipoEmpresa): Campo[] {
       { chave: "receita_hub", rotulo: "Receita Hub (R$)", tipo: "brl" },
     ]
   }
-  return [
-    { chave: "verba", rotulo: "Investimento (R$)", tipo: "brl" },
-    { chave: "criativos", rotulo: "Criativos no mês", tipo: "numero" },
+  // leads-reunioes-contratos (default)
+  const base: Campo[] = [
     { chave: "leads", rotulo: "Leads", tipo: "numero" },
     { chave: "reunioes", rotulo: "Reuniões", tipo: "numero" },
     { chave: "contratos", rotulo: "Contratos", tipo: "numero" },
@@ -67,6 +91,14 @@ function camposPorTipo(tipo: TipoEmpresa): Campo[] {
     { chave: "churn", rotulo: "Churn", tipo: "numero" },
     { chave: "ticket", rotulo: "Ticket médio (R$)", tipo: "brl" },
     { chave: "faturamento", rotulo: "Faturamento (R$)", tipo: "brl" },
+  ]
+  if (ehOrganico) {
+    return [{ chave: "respostas", rotulo: "Respostas", tipo: "numero" }, ...base]
+  }
+  return [
+    { chave: "verba", rotulo: "Investimento (R$)", tipo: "brl" },
+    { chave: "criativos", rotulo: "Criativos no mês", tipo: "numero" },
+    ...base,
   ]
 }
 
@@ -77,6 +109,7 @@ export default function DrawerEditarMeta({
   ano,
   mesInicial,
   linhasPorMes,
+  origem = ORIGEM_PADRAO,
 }: {
   empresa: EmpresaDb
   empresaNome: string
@@ -84,6 +117,7 @@ export default function DrawerEditarMeta({
   ano: number
   mesInicial: Mes
   linhasPorMes: Record<string, Record<string, number>>
+  origem?: OrigemDadosReais
 }) {
   const [aberto, setAberto] = useState(false)
   const [mesSelecionado, setMesSelecionado] = useState<Mes>(mesInicial)
@@ -93,7 +127,8 @@ export default function DrawerEditarMeta({
   const [status, setStatus] = useState<string | null>(null)
   const router = useRouter()
 
-  const campos = camposPorTipo(tipoEmpresa)
+  const campos = camposPorTipo(tipoEmpresa, origem)
+  const rotuloOrigem = origem === "pago" ? "Tráfego pago" : "Prospecção orgânica"
   // linhasPorMes só corresponde ao `ano` que a página carregou no servidor.
   // Se o usuário escolher outro ano, não temos os projetados aqui — mostra
   // apenas os campos sem hint.
@@ -134,6 +169,7 @@ export default function DrawerEditarMeta({
     fd.set("empresa", empresa)
     fd.set("mes", mesSelecionado)
     fd.set("ano", String(anoSelecionado))
+    fd.set("origem", origem)
     for (const c of campos) {
       const v = valores[c.chave]
       if (v !== undefined && v !== "") fd.set(c.chave, v)
@@ -215,6 +251,18 @@ export default function DrawerEditarMeta({
                     }}
                   >
                     Editar meta do mês
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 10,
+                      letterSpacing: "1.2px",
+                      color: "#C9953A",
+                      fontWeight: 600,
+                      marginTop: 6,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {rotuloOrigem}
                   </p>
                 </div>
                 <button

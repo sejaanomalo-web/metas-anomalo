@@ -271,7 +271,11 @@ create table if not exists public.configuracoes (
   updated_at timestamptz not null default now()
 );
 
--- Overrides de metas por empresa × mês × ano (complementa lib/data.ts) -----
+-- Overrides de metas por empresa × mês × ano × origem (complementa lib/data.ts)
+-- Cada combinação (empresa, mes, ano, origem) tem seus próprios overrides:
+-- 'pago' guarda metas de tráfego pago (verba, criativos, etc.); 'organico'
+-- guarda metas de prospecção orgânica (respostas, sem investimento). Mesma
+-- lógica aplicada em dados_reais.
 create table if not exists public.metas_empresa (
   id uuid primary key default gen_random_uuid(),
   empresa text not null,
@@ -281,6 +285,22 @@ create table if not exists public.metas_empresa (
   updated_at timestamptz not null default now(),
   unique (empresa, mes, ano)
 );
+
+-- Migração: adiciona origem em metas_empresa
+alter table public.metas_empresa
+  add column if not exists origem text not null default 'pago';
+alter table public.metas_empresa
+  drop constraint if exists metas_empresa_origem_check;
+alter table public.metas_empresa
+  add constraint metas_empresa_origem_check
+  check (origem in ('pago','organico'));
+
+-- Substitui o unique (empresa, mes, ano) — sem origem na chave, não daria
+-- pra manter overrides separados por origem (pago e organico no mesmo mês).
+alter table public.metas_empresa
+  drop constraint if exists metas_empresa_empresa_mes_ano_key;
+create unique index if not exists metas_empresa_empresa_mes_ano_origem_key
+  on public.metas_empresa (empresa, mes, ano, origem);
 
 alter table public.metas_empresa enable row level security;
 drop policy if exists metas_empresa_all on public.metas_empresa;

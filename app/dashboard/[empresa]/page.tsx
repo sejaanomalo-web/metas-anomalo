@@ -56,7 +56,7 @@ export default async function EmpresaPage({
   const [real, todosReais, overrides, dadosDiarios] = await Promise.all([
     getDadosReaisMes(empresa.db, mes, ano, origem),
     getDadosReais(empresa.db, ano, origem),
-    getMetasOverrideEmpresa(empresa.db, ano),
+    getMetasOverrideEmpresa(empresa.db, ano, origem),
     getDadosDiariosDoMes(empresa.db, mes, ano, origem),
   ])
 
@@ -222,6 +222,7 @@ export default async function EmpresaPage({
                   tipoEmpresa={empresa.tipo}
                   ano={ano}
                   mesInicial={mes}
+                  origem={origem}
                   linhasPorMes={Object.fromEntries(
                     (
                       linhas as unknown as Record<string, number | string>[]

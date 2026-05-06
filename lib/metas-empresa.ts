@@ -2,7 +2,15 @@
 
 import { revalidatePath } from "next/cache"
 import { getSupabase, supabaseConfigurado } from "./supabase"
-import { type EmpresaDb, type Mes, empresas, MESES } from "./data"
+import {
+  type EmpresaDb,
+  type Mes,
+  type OrigemDadosReais,
+  empresas,
+  MESES,
+  ORIGEM_PADRAO,
+  origemValida,
+} from "./data"
 
 export interface ResultadoMeta {
   ok: boolean
@@ -32,7 +40,8 @@ function mesValidoFn(m: string): m is Mes {
 
 export async function getMetasOverrideEmpresa(
   empresa: EmpresaDb,
-  ano: number
+  ano: number,
+  origem: OrigemDadosReais = ORIGEM_PADRAO
 ): Promise<Map<string, MetaOverride>> {
   const supabase = getSupabase()
   if (!supabase) return new Map()
@@ -41,6 +50,7 @@ export async function getMetasOverrideEmpresa(
     .select("mes, overrides")
     .eq("empresa", empresa)
     .eq("ano", ano)
+    .eq("origem", origem)
   if (error) {
     console.error("[metas_empresa] get error", error.message)
     return new Map()
@@ -63,10 +73,14 @@ export async function getMetasOverrideEmpresa(
  * Carrega em lote os overrides de metas_empresa para um dado mes/ano,
  * agrupados por empresa (db). Usado pela dashboard para compor o resumo
  * do Hub e os cards de empresa sem precisar de uma query por empresa.
+ *
+ * Filtra por origem (default 'pago') porque metas paga e orgânica vivem
+ * em linhas separadas e o Hub atual visualiza sempre métricas de pago.
  */
 export async function getOverridesTodasEmpresasMes(
   mes: Mes,
-  ano: number
+  ano: number,
+  origem: OrigemDadosReais = ORIGEM_PADRAO
 ): Promise<Map<EmpresaDb, MetaOverride>> {
   const supabase = getSupabase()
   if (!supabase) return new Map()
@@ -75,6 +89,7 @@ export async function getOverridesTodasEmpresasMes(
     .select("empresa, overrides")
     .eq("mes", mes)
     .eq("ano", ano)
+    .eq("origem", origem)
   if (error) {
     console.error("[metas_empresa] get por mes error", error.message)
     return new Map()
@@ -104,15 +119,20 @@ export async function salvarMetaEmpresaAction(
   const mes = String(formData.get("mes") ?? "")
   const anoRaw = String(formData.get("ano") ?? "")
   const ano = parseInt(anoRaw, 10) || new Date().getFullYear()
+  const origem = origemValida(formData.get("origem")?.toString())
 
   if (!empresaValida(empresa) || !mesValidoFn(mes)) {
     return { ok: false, erro: "Empresa ou mês inválidos." }
   }
 
+  // Lista de chaves aceitas no jsonb `overrides`. Cobre os dois universos
+  // (pago e organico) — a UI envia só as chaves relevantes pra origem
+  // selecionada, então a persistência fica naturalmente coerente.
   const CAMPOS: string[] = [
     "verba",
     "criativos",
     "criativos_semana",
+    "respostas",
     "leads",
     "reunioes",
     "orcamentos",
@@ -147,10 +167,11 @@ export async function salvarMetaEmpresaAction(
       empresa,
       mes,
       ano,
+      origem,
       overrides,
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "empresa,mes,ano" }
+    { onConflict: "empresa,mes,ano,origem" }
   )
   if (error) return { ok: false, erro: error.message }
 
