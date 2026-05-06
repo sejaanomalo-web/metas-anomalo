@@ -88,7 +88,7 @@ function TooltipConteudo({
         borderRadius: 8,
         backdropFilter: "blur(16px)",
         padding: "10px 14px",
-        fontFamily: "Poppins",
+        fontFamily: "Inter",
         fontSize: 11,
         fontWeight: 400,
         color: "#fff",
@@ -179,13 +179,13 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
               stroke="rgba(255,255,255,0.3)"
               tickLine={false}
               axisLine={false}
-              style={{ fontSize: 9, fontFamily: "Poppins" }}
+              style={{ fontSize: 9, fontFamily: "Inter" }}
             />
             <YAxis
               stroke="rgba(255,255,255,0.3)"
               tickLine={false}
               axisLine={false}
-              style={{ fontSize: 9, fontFamily: "Poppins" }}
+              style={{ fontSize: 9, fontFamily: "Inter" }}
               tickFormatter={(v) =>
                 v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)
               }
