@@ -22,18 +22,65 @@ export function anoTemProjecao(ano: number): boolean {
   return ano === ANO_PROJETADO
 }
 
-export function anoValido(a: string | undefined | null): Ano {
-  if (!a) return ANO_PADRAO
-  const n = parseInt(a, 10)
-  if (!Number.isFinite(n)) return ANO_PADRAO
+// ----------------- Período atual em BRT -----------------
+// O servidor da Vercel roda em UTC; subtraímos 3h pra obter "hoje" em
+// horário de Brasília (sem DST, válido pra todo o Brasil corporativo).
+function hojeBRL(): Date {
+  const agora = new Date()
+  const utc = agora.getTime() + agora.getTimezoneOffset() * 60000
+  return new Date(utc + -3 * 3600000)
+}
+
+const NOMES_MES_PT: Record<number, string> = {
+  1: "Janeiro",
+  2: "Fevereiro",
+  3: "Março",
+  4: "Abril",
+  5: "Maio",
+  6: "Junho",
+  7: "Julho",
+  8: "Agosto",
+  9: "Setembro",
+  10: "Outubro",
+  11: "Novembro",
+  12: "Dezembro",
+}
+
+/**
+ * Mês atual em BRT, mapeado para a lista MESES (Abril–Dezembro).
+ * Janeiro/Fevereiro/Março caem em Abril como menor opção disponível.
+ */
+export function mesAtual(): Mes {
+  const hoje = hojeBRL()
+  const nome = NOMES_MES_PT[hoje.getMonth() + 1]
+  if (nome && (MESES as readonly string[]).includes(nome)) return nome as Mes
+  return "Abril"
+}
+
+/**
+ * Ano atual em BRT, mapeado para ANOS_DISPONIVEIS.
+ * Anos fora da lista (passado/muito futuro) caem em ANO_PADRAO.
+ */
+export function anoAtual(): Ano {
+  const hoje = hojeBRL()
+  const n = hoje.getFullYear()
   return (ANOS_DISPONIVEIS as readonly number[]).includes(n)
     ? (n as Ano)
     : ANO_PADRAO
 }
 
+export function anoValido(a: string | undefined | null): Ano {
+  if (!a) return anoAtual()
+  const n = parseInt(a, 10)
+  if (!Number.isFinite(n)) return anoAtual()
+  return (ANOS_DISPONIVEIS as readonly number[]).includes(n)
+    ? (n as Ano)
+    : anoAtual()
+}
+
 export function mesValido(m: string | undefined | null): Mes {
   if (m && (MESES as readonly string[]).includes(m)) return m as Mes
-  return "Abril"
+  return mesAtual()
 }
 
 export const ORIGENS_DADOS = ["pago", "organico"] as const

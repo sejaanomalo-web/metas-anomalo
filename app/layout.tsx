@@ -32,11 +32,6 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('anomalo-theme');if(t==='light'||t==='mono'||t==='gold'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`,
-          }}
-        />
       </head>
       <body className="min-h-screen">
         <div className="motion-bg" aria-hidden="true">
