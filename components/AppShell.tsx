@@ -1,28 +1,31 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import logo from "@/public/logo-anomalo.png"
 import { sairAction } from "@/app/login/actions"
 
 /**
  * Sidebar global do /dashboard/*. Dois modos:
  *
  *   • Colapsado (default): rail de 72px na extrema esquerda mostrando
- *     ícones quadrados de cada seção (Dashboard, Empresas, Time,
- *     Configurações, Sair). Hover destaca o item; tooltip nativo.
+ *     o logo Anômalo no topo + ícones quadrados de cada seção.
  *   • Expandido: rail vira sidebar de 240px com rótulos visíveis ao
- *     lado dos ícones. Time se mantém colapsável (sub-items: Comissão,
- *     Formulários diários).
+ *     lado dos ícones.
  *
- * Toggle: clicar no logo Anômalo (LogoToggle no Header). Estado
- * persistido em localStorage (anomalo-sidebar-expandido).
+ * Toggle: clicar no logo do topo do rail (ItemLogo).
  *
- * Items visuais: cada item é um pill com altura 44px (modo expandido)
- * ou quadrado 44x44 (colapsado), raio 10px, cor do texto var(--text-2),
- * background transparente. Hover: background var(--surface-2). Item
- * ativo (rota atual): background var(--surface-2) + barra ouro
- * lateral fina à esquerda.
+ * Indicador de rota ativa: barra vertical ouro (3px) à esquerda do
+ * item + cor do ícone em ouro + texto em text-1. Muda conforme o
+ * pathname:
+ *   /dashboard                  → Dashboard
+ *   /dashboard/empresas         → Empresas
+ *   /dashboard/<slug>           → Empresas (página de empresa individual)
+ *   /dashboard/comissionamento  → Time
+ *   /dashboard/preenchedores    → Time
+ *   /dashboard/configuracoes    → Configurações
  */
 
 interface SidebarCtx {
@@ -44,6 +47,23 @@ export function useSidebar(): SidebarCtx {
 const STORAGE_KEY = "anomalo-sidebar-expandido"
 const RAIL_COLLAPSED = 72
 const RAIL_EXPANDED = 240
+
+// Rotas das outras seções — usadas pra deduzir quando Empresas está ativo
+// (qualquer rota /dashboard/<slug> que NÃO seja uma dessas).
+const ROTAS_NAO_EMPRESA = new Set([
+  "/dashboard/empresas",
+  "/dashboard/comissionamento",
+  "/dashboard/preenchedores",
+  "/dashboard/configuracoes",
+])
+
+function ehRotaEmpresa(pathname: string): boolean {
+  if (pathname === "/dashboard/empresas") return true
+  if (!pathname.startsWith("/dashboard/")) return false
+  if (pathname === "/dashboard") return false
+  // /dashboard/<algo>  →  empresa (a menos que seja uma rota especial)
+  return !ROTAS_NAO_EMPRESA.has(pathname.replace(/\/$/, "").split("/").slice(0, 3).join("/"))
+}
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const [expandido, setExpandido] = useState(false)
@@ -72,7 +92,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <SidebarContext.Provider value={value}>
-      <SidebarRail expandido={hydrated ? expandido : false} />
+      <SidebarRail expandido={hydrated ? expandido : false} onToggle={toggle} />
       <div
         style={{
           marginLeft: railWidth,
@@ -86,10 +106,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
   )
 }
 
-function SidebarRail({ expandido }: { expandido: boolean }) {
+function SidebarRail({
+  expandido,
+  onToggle,
+}: {
+  expandido: boolean
+  onToggle: () => void
+}) {
   const [timeAberto, setTimeAberto] = useState(true)
   const pathname = usePathname()
   const width = expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
+
+  const dashboardAtivo = pathname === "/dashboard"
+  const empresasAtivo = ehRotaEmpresa(pathname)
+  const timeAtivo =
+    pathname === "/dashboard/comissionamento" ||
+    pathname === "/dashboard/preenchedores"
+  const configAtivo = pathname === "/dashboard/configuracoes"
 
   return (
     <aside
@@ -110,8 +143,10 @@ function SidebarRail({ expandido }: { expandido: boolean }) {
         overflowY: "auto",
       }}
     >
-      {/* Spacer pra alinhar com o header sticky de 64px */}
-      <div style={{ height: 64, flexShrink: 0 }} />
+      {/* Logo Anômalo (botão de toggle) */}
+      <div style={{ padding: "16px 14px 8px 14px" }}>
+        <ItemLogo expandido={expandido} onClick={onToggle} />
+      </div>
 
       {/* Navegação principal */}
       <nav
@@ -119,7 +154,7 @@ function SidebarRail({ expandido }: { expandido: boolean }) {
           display: "flex",
           flexDirection: "column",
           gap: 4,
-          padding: "12px 14px",
+          padding: "8px 14px",
           flex: 1,
         }}
       >
@@ -128,20 +163,21 @@ function SidebarRail({ expandido }: { expandido: boolean }) {
           rotulo="Dashboard"
           href="/dashboard"
           expandido={expandido}
-          ativo={pathname === "/dashboard"}
+          ativo={dashboardAtivo}
         />
         <ItemMenu
           icon={<IconeEmpresas />}
           rotulo="Empresas"
-          href="/dashboard#empresas"
+          href="/dashboard/empresas"
           expandido={expandido}
-          ativo={false}
+          ativo={empresasAtivo}
         />
         <SecaoTime
           expandido={expandido}
           aberto={timeAberto}
           onToggle={() => expandido && setTimeAberto((v) => !v)}
           pathname={pathname}
+          ativo={timeAtivo}
         />
       </nav>
 
@@ -160,7 +196,7 @@ function SidebarRail({ expandido }: { expandido: boolean }) {
           rotulo="Configurações"
           href="/dashboard/configuracoes"
           expandido={expandido}
-          ativo={pathname === "/dashboard/configuracoes"}
+          ativo={configAtivo}
         />
         <form action={sairAction} style={{ width: "100%" }}>
           <ItemMenu
@@ -181,14 +217,14 @@ function SecaoTime({
   aberto,
   onToggle,
   pathname,
+  ativo,
 }: {
   expandido: boolean
   aberto: boolean
   onToggle: () => void
   pathname: string
+  ativo: boolean
 }) {
-  // Colapsado: item clicável que NÃO expande sub-menu (só destaca).
-  // Expandido: header de seção com chevron + sub-items embaixo.
   return (
     <div>
       <ItemMenu
@@ -198,10 +234,7 @@ function SecaoTime({
         chevron={expandido}
         chevronAberto={aberto}
         onClick={onToggle}
-        ativo={
-          pathname === "/dashboard/comissionamento" ||
-          pathname === "/dashboard/preenchedores"
-        }
+        ativo={ativo}
       />
       {expandido && aberto && (
         <div
@@ -232,10 +265,55 @@ function SecaoTime({
 }
 
 /**
- * Item visual do menu. Colapsado: quadrado 44x44 com ícone centrado.
- * Expandido: pill 44px de altura com ícone + rótulo + chevron opcional.
- * Item ativo: surface-2 de fundo + barrinha ouro vertical à esquerda.
+ * Logo Anômalo no topo do rail. Clicar toggla expand/collapse.
+ * Não tem barra ativa nem indicador (é só o branding + toggle).
  */
+function ItemLogo({
+  expandido,
+  onClick,
+}: {
+  expandido: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={expandido ? "Recolher menu" : "Expandir menu"}
+      title={expandido ? "Recolher menu" : "Expandir menu"}
+      className="no-ds hover:bg-[var(--surface-2)]"
+      style={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: expandido ? "flex-start" : "center",
+        gap: 12,
+        width: "100%",
+        height: 44,
+        padding: expandido ? "0 12px" : "0",
+        background: "transparent",
+        border: "none",
+        borderRadius: 10,
+        cursor: "pointer",
+        color: "inherit",
+        fontFamily: "inherit",
+        fontSize: "inherit",
+        textTransform: "none",
+        letterSpacing: "normal",
+        transition: "background 0.15s ease",
+      }}
+    >
+      <Image
+        src={logo}
+        alt="Anômalo"
+        height={28}
+        style={{ height: 28, width: "auto", flexShrink: 0 }}
+        priority
+      />
+    </button>
+  )
+}
+
 function ItemMenu({
   icon,
   rotulo,

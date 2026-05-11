@@ -1,23 +1,22 @@
-import LogoToggle from "@/components/LogoToggle"
-
 /**
- * Top bar global das rotas autenticadas. Contém:
- *   • LogoToggle (logo Anômalo, clicar expande/recolhe a sidebar)
- *   • Slot pra children (geralmente o SeletorPeriodo da página)
+ * Top bar minimalista que algumas páginas internas (/dashboard/[empresa],
+ * comissionamento, configuracoes, etc.) ainda usam pra ancorar o
+ * SeletorPeriodo. Não mostra logo nem ações — a navegação inteira
+ * vive no rail (AppShell).
  *
- * Configurações e Sair foram movidos pro rail (AppShell). Inputs de
- * navegação por sessão ficam todos lá; o header fica só pra contexto
- * (logo + filtro de período).
+ * /dashboard e /dashboard/empresas não usam mais este componente —
+ * elas embutem o SeletorPeriodo direto no hero da página, sem cabeçalho
+ * sticky.
  */
 export default function Header({ children }: { children?: React.ReactNode }) {
+  if (!children) return null
   return (
     <header
       className="glass-header sticky top-0 z-20"
-      style={{ height: 64 }}
+      style={{ height: 56 }}
     >
-      <div className="max-w-7xl mx-auto h-full px-6 flex items-center justify-between gap-4">
-        <LogoToggle />
-        <div className="flex items-center gap-3">{children}</div>
+      <div className="mx-auto h-full px-8 flex items-center justify-end gap-3" style={{ maxWidth: 1280 }}>
+        {children}
       </div>
     </header>
   )

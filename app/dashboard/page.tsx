@@ -1,10 +1,6 @@
-import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import KPICard from "@/components/ui/KPICard"
-import SectionHeader from "@/components/ui/SectionHeader"
 import GraficoHub from "@/components/GraficoHub"
-import CardEmpresa from "@/components/CardEmpresa"
-import DrawerEmpresas from "@/components/DrawerEmpresas"
 import {
   MESES,
   type Mes,
@@ -20,12 +16,8 @@ import {
   getDadosReaisDoMes,
   getFaturamentoMensalHub,
 } from "@/lib/dados-reais"
-import {
-  listarEmpresas,
-  listarEmpresasInativas,
-} from "@/lib/empresas-actions"
+import { listarEmpresas } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
-import { supabaseConfigurado } from "@/lib/supabase"
 
 type StatusKPI = "success" | "warning" | "danger" | "neutral"
 
@@ -83,19 +75,16 @@ export default async function DashboardPage({
     reaisDoMes,
     reaisMesAnterior,
     empresas,
-    empresasInativas,
     overridesMes,
     faturamentoMensal,
   ] = await Promise.all([
     getDadosReaisDoMes(mes, ano),
     mesPrev ? getDadosReaisDoMes(mesPrev, ano) : Promise.resolve(new Map()),
     listarEmpresas(true),
-    listarEmpresasInativas(),
     getOverridesTodasEmpresasMes(mes, ano),
     getFaturamentoMensalHub(ano),
   ])
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
-  const supabaseOk = supabaseConfigurado()
 
   const { soma: somaFat, tem: temFat } = somarFaturamento(reaisDoMes)
   let somaInv = 0
@@ -150,12 +139,8 @@ export default async function DashboardPage({
 
   return (
     <>
-      <Header>
-        <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
-      </Header>
-
       <main
-        className="mx-auto px-8 py-12 space-y-10"
+        className="mx-auto px-8 py-10 space-y-10"
         style={{ maxWidth: 1280 }}
       >
         {/* Hero */}
@@ -171,21 +156,36 @@ export default async function DashboardPage({
             Visão geral
           </p>
           <h1 style={{ marginTop: 6, fontSize: 36 }}>
-            Hub Anômalo · {mes} {ano}
+            Anômalo Hub · {mes} {ano}
           </h1>
-          <p
+          <div
             style={{
-              fontSize: 14,
-              color: "var(--text-3)",
-              marginTop: 8,
+              marginTop: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
             }}
           >
-            {empresas.length}{" "}
-            {empresas.length === 1 ? "empresa ativa" : "empresas ativas"}
-            {temProjecao
-              ? ""
-              : " · planejamento futuro, sem projeção definida"}
-          </p>
+            <p
+              style={{
+                fontSize: 14,
+                color: "var(--text-3)",
+              }}
+            >
+              {empresas.length}{" "}
+              {empresas.length === 1 ? "empresa ativa" : "empresas ativas"}
+              {" · "}
+              <span style={{ color: "var(--text-2)" }}>
+                Atualmente {mes} {ano}
+              </span>
+              {temProjecao
+                ? ""
+                : " · planejamento futuro, sem projeção definida"}
+            </p>
+            <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+          </div>
         </div>
 
         {/* Faixa principal de KPIs (3 cards proporcionais) */}
@@ -267,79 +267,6 @@ export default async function DashboardPage({
         {/* Gráfico principal de faturamento mensal */}
         <section>
           <GraficoHub dados={faturamentoMensal} ano={ano} />
-        </section>
-
-        {/* Empresas do Hub — grid de cards */}
-        <section id="empresas" style={{ scrollMarginTop: 80 }}>
-          <SectionHeader
-            titulo="Empresas do Hub"
-            descricao="Clique em um card para detalhar funil, metas e gráficos"
-            acao={
-              <DrawerEmpresas
-                empresas={empresas}
-                empresasInativas={empresasInativas}
-                supabaseOk={supabaseOk}
-              />
-            }
-          />
-
-          {empresas.length === 0 && (
-            <div
-              className="glass"
-              style={{
-                padding: "32px 28px",
-                textAlign: "center",
-                borderStyle: "dashed",
-                borderColor: "rgba(201,149,58,0.35)",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 14,
-                  color: "var(--text-2)",
-                  fontWeight: 400,
-                  marginBottom: 0,
-                  lineHeight: 1.5,
-                }}
-              >
-                Nenhuma empresa cadastrada ainda. Comece criando sua primeira
-                — clique em <strong>Gerenciar empresas</strong>.
-              </p>
-            </div>
-          )}
-
-          <div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-            style={{ gap: 16 }}
-          >
-            {empresas.map((empresa) => {
-              const bucket = reaisDoMes.get(empresa.db)
-              const pago = bucket?.pago ?? null
-              const organico = bucket?.organico ?? null
-              const faturamentoSoma =
-                (pago?.faturamento_real ?? 0) +
-                (organico?.faturamento_real ?? 0)
-              const faturamentoReal =
-                pago?.faturamento_real === null &&
-                organico?.faturamento_real === null
-                  ? null
-                  : pago?.faturamento_real !== undefined ||
-                    organico?.faturamento_real !== undefined
-                  ? faturamentoSoma
-                  : null
-              return (
-                <CardEmpresa
-                  key={empresa.slug}
-                  empresa={empresa}
-                  mes={mes}
-                  ano={ano}
-                  faturamentoReal={faturamentoReal}
-                  investimentoReal={pago?.investimento_real ?? null}
-                  override={overridesMes.get(empresa.db)}
-                />
-              )
-            })}
-          </div>
         </section>
       </main>
 
