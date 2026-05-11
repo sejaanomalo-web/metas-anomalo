@@ -1,22 +1,15 @@
 import { redirect } from "next/navigation"
 import AppShell from "@/components/AppShell"
 import { estaAutenticado } from "@/lib/auth"
-import {
-  listarEmpresas,
-  listarEmpresasInativas,
-} from "@/lib/empresas-actions"
-import { supabaseConfigurado } from "@/lib/supabase"
 
 /**
  * Layout que envolve todas as rotas /dashboard/*. Fornece:
  *   • Guard de autenticação (redirect pra /login se não autenticado)
- *   • Sidebar global (AppShell) com seções Empresas, Time,
- *     Configurações e Sair — mesma navegação em todas as páginas
- *   • Estado da sidebar persistido em localStorage (colapsada por
- *     padrão; expande ao clicar no logo do header)
+ *   • Sidebar global (AppShell) com seções Dashboard, Empresas, Time,
+ *     Configurações e Sair
  *
- * As empresas são carregadas aqui pra ficarem disponíveis na sidebar
- * em qualquer rota (sem cada page precisar refetch).
+ * Rail é puramente estático (links fixos) — sem fetch server-side aqui.
+ * A lista de empresas vive na seção "Empresas do Hub" da página inicial.
  */
 export default async function DashboardLayout({
   children,
@@ -27,19 +20,5 @@ export default async function DashboardLayout({
     redirect("/login")
   }
 
-  const [empresas, empresasInativas] = await Promise.all([
-    listarEmpresas(true),
-    listarEmpresasInativas(),
-  ])
-  const supabaseOk = supabaseConfigurado()
-
-  return (
-    <AppShell
-      empresas={empresas}
-      empresasInativas={empresasInativas}
-      supabaseOk={supabaseOk}
-    >
-      {children}
-    </AppShell>
-  )
+  return <AppShell>{children}</AppShell>
 }
