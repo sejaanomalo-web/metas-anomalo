@@ -51,10 +51,10 @@ export default function KPICard({
     <div
       className="glass"
       style={{
-        padding: "20px 22px",
+        padding: "24px 26px",
         display: "flex",
         flexDirection: "column",
-        gap: 12,
+        gap: 14,
         borderColor: destaque
           ? "rgba(201, 149, 58, 0.30)"
           : undefined,
@@ -87,11 +87,11 @@ export default function KPICard({
 
       <p
         style={{
-          fontSize: 28,
+          fontSize: 32,
           fontWeight: 700,
           color: semDados ? "var(--text-4)" : "var(--text-1)",
           lineHeight: 1.1,
-          letterSpacing: "-0.015em",
+          letterSpacing: "-0.02em",
           fontVariantNumeric: "tabular-nums",
         }}
       >
