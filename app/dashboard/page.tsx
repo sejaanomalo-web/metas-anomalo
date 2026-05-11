@@ -189,87 +189,103 @@ export default async function DashboardPage({
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
-        {/* Faixa principal: 3 KPIs (esquerda 50%) + Gráfico (direita 50%) */}
+        {/* Faixa principal:
+         *   Esquerda (50%)
+         *     ┌ Faturamento do Hub (full width)
+         *     └ Investimento em ADS | % da meta total (50/50)
+         *   Direita (50%) — Gráfico
+         */}
         <section
           className="grid grid-cols-1 lg:grid-cols-2"
           style={{ gap: 20, alignItems: "stretch" }}
         >
           <div
-            className="grid grid-cols-1 sm:grid-cols-3"
-            style={{ gap: 16 }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
           >
             <KPICard
               label={`Faturamento do Hub de ${mes}`}
               valor={formatBRL(somaFat)}
               icon="$"
               iconStatus="success"
+              destaque
               semDados={!temFat}
               delta={deltaInfo}
             />
-            <KPICard
-              label="Investimento em ADS"
-              valor={formatBRL(somaInv)}
-              icon="▲"
-              iconStatus="neutral"
-              semDados={!temInv}
-              delta={
-                temInv && temProjecao && resumo.investimento > 0
-                  ? {
-                      texto: `${Math.round(
-                        (somaInv / resumo.investimento) * 100
-                      )}% do previsto`,
-                      status:
-                        statusInv === "neutral" ? "neutral" : statusInv,
-                    }
-                  : undefined
-              }
-              progresso={
-                temInv && temProjecao && resumo.investimento > 0
-                  ? {
-                      pct: Math.min(
-                        100,
-                        Math.round((somaInv / resumo.investimento) * 100)
-                      ),
-                      status:
-                        statusInv === "neutral" ? "neutral" : statusInv,
-                    }
-                  : undefined
-              }
-            />
-            <KPICard
-              label="% da meta total"
-              valor={
-                temFat && resumo.faturamento > 0
-                  ? `${pctMeta.toFixed(1)}%`
-                  : "—"
-              }
-              icon="◎"
-              iconStatus={statusFat === "neutral" ? "neutral" : statusFat}
-              semDados={!temFat || !temProjecao}
-              semDadosTexto={
-                !temProjecao
-                  ? "Sem projeção definida"
-                  : "Sem dados reais inseridos"
-              }
-              delta={
-                temFat && temProjecao && resumo.faturamento > 0
-                  ? {
-                      texto: `Meta: ${formatBRL(resumo.faturamento)}`,
-                      status:
-                        statusFat === "neutral" ? "neutral" : statusFat,
-                    }
-                  : undefined
-              }
-              progresso={
-                temFat && temProjecao && resumo.faturamento > 0
-                  ? {
-                      pct: pctMeta,
-                      status:
-                        statusFat === "neutral" ? "neutral" : statusFat,
-                    }
-                  : undefined
-              }
-            />
+            <div
+              className="grid grid-cols-1 sm:grid-cols-2"
+              style={{ gap: 16, flex: 1 }}
+            >
+              <KPICard
+                label="Investimento em ADS"
+                valor={formatBRL(somaInv)}
+                icon="▲"
+                iconStatus="neutral"
+                semDados={!temInv}
+                delta={
+                  temInv && temProjecao && resumo.investimento > 0
+                    ? {
+                        texto: `${Math.round(
+                          (somaInv / resumo.investimento) * 100
+                        )}% do previsto · ${formatBRL(resumo.investimento)}`,
+                        status:
+                          statusInv === "neutral" ? "neutral" : statusInv,
+                      }
+                    : undefined
+                }
+                progresso={
+                  temInv && temProjecao && resumo.investimento > 0
+                    ? {
+                        pct: Math.min(
+                          100,
+                          Math.round((somaInv / resumo.investimento) * 100)
+                        ),
+                        status:
+                          statusInv === "neutral" ? "neutral" : statusInv,
+                      }
+                    : undefined
+                }
+              />
+              <KPICard
+                label="% da meta total"
+                valor={
+                  temFat && resumo.faturamento > 0
+                    ? `${pctMeta.toFixed(1)}%`
+                    : "—"
+                }
+                icon="◎"
+                iconStatus={
+                  statusFat === "neutral" ? "neutral" : statusFat
+                }
+                semDados={!temFat || !temProjecao}
+                semDadosTexto={
+                  !temProjecao
+                    ? "Sem projeção definida"
+                    : "Sem dados reais inseridos"
+                }
+                delta={
+                  temFat && temProjecao && resumo.faturamento > 0
+                    ? {
+                        texto: `Meta total: ${formatBRL(resumo.faturamento)}`,
+                        status:
+                          statusFat === "neutral" ? "neutral" : statusFat,
+                      }
+                    : undefined
+                }
+                progresso={
+                  temFat && temProjecao && resumo.faturamento > 0
+                    ? {
+                        pct: pctMeta,
+                        status:
+                          statusFat === "neutral" ? "neutral" : statusFat,
+                      }
+                    : undefined
+                }
+              />
+            </div>
           </div>
           <GraficoHub dados={faturamentoMensal} ano={ano} />
         </section>
