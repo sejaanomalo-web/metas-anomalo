@@ -37,6 +37,53 @@ function statusMeta(
   return "danger"
 }
 
+/** Cifrão (mantém o que já estava). */
+function IconeCifrao() {
+  return <span style={{ fontSize: 14, fontWeight: 700 }}>$</span>
+}
+
+/** Megafone — ícone semântico de Investimento em ADS (publicidade). */
+function IconeMegafone() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  )
+}
+
+/** Alvo (target) — ícone semântico de % da meta. */
+function IconeAlvo() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  )
+}
+
 function mesAnterior(mes: Mes): Mes | null {
   const idx = MESES.indexOf(mes)
   if (idx <= 0) return null
@@ -126,6 +173,35 @@ export default async function DashboardPage({
     temProjecao
   )
 
+  // Status do ícone (verde/vermelho/neutro) por KPI. Critério:
+  // real >= meta acumulada até hoje → success; abaixo → danger.
+  // Sem dados ou sem projeção → neutral. Mais rigoroso que statusMeta
+  // (que aceita warning ~80% como "intermediário").
+  const metaAcumuladaFat = temProjecao
+    ? metaAcumuladaAteHoje(resumo.faturamento, mes, ano)
+    : 0
+  const metaAcumuladaInv = temProjecao
+    ? metaAcumuladaAteHoje(resumo.investimento, mes, ano)
+    : 0
+  const iconStatusFat: "success" | "danger" | "neutral" =
+    !temFat || !temProjecao
+      ? "neutral"
+      : somaFat >= metaAcumuladaFat
+      ? "success"
+      : "danger"
+  const iconStatusInv: "success" | "danger" | "neutral" =
+    !temInv || !temProjecao
+      ? "neutral"
+      : somaInv >= metaAcumuladaInv
+      ? "success"
+      : "danger"
+  const iconStatusPctMeta: "success" | "danger" | "neutral" =
+    !temFat || !temProjecao
+      ? "neutral"
+      : somaFat >= metaAcumuladaFat
+      ? "success"
+      : "danger"
+
   const deltaInfo = (() => {
     if (deltaPct === null || !mesPrev) return undefined
     const positivo = deltaPct >= 0
@@ -209,11 +285,16 @@ export default async function DashboardPage({
             <KPICard
               label={`Faturamento do Hub de ${mes}`}
               valor={formatBRL(somaFat)}
-              icon="$"
-              iconStatus="success"
+              icon={<IconeCifrao />}
+              iconStatus={iconStatusFat}
               destaque
               semDados={!temFat}
               delta={deltaInfo}
+              meta={
+                temProjecao && resumo.faturamento > 0
+                  ? formatBRL(resumo.faturamento)
+                  : undefined
+              }
             />
             <div
               className="grid grid-cols-1 sm:grid-cols-2"
@@ -222,15 +303,15 @@ export default async function DashboardPage({
               <KPICard
                 label="Investimento em ADS"
                 valor={formatBRL(somaInv)}
-                icon="▲"
-                iconStatus="neutral"
+                icon={<IconeMegafone />}
+                iconStatus={iconStatusInv}
                 semDados={!temInv}
                 delta={
                   temInv && temProjecao && resumo.investimento > 0
                     ? {
                         texto: `${Math.round(
                           (somaInv / resumo.investimento) * 100
-                        )}% do previsto · ${formatBRL(resumo.investimento)}`,
+                        )}% do previsto`,
                         status:
                           statusInv === "neutral" ? "neutral" : statusInv,
                       }
@@ -248,6 +329,11 @@ export default async function DashboardPage({
                       }
                     : undefined
                 }
+                meta={
+                  temProjecao && resumo.investimento > 0
+                    ? formatBRL(resumo.investimento)
+                    : undefined
+                }
               />
               <KPICard
                 label="% da meta total"
@@ -256,24 +342,13 @@ export default async function DashboardPage({
                     ? `${pctMeta.toFixed(1)}%`
                     : "—"
                 }
-                icon="◎"
-                iconStatus={
-                  statusFat === "neutral" ? "neutral" : statusFat
-                }
+                icon={<IconeAlvo />}
+                iconStatus={iconStatusPctMeta}
                 semDados={!temFat || !temProjecao}
                 semDadosTexto={
                   !temProjecao
                     ? "Sem projeção definida"
                     : "Sem dados reais inseridos"
-                }
-                delta={
-                  temFat && temProjecao && resumo.faturamento > 0
-                    ? {
-                        texto: `Meta total: ${formatBRL(resumo.faturamento)}`,
-                        status:
-                          statusFat === "neutral" ? "neutral" : statusFat,
-                      }
-                    : undefined
                 }
                 progresso={
                   temFat && temProjecao && resumo.faturamento > 0
@@ -282,6 +357,11 @@ export default async function DashboardPage({
                         status:
                           statusFat === "neutral" ? "neutral" : statusFat,
                       }
+                    : undefined
+                }
+                meta={
+                  temProjecao && resumo.faturamento > 0
+                    ? formatBRL(resumo.faturamento)
                     : undefined
                 }
               />

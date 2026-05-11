@@ -25,6 +25,7 @@ export default function KPICard({
   iconStatus = "neutral",
   delta,
   progresso,
+  meta,
   destaque = false,
   semDados = false,
   semDadosTexto = "Sem dados",
@@ -35,6 +36,9 @@ export default function KPICard({
   iconStatus?: IconBadgeStatus
   delta?: { texto: string; status: "success" | "warning" | "danger" | "neutral" }
   progresso?: { pct: number; status: ProgressStatus; mostrarNumero?: boolean }
+  /** Texto curto da meta do período (ex: "R$ 1.250.000"). Renderizado
+   *  como linha discreta abaixo do delta/progresso. */
+  meta?: string
   destaque?: boolean
   semDados?: boolean
   semDadosTexto?: string
@@ -130,6 +134,30 @@ export default function KPICard({
           status={progresso.status}
           mostrarNumero={progresso.mostrarNumero}
         />
+      )}
+
+      {meta && (
+        <p
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: "var(--text-3)",
+            lineHeight: 1.3,
+            paddingTop: 4,
+            borderTop: "1px solid rgba(255,255,255,0.05)",
+          }}
+        >
+          <span style={{ color: "var(--text-4)", marginRight: 6 }}>Meta</span>
+          <span
+            style={{
+              color: "var(--accent)",
+              fontWeight: 600,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {meta}
+          </span>
+        </p>
       )}
     </div>
   )
