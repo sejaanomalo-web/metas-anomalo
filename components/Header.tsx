@@ -11,32 +11,29 @@ export default function Header({ children }: { children?: React.ReactNode }) {
           <Image
             src={logo}
             alt="Anômalo Hub"
-            height={32}
-            style={{ height: 32, width: "auto" }}
+            height={28}
+            style={{ height: 28, width: "auto" }}
             priority
           />
           <div className="hidden sm:block leading-tight">
             <p
               style={{
-                fontSize: 13,
-                letterSpacing: "1.17px",
+                fontSize: 14,
                 color: "#C9953A",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                lineHeight: 0.94,
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+                lineHeight: 1.2,
               }}
             >
               Anômalo Hub
             </p>
             <p
               style={{
-                fontSize: 10,
-                color: "rgba(255,255,255,0.55)",
+                fontSize: 11,
+                color: "var(--text-3)",
                 fontWeight: 400,
-                marginTop: 4,
-                letterSpacing: "1px",
-                textTransform: "uppercase",
-                lineHeight: 0.94,
+                marginTop: 2,
+                lineHeight: 1.2,
               }}
             >
               Painel de Metas
@@ -51,7 +48,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
             aria-label="Configurações"
             style={{
               fontSize: 18,
-              color: "rgba(255,255,255,0.4)",
+              color: "var(--text-3)",
               lineHeight: 1,
               padding: "4px 6px",
             }}
@@ -62,13 +59,12 @@ export default function Header({ children }: { children?: React.ReactNode }) {
           <form action={sairAction}>
             <button
               type="submit"
+              className="ds-btn"
               style={{
                 fontSize: 11,
-                color: "rgba(255,255,255,0.55)",
+                color: "var(--text-3)",
                 fontWeight: 600,
-                letterSpacing: "1.17px",
               }}
-              className="hover:text-[#C9953A] transition uppercase"
             >
               Sair
             </button>
