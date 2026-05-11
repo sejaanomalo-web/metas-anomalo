@@ -83,7 +83,16 @@ export default function GraficoHub({
   const temReal = dados.some((p) => p.real !== null && p.real > 0)
 
   return (
-    <div className="glass" style={{ padding: 24 }}>
+    <div
+      className="glass"
+      style={{
+        padding: 24,
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 460,
+      }}
+    >
       <div
         className="flex items-center justify-between"
         style={{ marginBottom: 16 }}
@@ -122,7 +131,13 @@ export default function GraficoHub({
         )}
       </div>
 
-      <div style={{ width: "100%", height: 280 }}>
+      <div
+        style={{
+          width: "100%",
+          flex: 1,
+          minHeight: 380,
+        }}
+      >
         <ResponsiveContainer>
           <LineChart
             data={dados}
@@ -148,6 +163,9 @@ export default function GraficoHub({
               tick={{ fontSize: 11, fontFamily: "Inter", fill: "var(--text-3)" }}
               tickFormatter={formatarTickY}
               width={70}
+              domain={[0, 1_000_000]}
+              ticks={[0, 250_000, 500_000, 750_000, 1_000_000]}
+              allowDataOverflow={false}
             />
             <Tooltip
               cursor={{ stroke: "rgba(201,149,58,0.25)", strokeWidth: 1 }}

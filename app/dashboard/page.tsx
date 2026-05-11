@@ -8,6 +8,7 @@ import {
   anoValido,
   anoTemProjecao,
   formatBRL,
+  formatNumero,
   getResumoGrupo,
   mesValido,
   metaAcumuladaAteHoje,
@@ -59,6 +60,26 @@ function IconeMegafone() {
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
       <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
       <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  )
+}
+
+/** Ticket — ícone semântico do ticket médio (recibo/etiqueta). */
+function IconeTicket() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <line x1="7" y1="7" x2="7.01" y2="7" />
     </svg>
   )
 }
@@ -136,6 +157,8 @@ export default async function DashboardPage({
   const { soma: somaFat, tem: temFat } = somarFaturamento(reaisDoMes)
   let somaInv = 0
   let temInv = false
+  let somaContratos = 0
+  let temContratos = false
   for (const bucket of reaisDoMes.values()) {
     if (
       bucket.pago?.investimento_real !== null &&
@@ -144,7 +167,25 @@ export default async function DashboardPage({
       somaInv += bucket.pago.investimento_real
       temInv = true
     }
+    // Contratos: tanto pago quanto orgânico, sem distinção — o que importa
+    // é quantos fechamentos aconteceram pra calcular ticket médio real.
+    for (const d of [bucket.pago, bucket.organico]) {
+      if (!d) continue
+      if (d.contratos_real !== null && d.contratos_real !== undefined) {
+        somaContratos += d.contratos_real
+        temContratos = true
+      }
+    }
   }
+
+  // Ticket médio: faturamento total do Hub / total de contratos fechados.
+  const temTicket = temFat && temContratos && somaContratos > 0
+  const ticketMedioReal = temTicket ? somaFat / somaContratos : 0
+  // Meta projetada do ticket médio: meta de faturamento / meta de contratos.
+  const ticketMedioMeta =
+    temProjecao && resumo.contratos > 0
+      ? resumo.faturamento / resumo.contratos
+      : 0
 
   const { soma: somaFatPrev, tem: temFatPrev } = somarFaturamento(reaisMesAnterior)
   const podeCalcularDelta = !!mesPrev && temFat && temFatPrev && somaFatPrev > 0
@@ -199,6 +240,12 @@ export default async function DashboardPage({
     !temFat || !temProjecao
       ? "neutral"
       : somaFat >= metaAcumuladaFat
+      ? "success"
+      : "danger"
+  const iconStatusTicket: "success" | "danger" | "neutral" =
+    !temTicket || !temProjecao || ticketMedioMeta === 0
+      ? "neutral"
+      : ticketMedioReal >= ticketMedioMeta
       ? "success"
       : "danger"
 
@@ -366,6 +413,35 @@ export default async function DashboardPage({
                 }
               />
             </div>
+            <KPICard
+              label="Ticket médio"
+              valor={temTicket ? formatBRL(ticketMedioReal) : "—"}
+              icon={<IconeTicket />}
+              iconStatus={iconStatusTicket}
+              semDados={!temTicket}
+              semDadosTexto={
+                !temFat
+                  ? "Sem faturamento inserido"
+                  : "Sem contratos fechados no mês"
+              }
+              delta={
+                temTicket
+                  ? {
+                      texto: `${formatNumero(somaContratos)} ${
+                        somaContratos === 1
+                          ? "contrato fechado"
+                          : "contratos fechados"
+                      }`,
+                      status: "neutral",
+                    }
+                  : undefined
+              }
+              meta={
+                temProjecao && ticketMedioMeta > 0
+                  ? formatBRL(ticketMedioMeta)
+                  : undefined
+              }
+            />
           </div>
           <GraficoHub dados={faturamentoMensal} ano={ano} />
         </section>
