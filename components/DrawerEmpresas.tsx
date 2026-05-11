@@ -45,7 +45,7 @@ export default function DrawerEmpresas({
       <button
         type="button"
         onClick={() => setAberto(true)}
-        className="btn-gold-outline"
+        className="btn-gold-filled"
       >
         Gerenciar empresas
       </button>
