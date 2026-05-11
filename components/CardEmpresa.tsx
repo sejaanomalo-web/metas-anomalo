@@ -1,10 +1,10 @@
 import Link from "next/link"
+import ProgressBar, { type ProgressStatus } from "@/components/ui/ProgressBar"
 import {
   type Ano,
   type EmpresaMeta,
   type Mes,
   anoTemProjecao,
-  corStatusMeta,
   formatBRL,
   getFaturamentoMesComOverride,
   getVerbaMesComOverride,
@@ -12,6 +12,22 @@ import {
   subtituloDaEmpresa,
 } from "@/lib/data"
 
+/**
+ * Card de empresa do Hub. Layout:
+ *
+ *   ┌─────────────────────────────────────┐
+ *   │ A2 Marketing            ↑ 105%     │   ← chip de status
+ *   │ Agência de marketing                 │
+ *   │                                      │
+ *   │ Investimento     Faturamento         │   ← labels (sentence case)
+ *   │ R$ 45.000        R$ 287.000          │   ← valores (24px)
+ *   │                                      │
+ *   │ ████████████████░░░░░░  68%          │   ← progresso
+ *   └─────────────────────────────────────┘
+ *
+ * Dividers por respiro (sem linhas), chip de status no topo direito,
+ * número-chave em destaque, progresso semântico.
+ */
 export default function CardEmpresa({
   empresa,
   mes,
@@ -30,142 +46,139 @@ export default function CardEmpresa({
   const temProjecao = anoTemProjecao(ano)
   const investimento = getVerbaMesComOverride(empresa, mes, ano, override)
   const meta = getFaturamentoMesComOverride(empresa, mes, ano, override)
-  // Empresas vindas do Supabase (com id) são sempre ativas — o filtro já
-  // foi aplicado na listagem. A lógica "inativa" só vale para empresas
-  // hardcoded (ex: F2 Móveis antes de Abril).
+  // Empresas sem id no Supabase + meta/invest zerados → consideramos
+  // "ainda não iniciada nesse mês" e atenuamos o card.
   const inativa =
     !empresa.id && temProjecao && meta === 0 && investimento === 0
 
-  const metaAcumulada = metaAcumuladaAteHoje(meta, mes, ano)
   const temReal = typeof faturamentoReal === "number" && faturamentoReal > 0
-  const temRealInvest =
-    typeof investimentoReal === "number" && investimentoReal > 0
-
-  const corBolinha = !temReal
-    ? "rgba(255,255,255,0.2)"
-    : faturamentoReal >= metaAcumulada
-    ? "#4caf50"
-    : "#e24b4a"
-
+  const acumulada = metaAcumuladaAteHoje(meta, mes, ano)
   const progressoPct =
     temReal && meta > 0
       ? Math.min(100, Math.round((faturamentoReal / meta) * 100))
       : 0
 
-  // Mesma lógica tri-status da bolinha, agora reaproveitada para as duas
-  // linhas do rodapé (Meta = faturamento vs meta; Invest. = invest. real
-  // vs investimento projetado).
-  const corFaturamento = corStatusMeta(
-    temReal ? faturamentoReal : 0,
-    meta,
-    temReal,
-    mes,
-    ano
-  )
-  const corInvestimento = corStatusMeta(
-    temRealInvest ? investimentoReal : 0,
-    investimento,
-    temRealInvest,
-    mes,
-    ano
-  )
-  const corTextoProgresso = corFaturamento
+  // Status semântico unificado (mesmo critério do KPI card no /dashboard).
+  const status: ProgressStatus = (() => {
+    if (!temReal || !temProjecao || meta === 0) return "neutral"
+    if (faturamentoReal >= meta) return "success"
+    if (faturamentoReal >= acumulada) return "success"
+    if (faturamentoReal >= acumulada * 0.8) return "warning"
+    return "danger"
+  })()
+
+  const corStatus = (() => {
+    if (status === "success") return "var(--success)"
+    if (status === "warning") return "var(--warning)"
+    if (status === "danger") return "var(--danger)"
+    return "var(--text-3)"
+  })()
+
+  const chipBg = (() => {
+    if (status === "success") return "var(--success-bg)"
+    if (status === "warning") return "var(--warning-bg)"
+    if (status === "danger") return "var(--danger-bg)"
+    return "rgba(199,205,217,0.10)"
+  })()
+
+  const chipTexto = (() => {
+    if (!temReal || !temProjecao) return null
+    if (status === "success") return `↑ ${progressoPct}%`
+    return `${progressoPct}%`
+  })()
 
   return (
     <Link
       href={`/dashboard/${empresa.slug}?mes=${mes}&ano=${ano}`}
       className="glass glass-hover block"
       style={{
-        opacity: inativa ? 0.35 : 1,
+        opacity: inativa ? 0.4 : 1,
+        padding: "20px 22px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
       }}
     >
-      <div style={{ padding: "24px 24px 18px" }}>
-        <div
-          className="flex items-center justify-between"
-          style={{ marginBottom: 10 }}
-        >
-          <div className="flex items-center gap-2">
-            <span
+      {/* Topo: nome + chip de status */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p
+            style={{
+              fontSize: 18,
+              fontWeight: 600,
+              color: "var(--text-1)",
+              letterSpacing: "-0.01em",
+              lineHeight: 1.2,
+            }}
+          >
+            {empresa.nome}
+          </p>
+          {!inativa && (
+            <p
               style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: corBolinha,
-                display: "inline-block",
-              }}
-            />
-            <span
-              style={{
-                fontSize: 10,
-                letterSpacing: "2px",
-                color: "rgba(255,255,255,0.35)",
-                textTransform: "uppercase",
-                fontWeight: 500,
+                fontSize: 12,
+                color: "var(--text-3)",
+                marginTop: 4,
+                lineHeight: 1.3,
               }}
             >
-              {mes} {ano}
-            </span>
-          </div>
+              {subtituloDaEmpresa(empresa)}
+            </p>
+          )}
+          {inativa && (
+            <p
+              style={{
+                fontSize: 11,
+                color: "var(--text-4)",
+                fontStyle: "italic",
+                marginTop: 4,
+              }}
+            >
+              Sem dados neste mês
+              {empresa.inicioEm ? ` — início em ${empresa.inicioEm}` : ""}
+            </p>
+          )}
         </div>
-
-        <h3
-          style={{
-            fontSize: 24,
-            fontWeight: 600,
-            color: "#ffffff",
-            letterSpacing: "-0.3px",
-            lineHeight: 1.2,
-          }}
-        >
-          {empresa.nome}
-        </h3>
-
-        {!inativa && (
-          <p
-            style={{
-              fontSize: 13,
-              color: "rgba(255,255,255,0.35)",
-              fontWeight: 300,
-              marginTop: 4,
-            }}
-          >
-            {subtituloDaEmpresa(empresa)}
-          </p>
-        )}
-
-        {inativa && (
-          <p
+        {chipTexto && (
+          <span
             style={{
               fontSize: 11,
-              color: "rgba(255,255,255,0.2)",
-              fontWeight: 300,
-              fontStyle: "italic",
-              marginTop: 8,
+              fontWeight: 600,
+              color: corStatus,
+              background: chipBg,
+              padding: "4px 10px",
+              borderRadius: 999,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              fontVariantNumeric: "tabular-nums",
             }}
           >
-            Sem dados neste mês
-            {empresa.inicioEm ? ` — início em ${empresa.inicioEm}` : ""}
-          </p>
+            {chipTexto}
+          </span>
         )}
       </div>
 
       {!inativa && (
         <>
-          <div className="divider-h" />
-
-          <div className="grid grid-cols-2" style={{ position: "relative" }}>
-            <div
-              className="divider-v"
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: 10,
-                bottom: 10,
-              }}
-            />
+          {/* Métricas principais (Investimento + Faturamento lado a lado) */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 16,
+            }}
+          >
             <BlocoMetrica
               rotulo="Investimento"
               valor={formatBRL(investimentoReal ?? 0)}
+              destaque={false}
             />
             <BlocoMetrica
               rotulo="Faturamento"
@@ -174,70 +187,30 @@ export default function CardEmpresa({
             />
           </div>
 
-          <div className="divider-h" />
-
-          <div style={{ padding: "18px 24px 20px" }}>
-            <div className="flex items-center gap-3">
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 500,
-                  color: corTextoProgresso,
-                  width: 32,
-                  textAlign: "right",
-                  flexShrink: 0,
-                }}
-              >
-                {temReal ? `${progressoPct}%` : "—"}
+          {/* Barra de progresso + meta total */}
+          <div>
+            <ProgressBar
+              pct={progressoPct}
+              status={status}
+              mostrarNumero
+              height={6}
+            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: 8,
+                fontSize: 11,
+                color: "var(--text-3)",
+                fontWeight: 400,
+              }}
+            >
+              <span>
+                {temProjecao ? `Meta: ${formatBRL(meta)}` : "Sem projeção"}
               </span>
-              <div
-                style={{
-                  flex: 1,
-                  height: 1.5,
-                  background: "rgba(255,255,255,0.06)",
-                  borderRadius: 2,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${progressoPct}%`,
-                    background: "#C9953A",
-                  }}
-                />
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-end",
-                  gap: 2,
-                  flexShrink: 0,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 300,
-                    color: temProjecao ? corFaturamento : "rgba(255,255,255,0.3)",
-                  }}
-                >
-                  {temProjecao ? `Meta ${formatBRL(meta)}` : "Sem projeção"}
-                </span>
-                {temProjecao && (
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 300,
-                      color: corInvestimento,
-                    }}
-                  >
-                    Invest. {formatBRL(investimento)}
-                  </span>
-                )}
-              </div>
+              {temProjecao && (
+                <span>Invest. previsto: {formatBRL(investimento)}</span>
+              )}
             </div>
           </div>
         </>
@@ -250,22 +223,19 @@ function BlocoMetrica({
   rotulo,
   valor,
   destaque,
-  esvaziado,
 }: {
   rotulo: string
   valor: string
   destaque?: boolean
-  esvaziado?: boolean
 }) {
   return (
-    <div style={{ padding: "20px 24px" }}>
+    <div>
       <p
         style={{
-          fontSize: 10,
-          letterSpacing: "2px",
-          color: "rgba(255,255,255,0.3)",
-          textTransform: "uppercase",
+          fontSize: 11,
           fontWeight: 500,
+          color: "var(--text-3)",
+          lineHeight: 1.3,
         }}
       >
         {rotulo}
@@ -273,14 +243,12 @@ function BlocoMetrica({
       <p
         style={{
           fontSize: 22,
-          fontWeight: destaque ? 600 : 400,
-          color: esvaziado
-            ? "rgba(255,255,255,0.2)"
-            : destaque
-            ? "#C9953A"
-            : "rgba(255,255,255,0.7)",
-          marginTop: 6,
+          fontWeight: destaque ? 700 : 500,
+          color: destaque ? "var(--text-1)" : "var(--text-2)",
+          marginTop: 4,
           lineHeight: 1.1,
+          fontVariantNumeric: "tabular-nums",
+          letterSpacing: "-0.01em",
         }}
       >
         {valor}
