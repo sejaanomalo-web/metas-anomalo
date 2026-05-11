@@ -8,24 +8,20 @@ import logo from "@/public/logo-anomalo.png"
 import { sairAction } from "@/app/login/actions"
 
 /**
- * Sidebar global do /dashboard/*. Dois modos:
+ * Shell global de /dashboard/*:
  *
- *   • Colapsado (default): rail de 72px na extrema esquerda mostrando
- *     o logo Anômalo no topo + ícones quadrados de cada seção.
- *   • Expandido: rail vira sidebar de 240px com rótulos visíveis ao
- *     lado dos ícones.
+ *   • Desktop (lg+): rail fixo à esquerda, 72px colapsado ou 240px
+ *     expandido. Toggle via logo "A" no topo do rail.
+ *   • Mobile (< lg): rail sai do fluxo e fica como overlay drawer
+ *     (sempre 240px quando visível). Por padrão escondido; um botão
+ *     hambúrguer com logo no canto superior esquerdo abre o drawer.
+ *     Backdrop atrás do drawer fecha ao clicar.
  *
- * Toggle: clicar no logo do topo do rail (ItemLogo).
+ * Items do rail: Dashboard, Empresas, Time, Configurações, Sair.
+ * Time é link direto pra /dashboard/time (sem sub-itens no rail).
  *
- * Indicador de rota ativa: barra vertical ouro (3px) à esquerda do
- * item + cor do ícone em ouro + texto em text-1. Muda conforme o
- * pathname:
- *   /dashboard                  → Dashboard
- *   /dashboard/empresas         → Empresas
- *   /dashboard/<slug>           → Empresas (página de empresa individual)
- *   /dashboard/comissionamento  → Time
- *   /dashboard/preenchedores    → Time
- *   /dashboard/configuracoes    → Configurações
+ * Indicador de rota ativa: barra vertical ouro à esquerda do item +
+ * ícone em ouro + texto em text-1. Calculado via usePathname.
  */
 
 interface SidebarCtx {
@@ -48,10 +44,12 @@ const STORAGE_KEY = "anomalo-sidebar-expandido"
 const RAIL_COLLAPSED = 72
 const RAIL_EXPANDED = 240
 
-// Rotas das outras seções — usadas pra deduzir quando Empresas está ativo
-// (qualquer rota /dashboard/<slug> que NÃO seja uma dessas).
+// Rotas que NÃO são empresa — usadas pra deduzir quando Empresas está ativo
+// (qualquer rota /dashboard/<algo> que não seja uma dessas).
 const ROTAS_NAO_EMPRESA = new Set([
+  "/dashboard",
   "/dashboard/empresas",
+  "/dashboard/time",
   "/dashboard/comissionamento",
   "/dashboard/preenchedores",
   "/dashboard/configuracoes",
@@ -60,14 +58,17 @@ const ROTAS_NAO_EMPRESA = new Set([
 function ehRotaEmpresa(pathname: string): boolean {
   if (pathname === "/dashboard/empresas") return true
   if (!pathname.startsWith("/dashboard/")) return false
-  if (pathname === "/dashboard") return false
-  // /dashboard/<algo>  →  empresa (a menos que seja uma rota especial)
-  return !ROTAS_NAO_EMPRESA.has(pathname.replace(/\/$/, "").split("/").slice(0, 3).join("/"))
+  const segmentos = pathname.split("/").filter(Boolean)
+  // Primeiro segmento depois de /dashboard: se for um slug livre (não uma
+  // rota especial), é página de empresa individual.
+  const rotaBase = `/${segmentos.slice(0, 2).join("/")}`
+  return !ROTAS_NAO_EMPRESA.has(rotaBase)
 }
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const [expandido, setExpandido] = useState(false)
   const [hydrated, setHydrated] = useState(false)
+  const pathname = usePathname()
 
   useEffect(() => {
     try {
@@ -76,6 +77,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
     } catch {}
     setHydrated(true)
   }, [])
+
+  // Em mobile, ao mudar de rota fecha o drawer automaticamente — é o
+  // padrão esperado de menus tipo hambúrguer.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      setExpandido(false)
+    }
+  }, [pathname])
 
   function toggle() {
     setExpandido((prev) => {
@@ -87,16 +97,50 @@ export default function AppShell({ children }: { children: ReactNode }) {
     })
   }
 
+  function fechar() {
+    setExpandido(false)
+  }
+
   const value: SidebarCtx = { expandido, toggle, setExpandido }
   const railWidth = hydrated && expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
 
   return (
     <SidebarContext.Provider value={value}>
+      {/* Trigger mobile (hambúrguer com logo). Só aparece em < lg. */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={expandido ? "Fechar menu" : "Abrir menu"}
+        className="app-mobile-trigger no-ds"
+      >
+        <Image
+          src={logo}
+          alt="Anômalo"
+          height={24}
+          style={{ height: 24, width: "auto" }}
+          priority
+        />
+        <IconeHamburger />
+      </button>
+
+      {/* Backdrop mobile — só visível em < lg quando drawer está aberto. */}
+      {hydrated && expandido && (
+        <button
+          type="button"
+          onClick={fechar}
+          aria-label="Fechar menu"
+          className="app-mobile-backdrop no-ds"
+        />
+      )}
+
       <SidebarRail expandido={hydrated ? expandido : false} onToggle={toggle} />
+
       <div
+        className="app-main"
         style={{
-          marginLeft: railWidth,
-          transition: "margin-left 0.2s ease",
+          // CSS var permite que a regra mobile sobrescreva pra 0 sem
+          // que precisemos checar matchMedia no React.
+          ["--rail-width" as string]: `${railWidth}px`,
           minHeight: "100vh",
         }}
       >
@@ -113,13 +157,13 @@ function SidebarRail({
   expandido: boolean
   onToggle: () => void
 }) {
-  const [timeAberto, setTimeAberto] = useState(true)
   const pathname = usePathname()
   const width = expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
 
   const dashboardAtivo = pathname === "/dashboard"
   const empresasAtivo = ehRotaEmpresa(pathname)
   const timeAtivo =
+    pathname === "/dashboard/time" ||
     pathname === "/dashboard/comissionamento" ||
     pathname === "/dashboard/preenchedores"
   const configAtivo = pathname === "/dashboard/configuracoes"
@@ -127,20 +171,10 @@ function SidebarRail({
   return (
     <aside
       data-expandido={expandido}
+      className="app-rail"
       style={{
-        position: "fixed",
-        left: 0,
-        top: 0,
-        bottom: 0,
         width,
         background: "var(--surface-1)",
-        borderRight: "1px solid rgba(255,255,255,0.06)",
-        transition: "width 0.2s ease",
-        zIndex: 30,
-        display: "flex",
-        flexDirection: "column",
-        overflowX: "hidden",
-        overflowY: "auto",
       }}
     >
       {/* Logo Anômalo (botão de toggle) */}
@@ -172,11 +206,11 @@ function SidebarRail({
           expandido={expandido}
           ativo={empresasAtivo}
         />
-        <SecaoTime
+        <ItemMenu
+          icon={<IconeTime />}
+          rotulo="Time"
+          href="/dashboard/time"
           expandido={expandido}
-          aberto={timeAberto}
-          onToggle={() => expandido && setTimeAberto((v) => !v)}
-          pathname={pathname}
           ativo={timeAtivo}
         />
       </nav>
@@ -212,61 +246,8 @@ function SidebarRail({
   )
 }
 
-function SecaoTime({
-  expandido,
-  aberto,
-  onToggle,
-  pathname,
-  ativo,
-}: {
-  expandido: boolean
-  aberto: boolean
-  onToggle: () => void
-  pathname: string
-  ativo: boolean
-}) {
-  return (
-    <div>
-      <ItemMenu
-        icon={<IconeTime />}
-        rotulo="Time"
-        expandido={expandido}
-        chevron={expandido}
-        chevronAberto={aberto}
-        onClick={onToggle}
-        ativo={ativo}
-      />
-      {expandido && aberto && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-            marginTop: 4,
-            marginLeft: 14,
-            paddingLeft: 14,
-            borderLeft: "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <SubItemMenu
-            href="/dashboard/comissionamento"
-            rotulo="Comissionamento"
-            ativo={pathname === "/dashboard/comissionamento"}
-          />
-          <SubItemMenu
-            href="/dashboard/preenchedores"
-            rotulo="Formulários diários"
-            ativo={pathname === "/dashboard/preenchedores"}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
-
 /**
  * Logo Anômalo no topo do rail. Clicar toggla expand/collapse.
- * Não tem barra ativa nem indicador (é só o branding + toggle).
  */
 function ItemLogo({
   expandido,
@@ -321,8 +302,6 @@ function ItemMenu({
   type,
   expandido,
   ativo,
-  chevron,
-  chevronAberto,
   onClick,
 }: {
   icon: ReactNode
@@ -331,8 +310,6 @@ function ItemMenu({
   type?: "submit"
   expandido: boolean
   ativo: boolean
-  chevron?: boolean
-  chevronAberto?: boolean
   onClick?: () => void
 }) {
   const conteudo = (
@@ -366,35 +343,20 @@ function ItemMenu({
         {icon}
       </span>
       {expandido && (
-        <>
-          <span
-            style={{
-              flex: 1,
-              fontSize: 13,
-              fontWeight: ativo ? 600 : 500,
-              color: ativo ? "var(--text-1)" : "var(--text-2)",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              transition: "color 0.15s ease",
-            }}
-          >
-            {rotulo}
-          </span>
-          {chevron && (
-            <span
-              aria-hidden="true"
-              style={{
-                fontSize: 10,
-                color: "var(--text-3)",
-                transform: chevronAberto ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.2s ease",
-              }}
-            >
-              ▾
-            </span>
-          )}
-        </>
+        <span
+          style={{
+            flex: 1,
+            fontSize: 13,
+            fontWeight: ativo ? 600 : 500,
+            color: ativo ? "var(--text-1)" : "var(--text-2)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            transition: "color 0.15s ease",
+          }}
+        >
+          {rotulo}
+        </span>
       )}
     </>
   )
@@ -447,35 +409,7 @@ function ItemMenu({
   )
 }
 
-function SubItemMenu({
-  href,
-  rotulo,
-  ativo,
-}: {
-  href: string
-  rotulo: string
-  ativo: boolean
-}) {
-  return (
-    <Link
-      href={href}
-      style={{
-        display: "block",
-        padding: "8px 10px",
-        fontSize: 12,
-        fontWeight: ativo ? 600 : 500,
-        color: ativo ? "var(--accent)" : "var(--text-3)",
-        borderRadius: 8,
-        transition: "background 0.15s ease, color 0.15s ease",
-      }}
-      className="hover:bg-[rgba(255,255,255,0.04)]"
-    >
-      {rotulo}
-    </Link>
-  )
-}
-
-/* =================== Ícones (SVG inline 20x20) =================== */
+/* =================== Ícones (SVG inline) =================== */
 
 function IconeDashboard() {
   return (
@@ -574,6 +508,26 @@ function IconeSair() {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  )
+}
+
+function IconeHamburger() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
     </svg>
   )
 }
