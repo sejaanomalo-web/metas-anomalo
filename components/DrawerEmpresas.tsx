@@ -45,17 +45,7 @@ export default function DrawerEmpresas({
       <button
         type="button"
         onClick={() => setAberto(true)}
-        style={{
-          fontSize: 10,
-          letterSpacing: "0.5px",
-          textTransform: "uppercase",
-          color: "#C9953A",
-          border: "0.5px solid rgba(201,149,58,0.35)",
-          padding: "6px 14px",
-          borderRadius: 6,
-          fontWeight: 500,
-        }}
-        className="hover:bg-[rgba(201,149,58,0.08)] transition"
+        className="btn-gold-outline"
       >
         Gerenciar empresas
       </button>

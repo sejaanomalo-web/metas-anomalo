@@ -5,10 +5,12 @@ import { ANOS_DISPONIVEIS, MESES, type Ano, type Mes } from "@/lib/data"
 
 const estilo: React.CSSProperties = {
   padding: "8px 12px",
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 500,
-  color: "rgba(255,255,255,0.7)",
+  color: "var(--text-2)",
 }
+
+const optionStyle: React.CSSProperties = { background: "#121826" }
 
 export default function SeletorPeriodo({
   mesAtual,
@@ -36,7 +38,7 @@ export default function SeletorPeriodo({
         style={estilo}
       >
         {MESES.map((m) => (
-          <option key={m} value={m} style={{ background: "#0a0a0a" }}>
+          <option key={m} value={m} style={optionStyle}>
             {m}
           </option>
         ))}
@@ -48,7 +50,7 @@ export default function SeletorPeriodo({
         style={estilo}
       >
         {ANOS_DISPONIVEIS.map((a) => (
-          <option key={a} value={a} style={{ background: "#0a0a0a" }}>
+          <option key={a} value={a} style={optionStyle}>
             {a}
           </option>
         ))}

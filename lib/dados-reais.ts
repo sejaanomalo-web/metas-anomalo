@@ -198,6 +198,46 @@ export async function getDadosReaisMes(
   return (data ?? null) as DadosReais | null
 }
 
+/**
+ * Soma o faturamento_real de todas as empresas (pago + organico) por mês,
+ * para o ano informado. Usado pelo gráfico "Faturamento Mensal" no /dashboard.
+ *
+ * Retorna sempre os 9 meses (Abril..Dezembro) na ordem de MESES; meses sem
+ * nenhuma linha em dados_reais devolvem `real: null`.
+ */
+export async function getFaturamentoMensalHub(
+  ano: number = ANO_PADRAO
+): Promise<{ mes: Mes; real: number | null }[]> {
+  const supabase = getSupabase()
+  if (!supabase) {
+    return MESES.map((mes) => ({ mes, real: null }))
+  }
+  const { data, error } = await supabase
+    .from("dados_reais")
+    .select("mes, faturamento_real")
+    .eq("ano", ano)
+  if (error) {
+    console.error("[dados_reais] getFaturamentoMensalHub error", error.message)
+    return MESES.map((mes) => ({ mes, real: null }))
+  }
+
+  const acc = new Map<Mes, { soma: number; tem: boolean }>()
+  for (const row of (data ?? []) as { mes: string; faturamento_real: number | null }[]) {
+    if (!mesValido(row.mes)) continue
+    const bucket = acc.get(row.mes) ?? { soma: 0, tem: false }
+    if (row.faturamento_real !== null && row.faturamento_real !== undefined) {
+      bucket.soma += row.faturamento_real
+      bucket.tem = true
+    }
+    acc.set(row.mes, bucket)
+  }
+
+  return MESES.map((mes) => {
+    const bucket = acc.get(mes)
+    return { mes, real: bucket?.tem ? bucket.soma : null }
+  })
+}
+
 export async function getDadosReaisDoMes(
   mes: Mes,
   ano: number = ANO_PADRAO
