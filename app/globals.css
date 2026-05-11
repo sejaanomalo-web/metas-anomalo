@@ -3,58 +3,80 @@
 @tailwind utilities;
 
 /* ============================================================
- * Anômalo Hub — Design System (SpaceX-inspired)
+ * Anômalo Hub — Design System (SaaS dashboard)
  *
- * Linguagem: industrial / aeroespacial — uppercase universal,
- * tracking positivo (0.96–1.17px), Inter, paleta achromática
- * (preto #000 + spectral white #ffffff), zero sombras, raios
- * generosos (botões 32px, cards 36px, inputs 32px). Ghost button
- * (rgba spectral 10%) é a primitiva interativa principal.
+ * Linguagem: produto de software para operação. Hierarquia por
+ * tamanho/peso, não por uppercase. Cards sólidos (sem blur) com
+ * elevation por luminância. Cor semântica explícita (success /
+ * warning / danger) ao lado do ouro pontual da marca (#C9953A).
  *
- * 4 temas (preservados como "cenas" do mesmo sistema):
- *   dark  → preto puro (cena clássica SpaceX)
- *   light → spectral invertido (canvas claro)
- *   mono  → preto com cards de surface branca
- *   gold  → preto com card dourado (variante de marca)
+ * Fonte: Inter, com Helvetica Neue/Helvetica como fallback.
+ * Raios: cards 16px, inputs 10px, botões 10px. Sem sombras.
  *
- * Cada tema fornece variáveis para:
- *   --bg / --fg          → página
- *   --card-bg / --card-fg → dentro de .glass
- *   --header-bg / etc.   → cabeçalho
- *   --accent             → dourado pontual da marca
- *   --spectral           → #ffffff (a "estrela" do sistema)
+ * Tokens centrais:
+ *   --bg                  → background da página (navy escuro)
+ *   --surface-1/2/3       → camadas de elevation (card / hover / input)
+ *   --text-1/2/3/4        → escala fechada de texto
+ *   --success/warning/danger → cor semântica (+ -bg variant)
+ *   --accent              → ouro #C9953A (marca, usado pontualmente)
+ *
+ * Os 4 temas (dark/light/mono/gold) são preservados — o sistema
+ * usa data-theme=\"dark\" fixo, mas as outras paletas continuam
+ * disponíveis caso o time queira reativar o seletor.
  * ============================================================ */
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #000000;
-  --fg: #ffffff;            /* spectral white — não branco puro */
+
+  /* Background: navy escuro calibrado (não preto puro) — referência do
+   * dashboard moderno. Fica mais confortável em sessões longas. */
+  --bg: #0a0e1a;
+  --fg: #ffffff;
   --accent: #C9953A;
   --accent-rgb: 201, 149, 58;
   --spectral: #ffffff;
   --spectral-rgb: 255, 255, 255;
 
-  --card-bg: rgba(255, 255, 255, 0.04);
-  --card-border: rgba(255, 255, 255, 0.10);
-  --card-border-hover: rgba(255, 255, 255, 0.22);
-  --card-fg: #ffffff;
+  /* Surface scale — elevation por luminância (não por sombra).
+   * surface-1 = card padrão; surface-2 = hover/elevação; surface-3 = input. */
+  --surface-1: #121826;
+  --surface-2: #1a2236;
+  --surface-3: #232b40;
 
-  --header-bg: rgba(0, 0, 0, 0.65);
-  --header-border: rgba(255, 255, 255, 0.08);
-  --input-bg: rgba(255, 255, 255, 0.04);
-  --input-border: rgba(255, 255, 255, 0.18);
-  --divider: rgba(255, 255, 255, 0.08);
+  /* Text scale fechada — abandona dezenas de rgba(255,255,255,X). */
+  --text-1: #ffffff;   /* números, títulos */
+  --text-2: #c7cdd9;   /* corpo, valores secundários */
+  --text-3: #8a93a3;   /* labels, captions */
+  --text-4: #5b6473;   /* placeholder, disabled */
 
-  /* SpaceX é radical sobre sombras: zero. Mantemos somente um inset
-   * espectral mínimo pra preservar a leitura do card sobre o fundo. */
-  --shadow-glass: 0 0 0 0.5px rgba(255, 255, 255, 0.04) inset;
-  --shadow-glass-hover: 0 0 0 0.5px rgba(255, 255, 255, 0.18) inset;
+  /* Semântica de status (deltas, progresso, status de meta). */
+  --success: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.12);
+  --warning: #eab308;
+  --warning-bg: rgba(234, 179, 8, 0.12);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.12);
 
-  --selection-bg: #ffffff;
+  --card-bg: var(--surface-1);
+  --card-border: rgba(255, 255, 255, 0.06);
+  --card-border-hover: rgba(255, 255, 255, 0.12);
+  --card-fg: var(--text-1);
+
+  --header-bg: rgba(10, 14, 26, 0.85);
+  --header-border: rgba(255, 255, 255, 0.06);
+  --input-bg: var(--surface-3);
+  --input-border: rgba(255, 255, 255, 0.10);
+  --divider: rgba(255, 255, 255, 0.06);
+
+  /* Cards sólidos não precisam de sombra/inset — elevation vem do bg. */
+  --shadow-glass: none;
+  --shadow-glass-hover: none;
+
+  --selection-bg: #C9953A;
   --selection-fg: #000;
 
-  --toggle-bg: rgba(255, 255, 255, 0.10);
-  --toggle-border: rgba(255, 255, 255, 0.35);
+  --toggle-bg: rgba(255, 255, 255, 0.06);
+  --toggle-border: rgba(255, 255, 255, 0.18);
   --toggle-fg: #ffffff;
 }
 
@@ -176,25 +198,27 @@ body {
 }
 
 /* ============================================================
- * Tipografia industrial — toda exibição, label, nav e botão
- * herda uppercase + tracking positivo. Body é a única exceção
- * (precisa permanecer legível em parágrafos longos).
+ * Tipografia — hierarquia por tamanho/peso, NÃO por uppercase.
+ * Headlines são sentence case com tracking quase neutro (sutil
+ * tightening em h1/h2 pra dar caráter editorial). Uppercase fica
+ * reservado às utilitárias .ds-label, .ds-nav, .ds-caption,
+ * .ds-micro (chips, status, breadcrumbs, badges).
  * ============================================================ */
 h1, h2, h3, h4, h5, h6,
 .ds-display, .ds-headline {
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.96px;
   font-weight: 700;
-  line-height: 1.05;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
 }
 
-h1, .ds-display { font-size: 48px; letter-spacing: 0.96px; }
-h2 { font-size: 36px; letter-spacing: 0.84px; }
-h3 { font-size: 24px; letter-spacing: 0.6px; }
-h4 { font-size: 18px; letter-spacing: 0.5px; }
-h5 { font-size: 15px; letter-spacing: 0.4px; }
-h6 { font-size: 13px; letter-spacing: 1.17px; }
+h1, .ds-display { font-size: 32px; letter-spacing: -0.02em; line-height: 1.1; }
+h2 { font-size: 24px; letter-spacing: -0.015em; }
+h3 { font-size: 20px; letter-spacing: -0.01em; font-weight: 600; }
+h4 { font-size: 16px; font-weight: 600; }
+h5 { font-size: 14px; font-weight: 600; }
+h6 { font-size: 13px; font-weight: 600; }
 
 .ds-label {
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -253,9 +277,16 @@ textarea {
   touch-action: manipulation;
 }
 
-/* Botões herdam a voz uppercase do sistema (com tracking) */
-button:not(.no-ds),
-.ds-btn {
+/* Botões: uppercase + tracking só nos botões com classe .btn-* legados,
+ * não em todo <button>. Componentes neutros (ex: chevrons, dropdowns,
+ * controles de UI) ficam em sentence case. */
+.ds-btn,
+.btn-gold-filled,
+.btn-gold-outline,
+.btn-gold-solid,
+.btn-semanal-pulse,
+.btn-ghost,
+.theme-toggle {
   text-transform: uppercase;
   letter-spacing: 1.17px;
   font-weight: 600;
@@ -354,40 +385,38 @@ table {
 }
 
 /* ============ Card primitive ============
- * Raio 36px (per YAML), zero sombras, borda spectral fina.
- * O backdrop-filter é mantido pra integrar com a "cena" do tema.
+ * Raio 16px (calibrado pra ferramenta densa de dados), fundo sólido
+ * (sem blur) — elevation por luminância via --surface-1. O nome
+ * `.glass` é preservado por compatibilidade histórica em ~200 usos.
  */
 .glass {
   background: var(--card-bg);
-  border: 0.5px solid var(--card-border);
-  border-radius: 36px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: var(--shadow-glass);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
   color: var(--card-fg);
-  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .glass-hover:hover {
+  background: var(--surface-2);
   border-color: var(--card-border-hover);
-  box-shadow: var(--shadow-glass-hover);
 }
 
 .glass-header {
   background: var(--header-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-bottom: 0.5px solid var(--header-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--header-border);
 }
 
 .glass-input {
   background: var(--input-bg);
-  border: 0.5px solid var(--input-border);
-  border-radius: 32px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
   color: var(--fg);
   outline: none;
   transition: border-color 0.2s ease;
-  padding: 12px 18px;
+  padding: 10px 14px;
 }
 
 .glass-input:focus {
@@ -410,7 +439,7 @@ table {
   background: rgba(var(--spectral-rgb), 0.10);
   color: var(--spectral);
   border: 1px solid rgba(var(--spectral-rgb), 0.35);
-  border-radius: 32px;
+  border-radius: 10px;
   padding: 14px 24px;
   font-family: "Inter", sans-serif;
   font-weight: 600;
@@ -435,7 +464,7 @@ table {
   background: transparent;
   border: 1px solid rgba(var(--spectral-rgb), 0.35);
   color: var(--accent);
-  border-radius: 32px;
+  border-radius: 10px;
   padding: 12px 22px;
   font-family: "Inter", sans-serif;
   font-weight: 600;
@@ -453,7 +482,7 @@ table {
   background: var(--accent);
   color: #000;
   border: 1px solid var(--accent);
-  border-radius: 32px;
+  border-radius: 10px;
   padding: 12px 22px;
   font-family: "Inter", sans-serif;
   font-weight: 700;
@@ -468,7 +497,7 @@ table {
   background: var(--accent);
   color: #000;
   border: 1px solid var(--accent);
-  border-radius: 32px;
+  border-radius: 10px;
   padding: 12px 22px;
   font-family: "Inter", sans-serif;
   font-weight: 700;
@@ -487,7 +516,7 @@ table {
 .btn-gold-solid {
   background: var(--accent);
   color: #000;
-  border-radius: 32px;
+  border-radius: 10px;
   font-family: "Inter", sans-serif;
   font-weight: 700;
   letter-spacing: 1.17px;
@@ -803,7 +832,7 @@ table {
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  border-radius: 32px;
+  border-radius: 10px;
   border: 1px solid var(--toggle-border);
   background: var(--toggle-bg);
   color: var(--toggle-fg);

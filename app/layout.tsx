@@ -33,14 +33,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen">
-        <div className="motion-bg" aria-hidden="true">
-          <div className="orb orb-1" />
-          <div className="orb orb-2" />
-          <div className="orb orb-3" />
-        </div>
-        <div className="relative z-10">{children}</div>
-      </body>
+      <body className="min-h-screen">{children}</body>
     </html>
   )
 }
