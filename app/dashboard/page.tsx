@@ -6,6 +6,7 @@ import CardEmpresa from "@/components/CardEmpresa"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
 import KPICard from "@/components/ui/KPICard"
 import SectionHeader from "@/components/ui/SectionHeader"
+import GraficoHub from "@/components/GraficoHub"
 import { estaAutenticado } from "@/lib/auth"
 import {
   anoValido,
@@ -16,7 +17,10 @@ import {
   mesValido,
   metaAcumuladaAteHoje,
 } from "@/lib/data"
-import { getDadosReaisDoMes } from "@/lib/dados-reais"
+import {
+  getDadosReaisDoMes,
+  getFaturamentoMensalHub,
+} from "@/lib/dados-reais"
 import {
   listarEmpresas,
   listarEmpresasInativas,
@@ -72,14 +76,21 @@ export default async function DashboardPage({
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
   const temProjecao = anoTemProjecao(ano)
-  const [reaisDoMes, time, empresas, empresasInativas, overridesMes] =
-    await Promise.all([
-      getDadosReaisDoMes(mes, ano),
-      getTimeDoHub(),
-      listarEmpresas(true),
-      listarEmpresasInativas(),
-      getOverridesTodasEmpresasMes(mes, ano),
-    ])
+  const [
+    reaisDoMes,
+    time,
+    empresas,
+    empresasInativas,
+    overridesMes,
+    faturamentoMensal,
+  ] = await Promise.all([
+    getDadosReaisDoMes(mes, ano),
+    getTimeDoHub(),
+    listarEmpresas(true),
+    listarEmpresasInativas(),
+    getOverridesTodasEmpresasMes(mes, ano),
+    getFaturamentoMensalHub(ano),
+  ])
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const supabaseOk = supabaseConfigurado()
 
@@ -253,6 +264,11 @@ export default async function DashboardPage({
               }
             />
           ))}
+        </section>
+
+        {/* Gráfico de evolução do faturamento mensal */}
+        <section>
+          <GraficoHub dados={faturamentoMensal} ano={ano} />
         </section>
 
         {/* Faixa Progresso vs Meta — só com projeção */}
