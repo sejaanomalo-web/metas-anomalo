@@ -4,15 +4,17 @@ import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CardEmpresa from "@/components/CardEmpresa"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
+import KPICard from "@/components/ui/KPICard"
+import SectionHeader from "@/components/ui/SectionHeader"
 import { estaAutenticado } from "@/lib/auth"
 import {
   anoValido,
   anoTemProjecao,
-  corStatusMeta,
   formatBRL,
   formatNumero,
   getResumoGrupo,
   mesValido,
+  metaAcumuladaAteHoje,
 } from "@/lib/data"
 import { getDadosReaisDoMes } from "@/lib/dados-reais"
 import {
@@ -22,6 +24,41 @@ import {
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
 import { getTimeDoHub } from "@/lib/strip"
 import { supabaseConfigurado } from "@/lib/supabase"
+
+type StatusKPI = "success" | "warning" | "danger" | "neutral"
+
+/**
+ * Status semântico baseado em real vs meta acumulada até hoje.
+ * - success: bateu a meta total do mês OU está acima da meta acumulada
+ * - warning: está atrás mas ainda dentro de 80% da acumulada
+ * - danger: abaixo de 80% da acumulada
+ */
+function statusMeta(
+  real: number,
+  metaTotal: number,
+  temReal: boolean,
+  mes: ReturnType<typeof mesValido>,
+  ano: ReturnType<typeof anoValido>,
+  temProjecao: boolean
+): StatusKPI {
+  if (!temReal || !temProjecao || metaTotal === 0) return "neutral"
+  if (real >= metaTotal) return "success"
+  const acumulada = metaAcumuladaAteHoje(metaTotal, mes, ano)
+  if (real >= acumulada) return "success"
+  if (real >= acumulada * 0.8) return "warning"
+  return "danger"
+}
+
+function deltaTexto(
+  real: number,
+  metaTotal: number,
+  temReal: boolean,
+  temProjecao: boolean
+): string | undefined {
+  if (!temReal || !temProjecao || metaTotal === 0) return undefined
+  const pct = Math.round((real / metaTotal) * 100)
+  return `${pct}% da meta · ${formatBRL(metaTotal)}`
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -74,58 +111,81 @@ export default async function DashboardPage({
     }
   }
 
-  interface Celula {
-    rotulo: string
-    real: string
-    meta: number
-    metaLabel: string
-    temReal: boolean
-    somaReal: number
-    tipo: "moeda" | "numero"
-    semMeta?: boolean
-    subLabel?: string
-  }
-
-  const celulas: Celula[] = [
+  // Faixa de KPIs principais (4 cards padronizados)
+  const kpis = [
     {
-      rotulo: "Faturamento do Hub",
-      real: formatBRL(somaFat),
-      meta: resumo.faturamento,
-      metaLabel: formatBRL(resumo.faturamento),
-      temReal: temFat,
-      somaReal: somaFat,
-      tipo: "moeda",
+      label: "Faturamento do Hub",
+      valor: formatBRL(somaFat),
+      icon: "$",
+      iconStatus: "success" as const,
+      semDados: !temFat,
+      delta: deltaTexto(somaFat, resumo.faturamento, temFat, temProjecao),
+      status: statusMeta(somaFat, resumo.faturamento, temFat, mes, ano, temProjecao),
+      progresso:
+        temProjecao && temFat && resumo.faturamento > 0
+          ? Math.min(100, Math.round((somaFat / resumo.faturamento) * 100))
+          : 0,
+      destaque: true,
     },
     {
-      rotulo: "Total investido em ads",
-      real: formatBRL(somaInv),
-      meta: resumo.investimento,
-      metaLabel: formatBRL(resumo.investimento),
-      temReal: temInv,
-      somaReal: somaInv,
-      tipo: "moeda",
+      label: "Investimento em ads",
+      valor: formatBRL(somaInv),
+      icon: "▲",
+      iconStatus: "neutral" as const,
+      semDados: !temInv,
+      delta: deltaTexto(somaInv, resumo.investimento, temInv, temProjecao),
+      status: statusMeta(somaInv, resumo.investimento, temInv, mes, ano, temProjecao),
+      progresso:
+        temProjecao && temInv && resumo.investimento > 0
+          ? Math.min(100, Math.round((somaInv / resumo.investimento) * 100))
+          : 0,
+      destaque: false,
     },
     {
-      rotulo: "Total de leads",
-      real: formatNumero(somaLeads),
-      meta: resumo.leads,
-      metaLabel: formatNumero(resumo.leads),
-      temReal: temLeads,
-      somaReal: somaLeads,
-      tipo: "numero",
+      label: "Total de leads",
+      valor: formatNumero(somaLeads),
+      icon: "◉",
+      iconStatus: "neutral" as const,
+      semDados: !temLeads,
+      delta: deltaTexto(somaLeads, resumo.leads, temLeads, temProjecao),
+      status: statusMeta(somaLeads, resumo.leads, temLeads, mes, ano, temProjecao),
+      progresso:
+        temProjecao && temLeads && resumo.leads > 0
+          ? Math.min(100, Math.round((somaLeads / resumo.leads) * 100))
+          : 0,
+      destaque: false,
     },
     {
-      rotulo: "Time do hub",
-      real: formatNumero(time.total),
-      meta: 0,
-      metaLabel: "",
-      temReal: true,
-      somaReal: time.total,
-      tipo: "numero",
-      semMeta: true,
-      subLabel: time.subLabel,
+      label: "Time do Hub",
+      valor: formatNumero(time.total),
+      icon: "✦",
+      iconStatus: "gold" as const,
+      semDados: false,
+      delta: time.subLabel,
+      status: "neutral" as const,
+      progresso: 0,
+      destaque: false,
+      isTime: true,
     },
   ]
+
+  // Faixa "Progresso vs Meta" — só renderiza se temProjecao + algum real
+  const metaHoje = temProjecao
+    ? metaAcumuladaAteHoje(resumo.faturamento, mes, ano)
+    : 0
+  const pctMeta =
+    temProjecao && temFat && resumo.faturamento > 0
+      ? (somaFat / resumo.faturamento) * 100
+      : 0
+  const pctMetaHoje =
+    temProjecao && temFat && metaHoje > 0 ? (somaFat / metaHoje) * 100 : 0
+  const statusProgresso: StatusKPI = !temFat
+    ? "neutral"
+    : pctMetaHoje >= 100
+    ? "success"
+    : pctMetaHoje >= 80
+    ? "warning"
+    : "danger"
 
   return (
     <>
@@ -133,201 +193,144 @@ export default async function DashboardPage({
         <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
       </Header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <div className="flex items-end justify-between mb-10 flex-wrap gap-6">
-          <div>
-            <h1
-              style={{
-                fontSize: 32,
-                fontWeight: 700,
-                color: "#ffffff",
-                letterSpacing: "-0.5px",
-                lineHeight: 1.1,
-              }}
-            >
-              Visão geral do Hub
-            </h1>
-            <div
-              className="gold-divider"
-              style={{ marginTop: 10, marginBottom: 10 }}
-            />
-            <p
-              style={{
-                fontSize: 13,
-                color: "rgba(255,255,255,0.45)",
-                fontWeight: 300,
-              }}
-            >
-              {mes} de {ano} · {empresas.length}{" "}
-              {empresas.length === 1 ? "empresa" : "empresas"}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <DrawerEmpresas
-              empresas={empresas}
-              empresasInativas={empresasInativas}
-              supabaseOk={supabaseOk}
-            />
-            <Link
-              href="/dashboard/preenchedores"
-              className="btn-gold-filled uppercase"
-            >
-              Formulários diários →
-            </Link>
-            <Link
-              href={`/dashboard/comissionamento?mes=${mes}&ano=${ano}`}
-              className="btn-gold-filled uppercase"
-            >
-              Comissionamento do time →
-            </Link>
-          </div>
+      <main className="max-w-7xl mx-auto px-6 py-10 space-y-10">
+        {/* Hero */}
+        <div>
+          <p
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: "var(--text-3)",
+              letterSpacing: "0.01em",
+            }}
+          >
+            Visão geral
+          </p>
+          <h1 style={{ marginTop: 6 }}>Hub Anômalo · {mes} {ano}</h1>
+          <p
+            style={{
+              fontSize: 14,
+              color: "var(--text-3)",
+              marginTop: 8,
+            }}
+          >
+            {empresas.length} {empresas.length === 1 ? "empresa ativa" : "empresas ativas"}
+            {temProjecao ? "" : " · planejamento futuro, sem projeção definida"}
+          </p>
         </div>
 
+        {/* Faixa principal de KPIs */}
         <section
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-12"
-          style={{ gap: 14 }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+          style={{ gap: 16 }}
         >
-          {celulas.map((c) => {
-            const cor = temProjecao
-              ? corStatusMeta(c.somaReal, c.meta, c.temReal, mes, ano)
-              : "rgba(255,255,255,0.2)"
-            const pct =
-              c.temReal && c.meta > 0
-                ? Math.min(100, Math.round((c.somaReal / c.meta) * 100))
-                : 0
-            return (
-              <div
-                key={c.rotulo}
-                className="glass"
-                style={{ padding: "24px 28px" }}
-              >
-                <p
-                  style={{
-                    fontSize: 10,
-                    letterSpacing: "2px",
-                    textTransform: "uppercase",
-                    color: "rgba(255,255,255,0.4)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {c.rotulo}
-                </p>
-                <p
-                  style={{
-                    fontSize: 34,
-                    fontWeight: 700,
-                    color: "#ffffff",
-                    marginTop: 10,
-                    lineHeight: 1.1,
-                  }}
-                >
-                  {c.real}
-                </p>
-                {c.semMeta ? (
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(255,255,255,0.45)",
-                      fontWeight: 300,
-                      marginTop: 6,
-                    }}
-                  >
-                    {c.subLabel}
-                  </p>
-                ) : (
-                  <>
-                    {temProjecao ? (
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: cor,
-                          fontWeight: 400,
-                          marginTop: 6,
-                        }}
-                      >
-                        Meta {c.metaLabel}
-                      </p>
-                    ) : (
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: "rgba(255,255,255,0.2)",
-                          fontWeight: 300,
-                          fontStyle: "italic",
-                          marginTop: 6,
-                        }}
-                      >
-                        Planejamento futuro — sem projeção definida
-                      </p>
-                    )}
-                    <div
-                      style={{
-                        marginTop: 10,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                      }}
-                    >
-                      <div
-                        style={{
-                          flex: 1,
-                          height: 2,
-                          background: "rgba(255,255,255,0.06)",
-                          borderRadius: 2,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: "100%",
-                            width: `${pct}%`,
-                            background: cor,
-                          }}
-                        />
-                      </div>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 500,
-                          color: cor,
-                          width: 34,
-                          textAlign: "right",
-                        }}
-                      >
-                        {pct}%
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            )
-          })}
+          {kpis.map((k) => (
+            <KPICard
+              key={k.label}
+              label={k.label}
+              valor={k.valor}
+              icon={k.icon}
+              iconStatus={k.iconStatus}
+              destaque={k.destaque}
+              semDados={k.semDados}
+              delta={
+                k.delta
+                  ? {
+                      texto: k.delta,
+                      status:
+                        k.status === "neutral" ? "neutral" : k.status,
+                    }
+                  : undefined
+              }
+              progresso={
+                k.isTime || !temProjecao
+                  ? undefined
+                  : {
+                      pct: k.progresso,
+                      status:
+                        k.status === "neutral" ? "neutral" : k.status,
+                    }
+              }
+            />
+          ))}
         </section>
 
+        {/* Faixa Progresso vs Meta — só com projeção */}
+        {temProjecao && (
+          <section
+            className="grid grid-cols-1 md:grid-cols-3"
+            style={{ gap: 16 }}
+          >
+            <KPICard
+              label="Meta acumulada hoje"
+              valor={formatBRL(metaHoje)}
+              icon="◷"
+              iconStatus="neutral"
+            />
+            <KPICard
+              label="Faturado no mês"
+              valor={formatBRL(somaFat)}
+              icon="$"
+              iconStatus={statusProgresso === "neutral" ? "neutral" : statusProgresso}
+              semDados={!temFat}
+              delta={
+                temFat && metaHoje > 0
+                  ? {
+                      texto: `${Math.round(pctMetaHoje)}% da meta acumulada`,
+                      status: statusProgresso === "neutral" ? "neutral" : statusProgresso,
+                    }
+                  : undefined
+              }
+            />
+            <KPICard
+              label="% da meta total"
+              valor={
+                temFat && resumo.faturamento > 0
+                  ? `${pctMeta.toFixed(1)}%`
+                  : "—"
+              }
+              icon="◎"
+              iconStatus={statusProgresso === "neutral" ? "neutral" : statusProgresso}
+              semDados={!temFat}
+              progresso={
+                temFat && resumo.faturamento > 0
+                  ? {
+                      pct: pctMeta,
+                      status: statusProgresso === "neutral" ? "neutral" : statusProgresso,
+                    }
+                  : undefined
+              }
+            />
+          </section>
+        )}
+
+        {/* Empresas */}
         <section>
-          <div className="flex items-baseline justify-between mb-5">
-            <h2
-              style={{
-                fontSize: 18,
-                fontWeight: 600,
-                color: "#ffffff",
-                letterSpacing: "-0.3px",
-              }}
-            >
-              Empresas
-            </h2>
-            <p
-              style={{
-                fontSize: 10,
-                letterSpacing: "2px",
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.3)",
-                fontWeight: 500,
-              }}
-            >
-              Clique para detalhar
-            </p>
-          </div>
+          <SectionHeader
+            titulo="Empresas"
+            descricao="Clique em um card para detalhar funil, metas e gráficos"
+            acao={
+              <>
+                <DrawerEmpresas
+                  empresas={empresas}
+                  empresasInativas={empresasInativas}
+                  supabaseOk={supabaseOk}
+                />
+                <Link
+                  href="/dashboard/preenchedores"
+                  className="btn-gold-filled"
+                >
+                  Formulários diários
+                </Link>
+                <Link
+                  href={`/dashboard/comissionamento?mes=${mes}&ano=${ano}`}
+                  className="btn-gold-filled"
+                >
+                  Comissionamento
+                </Link>
+              </>
+            }
+          />
 
           {empresas.length === 0 && (
             <div
@@ -335,28 +338,28 @@ export default async function DashboardPage({
               style={{
                 padding: "32px 28px",
                 textAlign: "center",
-                border: "0.5px dashed rgba(201,149,58,0.35)",
+                borderStyle: "dashed",
+                borderColor: "rgba(201,149,58,0.35)",
               }}
             >
               <p
                 style={{
-                  fontSize: 13,
-                  color: "rgba(255,255,255,0.55)",
-                  fontWeight: 300,
-                  marginBottom: 16,
+                  fontSize: 14,
+                  color: "var(--text-2)",
+                  fontWeight: 400,
+                  marginBottom: 0,
                   lineHeight: 1.5,
                 }}
               >
                 Nenhuma empresa cadastrada ainda. Comece criando sua primeira
-                — clique em <strong>Gerenciar empresas</strong> no topo da
-                página.
+                — clique em <strong>Gerenciar empresas</strong> acima.
               </p>
             </div>
           )}
 
           <div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-            style={{ gap: 20 }}
+            style={{ gap: 16 }}
           >
             {empresas.map((empresa) => {
               const bucket = reaisDoMes.get(empresa.db)
@@ -389,13 +392,11 @@ export default async function DashboardPage({
         </section>
       </main>
 
-      <footer className="max-w-7xl mx-auto px-6 py-10 text-center">
+      <footer className="max-w-7xl mx-auto px-6 py-8 text-center">
         <p
           style={{
-            fontSize: 10,
-            letterSpacing: "2px",
-            textTransform: "uppercase",
-            color: "rgba(255,255,255,0.15)",
+            fontSize: 11,
+            color: "var(--text-4)",
             fontWeight: 400,
           }}
         >
