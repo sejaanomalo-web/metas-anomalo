@@ -166,6 +166,7 @@ export default async function EmpresaPage({
               <ToggleOrigem origem={origem} />
             </div>
           )}
+          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         {empresa.tipo !== "diego" && (

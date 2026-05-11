@@ -148,6 +148,7 @@ export default async function ComissionamentoPage({
             </span>{" "}
             · Bônus por performance e entregas
           </p>
+          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="glass" style={{ padding: "14px 22px" }}>

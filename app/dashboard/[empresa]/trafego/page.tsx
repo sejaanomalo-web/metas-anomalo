@@ -154,6 +154,7 @@ export default async function TrafegoPage({
           >
             {subtituloDaEmpresa(empresa)}
           </p>
+          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">

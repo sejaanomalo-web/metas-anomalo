@@ -45,6 +45,7 @@ export default async function TimePage({
           >
             Gestão de comissionamento e formulários diários do time.
           </p>
+          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         {/* Cards de navegação */}

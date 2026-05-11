@@ -59,6 +59,7 @@ export default async function ConfiguracoesPage({
           >
             Resumos para enviar no WhatsApp · clique em copiar e cole no chat
           </p>
+          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         <FormConfig

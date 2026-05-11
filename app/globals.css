@@ -387,21 +387,32 @@ table {
 }
 
 /* ============ Card primitive ============
- * Raio 16px (calibrado pra ferramenta densa de dados), fundo sólido
- * (sem blur) — elevation por luminância via --surface-1. O nome
- * `.glass` é preservado por compatibilidade histórica em ~200 usos.
+ * Raio 16px, fundo sólido (preto fosco), borda fina. Inclui um glow
+ * externo bem sutil em ouro (rgba do --accent) pra dar o aspecto
+ * premium pedido — sem exagero: 24px de blur, ~4% de opacidade, só
+ * o suficiente pra dar profundidade na borda escura. No hover o glow
+ * aparece mais forte e a borda fica em ouro.
  */
 .glass {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 16px;
   color: var(--card-fg);
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  box-shadow:
+    0 0 0 1px rgba(201, 149, 58, 0.03),
+    0 2px 24px rgba(201, 149, 58, 0.04),
+    0 1px 0 rgba(255, 255, 255, 0.02) inset;
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.25s ease;
 }
 
 .glass-hover:hover {
   background: var(--surface-2);
-  border-color: var(--card-border-hover);
+  border-color: rgba(201, 149, 58, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(201, 149, 58, 0.10),
+    0 4px 36px rgba(201, 149, 58, 0.10),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
 }
 
 .glass-header {
@@ -518,36 +529,52 @@ table {
   }
 }
 
+/* ============ Gold divider — linha premium entre hero e conteúdo ============
+ * Gradiente que começa em ouro pleno e some no nada, com um sutil
+ * glow ao redor pra dar profundidade. Usado entre o título da página e
+ * a primeira seção de blocos.
+ */
 .gold-divider {
-  width: 48px;
-  height: 1px;
-  background: rgba(var(--spectral-rgb), 0.6);
-  border-radius: 0;
+  width: 64px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(201, 149, 58, 0.85) 0%,
+    rgba(201, 149, 58, 0.6) 35%,
+    rgba(201, 149, 58, 0) 100%
+  );
+  border-radius: 2px;
+  box-shadow: 0 0 12px rgba(201, 149, 58, 0.25);
 }
 
-/* ============ Botão fantasma — primitiva SpaceX ============ */
+/* ============ Botão fantasma — variante em ouro suave ============
+ * Mesma forma do outline, mas com um leve preenchimento gold em vez de
+ * transparente. Usado pra ações secundárias que ainda precisam de
+ * destaque (ex: chips de filtro, toggles).
+ */
 .btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(var(--spectral-rgb), 0.10);
-  color: var(--spectral);
-  border: 1px solid rgba(var(--spectral-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.10);
+  color: var(--accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
   border-radius: 10px;
-  padding: 14px 24px;
+  padding: 12px 22px;
   font-family: "Inter", sans-serif;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 1.17px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .btn-ghost:hover {
-  background: rgba(var(--spectral-rgb), 0.18);
-  border-color: rgba(var(--spectral-rgb), 0.6);
-  color: var(--spectral);
+  background: rgba(var(--accent-rgb), 0.18);
+  border-color: rgba(var(--accent-rgb), 0.6);
+  box-shadow: 0 0 16px rgba(201, 149, 58, 0.18);
 }
 
 /* ============ Botões legados (mapeados pra linguagem SpaceX) ============
@@ -557,7 +584,7 @@ table {
  */
 .btn-gold-outline {
   background: transparent;
-  border: 1px solid rgba(var(--spectral-rgb), 0.35);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
   color: var(--accent);
   border-radius: 10px;
   padding: 12px 22px;
@@ -566,11 +593,13 @@ table {
   font-size: 11px;
   letter-spacing: 1.17px;
   text-transform: uppercase;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .btn-gold-outline:hover {
   background: rgba(var(--accent-rgb), 0.10);
-  border-color: rgba(var(--accent-rgb), 0.55);
+  border-color: rgba(var(--accent-rgb), 0.65);
+  box-shadow: 0 0 16px rgba(201, 149, 58, 0.18);
 }
 
 .btn-gold-filled {
@@ -584,9 +613,13 @@ table {
   font-size: 11px;
   letter-spacing: 1.17px;
   text-transform: uppercase;
-  transition: filter 0.2s ease;
+  box-shadow: 0 0 16px rgba(201, 149, 58, 0.12);
+  transition: filter 0.2s ease, box-shadow 0.2s ease;
 }
-.btn-gold-filled:hover { filter: brightness(1.1); }
+.btn-gold-filled:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 0 24px rgba(201, 149, 58, 0.30);
+}
 
 .btn-semanal-pulse {
   background: var(--accent);

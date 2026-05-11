@@ -87,6 +87,7 @@ export default async function EmpresasPage({
             </p>
             <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
           </div>
+          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         {/* Cards de empresas */}

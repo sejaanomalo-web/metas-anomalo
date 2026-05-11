@@ -48,6 +48,7 @@ export default async function PreenchedoresPage() {
             recebe um link permanente que abre o formulário só com as empresas
             atribuídas a ela.
           </p>
+          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         {!supabaseOk && (
