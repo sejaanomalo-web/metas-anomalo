@@ -1,18 +1,17 @@
-import Link from "next/link"
 import { redirect } from "next/navigation"
 import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
-import CardEmpresa from "@/components/CardEmpresa"
-import DrawerEmpresas from "@/components/DrawerEmpresas"
 import KPICard from "@/components/ui/KPICard"
-import SectionHeader from "@/components/ui/SectionHeader"
 import GraficoHub from "@/components/GraficoHub"
+import SidebarDashboard from "@/components/SidebarDashboard"
 import { estaAutenticado } from "@/lib/auth"
 import {
+  MESES,
+  type Mes,
+  type Ano,
   anoValido,
   anoTemProjecao,
   formatBRL,
-  formatNumero,
   getResumoGrupo,
   mesValido,
   metaAcumuladaAteHoje,
@@ -26,23 +25,22 @@ import {
   listarEmpresasInativas,
 } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
-import { getTimeDoHub } from "@/lib/strip"
 import { supabaseConfigurado } from "@/lib/supabase"
 
 type StatusKPI = "success" | "warning" | "danger" | "neutral"
 
 /**
  * Status semântico baseado em real vs meta acumulada até hoje.
- * - success: bateu a meta total do mês OU está acima da meta acumulada
- * - warning: está atrás mas ainda dentro de 80% da acumulada
+ * - success: bateu a meta total OU está acima da acumulada
+ * - warning: está atrás mas dentro de 80% da acumulada
  * - danger: abaixo de 80% da acumulada
  */
 function statusMeta(
   real: number,
   metaTotal: number,
   temReal: boolean,
-  mes: ReturnType<typeof mesValido>,
-  ano: ReturnType<typeof anoValido>,
+  mes: Mes,
+  ano: Ano,
   temProjecao: boolean
 ): StatusKPI {
   if (!temReal || !temProjecao || metaTotal === 0) return "neutral"
@@ -53,15 +51,38 @@ function statusMeta(
   return "danger"
 }
 
-function deltaTexto(
-  real: number,
-  metaTotal: number,
-  temReal: boolean,
-  temProjecao: boolean
-): string | undefined {
-  if (!temReal || !temProjecao || metaTotal === 0) return undefined
-  const pct = Math.round((real / metaTotal) * 100)
-  return `${pct}% da meta · ${formatBRL(metaTotal)}`
+/**
+ * Mês imediatamente anterior ao informado, dentro do mesmo ano.
+ * Como MESES começa em Abril, retorna null quando mes=Abril (não há
+ * Março comparável no nosso sistema). Ano permanece igual: a comparação
+ * cross-year não é suportada porque os meses Janeiro–Março não existem
+ * em nossa planilha.
+ */
+function mesAnterior(mes: Mes): Mes | null {
+  const idx = MESES.indexOf(mes)
+  if (idx <= 0) return null
+  return MESES[idx - 1]
+}
+
+/**
+ * Soma faturamento (pago + orgânico) de todos os buckets do
+ * `getDadosReaisDoMes` num único valor. Devolve { soma, tem }.
+ */
+function somarFaturamento(
+  reaisDoMes: Awaited<ReturnType<typeof getDadosReaisDoMes>>
+): { soma: number; tem: boolean } {
+  let soma = 0
+  let tem = false
+  for (const bucket of reaisDoMes.values()) {
+    for (const d of [bucket.pago, bucket.organico]) {
+      if (!d) continue
+      if (d.faturamento_real !== null && d.faturamento_real !== undefined) {
+        soma += d.faturamento_real
+        tem = true
+      }
+    }
+  }
+  return { soma, tem }
 }
 
 export default async function DashboardPage({
@@ -76,16 +97,20 @@ export default async function DashboardPage({
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
   const temProjecao = anoTemProjecao(ano)
+  const mesPrev = mesAnterior(mes)
+
+  // Busca em paralelo: dados do mês atual, mês anterior (pra delta),
+  // overrides, lista de empresas e série mensal pro gráfico.
   const [
     reaisDoMes,
-    time,
+    reaisMesAnterior,
     empresas,
     empresasInativas,
     overridesMes,
     faturamentoMensal,
   ] = await Promise.all([
     getDadosReaisDoMes(mes, ano),
-    getTimeDoHub(),
+    mesPrev ? getDadosReaisDoMes(mesPrev, ano) : Promise.resolve(new Map()),
     listarEmpresas(true),
     listarEmpresasInativas(),
     getOverridesTodasEmpresasMes(mes, ano),
@@ -94,109 +119,61 @@ export default async function DashboardPage({
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
   const supabaseOk = supabaseConfigurado()
 
-  // Agregações do Hub:
-  // - Investimento em ads → só 'pago' (orgânico por definição não tem verba)
-  // - Leads e faturamento → soma 'pago' + 'organico' (o Hub vê o total)
-  let somaFat = 0
+  // Agregações do mês atual (pago + orgânico no faturamento; só pago
+  // em investimento — orgânico não tem verba por definição).
+  const { soma: somaFat, tem: temFat } = somarFaturamento(reaisDoMes)
   let somaInv = 0
-  let somaLeads = 0
-  let temFat = false
   let temInv = false
-  let temLeads = false
   for (const bucket of reaisDoMes.values()) {
-    const { pago, organico } = bucket
-    if (pago?.investimento_real !== null && pago?.investimento_real !== undefined) {
-      somaInv += pago.investimento_real
+    if (
+      bucket.pago?.investimento_real !== null &&
+      bucket.pago?.investimento_real !== undefined
+    ) {
+      somaInv += bucket.pago.investimento_real
       temInv = true
-    }
-    for (const d of [pago, organico]) {
-      if (!d) continue
-      if (d.faturamento_real !== null) {
-        somaFat += d.faturamento_real
-        temFat = true
-      }
-      if (d.leads_real !== null) {
-        somaLeads += d.leads_real
-        temLeads = true
-      }
     }
   }
 
-  // Faixa de KPIs principais (4 cards padronizados)
-  const kpis = [
-    {
-      label: "Faturamento do Hub",
-      valor: formatBRL(somaFat),
-      icon: "$",
-      iconStatus: "success" as const,
-      semDados: !temFat,
-      delta: deltaTexto(somaFat, resumo.faturamento, temFat, temProjecao),
-      status: statusMeta(somaFat, resumo.faturamento, temFat, mes, ano, temProjecao),
-      progresso:
-        temProjecao && temFat && resumo.faturamento > 0
-          ? Math.min(100, Math.round((somaFat / resumo.faturamento) * 100))
-          : 0,
-      destaque: true,
-    },
-    {
-      label: "Investimento em ads",
-      valor: formatBRL(somaInv),
-      icon: "▲",
-      iconStatus: "neutral" as const,
-      semDados: !temInv,
-      delta: deltaTexto(somaInv, resumo.investimento, temInv, temProjecao),
-      status: statusMeta(somaInv, resumo.investimento, temInv, mes, ano, temProjecao),
-      progresso:
-        temProjecao && temInv && resumo.investimento > 0
-          ? Math.min(100, Math.round((somaInv / resumo.investimento) * 100))
-          : 0,
-      destaque: false,
-    },
-    {
-      label: "Total de leads",
-      valor: formatNumero(somaLeads),
-      icon: "◉",
-      iconStatus: "neutral" as const,
-      semDados: !temLeads,
-      delta: deltaTexto(somaLeads, resumo.leads, temLeads, temProjecao),
-      status: statusMeta(somaLeads, resumo.leads, temLeads, mes, ano, temProjecao),
-      progresso:
-        temProjecao && temLeads && resumo.leads > 0
-          ? Math.min(100, Math.round((somaLeads / resumo.leads) * 100))
-          : 0,
-      destaque: false,
-    },
-    {
-      label: "Time do Hub",
-      valor: formatNumero(time.total),
-      icon: "✦",
-      iconStatus: "gold" as const,
-      semDados: false,
-      delta: time.subLabel,
-      status: "neutral" as const,
-      progresso: 0,
-      destaque: false,
-      isTime: true,
-    },
-  ]
+  // Faturamento do mês anterior (pra delta % do KPI principal).
+  const { soma: somaFatPrev, tem: temFatPrev } = somarFaturamento(reaisMesAnterior)
+  const podeCalcularDelta = !!mesPrev && temFat && temFatPrev && somaFatPrev > 0
+  const deltaPct = podeCalcularDelta
+    ? ((somaFat - somaFatPrev) / somaFatPrev) * 100
+    : null
 
-  // Faixa "Progresso vs Meta" — só renderiza se temProjecao + algum real
-  const metaHoje = temProjecao
-    ? metaAcumuladaAteHoje(resumo.faturamento, mes, ano)
-    : 0
+  // % da meta total (KPI 3).
   const pctMeta =
     temProjecao && temFat && resumo.faturamento > 0
       ? (somaFat / resumo.faturamento) * 100
       : 0
-  const pctMetaHoje =
-    temProjecao && temFat && metaHoje > 0 ? (somaFat / metaHoje) * 100 : 0
-  const statusProgresso: StatusKPI = !temFat
-    ? "neutral"
-    : pctMetaHoje >= 100
-    ? "success"
-    : pctMetaHoje >= 80
-    ? "warning"
-    : "danger"
+  const statusFat = statusMeta(
+    somaFat,
+    resumo.faturamento,
+    temFat,
+    mes,
+    ano,
+    temProjecao
+  )
+  const statusInv = statusMeta(
+    somaInv,
+    resumo.investimento,
+    temInv,
+    mes,
+    ano,
+    temProjecao
+  )
+
+  // Texto do delta vs mês anterior, formatado com seta + cor semântica.
+  const deltaInfo = (() => {
+    if (deltaPct === null || !mesPrev) return undefined
+    const positivo = deltaPct >= 0
+    const seta = positivo ? "↑" : "↓"
+    const abs = Math.abs(deltaPct)
+    return {
+      texto: `${seta} ${abs.toFixed(1)}% vs ${mesPrev}`,
+      status: positivo ? ("success" as const) : ("danger" as const),
+    }
+  })()
 
   return (
     <>
@@ -204,96 +181,87 @@ export default async function DashboardPage({
         <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
       </Header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10 space-y-10">
-        {/* Hero */}
-        <div>
-          <p
-            style={{
-              fontSize: 12,
-              fontWeight: 500,
-              color: "var(--text-3)",
-              letterSpacing: "0.01em",
-            }}
-          >
-            Visão geral
-          </p>
-          <h1 style={{ marginTop: 6 }}>Hub Anômalo · {mes} {ano}</h1>
-          <p
-            style={{
-              fontSize: 14,
-              color: "var(--text-3)",
-              marginTop: 8,
-            }}
-          >
-            {empresas.length} {empresas.length === 1 ? "empresa ativa" : "empresas ativas"}
-            {temProjecao ? "" : " · planejamento futuro, sem projeção definida"}
-          </p>
-        </div>
+      <div
+        className="max-w-7xl mx-auto px-6 py-10 flex flex-col lg:flex-row"
+        style={{ gap: 24, alignItems: "flex-start" }}
+      >
+        <SidebarDashboard
+          empresas={empresas}
+          empresasInativas={empresasInativas}
+          supabaseOk={supabaseOk}
+          mes={mes}
+          ano={ano}
+        />
 
-        {/* Faixa principal de KPIs */}
-        <section
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-          style={{ gap: 16 }}
-        >
-          {kpis.map((k) => (
+        <main style={{ flex: 1, minWidth: 0 }} className="space-y-8">
+          {/* Hero */}
+          <div>
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: "var(--text-3)",
+                letterSpacing: "0.01em",
+              }}
+            >
+              Visão geral
+            </p>
+            <h1 style={{ marginTop: 6 }}>
+              Hub Anômalo · {mes} {ano}
+            </h1>
+            <p
+              style={{
+                fontSize: 14,
+                color: "var(--text-3)",
+                marginTop: 8,
+              }}
+            >
+              {empresas.length}{" "}
+              {empresas.length === 1 ? "empresa ativa" : "empresas ativas"}
+              {temProjecao
+                ? ""
+                : " · planejamento futuro, sem projeção definida"}
+            </p>
+          </div>
+
+          {/* Faixa principal de KPIs (3 cards proporcionais) */}
+          <section
+            className="grid grid-cols-1 sm:grid-cols-3"
+            style={{ gap: 16 }}
+          >
             <KPICard
-              key={k.label}
-              label={k.label}
-              valor={k.valor}
-              icon={k.icon}
-              iconStatus={k.iconStatus}
-              destaque={k.destaque}
-              semDados={k.semDados}
+              label={`Faturamento do Hub de ${mes}`}
+              valor={formatBRL(somaFat)}
+              icon="$"
+              iconStatus="success"
+              destaque
+              semDados={!temFat}
+              delta={deltaInfo}
+            />
+            <KPICard
+              label="Investimento em ADS"
+              valor={formatBRL(somaInv)}
+              icon="▲"
+              iconStatus="neutral"
+              semDados={!temInv}
               delta={
-                k.delta
+                temInv && temProjecao && resumo.investimento > 0
                   ? {
-                      texto: k.delta,
-                      status:
-                        k.status === "neutral" ? "neutral" : k.status,
+                      texto: `${Math.round(
+                        (somaInv / resumo.investimento) * 100
+                      )}% do previsto · ${formatBRL(resumo.investimento)}`,
+                      status: statusInv === "neutral" ? "neutral" : statusInv,
                     }
                   : undefined
               }
               progresso={
-                k.isTime || !temProjecao
-                  ? undefined
-                  : {
-                      pct: k.progresso,
-                      status:
-                        k.status === "neutral" ? "neutral" : k.status,
-                    }
-              }
-            />
-          ))}
-        </section>
-
-        {/* Gráfico de evolução do faturamento mensal */}
-        <section>
-          <GraficoHub dados={faturamentoMensal} ano={ano} />
-        </section>
-
-        {/* Faixa Progresso vs Meta — só com projeção */}
-        {temProjecao && (
-          <section
-            className="grid grid-cols-1 md:grid-cols-3"
-            style={{ gap: 16 }}
-          >
-            <KPICard
-              label="Meta acumulada hoje"
-              valor={formatBRL(metaHoje)}
-              icon="◷"
-              iconStatus="neutral"
-            />
-            <KPICard
-              label="Faturado no mês"
-              valor={formatBRL(somaFat)}
-              icon="$"
-              iconStatus={statusProgresso === "neutral" ? "neutral" : statusProgresso}
-              semDados={!temFat}
-              delta={
-                temFat && metaHoje > 0
+                temInv && temProjecao && resumo.investimento > 0
                   ? {
-                      texto: `${Math.round(pctMetaHoje)}% da meta acumulada`,
-                      status: statusProgresso === "neutral" ? "neutral" : statusProgresso,
+                      pct: Math.min(
+                        100,
+                        Math.round((somaInv / resumo.investimento) * 100)
+                      ),
+                      status: statusInv === "neutral" ? "neutral" : statusInv,
                     }
                   : undefined
               }
@@ -306,107 +274,38 @@ export default async function DashboardPage({
                   : "—"
               }
               icon="◎"
-              iconStatus={statusProgresso === "neutral" ? "neutral" : statusProgresso}
-              semDados={!temFat}
+              iconStatus={statusFat === "neutral" ? "neutral" : statusFat}
+              semDados={!temFat || !temProjecao}
+              semDadosTexto={
+                !temProjecao
+                  ? "Sem projeção definida"
+                  : "Sem dados reais inseridos"
+              }
+              delta={
+                temFat && temProjecao && resumo.faturamento > 0
+                  ? {
+                      texto: `Meta total: ${formatBRL(resumo.faturamento)}`,
+                      status: statusFat === "neutral" ? "neutral" : statusFat,
+                    }
+                  : undefined
+              }
               progresso={
-                temFat && resumo.faturamento > 0
+                temFat && temProjecao && resumo.faturamento > 0
                   ? {
                       pct: pctMeta,
-                      status: statusProgresso === "neutral" ? "neutral" : statusProgresso,
+                      status: statusFat === "neutral" ? "neutral" : statusFat,
                     }
                   : undefined
               }
             />
           </section>
-        )}
 
-        {/* Empresas */}
-        <section>
-          <SectionHeader
-            titulo="Empresas"
-            descricao="Clique em um card para detalhar funil, metas e gráficos"
-            acao={
-              <>
-                <DrawerEmpresas
-                  empresas={empresas}
-                  empresasInativas={empresasInativas}
-                  supabaseOk={supabaseOk}
-                />
-                <Link
-                  href="/dashboard/preenchedores"
-                  className="btn-gold-filled"
-                >
-                  Formulários diários
-                </Link>
-                <Link
-                  href={`/dashboard/comissionamento?mes=${mes}&ano=${ano}`}
-                  className="btn-gold-filled"
-                >
-                  Comissionamento
-                </Link>
-              </>
-            }
-          />
-
-          {empresas.length === 0 && (
-            <div
-              className="glass"
-              style={{
-                padding: "32px 28px",
-                textAlign: "center",
-                borderStyle: "dashed",
-                borderColor: "rgba(201,149,58,0.35)",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 14,
-                  color: "var(--text-2)",
-                  fontWeight: 400,
-                  marginBottom: 0,
-                  lineHeight: 1.5,
-                }}
-              >
-                Nenhuma empresa cadastrada ainda. Comece criando sua primeira
-                — clique em <strong>Gerenciar empresas</strong> acima.
-              </p>
-            </div>
-          )}
-
-          <div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-            style={{ gap: 16 }}
-          >
-            {empresas.map((empresa) => {
-              const bucket = reaisDoMes.get(empresa.db)
-              const pago = bucket?.pago ?? null
-              const organico = bucket?.organico ?? null
-              const faturamentoSoma =
-                (pago?.faturamento_real ?? 0) +
-                (organico?.faturamento_real ?? 0)
-              const faturamentoReal =
-                pago?.faturamento_real === null &&
-                organico?.faturamento_real === null
-                  ? null
-                  : pago?.faturamento_real !== undefined ||
-                    organico?.faturamento_real !== undefined
-                  ? faturamentoSoma
-                  : null
-              return (
-                <CardEmpresa
-                  key={empresa.slug}
-                  empresa={empresa}
-                  mes={mes}
-                  ano={ano}
-                  faturamentoReal={faturamentoReal}
-                  investimentoReal={pago?.investimento_real ?? null}
-                  override={overridesMes.get(empresa.db)}
-                />
-              )
-            })}
-          </div>
-        </section>
-      </main>
+          {/* Gráfico principal de faturamento mensal */}
+          <section>
+            <GraficoHub dados={faturamentoMensal} ano={ano} />
+          </section>
+        </main>
+      </div>
 
       <footer className="max-w-7xl mx-auto px-6 py-8 text-center">
         <p

@@ -28,20 +28,22 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* Background: navy escuro calibrado (não preto puro) — referência do
-   * dashboard moderno. Fica mais confortável em sessões longas. */
-  --bg: #0a0e1a;
+  /* Background: preto puro pra dar máximo contraste com os cards.
+   * Os cards usam surface-1 (preto fosco) — diferença de luminância
+   * sutil cria a separação sem precisar de sombra ou borda forte. */
+  --bg: #000000;
   --fg: #ffffff;
   --accent: #C9953A;
   --accent-rgb: 201, 149, 58;
   --spectral: #ffffff;
   --spectral-rgb: 255, 255, 255;
 
-  /* Surface scale — elevation por luminância (não por sombra).
-   * surface-1 = card padrão; surface-2 = hover/elevação; surface-3 = input. */
-  --surface-1: #121826;
-  --surface-2: #1a2236;
-  --surface-3: #232b40;
+  /* Surface scale — preto fosco pra cards, sem reflexo navy.
+   * surface-1 = card padrão (preto fosco menos puro); surface-2 = hover;
+   * surface-3 = input (mais claro pra distinguir do card). */
+  --surface-1: #0f0f12;
+  --surface-2: #16161b;
+  --surface-3: #1c1c22;
 
   /* Text scale fechada — abandona dezenas de rgba(255,255,255,X). */
   --text-1: #ffffff;   /* números, títulos */
@@ -62,7 +64,7 @@
   --card-border-hover: rgba(255, 255, 255, 0.12);
   --card-fg: var(--text-1);
 
-  --header-bg: rgba(10, 14, 26, 0.85);
+  --header-bg: rgba(0, 0, 0, 0.85);
   --header-border: rgba(255, 255, 255, 0.06);
   --input-bg: var(--surface-3);
   --input-border: rgba(255, 255, 255, 0.10);
@@ -421,6 +423,26 @@ table {
 
 .glass-input:focus {
   border-color: rgba(var(--spectral-rgb), 0.55);
+}
+
+/* ============ Sidebar do dashboard ============
+ * Em desktop (lg+): largura fixa de 240px, sticky no topo (alinha com
+ * o header sticky de ~64px). Em telas menores: ocupa toda a largura
+ * e fica no fluxo normal acima do main content.
+ */
+.sidebar-dashboard {
+  width: 100%;
+  flex-shrink: 0;
+}
+@media (min-width: 1024px) {
+  .sidebar-dashboard {
+    width: 240px;
+    position: sticky;
+    top: 80px;
+    align-self: flex-start;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+  }
 }
 
 .gold-divider {

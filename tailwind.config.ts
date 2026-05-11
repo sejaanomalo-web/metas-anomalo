@@ -9,14 +9,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Page background (navy escuro calibrado).
-        bg: "#0a0e1a",
+        // Page background (preto puro pra contraste máximo com os cards).
+        bg: "#000000",
 
-        // Surface scale — elevation por luminância.
+        // Surface scale — preto fosco em escala suave.
         surface: {
-          1: "#121826",
-          2: "#1a2236",
-          3: "#232b40",
+          1: "#0f0f12",
+          2: "#16161b",
+          3: "#1c1c22",
         },
 
         // Escala fechada de texto.
