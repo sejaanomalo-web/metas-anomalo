@@ -1,6 +1,5 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CenarioReal from "@/components/CenarioReal"
 import DrawerEditarMeta from "@/components/DrawerEditarMeta"
@@ -99,68 +98,73 @@ export default async function EmpresaPage({
 
   return (
     <>
-      <Header>
-        <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
-      </Header>
-
-      <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
-        <div className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <Link
-              href={`/dashboard?mes=${mes}&ano=${ano}`}
-              style={{
-                fontSize: 10,
-                letterSpacing: "2px",
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.3)",
-                fontWeight: 500,
-              }}
-              className="hover:text-[#C9953A] transition"
-            >
-              ← Voltar ao painel
-            </Link>
-            <h1
-              style={{
-                fontSize: 32,
-                fontWeight: 700,
-                color: "#ffffff",
-                letterSpacing: "-0.5px",
-                lineHeight: 1.1,
-                marginTop: 14,
-              }}
-            >
-              {empresa.nome}
-            </h1>
-            <div
-              className="gold-divider"
-              style={{ marginTop: 10, marginBottom: 10 }}
-            />
-            <MetadadosEmpresa
-              mes={mes}
-              clientesReais={real?.clientes_ativos ?? null}
-              linhaProjetada={
-                empresa.tipo === "leads-reunioes-contratos"
-                  ? (dados as LinhaPadrao[]).find((l) => l.mes === mes)
-                  : undefined
-              }
-              subtitulo={subtituloDaEmpresa(empresa)}
-            />
+      <main
+        className="mx-auto px-8 py-10 space-y-8"
+        style={{ maxWidth: 1280 }}
+      >
+        <div>
+          <Link
+            href={`/dashboard/empresas?mes=${mes}&ano=${ano}`}
+            style={{
+              fontSize: 12,
+              color: "var(--text-3)",
+              fontWeight: 500,
+            }}
+            className="hover:text-[#C9953A] transition"
+          >
+            ← Empresas
+          </Link>
+          <div
+            style={{
+              marginTop: 10,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <h1 style={{ fontSize: 36 }}>{empresa.nome}</h1>
+            <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+          </div>
+          <div
+            style={{
+              marginTop: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ fontSize: 14, color: "var(--text-3)" }}>
+              <MetadadosEmpresa
+                mes={mes}
+                clientesReais={real?.clientes_ativos ?? null}
+                linhaProjetada={
+                  empresa.tipo === "leads-reunioes-contratos"
+                    ? (dados as LinhaPadrao[]).find((l) => l.mes === mes)
+                    : undefined
+                }
+                subtitulo={subtituloDaEmpresa(empresa)}
+              />
+            </div>
             {empresa.tipo !== "diego" && (
-              <div style={{ marginTop: 14 }}>
-                <ToggleOrigem origem={origem} />
-              </div>
+              <DrawerDadosReais
+                empresa={empresa.db}
+                mes={mes}
+                ano={ano}
+                origem={origem}
+                supabaseOk={supabaseOk}
+                tipoEmpresa={empresa.tipo}
+                existentes={real}
+              />
             )}
           </div>
           {empresa.tipo !== "diego" && (
-            <DrawerDadosReais
-              empresa={empresa.db}
-              mes={mes}
-              ano={ano}
-              origem={origem}
-              supabaseOk={supabaseOk}
-              tipoEmpresa={empresa.tipo}
-              existentes={real}
-            />
+            <div style={{ marginTop: 14 }}>
+              <ToggleOrigem origem={origem} />
+            </div>
           )}
         </div>
 
@@ -243,13 +247,14 @@ export default async function EmpresaPage({
         )}
       </main>
 
-      <footer className="max-w-7xl mx-auto px-6 py-10 text-center">
+      <footer
+        className="mx-auto px-8 py-8 text-center"
+        style={{ maxWidth: 1280 }}
+      >
         <p
           style={{
-            fontSize: 10,
-            letterSpacing: "2px",
-            textTransform: "uppercase",
-            color: "rgba(255,255,255,0.15)",
+            fontSize: 11,
+            color: "var(--text-4)",
             fontWeight: 400,
           }}
         >

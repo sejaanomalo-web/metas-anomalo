@@ -1,6 +1,5 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import OutrasPlataformas from "@/components/OutrasPlataformas"
 import { estaAutenticado } from "@/lib/auth"
@@ -115,46 +114,42 @@ export default async function TrafegoPage({
 
   return (
     <>
-      <Header>
-        <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
-      </Header>
-
-      <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+      <main
+        className="mx-auto px-8 py-10 space-y-8"
+        style={{ maxWidth: 1280 }}
+      >
         <div>
           <Link
             href={`/dashboard/${empresa.slug}?mes=${mes}&ano=${ano}`}
             style={{
-              fontSize: 10,
-              letterSpacing: "2px",
-              textTransform: "uppercase",
-              color: "rgba(255,255,255,0.3)",
+              fontSize: 12,
+              color: "var(--text-3)",
               fontWeight: 500,
             }}
             className="hover:text-[#C9953A] transition"
           >
             ← {empresa.nome}
           </Link>
-          <h1
+          <div
             style={{
-              fontSize: 32,
-              fontWeight: 700,
-              color: "#ffffff",
-              letterSpacing: "-0.5px",
-              lineHeight: 1.1,
-              marginTop: 14,
+              marginTop: 10,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
             }}
           >
-            Tráfego — {empresa.nome}
-          </h1>
-          <div
-            className="gold-divider"
-            style={{ marginTop: 10, marginBottom: 10 }}
-          />
+            <h1 style={{ fontSize: 36 }}>
+              Tráfego — {empresa.nome}
+            </h1>
+            <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+          </div>
           <p
             style={{
-              fontSize: 13,
-              color: "rgba(255,255,255,0.45)",
-              fontWeight: 300,
+              fontSize: 14,
+              color: "var(--text-3)",
+              marginTop: 10,
             }}
           >
             {subtituloDaEmpresa(empresa)}

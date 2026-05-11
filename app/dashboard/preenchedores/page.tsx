@@ -1,8 +1,4 @@
-import Link from "next/link"
-import { redirect } from "next/navigation"
-import Header from "@/components/Header"
 import GerenciadorPreenchedores from "@/components/GerenciadorPreenchedores"
-import { estaAutenticado } from "@/lib/auth"
 import { listarEmpresas } from "@/lib/empresas-actions"
 import {
   listarPreenchedores,
@@ -11,10 +7,6 @@ import {
 import { supabaseConfigurado } from "@/lib/supabase"
 
 export default async function PreenchedoresPage() {
-  if (!estaAutenticado()) {
-    redirect("/login")
-  }
-
   const [preenchedores, atribuicoes, empresas] = await Promise.all([
     listarPreenchedores(),
     listarTodasAtribuicoes(),
@@ -29,43 +21,27 @@ export default async function PreenchedoresPage() {
 
   return (
     <>
-      <Header />
-      <main className="max-w-6xl mx-auto px-6 py-10 space-y-8">
+      <main
+        className="mx-auto px-8 py-10 space-y-8"
+        style={{ maxWidth: 1280 }}
+      >
         <div>
-          <Link
-            href="/dashboard"
-            style={{
-              fontSize: 10,
-              letterSpacing: "2px",
-              textTransform: "uppercase",
-              color: "rgba(255,255,255,0.3)",
-              fontWeight: 500,
-            }}
-            className="hover:text-[#C9953A] transition"
-          >
-            ← Voltar ao painel
-          </Link>
-          <h1
-            style={{
-              fontSize: 32,
-              fontWeight: 700,
-              color: "#ffffff",
-              letterSpacing: "-0.5px",
-              lineHeight: 1.1,
-              marginTop: 14,
-            }}
-          >
-            Formulários diários
-          </h1>
-          <div
-            className="gold-divider"
-            style={{ marginTop: 10, marginBottom: 10 }}
-          />
           <p
             style={{
-              fontSize: 13,
-              color: "rgba(255,255,255,0.45)",
-              fontWeight: 300,
+              fontSize: 12,
+              fontWeight: 500,
+              color: "var(--text-3)",
+              letterSpacing: "0.01em",
+            }}
+          >
+            Time
+          </p>
+          <h1 style={{ marginTop: 6, fontSize: 36 }}>Formulários diários</h1>
+          <p
+            style={{
+              fontSize: 14,
+              color: "var(--text-3)",
+              marginTop: 10,
             }}
           >
             Gestão de gestores de tráfego (pago) e SDRs (orgânico). Cada pessoa
@@ -79,7 +55,7 @@ export default async function PreenchedoresPage() {
             style={{
               padding: 16,
               borderRadius: 12,
-              border: "0.5px solid rgba(226,75,74,0.35)",
+              border: "1px solid rgba(226,75,74,0.35)",
               background: "rgba(226,75,74,0.08)",
               color: "#e24b4a",
               fontSize: 12,
@@ -101,13 +77,14 @@ export default async function PreenchedoresPage() {
         />
       </main>
 
-      <footer className="max-w-7xl mx-auto px-6 py-10 text-center">
+      <footer
+        className="mx-auto px-8 py-8 text-center"
+        style={{ maxWidth: 1280 }}
+      >
         <p
           style={{
-            fontSize: 10,
-            letterSpacing: "2px",
-            textTransform: "uppercase",
-            color: "rgba(255,255,255,0.15)",
+            fontSize: 11,
+            color: "var(--text-4)",
             fontWeight: 400,
           }}
         >

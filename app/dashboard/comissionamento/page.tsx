@@ -1,6 +1,4 @@
-import Link from "next/link"
 import { redirect } from "next/navigation"
-import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import CardFelipe from "@/components/CardFelipe"
 import CardEditor from "@/components/CardEditor"
@@ -110,88 +108,81 @@ export default async function ComissionamentoPage({
 
   return (
     <>
-      <Header>
-        <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
-      </Header>
-
-      <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
-        <div className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <Link
-              href={`/dashboard?mes=${mes}&ano=${ano}`}
-              style={{
-                fontSize: 10,
-                letterSpacing: "2px",
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.3)",
-                fontWeight: 500,
-              }}
-              className="hover:text-[#C9953A] transition"
-            >
-              ← Voltar ao painel
-            </Link>
-            <h1
-              style={{
-                fontSize: 32,
-                fontWeight: 700,
-                color: "#ffffff",
-                letterSpacing: "-0.5px",
-                lineHeight: 1.1,
-                marginTop: 14,
-              }}
-            >
-              Comissionamento do Time
-            </h1>
-            <div
-              className="gold-divider"
-              style={{ marginTop: 10, marginBottom: 10 }}
-            />
+      <main
+        className="mx-auto px-8 py-10 space-y-8"
+        style={{ maxWidth: 1280 }}
+      >
+        <div>
+          <p
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: "var(--text-3)",
+              letterSpacing: "0.01em",
+            }}
+          >
+            Time
+          </p>
+          <div
+            style={{
+              marginTop: 6,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <h1 style={{ fontSize: 36 }}>Comissionamento do Time</h1>
+            <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+          </div>
+          <p
+            style={{
+              fontSize: 14,
+              color: "var(--text-3)",
+              marginTop: 10,
+            }}
+          >
+            <span style={{ color: "var(--text-2)" }}>
+              Atualmente {mes} {ano}
+            </span>{" "}
+            · Bônus por performance e entregas
+          </p>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="glass" style={{ padding: "14px 22px" }}>
             <p
               style={{
-                fontSize: 13,
-                color: "rgba(255,255,255,0.45)",
-                fontWeight: 300,
+                fontSize: 11,
+                color: "var(--text-3)",
+                fontWeight: 500,
               }}
             >
-              {mes} de {ano} · Bônus por performance e entregas
+              Total pago no mês
+            </p>
+            <p
+              style={{
+                fontSize: 24,
+                color: "var(--accent)",
+                fontWeight: 700,
+                marginTop: 4,
+                letterSpacing: "-0.02em",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {formatBRL(totalBonus)}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="glass" style={{ padding: "14px 22px" }}>
-              <p
-                style={{
-                  fontSize: 9,
-                  letterSpacing: "2px",
-                  color: "rgba(255,255,255,0.35)",
-                  textTransform: "uppercase",
-                  fontWeight: 500,
-                }}
-              >
-                Total pago no mês
-              </p>
-              <p
-                style={{
-                  fontSize: 22,
-                  color: "#C9953A",
-                  fontWeight: 700,
-                  marginTop: 4,
-                  letterSpacing: "-0.3px",
-                }}
-              >
-                {formatBRL(totalBonus)}
-              </p>
-            </div>
-            <DrawerEdicaoComissao
-              mes={mes}
-              ano={ano}
-              supabaseOk={supabaseOk}
-              colaboradores={colaboradoresExtras}
-              colaboradoresInativos={colaboradoresInativos}
-              funcoes={funcoes}
-              metasPorColaborador={metasEditaveis}
-              padroesPorColaborador={PADROES}
-            />
-          </div>
+          <DrawerEdicaoComissao
+            mes={mes}
+            ano={ano}
+            supabaseOk={supabaseOk}
+            colaboradores={colaboradoresExtras}
+            colaboradoresInativos={colaboradoresInativos}
+            funcoes={funcoes}
+            metasPorColaborador={metasEditaveis}
+            padroesPorColaborador={PADROES}
+          />
         </div>
 
         {!supabaseOk && (
@@ -337,13 +328,14 @@ export default async function ComissionamentoPage({
         </section>
       </main>
 
-      <footer className="max-w-7xl mx-auto px-6 py-10 text-center">
+      <footer
+        className="mx-auto px-8 py-8 text-center"
+        style={{ maxWidth: 1280 }}
+      >
         <p
           style={{
-            fontSize: 10,
-            letterSpacing: "2px",
-            textTransform: "uppercase",
-            color: "rgba(255,255,255,0.15)",
+            fontSize: 11,
+            color: "var(--text-4)",
             fontWeight: 400,
           }}
         >

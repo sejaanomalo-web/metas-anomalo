@@ -1,9 +1,5 @@
-import Link from "next/link"
-import { redirect } from "next/navigation"
-import Header from "@/components/Header"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import FormConfig from "@/components/FormConfig"
-import { estaAutenticado } from "@/lib/auth"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
 import {
   montarResumoDiario,
@@ -16,10 +12,6 @@ export default async function ConfiguracoesPage({
 }: {
   searchParams: { mes?: string }
 }) {
-  if (!estaAutenticado()) {
-    redirect("/login")
-  }
-
   const mes = mesValido(searchParams?.mes)
 
   const [mensagemDiario, mensagemSemanal, mensagemMensal] = await Promise.all([
@@ -30,46 +22,39 @@ export default async function ConfiguracoesPage({
 
   return (
     <>
-      <Header>
-        <SeletorPeriodo mesAtual={mes} anoAtual={ANO_PADRAO} />
-      </Header>
-
-      <main className="max-w-3xl mx-auto px-6 py-10 space-y-8">
+      <main
+        className="mx-auto px-8 py-10 space-y-8"
+        style={{ maxWidth: 1280 }}
+      >
         <div>
-          <Link
-            href={`/dashboard?mes=${mes}`}
-            style={{
-              fontSize: 10,
-              letterSpacing: "2px",
-              textTransform: "uppercase",
-              color: "rgba(255,255,255,0.3)",
-              fontWeight: 500,
-            }}
-            className="hover:text-[#C9953A] transition"
-          >
-            ← Voltar ao painel
-          </Link>
-          <h1
-            style={{
-              fontSize: 32,
-              fontWeight: 700,
-              color: "#ffffff",
-              letterSpacing: "-0.5px",
-              lineHeight: 1.1,
-              marginTop: 14,
-            }}
-          >
-            Configurações
-          </h1>
-          <div
-            className="gold-divider"
-            style={{ marginTop: 10, marginBottom: 10 }}
-          />
           <p
             style={{
-              fontSize: 13,
-              color: "rgba(255,255,255,0.45)",
-              fontWeight: 300,
+              fontSize: 12,
+              fontWeight: 500,
+              color: "var(--text-3)",
+              letterSpacing: "0.01em",
+            }}
+          >
+            Sistema
+          </p>
+          <div
+            style={{
+              marginTop: 6,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <h1 style={{ fontSize: 36 }}>Configurações</h1>
+            <SeletorPeriodo mesAtual={mes} anoAtual={ANO_PADRAO} />
+          </div>
+          <p
+            style={{
+              fontSize: 14,
+              color: "var(--text-3)",
+              marginTop: 10,
             }}
           >
             Resumos para enviar no WhatsApp · clique em copiar e cole no chat
@@ -82,6 +67,21 @@ export default async function ConfiguracoesPage({
           mensagemMensal={mensagemMensal}
         />
       </main>
+
+      <footer
+        className="mx-auto px-8 py-8 text-center"
+        style={{ maxWidth: 1280 }}
+      >
+        <p
+          style={{
+            fontSize: 11,
+            color: "var(--text-4)",
+            fontWeight: 400,
+          }}
+        >
+          Anômalo Hub · {new Date().getFullYear()}
+        </p>
+      </footer>
     </>
   )
 }
