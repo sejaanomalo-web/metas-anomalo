@@ -12,30 +12,33 @@ import {
   subtituloDaEmpresa,
 } from "@/lib/data"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
-import { getDadosReaisMes } from "@/lib/dados-reais"
-import { getDadosDiariosDoMes } from "@/lib/dados-diarios"
+import {
+  agregarInsights,
+  insightsDaCampanha,
+  listarCampanhasMeta,
+  type InsightsAgregados,
+} from "@/lib/campanhas-meta"
 import { getSupabase } from "@/lib/supabase"
 
 /**
  * Painel de tráfego pago da empresa. Lê 100% do Supabase:
  *
- *   • dados_reais (origem='pago')        → totais cumulativos do mês
- *   • dados_diarios_log                  → deltas diários (timeline)
- *   • tokens_meta                        → status da conexão Meta Ads
- *                                          (preenchida pelo agente Sentinela)
+ *   • campanhas_meta   → snapshot por campanha (insights do Meta puros)
+ *   • tokens_meta      → status da conexão Meta Ads (System User)
  *
- * A escrita em dados_reais é feita pelo agente Sentinela
- * (sistema/automação) que lê o Meta Ads via System User token e
- * grava aqui. Por isso esta página NÃO consulta a Meta Graph API
- * em runtime — todos os números vêm de tabelas locais, com latência
- * controlada pelo cron do agente.
+ * Apenas métricas reais do Meta Ads. Dados manuais (contratos,
+ * faturamento, ticket médio) vivem em dados_reais e aparecem
+ * exclusivamente na aba "Visão Geral" — aqui não.
+ *
+ * Suporta filtro por campanha via ?campanha={campanha_id}. Quando
+ * vazio, mostra o agregado de todas as campanhas do período.
  */
 export default async function TrafegoPage({
   params,
   searchParams,
 }: {
   params: { empresa: string }
-  searchParams: { mes?: string; ano?: string }
+  searchParams: { mes?: string; ano?: string; campanha?: string }
 }) {
   if (!estaAutenticado()) {
     redirect("/login")
@@ -46,30 +49,24 @@ export default async function TrafegoPage({
 
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
+  const campanhaSelecionada = searchParams?.campanha?.trim() || null
 
-  const [real, diarios, conexao] = await Promise.all([
-    getDadosReaisMes(empresa.db, mes, ano, "pago"),
-    getDadosDiariosDoMes(empresa.db, mes, ano, "pago"),
+  const [campanhas, conexao] = await Promise.all([
+    listarCampanhasMeta(empresa.db, mes, ano),
     buscarConexaoMeta(empresa.db),
   ])
 
-  // Métricas principais derivadas de dados_reais (origem=pago):
-  const investimento = real?.investimento_real ?? 0
-  const leads = real?.leads_real ?? 0
-  const contratos = real?.contratos_real ?? 0
-  const faturamento = real?.faturamento_real ?? 0
-  const cpl = real?.cpl_real ?? (leads > 0 ? investimento / leads : null)
-  const cpa = real?.cpa_real ?? (contratos > 0 ? investimento / contratos : null)
-  const criativosUsados = real?.criativos_usados ?? 0
-  const criativosEntregues = real?.criativos_entregues ?? 0
-  const ticketMedio = contratos > 0 ? faturamento / contratos : 0
-  const conversao = leads > 0 ? (contratos / leads) * 100 : 0
+  // Campanha individual ou agregado de todas:
+  const campanhaAtual =
+    campanhaSelecionada !== null
+      ? campanhas.find((c) => c.campanha_id === campanhaSelecionada) ?? null
+      : null
+  const insights: InsightsAgregados = campanhaAtual
+    ? insightsDaCampanha(campanhaAtual)
+    : agregarInsights(campanhas)
 
-  const temDadosReais = !!real && investimento > 0
-  const criativosDetalhe = (real?.criativos_detalhe ?? []) as Array<{
-    nome?: string
-    publico?: string
-  }>
+  const semCampanhas = campanhas.length === 0
+  const linkBase = `/dashboard/${empresa.slug}/trafego?mes=${mes}&ano=${ano}`
 
   return (
     <>
@@ -124,12 +121,24 @@ export default async function TrafegoPage({
             }}
           >
             <TabsEmpresa slug={empresa.slug} mes={mes} ano={ano} />
-            <StatusConexao conexao={conexao} />
+            <StatusConexao
+              conexao={conexao}
+              ultimaSincronizacao={insights.ultimaSincronizacao}
+            />
           </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
-        {!temDadosReais && (
+        {/* Seletor de campanha — sempre visível quando há campanhas */}
+        {!semCampanhas && (
+          <SeletorCampanha
+            campanhas={campanhas}
+            ativoId={campanhaSelecionada}
+            linkBase={linkBase}
+          />
+        )}
+
+        {semCampanhas && (
           <div
             style={{
               padding: 18,
@@ -141,189 +150,112 @@ export default async function TrafegoPage({
               lineHeight: 1.5,
             }}
           >
-            Nenhum dado de tráfego pago neste mês ainda. O agente Sentinela
-            popula esta seção automaticamente — verifique se a empresa tem
-            token cadastrado em <strong>tokens_meta</strong> e se a última
-            execução do agente passou em <strong>logs_sentinela</strong>.
+            Nenhuma campanha sincronizada neste mês ainda. O agente
+            Sentinela popula esta tabela (<strong>campanhas_meta</strong>)
+            automaticamente — verifique se a empresa tem token cadastrado
+            em <strong>tokens_meta</strong> e se a última execução do
+            agente passou em <strong>logs_sentinela</strong>.
           </div>
         )}
 
-        {/* Faixa principal de KPIs */}
+        {/* Faixa principal de KPIs — só métricas reais do Meta */}
         <section
           className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
           style={{ gap: 16 }}
         >
           <KPICard
-            label="Investimento real"
-            valor={formatBRL(investimento)}
+            label="Investimento"
+            valor={formatBRL(insights.spend)}
             icon={<IconeMegafone />}
             iconStatus="gold"
-            semDados={!temDadosReais}
             destaque
+            semDados={semCampanhas}
           />
           <KPICard
             label="Leads gerados"
-            valor={formatNumero(leads)}
+            valor={formatNumero(insights.leads)}
             icon={<IconeLeads />}
             iconStatus="neutral"
-            semDados={!temDadosReais}
+            semDados={semCampanhas}
           />
           <KPICard
             label="CPL"
-            valor={cpl !== null ? formatBRL(cpl) : "—"}
+            valor={insights.cpl !== null ? formatBRL(insights.cpl) : "—"}
             icon={<IconeAlvo />}
-            iconStatus={cpl !== null && cpl > 0 ? "success" : "neutral"}
-            semDados={!temDadosReais}
+            iconStatus={insights.cpl !== null && insights.cpl > 0 ? "success" : "neutral"}
+            semDados={semCampanhas}
+            semDadosTexto="Sem leads"
           />
           <KPICard
-            label="CPA"
-            valor={cpa !== null ? formatBRL(cpa) : "—"}
-            icon={<IconeAlvo />}
-            iconStatus={cpa !== null && cpa > 0 ? "success" : "neutral"}
-            semDados={!temDadosReais}
-            semDadosTexto={!temDadosReais ? "—" : "Sem contratos"}
+            label="Impressões"
+            valor={formatNumero(insights.impressions)}
+            icon={<IconeOlho />}
+            iconStatus="neutral"
+            semDados={semCampanhas}
           />
           <KPICard
-            label="Contratos fechados"
-            valor={formatNumero(contratos)}
-            icon={<IconeContrato />}
-            iconStatus={contratos > 0 ? "success" : "neutral"}
-            semDados={!temDadosReais}
+            label="Alcance"
+            valor={formatNumero(insights.reach)}
+            icon={<IconeAlcance />}
+            iconStatus="neutral"
+            semDados={semCampanhas}
           />
           <KPICard
-            label="Faturamento atribuído"
-            valor={formatBRL(faturamento)}
-            icon={<IconeCifrao />}
-            iconStatus={faturamento > 0 ? "success" : "neutral"}
-            semDados={!temDadosReais}
+            label="Cliques"
+            valor={formatNumero(insights.clicks)}
+            icon={<IconeCliques />}
+            iconStatus="neutral"
+            semDados={semCampanhas}
           />
           <KPICard
-            label="Ticket médio"
-            valor={ticketMedio > 0 ? formatBRL(ticketMedio) : "—"}
-            icon={<IconeTicket />}
-            iconStatus={ticketMedio > 0 ? "success" : "neutral"}
-            semDados={!temDadosReais}
-            semDadosTexto={!temDadosReais ? "—" : "Sem contratos"}
-          />
-          <KPICard
-            label="Conversão lead → contrato"
-            valor={leads > 0 ? `${conversao.toFixed(1)}%` : "—"}
+            label="CTR"
+            valor={
+              insights.ctr !== null ? `${insights.ctr.toFixed(2)}%` : "—"
+            }
             icon={<IconeFunil />}
-            iconStatus={conversao > 0 ? "success" : "neutral"}
-            semDados={!temDadosReais}
-            semDadosTexto={!temDadosReais ? "—" : "Sem leads"}
+            iconStatus={
+              insights.ctr !== null && insights.ctr > 0 ? "success" : "neutral"
+            }
+            semDados={semCampanhas}
+            semDadosTexto="Sem impressões"
+          />
+          <KPICard
+            label="Frequência"
+            valor={
+              insights.frequencia !== null
+                ? insights.frequencia.toFixed(2)
+                : "—"
+            }
+            icon={<IconeRepeticao />}
+            iconStatus="neutral"
+            semDados={semCampanhas}
+            semDadosTexto="Sem alcance"
           />
         </section>
 
-        {/* Criativos do mês */}
-        <section className="glass" style={{ padding: 24 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              justifyContent: "space-between",
-              gap: 16,
-              flexWrap: "wrap",
-              marginBottom: 16,
-            }}
-          >
-            <h2 style={{ fontSize: 18, fontWeight: 600 }}>Criativos no mês</h2>
-            <p
-              style={{
-                fontSize: 12,
-                color: "var(--text-3)",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {formatNumero(criativosUsados)} usados
-              {" · "}
-              {formatNumero(criativosEntregues)} entregues
-            </p>
-          </div>
-          {criativosDetalhe.length === 0 ? (
-            <p
-              style={{
-                fontSize: 13,
-                color: "var(--text-4)",
-                fontStyle: "italic",
-              }}
-            >
-              Nenhum criativo detalhado ainda neste mês.
-            </p>
-          ) : (
-            <ul
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                gap: 10,
-                listStyle: "none",
-                padding: 0,
-                margin: 0,
-              }}
-            >
-              {criativosDetalhe.map((c, idx) => (
-                <li
-                  key={`${c.nome ?? "criativo"}-${idx}`}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 10,
-                    background: "var(--surface-2)",
-                    border: "1px solid rgba(255,255,255,0.05)",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: 13,
-                      color: "var(--text-1)",
-                      fontWeight: 500,
-                      marginBottom: 2,
-                    }}
-                  >
-                    {c.nome ?? "Criativo sem nome"}
-                  </p>
-                  {c.publico && (
-                    <p
-                      style={{
-                        fontSize: 11,
-                        color: "var(--text-3)",
-                      }}
-                    >
-                      Público: {c.publico}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        {/* Detalhes da campanha selecionada */}
+        {campanhaAtual && (
+          <DetalhesCampanha campanha={campanhaAtual} />
+        )}
 
-        {/* Timeline diária */}
-        <section className="glass" style={{ padding: 24 }}>
-          <div style={{ marginBottom: 16 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600 }}>
-              Evolução diária
-            </h2>
-            <p
-              style={{
-                fontSize: 12,
-                color: "var(--text-3)",
-                marginTop: 4,
-              }}
-            >
-              Deltas dia a dia agregados a partir de dados_diarios_log
-            </p>
-          </div>
-          {diarios.length === 0 ? (
-            <p
-              style={{
-                fontSize: 13,
-                color: "var(--text-4)",
-                fontStyle: "italic",
-              }}
-            >
-              Nenhum movimento diário registrado no mês.
-            </p>
-          ) : (
+        {/* Tabela com todas as campanhas, sempre visível */}
+        {!semCampanhas && (
+          <section className="glass" style={{ padding: 24 }}>
+            <div style={{ marginBottom: 16 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 600 }}>
+                Todas as campanhas
+              </h2>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-3)",
+                  marginTop: 4,
+                }}
+              >
+                Clique em uma linha pra ver só os dados dela acima.
+              </p>
+            </div>
+
             <div className="overflow-x-auto scrollbar-thin">
               <table
                 style={{
@@ -335,13 +267,15 @@ export default async function TrafegoPage({
                 <thead>
                   <tr>
                     {[
-                      "Dia",
+                      "Campanha",
+                      "Status",
+                      "Objetivo",
                       "Investimento",
                       "Leads",
                       "CPL",
-                      "Contratos",
-                      "Faturamento",
-                      "Criativos novos",
+                      "Impressões",
+                      "Cliques",
+                      "CTR",
                     ].map((h) => (
                       <th
                         key={h}
@@ -362,28 +296,70 @@ export default async function TrafegoPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {diarios.map((d) => (
-                    <tr key={d.data}>
-                      <td style={celulaStyle}>
-                        Dia {String(d.diaMes).padStart(2, "0")}
-                      </td>
-                      <td style={celulaStyle}>{formatBRL(d.investimento)}</td>
-                      <td style={celulaStyle}>{formatNumero(d.leads)}</td>
-                      <td style={celulaStyle}>
-                        {d.cpl !== null ? formatBRL(d.cpl) : "—"}
-                      </td>
-                      <td style={celulaStyle}>{formatNumero(d.contratos)}</td>
-                      <td style={celulaStyle}>{formatBRL(d.faturamento)}</td>
-                      <td style={celulaStyle}>
-                        {formatNumero(d.criativosAdicionados.length)}
-                      </td>
-                    </tr>
-                  ))}
+                  {campanhas.map((c) => {
+                    const ativa = c.campanha_id === campanhaSelecionada
+                    return (
+                      <tr
+                        key={c.id}
+                        style={{
+                          background: ativa
+                            ? "rgba(201,149,58,0.06)"
+                            : undefined,
+                        }}
+                      >
+                        <td style={celulaStyle}>
+                          <Link
+                            href={
+                              ativa
+                                ? linkBase
+                                : `${linkBase}&campanha=${c.campanha_id}`
+                            }
+                            style={{
+                              color: ativa
+                                ? "var(--accent)"
+                                : "var(--text-1)",
+                              fontWeight: ativa ? 600 : 500,
+                              textDecoration: "none",
+                            }}
+                            className="hover:text-[#C9953A] transition"
+                          >
+                            {c.nome}
+                          </Link>
+                        </td>
+                        <td style={celulaStyle}>
+                          <BadgeStatus status={c.status} />
+                        </td>
+                        <td style={celulaStyle}>{c.objetivo || "—"}</td>
+                        <td style={celulaStyle}>
+                          {formatBRL(Number(c.spend ?? 0))}
+                        </td>
+                        <td style={celulaStyle}>
+                          {formatNumero(c.leads ?? 0)}
+                        </td>
+                        <td style={celulaStyle}>
+                          {c.cpl !== null && c.cpl !== undefined
+                            ? formatBRL(Number(c.cpl))
+                            : "—"}
+                        </td>
+                        <td style={celulaStyle}>
+                          {formatNumero(c.impressions ?? 0)}
+                        </td>
+                        <td style={celulaStyle}>
+                          {formatNumero(c.clicks ?? 0)}
+                        </td>
+                        <td style={celulaStyle}>
+                          {c.ctr !== null && c.ctr !== undefined
+                            ? `${Number(c.ctr).toFixed(2)}%`
+                            : "—"}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
-          )}
-        </section>
+          </section>
+        )}
       </main>
     </>
   )
@@ -413,8 +389,8 @@ async function buscarConexaoMeta(
 ): Promise<ConexaoMeta | null> {
   const supabase = getSupabase()
   if (!supabase) return null
-  // Apenas consulta de leitura na coluna pública — a coluna `access_token`
-  // segue protegida por RLS (só service_role), então não vaza credenciais.
+  // Apenas consulta de leitura na coluna pública — `access_token` segue
+  // protegida por RLS (só service_role), então não vaza credenciais.
   const { data } = await supabase
     .from("tokens_meta")
     .select("ad_account_id, bm_id, data_geracao, ativo")
@@ -430,9 +406,225 @@ async function buscarConexaoMeta(
   }
 }
 
-/* ============ Componentes inline ============ */
+/* ============ Subcomponentes ============ */
 
-function StatusConexao({ conexao }: { conexao: ConexaoMeta | null }) {
+function SeletorCampanha({
+  campanhas,
+  ativoId,
+  linkBase,
+}: {
+  campanhas: { campanha_id: string; nome: string; status: string | null }[]
+  ativoId: string | null
+  linkBase: string
+}) {
+  return (
+    <section>
+      <p
+        style={{
+          fontSize: 12,
+          fontWeight: 500,
+          color: "var(--text-3)",
+          marginBottom: 10,
+        }}
+      >
+        Filtrar por campanha
+      </p>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+        }}
+      >
+        <ChipCampanha
+          href={linkBase}
+          ativo={ativoId === null}
+          label={`Todas (${campanhas.length})`}
+        />
+        {campanhas.map((c) => (
+          <ChipCampanha
+            key={c.campanha_id}
+            href={`${linkBase}&campanha=${c.campanha_id}`}
+            ativo={ativoId === c.campanha_id}
+            label={c.nome}
+            status={c.status}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ChipCampanha({
+  href,
+  ativo,
+  label,
+  status,
+}: {
+  href: string
+  ativo: boolean
+  label: string
+  status?: string | null
+}) {
+  const ativaCampanha = status === "ACTIVE"
+  return (
+    <Link
+      href={href}
+      className="no-ds transition"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "8px 14px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 500,
+        textDecoration: "none",
+        background: ativo
+          ? "var(--accent)"
+          : "var(--surface-2)",
+        color: ativo ? "#000" : "var(--text-2)",
+        border: `1px solid ${
+          ativo ? "var(--accent)" : "rgba(255,255,255,0.06)"
+        }`,
+        boxShadow: ativo
+          ? "0 0 12px rgba(201,149,58,0.22)"
+          : undefined,
+        maxWidth: 280,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {status && (
+        <span
+          aria-hidden="true"
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: ativaCampanha ? "var(--success)" : "var(--text-4)",
+            flexShrink: 0,
+          }}
+        />
+      )}
+      {label}
+    </Link>
+  )
+}
+
+function DetalhesCampanha({
+  campanha,
+}: {
+  campanha: {
+    nome: string
+    status: string | null
+    objetivo: string | null
+    orcamento_diario: number | null
+    orcamento_total: number | null
+    criativos_ativos: number | null
+  }
+}) {
+  return (
+    <section className="glass" style={{ padding: 24 }}>
+      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+        Detalhes da campanha
+      </h2>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 16,
+        }}
+      >
+        <Detalhe
+          label="Nome"
+          valor={campanha.nome}
+          destaque
+        />
+        <Detalhe
+          label="Status"
+          valorComponent={<BadgeStatus status={campanha.status} />}
+        />
+        <Detalhe label="Objetivo" valor={campanha.objetivo || "—"} />
+        <Detalhe
+          label="Orçamento diário"
+          valor={
+            campanha.orcamento_diario !== null &&
+            campanha.orcamento_diario !== undefined
+              ? formatBRL(Number(campanha.orcamento_diario))
+              : "—"
+          }
+        />
+        <Detalhe
+          label="Orçamento total"
+          valor={
+            campanha.orcamento_total !== null &&
+            campanha.orcamento_total !== undefined
+              ? formatBRL(Number(campanha.orcamento_total))
+              : "—"
+          }
+        />
+        <Detalhe
+          label="Criativos ativos"
+          valor={
+            campanha.criativos_ativos !== null &&
+            campanha.criativos_ativos !== undefined
+              ? formatNumero(campanha.criativos_ativos)
+              : "—"
+          }
+        />
+      </div>
+    </section>
+  )
+}
+
+function Detalhe({
+  label,
+  valor,
+  valorComponent,
+  destaque,
+}: {
+  label: string
+  valor?: string
+  valorComponent?: React.ReactNode
+  destaque?: boolean
+}) {
+  return (
+    <div>
+      <p
+        style={{
+          fontSize: 11,
+          color: "var(--text-3)",
+          fontWeight: 500,
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </p>
+      {valorComponent ?? (
+        <p
+          style={{
+            fontSize: destaque ? 15 : 14,
+            color: "var(--text-1)",
+            fontWeight: destaque ? 600 : 500,
+            lineHeight: 1.3,
+          }}
+        >
+          {valor}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function StatusConexao({
+  conexao,
+  ultimaSincronizacao,
+}: {
+  conexao: ConexaoMeta | null
+  ultimaSincronizacao: string | null
+}) {
   if (!conexao || !conexao.conectado) {
     return (
       <span
@@ -467,9 +659,41 @@ function StatusConexao({ conexao }: { conexao: ConexaoMeta | null }) {
         gap: 8,
         fontVariantNumeric: "tabular-nums",
       }}
+      title={
+        ultimaSincronizacao
+          ? `Última sincronização: ${ultimaSincronizacao}`
+          : undefined
+      }
     >
       <Bolinha cor="var(--success)" pulse />
       Sentinela conectado · {conexao.ad_account_id}
+    </span>
+  )
+}
+
+function BadgeStatus({ status }: { status: string | null }) {
+  const ativa = status === "ACTIVE"
+  const cor = ativa ? "var(--success)" : "var(--text-3)"
+  const bg = ativa ? "var(--success-bg)" : "rgba(255,255,255,0.04)"
+  const label = ativa ? "Ativa" : status === "PAUSED" ? "Pausada" : status ?? "—"
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        letterSpacing: "0.04em",
+        color: cor,
+        background: bg,
+        border: `1px solid ${ativa ? "rgba(22,163,74,0.25)" : "rgba(255,255,255,0.06)"}`,
+        borderRadius: 999,
+        padding: "3px 10px",
+        fontWeight: 600,
+        textTransform: "uppercase",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      {label}
     </span>
   )
 }
@@ -491,10 +715,6 @@ function Bolinha({ cor, pulse }: { cor: string; pulse?: boolean }) {
 }
 
 /* ============ Ícones SVG inline ============ */
-
-function IconeCifrao() {
-  return <span style={{ fontSize: 14, fontWeight: 700 }}>$</span>
-}
 
 function IconeMegafone() {
   return (
@@ -556,7 +776,7 @@ function IconeLeads() {
   )
 }
 
-function IconeContrato() {
+function IconeOlho() {
   return (
     <svg
       width="18"
@@ -569,14 +789,13 @@ function IconeContrato() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <polyline points="9 15 11 17 15 13" />
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   )
 }
 
-function IconeTicket() {
+function IconeAlcance() {
   return (
     <svg
       width="18"
@@ -589,8 +808,29 @@ function IconeTicket() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-      <line x1="7" y1="7" x2="7.01" y2="7" />
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  )
+}
+
+function IconeCliques() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 9l3 3 3-3" />
+      <path d="M9 14l3 3 3-3" />
+      <circle cx="12" cy="12" r="10" />
     </svg>
   )
 }
@@ -609,6 +849,27 @@ function IconeFunil() {
       aria-hidden="true"
     >
       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  )
+}
+
+function IconeRepeticao() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="17 1 21 5 17 9" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <polyline points="7 23 3 19 7 15" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
     </svg>
   )
 }
