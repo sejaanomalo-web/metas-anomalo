@@ -575,51 +575,17 @@ create policy dados_diarios_log_all
   to anon, authenticated using (true) with check (true);
 
 -- ===========================================================================
--- campanhas_meta: snapshot mensal das campanhas do Meta Ads por empresa,
--- populado pelo agente Sentinela. Apenas métricas REAIS do Meta — dados
--- manuais (contratos, faturamento) vivem em dados_reais.
+-- Sentinela Anômalo — agente autônomo que lê Meta Ads e grava aqui.
+--
+-- O agente NÃO usa uma tabela própria. Ele grava direto em
+-- dados_diarios_log com preenchedor_nome='Sentinela Anomalo', tocando
+-- apenas: investimento_real, leads_real, cpl_real (+ os _anterior
+-- correspondentes). Campos manuais (reunioes, contratos, faturamento,
+-- criativos*, observacoes) permanecem intocados.
+--
+-- Status de cada execução fica em logs_sentinela (criada via migration
+-- externa do projeto Sentinela). Tokens System User ficam em
+-- tokens_meta (também externa, RLS bloqueada pra anon/auth).
+--
+-- O dashboard lê: dados_diarios_log filtrado + logs_sentinela (último).
 -- ===========================================================================
-create table if not exists public.campanhas_meta (
-  id uuid primary key default gen_random_uuid(),
-  empresa text not null,
-  campanha_id text not null,
-  nome text not null,
-  status text,
-  objetivo text,
-  orcamento_diario numeric,
-  orcamento_total numeric,
-  mes text not null check (
-    mes = ANY (ARRAY['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'])
-  ),
-  ano int not null default 2026,
-  -- Insights do Meta Ads:
-  spend numeric not null default 0,
-  leads int not null default 0,
-  impressions bigint not null default 0,
-  reach bigint not null default 0,
-  clicks bigint not null default 0,
-  ctr numeric,
-  cpl numeric,
-  frequencia numeric,
-  criativos_ativos int,
-  ultima_sincronizacao timestamptz not null default now(),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create unique index if not exists campanhas_meta_empresa_id_mes_ano_key
-  on public.campanhas_meta (empresa, campanha_id, mes, ano);
-
-create index if not exists campanhas_meta_empresa_mes_ano_idx
-  on public.campanhas_meta (empresa, mes, ano);
-
-alter table public.campanhas_meta enable row level security;
-
--- Leitura liberada; escrita só pelo service_role (agente Sentinela).
--- Sem policy de insert/update/delete = bloqueado pra anon/authenticated.
-drop policy if exists campanhas_meta_read on public.campanhas_meta;
-create policy campanhas_meta_read
-  on public.campanhas_meta
-  for select
-  to anon, authenticated
-  using (true);

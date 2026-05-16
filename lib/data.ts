@@ -662,7 +662,7 @@ export function subtituloDaEmpresa(empresa: EmpresaMeta): string {
   return empresa.subtitulo ?? SUBTITULO_EMPRESA[empresa.slug] ?? ""
 }
 
-const MES_NUM: Record<Mes, number> = {
+export const MES_NUM: Record<Mes, number> = {
   Abril: 4,
   Maio: 5,
   Junho: 6,

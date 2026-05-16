@@ -2,10 +2,13 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import TabsEmpresa from "@/components/TabsEmpresa"
+import TrafegoRealtime from "@/components/TrafegoRealtime"
 import KPICard from "@/components/ui/KPICard"
 import { estaAutenticado } from "@/lib/auth"
 import {
+  MES_NUM,
   anoValido,
+  diasNoMes,
   formatBRL,
   formatNumero,
   mesValido,
@@ -13,32 +16,39 @@ import {
 } from "@/lib/data"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
-  agregarInsights,
-  insightsDaCampanha,
-  listarCampanhasMeta,
-  type InsightsAgregados,
-} from "@/lib/campanhas-meta"
-import { getSupabase } from "@/lib/supabase"
+  EMPRESAS_TRACKEADAS,
+  SENTINELA_NOME,
+  empresaTrackeadaPeloSentinela,
+  getDiasSentinelaDaEmpresa,
+  getLinhasDoMes,
+  getUltimoLogSentinela,
+  proximaExecucao,
+  resumirMesSentinela,
+  statusSentinela,
+  tempoDecorrido,
+  type AnomaliaSentinela,
+  type LinhaDoMes,
+} from "@/lib/sentinela"
 
 /**
- * Painel de tráfego pago da empresa. Lê 100% do Supabase:
+ * Painel de tráfego pago da empresa, alimentado pelo agente Sentinela
+ * Anomalo. Lê SOMENTE de tabelas do Supabase — sem chamada Meta Graph
+ * em runtime.
  *
- *   • campanhas_meta   → snapshot por campanha (insights do Meta puros)
- *   • tokens_meta      → status da conexão Meta Ads (System User)
+ * Fonte:
+ *   • dados_diarios_log filtrado por (empresa.nome, origem=pago)
+ *     com flag de quem preencheu (Sentinela 🤖 vs humano 👤)
+ *   • logs_sentinela (último) → status + anomalias detectadas
  *
- * Apenas métricas reais do Meta Ads. Dados manuais (contratos,
- * faturamento, ticket médio) vivem em dados_reais e aparecem
- * exclusivamente na aba "Visão Geral" — aqui não.
- *
- * Suporta filtro por campanha via ?campanha={campanha_id}. Quando
- * vazio, mostra o agregado de todas as campanhas do período.
+ * Atualização em tempo real via TrafegoRealtime (client component que
+ * dispara router.refresh ao receber INSERT/UPDATE do agente).
  */
 export default async function TrafegoPage({
   params,
   searchParams,
 }: {
   params: { empresa: string }
-  searchParams: { mes?: string; ano?: string; campanha?: string }
+  searchParams: { mes?: string; ano?: string }
 }) {
   if (!estaAutenticado()) {
     redirect("/login")
@@ -49,27 +59,38 @@ export default async function TrafegoPage({
 
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
-  const campanhaSelecionada = searchParams?.campanha?.trim() || null
 
-  const [campanhas, conexao] = await Promise.all([
-    listarCampanhasMeta(empresa.db, mes, ano),
-    buscarConexaoMeta(empresa.db),
+  // Range YYYY-MM-01 .. YYYY-MM-{lastDay} para filtrar dados_diarios_log.
+  const mesNum = String(MES_NUM[mes]).padStart(2, "0")
+  const ultimoDia = String(diasNoMes(mes, ano)).padStart(2, "0")
+  const inicio = `${ano}-${mesNum}-01`
+  const fim = `${ano}-${mesNum}-${ultimoDia}`
+
+  const [diasSentinela, linhas, ultimoLog] = await Promise.all([
+    getDiasSentinelaDaEmpresa(empresa.nome, inicio, fim),
+    getLinhasDoMes(empresa.nome, inicio, fim),
+    getUltimoLogSentinela(),
   ])
 
-  // Campanha individual ou agregado de todas:
-  const campanhaAtual =
-    campanhaSelecionada !== null
-      ? campanhas.find((c) => c.campanha_id === campanhaSelecionada) ?? null
-      : null
-  const insights: InsightsAgregados = campanhaAtual
-    ? insightsDaCampanha(campanhaAtual)
-    : agregarInsights(campanhas)
-
-  const semCampanhas = campanhas.length === 0
-  const linkBase = `/dashboard/${empresa.slug}/trafego?mes=${mes}&ano=${ano}`
+  const resumo = resumirMesSentinela(diasSentinela)
+  const trackeada = empresaTrackeadaPeloSentinela(empresa.nome)
+  const stat = statusSentinela(ultimoLog)
+  const prox = proximaExecucao()
+  const anomaliasEmpresa: AnomaliaSentinela[] = (
+    ultimoLog?.anomalias_detectadas ?? []
+  ).filter((a) => a.empresa === empresa.nome)
+  const erroEmpresa = (ultimoLog?.erros_de_leitura ?? []).find(
+    (e) => e.empresa === empresa.nome
+  )
+  const semAtividade =
+    ultimoLog?.contas_sem_atividade?.some(
+      (c) => c.empresa === empresa.nome
+    ) ?? false
 
   return (
     <>
+      <TrafegoRealtime empresaNome={empresa.nome} />
+
       <main
         className="mx-auto px-8 py-10 space-y-8"
         style={{ maxWidth: 1280 }}
@@ -121,24 +142,18 @@ export default async function TrafegoPage({
             }}
           >
             <TabsEmpresa slug={empresa.slug} mes={mes} ano={ano} />
-            <StatusConexao
-              conexao={conexao}
-              ultimaSincronizacao={insights.ultimaSincronizacao}
+            <BadgeStatusSentinela
+              statusCor={stat.cor}
+              rotulo={stat.rotulo}
+              ultimaExecucao={ultimoLog?.data_execucao ?? null}
+              proximaLabel={prox.label}
             />
           </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
-        {/* Seletor de campanha — sempre visível quando há campanhas */}
-        {!semCampanhas && (
-          <SeletorCampanha
-            campanhas={campanhas}
-            ativoId={campanhaSelecionada}
-            linkBase={linkBase}
-          />
-        )}
-
-        {semCampanhas && (
+        {/* Banner pra empresas sem token Meta cadastrado */}
+        {!trackeada && (
           <div
             style={{
               padding: 18,
@@ -147,115 +162,168 @@ export default async function TrafegoPage({
               background: "rgba(201,149,58,0.06)",
               color: "var(--text-2)",
               fontSize: 13,
-              lineHeight: 1.5,
+              lineHeight: 1.6,
             }}
           >
-            Nenhuma campanha sincronizada neste mês ainda. O agente
-            Sentinela popula esta tabela (<strong>campanhas_meta</strong>)
-            automaticamente — verifique se a empresa tem token cadastrado
-            em <strong>tokens_meta</strong> e se a última execução do
-            agente passou em <strong>logs_sentinela</strong>.
+            <strong>Token Meta não cadastrado pra esta empresa.</strong>{" "}
+            O agente Sentinela só processa as empresas listadas em{" "}
+            <code style={{ color: "var(--accent)" }}>tokens_meta</code>{" "}
+            (hoje: {EMPRESAS_TRACKEADAS.join(", ")}). Pra começar a
+            trackear, cadastre o System User token no Supabase.
           </div>
         )}
 
-        {/* Faixa principal de KPIs — só métricas reais do Meta */}
+        {/* Banner se Sentinela retornou erro pra essa empresa */}
+        {trackeada && erroEmpresa && (
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 12,
+              border: "1px solid rgba(239,68,68,0.30)",
+              background: "var(--danger-bg)",
+              color: "var(--text-1)",
+              fontSize: 13,
+              lineHeight: 1.6,
+            }}
+          >
+            <strong style={{ color: "var(--danger)" }}>
+              Erro de leitura na última execução:
+            </strong>{" "}
+            <span style={{ color: "var(--text-2)" }}>
+              {erroEmpresa.error}
+            </span>
+          </div>
+        )}
+
+        {/* Sem movimento detectado */}
+        {trackeada && !erroEmpresa && semAtividade && (
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 12,
+              border: "1px solid rgba(234,179,8,0.30)",
+              background: "var(--warning-bg)",
+              color: "var(--text-2)",
+              fontSize: 13,
+            }}
+          >
+            <strong style={{ color: "var(--warning)" }}>
+              Sem atividade detectada no Meta Ads
+            </strong>{" "}
+            na última execução do Sentinela — campanhas pausadas ou sem
+            investimento no período.
+          </div>
+        )}
+
+        {/* KPIs do mês — só métricas do agente Sentinela */}
         <section
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+          className="grid grid-cols-2 sm:grid-cols-4"
           style={{ gap: 16 }}
         >
           <KPICard
-            label="Investimento"
-            valor={formatBRL(insights.spend)}
+            label="Investimento no mês"
+            valor={formatBRL(resumo.investimento)}
             icon={<IconeMegafone />}
             iconStatus="gold"
             destaque
-            semDados={semCampanhas}
+            semDados={resumo.investimento === 0}
+            semDadosTexto="Aguardando dados"
           />
           <KPICard
-            label="Leads gerados"
-            valor={formatNumero(insights.leads)}
+            label="Resultados"
+            valor={formatNumero(resumo.leads)}
             icon={<IconeLeads />}
-            iconStatus="neutral"
-            semDados={semCampanhas}
+            iconStatus={resumo.leads > 0 ? "success" : "neutral"}
+            semDados={resumo.leads === 0}
+            semDadosTexto="Aguardando dados"
+            delta={{
+              texto: "leads / mensagens iniciadas / conversões",
+              status: "neutral",
+            }}
           />
           <KPICard
-            label="CPL"
-            valor={insights.cpl !== null ? formatBRL(insights.cpl) : "—"}
+            label="CPL médio"
+            valor={resumo.cpl !== null ? formatBRL(resumo.cpl) : "—"}
             icon={<IconeAlvo />}
-            iconStatus={insights.cpl !== null && insights.cpl > 0 ? "success" : "neutral"}
-            semDados={semCampanhas}
-            semDadosTexto="Sem leads"
-          />
-          <KPICard
-            label="Impressões"
-            valor={formatNumero(insights.impressions)}
-            icon={<IconeOlho />}
-            iconStatus="neutral"
-            semDados={semCampanhas}
-          />
-          <KPICard
-            label="Alcance"
-            valor={formatNumero(insights.reach)}
-            icon={<IconeAlcance />}
-            iconStatus="neutral"
-            semDados={semCampanhas}
-          />
-          <KPICard
-            label="Cliques"
-            valor={formatNumero(insights.clicks)}
-            icon={<IconeCliques />}
-            iconStatus="neutral"
-            semDados={semCampanhas}
-          />
-          <KPICard
-            label="CTR"
-            valor={
-              insights.ctr !== null ? `${insights.ctr.toFixed(2)}%` : "—"
+            iconStatus={resumo.cpl !== null ? "success" : "neutral"}
+            semDados={resumo.cpl === null}
+            semDadosTexto="Sem leads ainda"
+            meta={
+              empresa.cpl && empresa.cpl > 0
+                ? formatBRL(empresa.cpl)
+                : undefined
             }
-            icon={<IconeFunil />}
-            iconStatus={
-              insights.ctr !== null && insights.ctr > 0 ? "success" : "neutral"
-            }
-            semDados={semCampanhas}
-            semDadosTexto="Sem impressões"
           />
           <KPICard
-            label="Frequência"
-            valor={
-              insights.frequencia !== null
-                ? insights.frequencia.toFixed(2)
-                : "—"
-            }
-            icon={<IconeRepeticao />}
+            label="Dias com dados"
+            valor={formatNumero(resumo.dias)}
+            icon={<IconeCalendario />}
             iconStatus="neutral"
-            semDados={semCampanhas}
-            semDadosTexto="Sem alcance"
+            semDados={resumo.dias === 0}
+            semDadosTexto="Sem dados no mês"
+            delta={
+              resumo.diasParciais > 0
+                ? {
+                    texto: `${resumo.diasParciais} parcial`,
+                    status: "warning",
+                  }
+                : undefined
+            }
           />
         </section>
 
-        {/* Detalhes da campanha selecionada */}
-        {campanhaAtual && (
-          <DetalhesCampanha campanha={campanhaAtual} />
+        {/* Alertas / anomalias detectadas pra essa empresa */}
+        {anomaliasEmpresa.length > 0 && (
+          <section className="glass" style={{ padding: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+              Alertas da última execução
+            </h2>
+            <ul
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+              }}
+            >
+              {anomaliasEmpresa.map((a, idx) => (
+                <CartaoAnomalia key={`${a.metrica}-${idx}`} anomalia={a} />
+              ))}
+            </ul>
+          </section>
         )}
 
-        {/* Tabela com todas as campanhas, sempre visível */}
-        {!semCampanhas && (
-          <section className="glass" style={{ padding: 24 }}>
-            <div style={{ marginBottom: 16 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 600 }}>
-                Todas as campanhas
-              </h2>
-              <p
-                style={{
-                  fontSize: 12,
-                  color: "var(--text-3)",
-                  marginTop: 4,
-                }}
-              >
-                Clique em uma linha pra ver só os dados dela acima.
-              </p>
-            </div>
-
+        {/* Histórico diário — TODAS as linhas (Sentinela + manuais) */}
+        <section className="glass" style={{ padding: 24 }}>
+          <div style={{ marginBottom: 16 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600 }}>
+              Histórico diário
+            </h2>
+            <p
+              style={{
+                fontSize: 12,
+                color: "var(--text-3)",
+                marginTop: 4,
+              }}
+            >
+              🤖 = Sentinela · 👤 = preenchimento manual ·{" "}
+              <span style={{ color: "var(--warning)" }}>parcial</span> = dia
+              corrente, vai mudar na próxima execução
+            </p>
+          </div>
+          {linhas.length === 0 ? (
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--text-4)",
+                fontStyle: "italic",
+              }}
+            >
+              Nenhum movimento registrado no mês.
+            </p>
+          ) : (
             <div className="overflow-x-auto scrollbar-thin">
               <table
                 style={{
@@ -267,15 +335,14 @@ export default async function TrafegoPage({
                 <thead>
                   <tr>
                     {[
-                      "Campanha",
-                      "Status",
-                      "Objetivo",
+                      "Dia",
+                      "Fonte",
                       "Investimento",
-                      "Leads",
+                      "Resultados",
                       "CPL",
-                      "Impressões",
-                      "Cliques",
-                      "CTR",
+                      "Reuniões",
+                      "Contratos",
+                      "Faturamento",
                     ].map((h) => (
                       <th
                         key={h}
@@ -296,405 +363,244 @@ export default async function TrafegoPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {campanhas.map((c) => {
-                    const ativa = c.campanha_id === campanhaSelecionada
-                    return (
-                      <tr
-                        key={c.id}
-                        style={{
-                          background: ativa
-                            ? "rgba(201,149,58,0.06)"
-                            : undefined,
-                        }}
-                      >
-                        <td style={celulaStyle}>
-                          <Link
-                            href={
-                              ativa
-                                ? linkBase
-                                : `${linkBase}&campanha=${c.campanha_id}`
-                            }
-                            style={{
-                              color: ativa
-                                ? "var(--accent)"
-                                : "var(--text-1)",
-                              fontWeight: ativa ? 600 : 500,
-                              textDecoration: "none",
-                            }}
-                            className="hover:text-[#C9953A] transition"
-                          >
-                            {c.nome}
-                          </Link>
-                        </td>
-                        <td style={celulaStyle}>
-                          <BadgeStatus status={c.status} />
-                        </td>
-                        <td style={celulaStyle}>{c.objetivo || "—"}</td>
-                        <td style={celulaStyle}>
-                          {formatBRL(Number(c.spend ?? 0))}
-                        </td>
-                        <td style={celulaStyle}>
-                          {formatNumero(c.leads ?? 0)}
-                        </td>
-                        <td style={celulaStyle}>
-                          {c.cpl !== null && c.cpl !== undefined
-                            ? formatBRL(Number(c.cpl))
-                            : "—"}
-                        </td>
-                        <td style={celulaStyle}>
-                          {formatNumero(c.impressions ?? 0)}
-                        </td>
-                        <td style={celulaStyle}>
-                          {formatNumero(c.clicks ?? 0)}
-                        </td>
-                        <td style={celulaStyle}>
-                          {c.ctr !== null && c.ctr !== undefined
-                            ? `${Number(c.ctr).toFixed(2)}%`
-                            : "—"}
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {linhas.map((l) => (
+                    <LinhaTabela key={l.data + l.preenchedor_nome} linha={l} />
+                  ))}
                 </tbody>
               </table>
             </div>
-          </section>
-        )}
+          )}
+        </section>
       </main>
     </>
   )
 }
 
-const celulaStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: "var(--text-2)",
-  fontWeight: 400,
-  padding: "12px 14px",
-  borderBottom: "1px solid rgba(255,255,255,0.04)",
-  whiteSpace: "nowrap",
-  fontVariantNumeric: "tabular-nums",
-}
+/* ============ Componentes inline ============ */
 
-/* ============ Helpers server ============ */
-
-interface ConexaoMeta {
-  conectado: boolean
-  ad_account_id?: string
-  bm_id?: string | null
-  data_geracao?: string | null
-}
-
-async function buscarConexaoMeta(
-  empresaDb: string
-): Promise<ConexaoMeta | null> {
-  const supabase = getSupabase()
-  if (!supabase) return null
-  // Apenas consulta de leitura na coluna pública — `access_token` segue
-  // protegida por RLS (só service_role), então não vaza credenciais.
-  const { data } = await supabase
-    .from("tokens_meta")
-    .select("ad_account_id, bm_id, data_geracao, ativo")
-    .eq("empresa", empresaDb)
-    .eq("ativo", true)
-    .maybeSingle()
-  if (!data) return { conectado: false }
-  return {
-    conectado: true,
-    ad_account_id: data.ad_account_id as string,
-    bm_id: (data.bm_id as string | null) ?? null,
-    data_geracao: (data.data_geracao as string | null) ?? null,
+function BadgeStatusSentinela({
+  statusCor,
+  rotulo,
+  ultimaExecucao,
+  proximaLabel,
+}: {
+  statusCor: "success" | "warning" | "danger" | "neutral"
+  rotulo: string
+  ultimaExecucao: string | null
+  proximaLabel: string
+}) {
+  const corMap = {
+    success: { fg: "var(--success)", bg: "var(--success-bg)", border: "rgba(22,163,74,0.25)" },
+    warning: { fg: "var(--warning)", bg: "var(--warning-bg)", border: "rgba(234,179,8,0.30)" },
+    danger: { fg: "var(--danger)", bg: "var(--danger-bg)", border: "rgba(239,68,68,0.30)" },
+    neutral: { fg: "var(--text-3)", bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" },
   }
-}
-
-/* ============ Subcomponentes ============ */
-
-function SeletorCampanha({
-  campanhas,
-  ativoId,
-  linkBase,
-}: {
-  campanhas: { campanha_id: string; nome: string; status: string | null }[]
-  ativoId: string | null
-  linkBase: string
-}) {
+  const c = corMap[statusCor]
   return (
-    <section>
-      <p
-        style={{
-          fontSize: 12,
-          fontWeight: 500,
-          color: "var(--text-3)",
-          marginBottom: 10,
-        }}
-      >
-        Filtrar por campanha
-      </p>
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-        }}
-      >
-        <ChipCampanha
-          href={linkBase}
-          ativo={ativoId === null}
-          label={`Todas (${campanhas.length})`}
-        />
-        {campanhas.map((c) => (
-          <ChipCampanha
-            key={c.campanha_id}
-            href={`${linkBase}&campanha=${c.campanha_id}`}
-            ativo={ativoId === c.campanha_id}
-            label={c.nome}
-            status={c.status}
-          />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function ChipCampanha({
-  href,
-  ativo,
-  label,
-  status,
-}: {
-  href: string
-  ativo: boolean
-  label: string
-  status?: string | null
-}) {
-  const ativaCampanha = status === "ACTIVE"
-  return (
-    <Link
-      href={href}
-      className="no-ds transition"
+    <div
       style={{
         display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "8px 14px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 500,
-        textDecoration: "none",
-        background: ativo
-          ? "var(--accent)"
-          : "var(--surface-2)",
-        color: ativo ? "#000" : "var(--text-2)",
-        border: `1px solid ${
-          ativo ? "var(--accent)" : "rgba(255,255,255,0.06)"
-        }`,
-        boxShadow: ativo
-          ? "0 0 12px rgba(201,149,58,0.22)"
-          : undefined,
-        maxWidth: 280,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 4,
       }}
     >
-      {status && (
-        <span
-          aria-hidden="true"
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: ativaCampanha ? "var(--success)" : "var(--text-4)",
-            flexShrink: 0,
-          }}
-        />
-      )}
-      {label}
-    </Link>
-  )
-}
-
-function DetalhesCampanha({
-  campanha,
-}: {
-  campanha: {
-    nome: string
-    status: string | null
-    objetivo: string | null
-    orcamento_diario: number | null
-    orcamento_total: number | null
-    criativos_ativos: number | null
-  }
-}) {
-  return (
-    <section className="glass" style={{ padding: 24 }}>
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
-        Detalhes da campanha
-      </h2>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 16,
-        }}
-      >
-        <Detalhe
-          label="Nome"
-          valor={campanha.nome}
-          destaque
-        />
-        <Detalhe
-          label="Status"
-          valorComponent={<BadgeStatus status={campanha.status} />}
-        />
-        <Detalhe label="Objetivo" valor={campanha.objetivo || "—"} />
-        <Detalhe
-          label="Orçamento diário"
-          valor={
-            campanha.orcamento_diario !== null &&
-            campanha.orcamento_diario !== undefined
-              ? formatBRL(Number(campanha.orcamento_diario))
-              : "—"
-          }
-        />
-        <Detalhe
-          label="Orçamento total"
-          valor={
-            campanha.orcamento_total !== null &&
-            campanha.orcamento_total !== undefined
-              ? formatBRL(Number(campanha.orcamento_total))
-              : "—"
-          }
-        />
-        <Detalhe
-          label="Criativos ativos"
-          valor={
-            campanha.criativos_ativos !== null &&
-            campanha.criativos_ativos !== undefined
-              ? formatNumero(campanha.criativos_ativos)
-              : "—"
-          }
-        />
-      </div>
-    </section>
-  )
-}
-
-function Detalhe({
-  label,
-  valor,
-  valorComponent,
-  destaque,
-}: {
-  label: string
-  valor?: string
-  valorComponent?: React.ReactNode
-  destaque?: boolean
-}) {
-  return (
-    <div>
-      <p
+      <span
         style={{
           fontSize: 11,
-          color: "var(--text-3)",
-          fontWeight: 500,
-          marginBottom: 6,
+          color: c.fg,
+          padding: "6px 12px",
+          borderRadius: 999,
+          background: c.bg,
+          border: `1px solid ${c.border}`,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          fontVariantNumeric: "tabular-nums",
         }}
       >
-        {label}
-      </p>
-      {valorComponent ?? (
-        <p
-          style={{
-            fontSize: destaque ? 15 : 14,
-            color: "var(--text-1)",
-            fontWeight: destaque ? 600 : 500,
-            lineHeight: 1.3,
-          }}
-        >
-          {valor}
-        </p>
-      )}
+        <Bolinha cor={c.fg} pulse={statusCor === "success"} />
+        🛡️ {rotulo}
+        {ultimaExecucao && (
+          <span style={{ color: "var(--text-3)", marginLeft: 2 }}>
+            · há {tempoDecorrido(ultimaExecucao)}
+          </span>
+        )}
+      </span>
+      <span
+        style={{
+          fontSize: 10,
+          color: "var(--text-4)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        próxima execução: {proximaLabel}
+      </span>
     </div>
   )
 }
 
-function StatusConexao({
-  conexao,
-  ultimaSincronizacao,
-}: {
-  conexao: ConexaoMeta | null
-  ultimaSincronizacao: string | null
-}) {
-  if (!conexao || !conexao.conectado) {
-    return (
+function CartaoAnomalia({ anomalia }: { anomalia: AnomaliaSentinela }) {
+  const corMap = {
+    positiva: {
+      fg: "var(--success)",
+      bg: "var(--success-bg)",
+      border: "rgba(22,163,74,0.25)",
+      icone: "↑",
+    },
+    negativa: {
+      fg: "var(--warning)",
+      bg: "var(--warning-bg)",
+      border: "rgba(234,179,8,0.30)",
+      icone: "↓",
+    },
+    critica: {
+      fg: "var(--danger)",
+      bg: "var(--danger-bg)",
+      border: "rgba(239,68,68,0.30)",
+      icone: "!",
+    },
+  } as const
+  const c = corMap[anomalia.tipo] ?? corMap.negativa
+  return (
+    <li
+      style={{
+        padding: "12px 14px",
+        borderRadius: 10,
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
       <span
         style={{
-          fontSize: 11,
-          color: "var(--text-4)",
-          padding: "6px 12px",
-          borderRadius: 999,
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.06)",
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: `rgba(0,0,0,0.20)`,
+          color: c.fg,
           display: "inline-flex",
           alignItems: "center",
-          gap: 6,
+          justifyContent: "center",
+          fontSize: 14,
+          fontWeight: 700,
+          flexShrink: 0,
         }}
       >
-        <Bolinha cor="var(--text-4)" />
-        Sem token Meta cadastrado
+        {c.icone}
       </span>
-    )
-  }
-  return (
-    <span
-      style={{
-        fontSize: 11,
-        color: "var(--success)",
-        padding: "6px 12px",
-        borderRadius: 999,
-        background: "var(--success-bg)",
-        border: "1px solid rgba(22,163,74,0.25)",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        fontVariantNumeric: "tabular-nums",
-      }}
-      title={
-        ultimaSincronizacao
-          ? `Última sincronização: ${ultimaSincronizacao}`
-          : undefined
-      }
-    >
-      <Bolinha cor="var(--success)" pulse />
-      Sentinela conectado · {conexao.ad_account_id}
-    </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p
+          style={{
+            fontSize: 13,
+            color: "var(--text-1)",
+            fontWeight: 600,
+            marginBottom: 2,
+          }}
+        >
+          {anomalia.metrica} ·{" "}
+          <span style={{ color: c.fg }}>
+            {anomalia.variacao_percentual > 0 ? "+" : ""}
+            {anomalia.variacao_percentual.toFixed(0)}%
+          </span>
+        </p>
+        <p style={{ fontSize: 12, color: "var(--text-3)" }}>
+          Atual: <strong style={{ color: "var(--text-2)" }}>
+            {anomalia.valor_atual}
+          </strong>{" "}
+          · média 7d:{" "}
+          <strong style={{ color: "var(--text-2)" }}>
+            {anomalia.media_7dias.toFixed(1)}
+          </strong>
+        </p>
+      </div>
+    </li>
   )
 }
 
-function BadgeStatus({ status }: { status: string | null }) {
-  const ativa = status === "ACTIVE"
-  const cor = ativa ? "var(--success)" : "var(--text-3)"
-  const bg = ativa ? "var(--success-bg)" : "rgba(255,255,255,0.04)"
-  const label = ativa ? "Ativa" : status === "PAUSED" ? "Pausada" : status ?? "—"
+function LinhaTabela({ linha }: { linha: LinhaDoMes }) {
+  const hojeISO = new Date().toISOString().slice(0, 10)
+  const ehSentinela = linha.preenchedor_nome === SENTINELA_NOME
+  const ehHoje = linha.data === hojeISO
+  const parcial = ehSentinela && ehHoje
+  const dia = linha.data.slice(8, 10)
   return (
-    <span
-      style={{
-        fontSize: 10,
-        letterSpacing: "0.04em",
-        color: cor,
-        background: bg,
-        border: `1px solid ${ativa ? "rgba(22,163,74,0.25)" : "rgba(255,255,255,0.06)"}`,
-        borderRadius: 999,
-        padding: "3px 10px",
-        fontWeight: 600,
-        textTransform: "uppercase",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-      }}
-    >
-      {label}
-    </span>
+    <tr>
+      <td style={celulaStyle}>
+        Dia {dia}
+        {parcial && (
+          <span
+            style={{
+              marginLeft: 8,
+              fontSize: 9,
+              color: "var(--warning)",
+              background: "var(--warning-bg)",
+              padding: "2px 6px",
+              borderRadius: 999,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              fontWeight: 600,
+            }}
+          >
+            parcial
+          </span>
+        )}
+      </td>
+      <td style={celulaStyle}>
+        {linha.preenchedor_nome ? (
+          <span
+            title={linha.preenchedor_nome}
+            style={{
+              fontSize: 11,
+              color: ehSentinela ? "var(--accent)" : "var(--text-2)",
+              background: ehSentinela
+                ? "rgba(201,149,58,0.10)"
+                : "rgba(255,255,255,0.04)",
+              padding: "3px 8px",
+              borderRadius: 999,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              fontWeight: 600,
+              letterSpacing: "0.02em",
+            }}
+          >
+            {ehSentinela ? "🤖" : "👤"}{" "}
+            {ehSentinela ? "Sentinela" : linha.preenchedor_nome}
+          </span>
+        ) : (
+          <span style={{ color: "var(--text-4)", fontSize: 11 }}>—</span>
+        )}
+      </td>
+      <td style={celulaStyle}>
+        {linha.investimento_real !== null
+          ? formatBRL(Number(linha.investimento_real))
+          : "—"}
+      </td>
+      <td style={celulaStyle}>
+        {linha.leads_real !== null ? formatNumero(linha.leads_real) : "—"}
+      </td>
+      <td style={celulaStyle}>
+        {linha.cpl_real !== null ? formatBRL(Number(linha.cpl_real)) : "—"}
+      </td>
+      <td style={{ ...celulaStyle, color: "var(--text-3)" }}>
+        {linha.reunioes_real !== null
+          ? formatNumero(linha.reunioes_real)
+          : "—"}
+      </td>
+      <td style={{ ...celulaStyle, color: "var(--text-3)" }}>
+        {linha.contratos_real !== null
+          ? formatNumero(linha.contratos_real)
+          : "—"}
+      </td>
+      <td style={{ ...celulaStyle, color: "var(--text-3)" }}>
+        {linha.faturamento_real !== null
+          ? formatBRL(Number(linha.faturamento_real))
+          : "—"}
+      </td>
+    </tr>
   )
 }
 
@@ -712,6 +618,16 @@ function Bolinha({ cor, pulse }: { cor: string; pulse?: boolean }) {
       }}
     />
   )
+}
+
+const celulaStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "var(--text-2)",
+  fontWeight: 400,
+  padding: "12px 14px",
+  borderBottom: "1px solid rgba(255,255,255,0.04)",
+  whiteSpace: "nowrap",
+  fontVariantNumeric: "tabular-nums",
 }
 
 /* ============ Ícones SVG inline ============ */
@@ -776,7 +692,7 @@ function IconeLeads() {
   )
 }
 
-function IconeOlho() {
+function IconeCalendario() {
   return (
     <svg
       width="18"
@@ -789,87 +705,10 @@ function IconeOlho() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  )
-}
-
-function IconeAlcance() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </svg>
-  )
-}
-
-function IconeCliques() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M9 9l3 3 3-3" />
-      <path d="M9 14l3 3 3-3" />
-      <circle cx="12" cy="12" r="10" />
-    </svg>
-  )
-}
-
-function IconeFunil() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-    </svg>
-  )
-}
-
-function IconeRepeticao() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="17 1 21 5 17 9" />
-      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-      <polyline points="7 23 3 19 7 15" />
-      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
     </svg>
   )
 }
