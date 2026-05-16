@@ -1,7 +1,8 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
-import OutrasPlataformas from "@/components/OutrasPlataformas"
+import TabsEmpresa from "@/components/TabsEmpresa"
+import KPICard from "@/components/ui/KPICard"
 import { estaAutenticado } from "@/lib/auth"
 import {
   anoValido,
@@ -11,35 +12,30 @@ import {
   subtituloDaEmpresa,
 } from "@/lib/data"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
-import {
-  contaMetaDaEmpresa,
-  metaTokenDisponivel,
-} from "@/lib/meta-accounts"
-import {
-  insightsDaCampanha,
-  listarCampanhas,
-  type InsightsCampanha,
-  type Periodo,
-} from "@/lib/meta-campaigns"
+import { getDadosReaisMes } from "@/lib/dados-reais"
+import { getDadosDiariosDoMes } from "@/lib/dados-diarios"
+import { getSupabase } from "@/lib/supabase"
 
-const PERIODOS: { chave: Periodo; label: string }[] = [
-  { chave: "hoje", label: "Hoje" },
-  { chave: "7_dias", label: "7 dias" },
-  { chave: "mes_atual", label: "Este mês" },
-  { chave: "mes_anterior", label: "Mês anterior" },
-]
-
-function periodoValido(p: string | undefined): Periodo {
-  const valido = PERIODOS.find((x) => x.chave === p)
-  return valido?.chave ?? "mes_atual"
-}
-
+/**
+ * Painel de tráfego pago da empresa. Lê 100% do Supabase:
+ *
+ *   • dados_reais (origem='pago')        → totais cumulativos do mês
+ *   • dados_diarios_log                  → deltas diários (timeline)
+ *   • tokens_meta                        → status da conexão Meta Ads
+ *                                          (preenchida pelo agente Sentinela)
+ *
+ * A escrita em dados_reais é feita pelo agente Sentinela
+ * (sistema/automação) que lê o Meta Ads via System User token e
+ * grava aqui. Por isso esta página NÃO consulta a Meta Graph API
+ * em runtime — todos os números vêm de tabelas locais, com latência
+ * controlada pelo cron do agente.
+ */
 export default async function TrafegoPage({
   params,
   searchParams,
 }: {
   params: { empresa: string }
-  searchParams: { mes?: string; ano?: string; periodo?: string }
+  searchParams: { mes?: string; ano?: string }
 }) {
   if (!estaAutenticado()) {
     redirect("/login")
@@ -50,67 +46,30 @@ export default async function TrafegoPage({
 
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
-  const periodo = periodoValido(searchParams?.periodo)
 
-  const conta = contaMetaDaEmpresa(empresa.db)
-  const temToken = metaTokenDisponivel()
+  const [real, diarios, conexao] = await Promise.all([
+    getDadosReaisMes(empresa.db, mes, ano, "pago"),
+    getDadosDiariosDoMes(empresa.db, mes, ano, "pago"),
+    buscarConexaoMeta(empresa.db),
+  ])
 
-  let mensagemErro: string | null = null
-  let campanhas: {
-    id: string
-    nome: string
-    status: string
-    objetivo: string
-    orcamentoDiario?: number
-    insights?: InsightsCampanha
-  }[] = []
-  let resumo: InsightsCampanha = {
-    spend: 0,
-    impressions: 0,
-    reach: 0,
-    clicks: 0,
-    ctr: 0,
-    leads: 0,
-    cpl: null,
-  }
+  // Métricas principais derivadas de dados_reais (origem=pago):
+  const investimento = real?.investimento_real ?? 0
+  const leads = real?.leads_real ?? 0
+  const contratos = real?.contratos_real ?? 0
+  const faturamento = real?.faturamento_real ?? 0
+  const cpl = real?.cpl_real ?? (leads > 0 ? investimento / leads : null)
+  const cpa = real?.cpa_real ?? (contratos > 0 ? investimento / contratos : null)
+  const criativosUsados = real?.criativos_usados ?? 0
+  const criativosEntregues = real?.criativos_entregues ?? 0
+  const ticketMedio = contratos > 0 ? faturamento / contratos : 0
+  const conversao = leads > 0 ? (contratos / leads) * 100 : 0
 
-  if (!temToken) {
-    mensagemErro =
-      "META_ACCESS_TOKEN ausente — defina a variável no Vercel para conectar à Meta Ads."
-  } else if (!conta) {
-    mensagemErro =
-      "Conta Meta não configurada para esta empresa. Edite lib/meta-accounts.ts."
-  } else {
-    const { data, erro } = await listarCampanhas(empresa.db)
-    if (erro) {
-      mensagemErro = erro.mensagem
-    } else if (data && data.length > 0) {
-      const comInsights = await Promise.all(
-        data.slice(0, 30).map(async (c) => {
-          const { data: ins } = await insightsDaCampanha(c.id, periodo)
-          return { ...c, insights: ins }
-        })
-      )
-      campanhas = comInsights
-      for (const c of comInsights) {
-        if (c.insights) {
-          resumo.spend += c.insights.spend
-          resumo.impressions += c.insights.impressions
-          resumo.reach += c.insights.reach
-          resumo.clicks += c.insights.clicks
-          resumo.leads += c.insights.leads
-        }
-      }
-      resumo.ctr =
-        resumo.impressions > 0
-          ? Number(((resumo.clicks / resumo.impressions) * 100).toFixed(2))
-          : 0
-      resumo.cpl =
-        resumo.leads > 0
-          ? Number((resumo.spend / resumo.leads).toFixed(2))
-          : null
-    }
-  }
+  const temDadosReais = !!real && investimento > 0
+  const criativosDetalhe = (real?.criativos_detalhe ?? []) as Array<{
+    nome?: string
+    publico?: string
+  }>
 
   return (
     <>
@@ -140,9 +99,7 @@ export default async function TrafegoPage({
               flexWrap: "wrap",
             }}
           >
-            <h1 style={{ fontSize: 36 }}>
-              Tráfego — {empresa.nome}
-            </h1>
+            <h1 style={{ fontSize: 36 }}>Tráfego pago — {empresa.nome}</h1>
             <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
           </div>
           <p
@@ -152,102 +109,219 @@ export default async function TrafegoPage({
               marginTop: 10,
             }}
           >
-            {subtituloDaEmpresa(empresa)}
+            {subtituloDaEmpresa(empresa)} · Atualizado automaticamente pelo
+            Sentinela
           </p>
+
+          <div
+            style={{
+              marginTop: 18,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <TabsEmpresa slug={empresa.slug} mes={mes} ano={ano} />
+            <StatusConexao conexao={conexao} />
+          </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <TabPlataforma ativa label="Meta Ads" />
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {PERIODOS.map((p) => (
-            <Link
-              key={p.chave}
-              href={`/dashboard/${empresa.slug}/trafego?mes=${mes}&ano=${ano}&periodo=${p.chave}`}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 999,
-                fontSize: 11,
-                fontWeight: 500,
-                letterSpacing: "0.3px",
-                background:
-                  p.chave === periodo
-                    ? "rgba(201,149,58,0.15)"
-                    : "transparent",
-                border: `0.5px solid ${
-                  p.chave === periodo ? "#C9953A" : "rgba(255,255,255,0.1)"
-                }`,
-                color: p.chave === periodo ? "#C9953A" : "rgba(255,255,255,0.45)",
-                transition: "background 0.15s ease",
-              }}
-            >
-              {p.label}
-            </Link>
-          ))}
-        </div>
-
-        {mensagemErro && (
+        {!temDadosReais && (
           <div
             style={{
-              padding: 16,
+              padding: 18,
               borderRadius: 12,
-              border: "0.5px solid rgba(226,75,74,0.35)",
-              background: "rgba(226,75,74,0.08)",
-              color: "#e24b4a",
-              fontSize: 12,
-              fontWeight: 400,
+              border: "1px solid rgba(201,149,58,0.30)",
+              background: "rgba(201,149,58,0.06)",
+              color: "var(--text-2)",
+              fontSize: 13,
+              lineHeight: 1.5,
             }}
           >
-            {mensagemErro}
+            Nenhum dado de tráfego pago neste mês ainda. O agente Sentinela
+            popula esta seção automaticamente — verifique se a empresa tem
+            token cadastrado em <strong>tokens_meta</strong> e se a última
+            execução do agente passou em <strong>logs_sentinela</strong>.
           </div>
         )}
 
+        {/* Faixa principal de KPIs */}
         <section
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
-          style={{ gap: 10 }}
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+          style={{ gap: 16 }}
         >
-          <CardResumo label="Investimento" valor={formatBRL(resumo.spend)} />
-          <CardResumo label="Leads" valor={formatNumero(resumo.leads)} />
-          <CardResumo
+          <KPICard
+            label="Investimento real"
+            valor={formatBRL(investimento)}
+            icon={<IconeMegafone />}
+            iconStatus="gold"
+            semDados={!temDadosReais}
+            destaque
+          />
+          <KPICard
+            label="Leads gerados"
+            valor={formatNumero(leads)}
+            icon={<IconeLeads />}
+            iconStatus="neutral"
+            semDados={!temDadosReais}
+          />
+          <KPICard
             label="CPL"
-            valor={resumo.cpl !== null ? formatBRL(resumo.cpl) : "—"}
+            valor={cpl !== null ? formatBRL(cpl) : "—"}
+            icon={<IconeAlvo />}
+            iconStatus={cpl !== null && cpl > 0 ? "success" : "neutral"}
+            semDados={!temDadosReais}
           />
-          <CardResumo label="Alcance" valor={formatNumero(resumo.reach)} />
-          <CardResumo
-            label="Impressões"
-            valor={formatNumero(resumo.impressions)}
+          <KPICard
+            label="CPA"
+            valor={cpa !== null ? formatBRL(cpa) : "—"}
+            icon={<IconeAlvo />}
+            iconStatus={cpa !== null && cpa > 0 ? "success" : "neutral"}
+            semDados={!temDadosReais}
+            semDadosTexto={!temDadosReais ? "—" : "Sem contratos"}
           />
-          <CardResumo label="CTR" valor={`${resumo.ctr}%`} />
+          <KPICard
+            label="Contratos fechados"
+            valor={formatNumero(contratos)}
+            icon={<IconeContrato />}
+            iconStatus={contratos > 0 ? "success" : "neutral"}
+            semDados={!temDadosReais}
+          />
+          <KPICard
+            label="Faturamento atribuído"
+            valor={formatBRL(faturamento)}
+            icon={<IconeCifrao />}
+            iconStatus={faturamento > 0 ? "success" : "neutral"}
+            semDados={!temDadosReais}
+          />
+          <KPICard
+            label="Ticket médio"
+            valor={ticketMedio > 0 ? formatBRL(ticketMedio) : "—"}
+            icon={<IconeTicket />}
+            iconStatus={ticketMedio > 0 ? "success" : "neutral"}
+            semDados={!temDadosReais}
+            semDadosTexto={!temDadosReais ? "—" : "Sem contratos"}
+          />
+          <KPICard
+            label="Conversão lead → contrato"
+            valor={leads > 0 ? `${conversao.toFixed(1)}%` : "—"}
+            icon={<IconeFunil />}
+            iconStatus={conversao > 0 ? "success" : "neutral"}
+            semDados={!temDadosReais}
+            semDadosTexto={!temDadosReais ? "—" : "Sem leads"}
+          />
         </section>
 
+        {/* Criativos do mês */}
         <section className="glass" style={{ padding: 24 }}>
-          <p
+          <div
             style={{
-              fontSize: 9,
-              letterSpacing: "2px",
-              color: "rgba(255,255,255,0.35)",
-              textTransform: "uppercase",
-              fontWeight: 500,
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
               marginBottom: 16,
             }}
           >
-            Campanhas
-          </p>
-
-          {campanhas.length === 0 ? (
+            <h2 style={{ fontSize: 18, fontWeight: 600 }}>Criativos no mês</h2>
             <p
               style={{
                 fontSize: 12,
-                color: "rgba(255,255,255,0.3)",
-                fontStyle: "italic",
-                fontWeight: 300,
+                color: "var(--text-3)",
+                fontVariantNumeric: "tabular-nums",
               }}
             >
-              {mensagemErro
-                ? "—"
-                : "Nenhuma campanha encontrada no período."}
+              {formatNumero(criativosUsados)} usados
+              {" · "}
+              {formatNumero(criativosEntregues)} entregues
+            </p>
+          </div>
+          {criativosDetalhe.length === 0 ? (
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--text-4)",
+                fontStyle: "italic",
+              }}
+            >
+              Nenhum criativo detalhado ainda neste mês.
+            </p>
+          ) : (
+            <ul
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                gap: 10,
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+              }}
+            >
+              {criativosDetalhe.map((c, idx) => (
+                <li
+                  key={`${c.nome ?? "criativo"}-${idx}`}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    background: "var(--surface-2)",
+                    border: "1px solid rgba(255,255,255,0.05)",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: 13,
+                      color: "var(--text-1)",
+                      fontWeight: 500,
+                      marginBottom: 2,
+                    }}
+                  >
+                    {c.nome ?? "Criativo sem nome"}
+                  </p>
+                  {c.publico && (
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text-3)",
+                      }}
+                    >
+                      Público: {c.publico}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Timeline diária */}
+        <section className="glass" style={{ padding: 24 }}>
+          <div style={{ marginBottom: 16 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600 }}>
+              Evolução diária
+            </h2>
+            <p
+              style={{
+                fontSize: 12,
+                color: "var(--text-3)",
+                marginTop: 4,
+              }}
+            >
+              Deltas dia a dia agregados a partir de dados_diarios_log
+            </p>
+          </div>
+          {diarios.length === 0 ? (
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--text-4)",
+                fontStyle: "italic",
+              }}
+            >
+              Nenhum movimento diário registrado no mês.
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-thin">
@@ -261,27 +335,24 @@ export default async function TrafegoPage({
                 <thead>
                   <tr>
                     {[
-                      "Nome",
-                      "Status",
-                      "Objetivo",
-                      "Orçamento/dia",
+                      "Dia",
                       "Investimento",
                       "Leads",
                       "CPL",
-                      "Alcance",
-                      "CTR",
+                      "Contratos",
+                      "Faturamento",
+                      "Criativos novos",
                     ].map((h) => (
                       <th
                         key={h}
                         style={{
-                          fontSize: 9,
-                          letterSpacing: "2px",
-                          color: "rgba(255,255,255,0.3)",
-                          textTransform: "uppercase",
-                          fontWeight: 500,
+                          fontSize: 11,
+                          color: "var(--text-3)",
+                          fontWeight: 600,
                           textAlign: "left",
                           padding: "10px 14px",
-                          borderBottom: "0.5px solid rgba(255,255,255,0.05)",
+                          borderBottom:
+                            "1px solid rgba(255,255,255,0.06)",
                           whiteSpace: "nowrap",
                         }}
                       >
@@ -291,44 +362,20 @@ export default async function TrafegoPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {campanhas.map((c) => (
-                    <tr key={c.id}>
-                      <td
-                        style={{
-                          fontSize: 13,
-                          color: "#fff",
-                          fontWeight: 500,
-                          padding: "12px 14px",
-                          borderBottom: "0.5px solid rgba(255,255,255,0.04)",
-                        }}
-                      >
-                        {c.nome}
-                      </td>
+                  {diarios.map((d) => (
+                    <tr key={d.data}>
                       <td style={celulaStyle}>
-                        <BadgeStatus status={c.status} />
+                        Dia {String(d.diaMes).padStart(2, "0")}
                       </td>
-                      <td style={celulaStyle}>{c.objetivo || "—"}</td>
+                      <td style={celulaStyle}>{formatBRL(d.investimento)}</td>
+                      <td style={celulaStyle}>{formatNumero(d.leads)}</td>
                       <td style={celulaStyle}>
-                        {c.orcamentoDiario
-                          ? formatBRL(c.orcamentoDiario)
-                          : "—"}
+                        {d.cpl !== null ? formatBRL(d.cpl) : "—"}
                       </td>
+                      <td style={celulaStyle}>{formatNumero(d.contratos)}</td>
+                      <td style={celulaStyle}>{formatBRL(d.faturamento)}</td>
                       <td style={celulaStyle}>
-                        {c.insights ? formatBRL(c.insights.spend) : "—"}
-                      </td>
-                      <td style={celulaStyle}>
-                        {c.insights ? formatNumero(c.insights.leads) : "—"}
-                      </td>
-                      <td style={celulaStyle}>
-                        {c.insights?.cpl !== null && c.insights
-                          ? formatBRL(c.insights.cpl)
-                          : "—"}
-                      </td>
-                      <td style={celulaStyle}>
-                        {c.insights ? formatNumero(c.insights.reach) : "—"}
-                      </td>
-                      <td style={celulaStyle}>
-                        {c.insights ? `${c.insights.ctr}%` : "—"}
+                        {formatNumero(d.criativosAdicionados.length)}
                       </td>
                     </tr>
                   ))}
@@ -336,10 +383,6 @@ export default async function TrafegoPage({
               </table>
             </div>
           )}
-
-          <div style={{ marginTop: 18 }}>
-            <OutrasPlataformas />
-          </div>
         </section>
       </main>
     </>
@@ -348,101 +391,224 @@ export default async function TrafegoPage({
 
 const celulaStyle: React.CSSProperties = {
   fontSize: 13,
-  color: "rgba(255,255,255,0.7)",
+  color: "var(--text-2)",
   fontWeight: 400,
   padding: "12px 14px",
-  borderBottom: "0.5px solid rgba(255,255,255,0.04)",
+  borderBottom: "1px solid rgba(255,255,255,0.04)",
   whiteSpace: "nowrap",
+  fontVariantNumeric: "tabular-nums",
 }
 
-function BadgeStatus({ status }: { status: string }) {
-  const ativa = status === "ACTIVE"
-  const cor = ativa ? "#4caf50" : "#C9953A"
-  const label = ativa ? "Ativa" : "Pausada"
+/* ============ Helpers server ============ */
+
+interface ConexaoMeta {
+  conectado: boolean
+  ad_account_id?: string
+  bm_id?: string | null
+  data_geracao?: string | null
+}
+
+async function buscarConexaoMeta(
+  empresaDb: string
+): Promise<ConexaoMeta | null> {
+  const supabase = getSupabase()
+  if (!supabase) return null
+  // Apenas consulta de leitura na coluna pública — a coluna `access_token`
+  // segue protegida por RLS (só service_role), então não vaza credenciais.
+  const { data } = await supabase
+    .from("tokens_meta")
+    .select("ad_account_id, bm_id, data_geracao, ativo")
+    .eq("empresa", empresaDb)
+    .eq("ativo", true)
+    .maybeSingle()
+  if (!data) return { conectado: false }
+  return {
+    conectado: true,
+    ad_account_id: data.ad_account_id as string,
+    bm_id: (data.bm_id as string | null) ?? null,
+    data_geracao: (data.data_geracao as string | null) ?? null,
+  }
+}
+
+/* ============ Componentes inline ============ */
+
+function StatusConexao({ conexao }: { conexao: ConexaoMeta | null }) {
+  if (!conexao || !conexao.conectado) {
+    return (
+      <span
+        style={{
+          fontSize: 11,
+          color: "var(--text-4)",
+          padding: "6px 12px",
+          borderRadius: 999,
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <Bolinha cor="var(--text-4)" />
+        Sem token Meta cadastrado
+      </span>
+    )
+  }
   return (
     <span
       style={{
-        fontSize: 10,
-        letterSpacing: "1px",
-        color: cor,
-        background: `${cor}22`,
-        border: `0.5px solid ${cor}66`,
-        borderRadius: 999,
-        padding: "2px 10px",
-        fontWeight: 500,
-        textTransform: "uppercase",
-      }}
-    >
-      {label}
-    </span>
-  )
-}
-
-function TabPlataforma({ label, ativa }: { label: string; ativa?: boolean }) {
-  const cor = ativa ? "#C9953A" : "rgba(255,255,255,0.25)"
-  return (
-    <span
-      style={{
-        padding: "6px 14px",
-        borderRadius: 8,
         fontSize: 11,
-        fontWeight: 500,
-        letterSpacing: "0.3px",
-        background: ativa ? "rgba(201,149,58,0.12)" : "transparent",
-        border: `0.5px solid ${ativa ? "#C9953A55" : "rgba(255,255,255,0.08)"}`,
-        color: cor,
+        color: "var(--success)",
+        padding: "6px 12px",
+        borderRadius: 999,
+        background: "var(--success-bg)",
+        border: "1px solid rgba(22,163,74,0.25)",
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
-        cursor: ativa ? "default" : "not-allowed",
+        gap: 8,
+        fontVariantNumeric: "tabular-nums",
       }}
     >
-      {label}
-      {!ativa && (
-        <span
-          style={{
-            fontSize: 8,
-            letterSpacing: "1px",
-            textTransform: "uppercase",
-            background: "rgba(255,255,255,0.06)",
-            padding: "2px 6px",
-            borderRadius: 999,
-            color: "rgba(255,255,255,0.35)",
-          }}
-        >
-          Em breve
-        </span>
-      )}
+      <Bolinha cor="var(--success)" pulse />
+      Sentinela conectado · {conexao.ad_account_id}
     </span>
   )
 }
 
-function CardResumo({ label, valor }: { label: string; valor: string }) {
+function Bolinha({ cor, pulse }: { cor: string; pulse?: boolean }) {
   return (
-    <div className="glass" style={{ padding: "14px 18px" }}>
-      <p
-        style={{
-          fontSize: 9,
-          letterSpacing: "2px",
-          color: "rgba(255,255,255,0.35)",
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        {label}
-      </p>
-      <p
-        style={{
-          fontSize: 20,
-          color: "#ffffff",
-          fontWeight: 600,
-          marginTop: 6,
-          lineHeight: 1.1,
-          letterSpacing: "-0.3px",
-        }}
-      >
-        {valor}
-      </p>
-    </div>
+    <span
+      aria-hidden="true"
+      style={{
+        width: 6,
+        height: 6,
+        borderRadius: "50%",
+        background: cor,
+        boxShadow: pulse ? `0 0 0 0 ${cor}` : undefined,
+        animation: pulse ? "pulseGold 2s ease-in-out infinite" : undefined,
+      }}
+    />
+  )
+}
+
+/* ============ Ícones SVG inline ============ */
+
+function IconeCifrao() {
+  return <span style={{ fontSize: 14, fontWeight: 700 }}>$</span>
+}
+
+function IconeMegafone() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  )
+}
+
+function IconeAlvo() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  )
+}
+
+function IconeLeads() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 11l-3-3 3-3" />
+    </svg>
+  )
+}
+
+function IconeContrato() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <polyline points="9 15 11 17 15 13" />
+    </svg>
+  )
+}
+
+function IconeTicket() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <line x1="7" y1="7" x2="7.01" y2="7" />
+    </svg>
+  )
+}
+
+function IconeFunil() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
   )
 }

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
+import TabsEmpresa from "@/components/TabsEmpresa"
 import CenarioReal from "@/components/CenarioReal"
 import DrawerEditarMeta from "@/components/DrawerEditarMeta"
 import GraficoFaturamento from "@/components/GraficoFaturamento"
@@ -162,7 +163,22 @@ export default async function EmpresaPage({
             )}
           </div>
           {empresa.tipo !== "diego" && (
-            <div style={{ marginTop: 14 }}>
+            <div
+              style={{
+                marginTop: 18,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <TabsEmpresa
+                slug={empresa.slug}
+                mes={mes}
+                ano={ano}
+                origem={origem}
+              />
               <ToggleOrigem origem={origem} />
             </div>
           )}
