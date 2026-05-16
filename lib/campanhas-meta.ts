@@ -1,4 +1,7 @@
-"use server"
+// Sem "use server": o arquivo mistura uma função de leitura async
+// (consumida por Server Components) com helpers de agregação puros
+// e síncronos. "use server" obrigaria TODOS os exports a serem async
+// server actions, o que quebraria a build do Next 14.
 
 import { getSupabase } from "./supabase"
 import type { EmpresaDb, Mes } from "./data"
