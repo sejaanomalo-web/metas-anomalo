@@ -529,6 +529,26 @@ table {
   }
 }
 
+/* ============ Painel de notificações (sino) ============
+ * Desktop: drawer 400px à direita, full-height.
+ * Mobile: bottom-sheet full-screen, ocupa tudo pra ficar legível.
+ * z-index 201 cobre rail (max 50), hambúrguer (60) e backdrop (40).
+ */
+.painel-notif {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  max-width: 100vw;
+}
+
+@media (max-width: 767px) {
+  .painel-notif {
+    width: 100vw;
+    left: 0;
+  }
+}
+
 /* ============ Gold divider — linha premium entre hero e conteúdo ============
  * Gradiente que começa em ouro pleno e some no nada, com um sutil
  * glow ao redor pra dar profundidade. Usado entre o título da página e

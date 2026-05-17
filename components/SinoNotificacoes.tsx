@@ -7,6 +7,7 @@ import {
   marcarTodasComoLidasAction,
 } from "@/lib/notificacoes-actions"
 import type { NotificacaoItem } from "@/lib/notificacoes"
+import { useSidebar } from "./AppShell"
 
 /**
  * Sino global de notificações. Renderizado no rail do AppShell (via prop).
@@ -32,6 +33,20 @@ export default function SinoNotificacoes({
   const [itens, setItens] = useState(inicial.itens)
   const [aberto, setAberto] = useState(false)
   const [, startTransition] = useTransition()
+  const { setExpandido } = useSidebar()
+
+  function abrirPainel() {
+    // No mobile, fecha o drawer do rail pra não ficar layer atrás do
+    // painel (UX mais limpa: ao fechar o painel, usuário volta direto
+    // pro conteúdo, sem o rail aberto).
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 1023px)").matches
+    ) {
+      setExpandido(false)
+    }
+    setAberto(true)
+  }
 
   // Polling de 30s. Não pinga quando aba está em background pra
   // economizar request — pega só quando volta o foco.
@@ -95,7 +110,7 @@ export default function SinoNotificacoes({
     <>
       <button
         type="button"
-        onClick={() => setAberto((v) => !v)}
+        onClick={() => (aberto ? setAberto(false) : abrirPainel())}
         title={!expandido ? "Notificações" : undefined}
         aria-label="Notificações"
         className="hover:bg-[var(--surface-2)] no-ds"
@@ -207,13 +222,18 @@ function PainelNotificacoes({
   onMarcarTodas: () => void
   temNaoLidas: boolean
 }) {
-  // ESC fecha
+  // ESC fecha + bloqueia scroll do body enquanto aberto
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onFechar()
     }
     document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
+    const overflowAntes = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      document.body.style.overflow = overflowAntes
+    }
   }, [onFechar])
 
   return (
@@ -222,31 +242,27 @@ function PainelNotificacoes({
         type="button"
         onClick={onFechar}
         aria-label="Fechar painel"
-        className="no-ds"
+        className="no-ds painel-notif-backdrop"
         style={{
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.45)",
+          background: "rgba(0,0,0,0.55)",
           border: "none",
           padding: 0,
           cursor: "default",
-          zIndex: 60,
+          zIndex: 200,
         }}
       />
       <aside
         role="dialog"
         aria-label="Notificações"
-        className="glass"
+        className="painel-notif"
         style={{
           position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: "min(400px, 100vw)",
-          zIndex: 61,
+          zIndex: 201,
           display: "flex",
           flexDirection: "column",
-          borderRadius: 0,
+          background: "var(--surface-1)",
           borderLeft: "0.5px solid rgba(255,255,255,0.08)",
         }}
       >
@@ -255,11 +271,13 @@ function PainelNotificacoes({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "20px 22px 14px",
+            padding: "20px 20px 14px",
+            paddingTop: "max(20px, env(safe-area-inset-top))",
             borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+            flexShrink: 0,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <p
               style={{
                 fontSize: 10,
@@ -285,7 +303,7 @@ function PainelNotificacoes({
                 : `${itens.length} ${itens.length === 1 ? "evento" : "eventos"}`}
             </h2>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             {temNaoLidas && (
               <button
                 type="button"
@@ -293,7 +311,7 @@ function PainelNotificacoes({
                 title="Marcar todas como lidas"
                 className="no-ds hover:text-[var(--accent)]"
                 style={{
-                  padding: "6px 10px",
+                  padding: "8px 12px",
                   fontSize: 10,
                   letterSpacing: "0.8px",
                   textTransform: "uppercase",
@@ -303,6 +321,7 @@ function PainelNotificacoes({
                   borderRadius: 6,
                   cursor: "pointer",
                   fontWeight: 500,
+                  whiteSpace: "nowrap",
                 }}
               >
                 Marcar todas
@@ -314,15 +333,15 @@ function PainelNotificacoes({
               aria-label="Fechar"
               className="no-ds hover:text-[var(--text-1)]"
               style={{
-                width: 30,
-                height: 30,
+                width: 36,
+                height: 36,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background: "transparent",
+                background: "rgba(255,255,255,0.04)",
                 border: "none",
-                borderRadius: 6,
-                color: "var(--text-3)",
+                borderRadius: 8,
+                color: "var(--text-2)",
                 cursor: "pointer",
               }}
             >
@@ -331,17 +350,27 @@ function PainelNotificacoes({
           </div>
         </header>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            padding: "12px 14px",
+            paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+          }}
+        >
           {itens.length === 0 ? (
             <EmptyState />
           ) : (
-            itens.map((n) => (
-              <ItemNotificacao
-                key={n.id}
-                notificacao={n}
-                onMarcarLida={() => onMarcarLida(n.id)}
-              />
-            ))
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {itens.map((n) => (
+                <ItemNotificacao
+                  key={n.id}
+                  notificacao={n}
+                  onMarcarLida={() => onMarcarLida(n.id)}
+                />
+              ))}
+            </div>
           )}
         </div>
       </aside>
@@ -357,83 +386,160 @@ function ItemNotificacao({
   onMarcarLida: () => void
 }) {
   const naoLida = n.lida_em == null
+  const [deltaX, setDeltaX] = useState(0)
+  const [saindo, setSaindo] = useState(false)
+  const inicioX = useRef<number | null>(null)
+  const arrastando = useRef(false)
+
+  const LIMITE_DISMISS = 100 // px de arrasto pra dispensar
+
+  function onTouchStart(e: React.TouchEvent) {
+    inicioX.current = e.touches[0].clientX
+    arrastando.current = false
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    if (inicioX.current == null) return
+    const dx = e.touches[0].clientX - inicioX.current
+    // Pequeno deadzone pra distinguir tap de swipe
+    if (Math.abs(dx) > 6) arrastando.current = true
+    // Permite arrastar nos dois sentidos com resistência
+    setDeltaX(dx)
+  }
+
+  function onTouchEnd() {
+    inicioX.current = null
+    if (Math.abs(deltaX) >= LIMITE_DISMISS) {
+      // Dispensa: anima pra fora e marca como lida
+      setSaindo(true)
+      setDeltaX(deltaX > 0 ? 400 : -400)
+      setTimeout(onMarcarLida, 180)
+    } else {
+      // Volta pra posição
+      setDeltaX(0)
+    }
+  }
+
+  function onClick() {
+    if (arrastando.current) return // não dispara click após swipe
+    if (naoLida) onMarcarLida()
+  }
+
+  const opacity = saindo ? 0 : 1 - Math.min(0.5, Math.abs(deltaX) / 400)
+
   return (
-    <button
-      type="button"
-      onClick={naoLida ? onMarcarLida : undefined}
-      className="no-ds hover:bg-[var(--surface-2)]"
+    <div
       style={{
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        padding: "14px 22px",
-        background: naoLida ? "rgba(201,149,58,0.04)" : "transparent",
-        border: "none",
-        borderBottom: "0.5px solid rgba(255,255,255,0.04)",
-        cursor: naoLida ? "pointer" : "default",
-        fontFamily: "inherit",
-        color: "inherit",
         position: "relative",
-        transition: "background 0.15s ease",
+        overflow: "hidden",
+        borderRadius: 14,
       }}
     >
-      {naoLida && (
-        <span
-          aria-hidden="true"
+      {/* Fundo revelado durante swipe — indica "dispensar" */}
+      {Math.abs(deltaX) > 6 && (
+        <div
           style={{
             position: "absolute",
-            left: 8,
-            top: 22,
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            background: "var(--accent)",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: deltaX > 0 ? "flex-start" : "flex-end",
+            padding: "0 22px",
+            background:
+              Math.abs(deltaX) >= LIMITE_DISMISS
+                ? "rgba(76,175,80,0.18)"
+                : "rgba(255,255,255,0.04)",
+            color:
+              Math.abs(deltaX) >= LIMITE_DISMISS
+                ? "#4caf50"
+                : "var(--text-3)",
+            fontSize: 11,
+            letterSpacing: "0.8px",
+            textTransform: "uppercase",
+            fontWeight: 600,
+            transition: "background 0.15s ease",
+            pointerEvents: "none",
           }}
-        />
+        >
+          {Math.abs(deltaX) >= LIMITE_DISMISS ? "Solte pra dispensar" : "Dispensar"}
+        </div>
       )}
-      <div
+
+      <button
+        type="button"
+        onClick={onClick}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        className="no-ds"
         style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: 8,
+          display: "block",
+          width: "100%",
+          textAlign: "left",
+          padding: "14px 16px",
+          background: naoLida
+            ? "linear-gradient(180deg, rgba(201,149,58,0.10), rgba(201,149,58,0.04))"
+            : "var(--surface-2)",
+          border: naoLida
+            ? "0.5px solid rgba(201,149,58,0.35)"
+            : "0.5px solid rgba(255,255,255,0.06)",
+          borderRadius: 14,
+          cursor: naoLida ? "pointer" : "default",
+          fontFamily: "inherit",
+          color: "inherit",
+          position: "relative",
+          transform: `translateX(${deltaX}px)`,
+          opacity,
+          transition: arrastando.current
+            ? "none"
+            : "transform 0.2s ease, opacity 0.2s ease",
+          touchAction: "pan-y",
         }}
       >
-        <span
+        <div
           style={{
-            fontSize: 13,
-            fontWeight: naoLida ? 600 : 500,
-            color: naoLida ? "var(--text-1)" : "var(--text-2)",
-            letterSpacing: "-0.01em",
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            gap: 8,
           }}
         >
-          {n.titulo}
-        </span>
-        <time
-          dateTime={n.criada_em}
+          <span
+            style={{
+              fontSize: 14,
+              fontWeight: naoLida ? 600 : 500,
+              color: naoLida ? "var(--text-1)" : "var(--text-2)",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {n.titulo}
+          </span>
+          <time
+            dateTime={n.criada_em}
+            style={{
+              fontSize: 10,
+              color: "var(--text-4)",
+              whiteSpace: "nowrap",
+              fontVariantNumeric: "tabular-nums",
+              flexShrink: 0,
+            }}
+          >
+            {tempoRelativo(n.criada_em)}
+          </time>
+        </div>
+        <p
           style={{
-            fontSize: 10,
-            color: "var(--text-4)",
-            whiteSpace: "nowrap",
-            fontVariantNumeric: "tabular-nums",
-            flexShrink: 0,
+            fontSize: 12.5,
+            color: naoLida ? "var(--text-2)" : "var(--text-3)",
+            marginTop: 6,
+            fontWeight: 400,
+            lineHeight: 1.5,
           }}
         >
-          {tempoRelativo(n.criada_em)}
-        </time>
-      </div>
-      <p
-        style={{
-          fontSize: 12,
-          color: "var(--text-3)",
-          marginTop: 4,
-          fontWeight: 400,
-          lineHeight: 1.5,
-        }}
-      >
-        {n.mensagem}
-      </p>
-    </button>
+          {n.mensagem}
+        </p>
+      </button>
+    </div>
   )
 }
 

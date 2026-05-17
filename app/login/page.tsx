@@ -1,6 +1,6 @@
 import Image from "next/image"
 import { redirect } from "next/navigation"
-import logo from "@/public/logo-anomalo.png"
+import logo from "@/public/logo-capa-app.png"
 import { estaAutenticado } from "@/lib/auth"
 import { entrarAction } from "./actions"
 
