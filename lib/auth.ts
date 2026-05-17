@@ -1,6 +1,6 @@
 import { cookies } from "next/headers"
 import { createHmac, scryptSync, timingSafeEqual } from "crypto"
-import { getSupabase } from "./supabase"
+import { getSupabaseAdmin } from "./supabase"
 
 export const COOKIE_SESSAO = "anomalo_session"
 const DURACAO_SESSAO_SEG = 60 * 60 * 12 // 12h
@@ -83,7 +83,7 @@ export interface UsuarioSessao {
 export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
   const usuarioId = getUsuarioIdSync()
   if (!usuarioId) return null
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return null
   const { data } = await supabase
     .from("usuarios")
@@ -117,7 +117,7 @@ export async function validarLogin(
   senha: string
 ): Promise<string | null> {
   if (!email || !senha) return null
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return null
   const { data, error } = await supabase
     .from("usuarios")

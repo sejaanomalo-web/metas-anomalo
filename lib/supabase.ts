@@ -91,6 +91,7 @@ export interface DadosDiariosLog {
 }
 
 let cliente: SupabaseClient | null = null
+let clienteAdmin: SupabaseClient | null = null
 
 export function getSupabase(): SupabaseClient | null {
   if (cliente) return cliente
@@ -101,6 +102,24 @@ export function getSupabase(): SupabaseClient | null {
     auth: { persistSession: false },
   })
   return cliente
+}
+
+/**
+ * Client com service_role key — bypassa RLS. Use apenas em server-side
+ * para ler tabelas sensíveis (usuarios.senha_hash, tokens_meta, etc.)
+ * onde RLS não tem policy permissiva pro anon. Nunca expor no client.
+ *
+ * Requer env SUPABASE_SERVICE_ROLE_KEY (sem prefixo NEXT_PUBLIC).
+ */
+export function getSupabaseAdmin(): SupabaseClient | null {
+  if (clienteAdmin) return clienteAdmin
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  clienteAdmin = createClient(url, key, {
+    auth: { persistSession: false },
+  })
+  return clienteAdmin
 }
 
 export function supabaseConfigurado(): boolean {

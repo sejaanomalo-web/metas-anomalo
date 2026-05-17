@@ -1,5 +1,6 @@
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import FormConfig from "@/components/FormConfig"
+import AtivarNotificacoes from "@/components/AtivarNotificacoes"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
 import {
   montarResumoDiario,
@@ -61,6 +62,10 @@ export default async function ConfiguracoesPage({
           </p>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
+
+        <AtivarNotificacoes
+          vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
+        />
 
         <FormConfig
           mensagemDiario={mensagemDiario}

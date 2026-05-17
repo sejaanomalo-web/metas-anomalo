@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getSupabase } from "./supabase"
+import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioIdSync } from "./auth"
 import { getNotificacoesDaSessao, type NotificacaoItem } from "./notificacoes"
 
@@ -10,7 +10,7 @@ export async function marcarComoLidaAction(formData: FormData) {
   if (!usuarioId) return
   const id = String(formData.get("id") ?? "").trim()
   if (!id) return
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return
   const { error } = await supabase
     .from("notificacoes_usuario")
@@ -27,7 +27,7 @@ export async function marcarComoLidaAction(formData: FormData) {
 export async function marcarTodasComoLidasAction() {
   const usuarioId = getUsuarioIdSync()
   if (!usuarioId) return
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return
   const { error } = await supabase
     .from("notificacoes_usuario")

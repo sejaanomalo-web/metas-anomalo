@@ -1,4 +1,4 @@
-import { getSupabase } from "./supabase"
+import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioIdSync } from "./auth"
 
 export type TipoNotificacao = "nova_venda" | "lembrete"
@@ -23,7 +23,7 @@ export async function listarNotificacoesDoUsuario(
   usuarioId: string,
   limite = 20
 ): Promise<NotificacaoItem[]> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return []
   const { data, error } = await supabase
     .from("notificacoes_usuario")
@@ -71,7 +71,7 @@ export async function listarNotificacoesDoUsuario(
  * Conta quantas notificações ainda não lidas o usuário tem.
  */
 export async function contarNaoLidas(usuarioId: string): Promise<number> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return 0
   const { count, error } = await supabase
     .from("notificacoes_usuario")

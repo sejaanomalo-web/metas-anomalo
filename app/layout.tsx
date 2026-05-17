@@ -4,6 +4,19 @@ import "./globals.css"
 export const metadata: Metadata = {
   title: "Anômalo Hub — Painel de Metas",
   description: "Painel interno de metas e funil de vendas do Grupo Anômalo Hub.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Anômalo",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 }
 
 export const viewport: Viewport = {
@@ -12,6 +25,7 @@ export const viewport: Viewport = {
   minimumScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#c9953a",
 }
 
 export default function RootLayout({
