@@ -354,7 +354,7 @@ export default async function TrafegoPage({
                       "Reuniões",
                       "Contratos",
                       "Faturamento",
-                    ].map((h) => (
+                    ].map((h, idx) => (
                       <th
                         key={h}
                         style={{
@@ -366,6 +366,11 @@ export default async function TrafegoPage({
                           borderBottom:
                             "1px solid rgba(255,255,255,0.06)",
                           whiteSpace: "nowrap",
+                          // Primeira coluna fica fixa ao rolar horizontalmente
+                          // (relevante no celular onde a tabela transborda).
+                          // Background sólido + box-shadow à direita pra
+                          // separar visualmente das colunas que rolam atrás.
+                          ...(idx === 0 ? colunaFixaEstilo : undefined),
                         }}
                       >
                         {h}
@@ -539,7 +544,7 @@ function LinhaTabela({ linha }: { linha: LinhaDoMes }) {
   const dia = linha.data.slice(8, 10)
   return (
     <tr>
-      <td style={celulaStyle}>
+      <td style={{ ...celulaStyle, ...colunaFixaEstilo }}>
         Dia {dia}
         {parcial && (
           <span
@@ -639,6 +644,21 @@ const celulaStyle: React.CSSProperties = {
   borderBottom: "1px solid rgba(255,255,255,0.04)",
   whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
+}
+
+/** Fixa a coluna "Dia" da tabela ao rolar horizontalmente.
+ *  Necessário no celular onde a tabela transborda — sem isso o
+ *  usuário perde o contexto do dia ao olhar valores à direita.
+ *  Background sólido cobre o conteúdo que rola atrás e o box-shadow
+ *  cria uma borda visual sutil indicando que tem mais coluna fora
+ *  do viewport. Idempotente no desktop (não há scroll, sticky vira
+ *  static visualmente). */
+const colunaFixaEstilo: React.CSSProperties = {
+  position: "sticky",
+  left: 0,
+  background: "var(--surface-1)",
+  zIndex: 1,
+  boxShadow: "2px 0 8px rgba(0,0,0,0.25)",
 }
 
 /* ============ Ícones SVG inline ============ */
