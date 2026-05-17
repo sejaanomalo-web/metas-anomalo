@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { criarSessao, destruirSessao, validarSenha } from "@/lib/auth"
+import { criarSessao, destruirSessao, validarLogin } from "@/lib/auth"
 import { getSupabase } from "@/lib/supabase"
 
 const LIMITE_TENTATIVAS = 5
@@ -45,6 +45,7 @@ async function registrarTentativa(ip: string, sucesso: boolean) {
 }
 
 export async function entrarAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "")
   const senha = String(formData.get("senha") ?? "")
   const ip = ipDoRequest()
 
@@ -52,13 +53,14 @@ export async function entrarAction(formData: FormData) {
     redirect("/login?erro=bloqueado")
   }
 
-  if (!validarSenha(senha)) {
+  const usuarioId = await validarLogin(email, senha)
+  if (!usuarioId) {
     await registrarTentativa(ip, false)
     redirect("/login?erro=1")
   }
 
   await registrarTentativa(ip, true)
-  criarSessao()
+  criarSessao(usuarioId)
   redirect("/dashboard")
 }
 

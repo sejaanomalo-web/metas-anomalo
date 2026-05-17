@@ -64,12 +64,43 @@ export default function LoginPage({
                 fontWeight: 500,
               }}
             >
-              Senha de acesso
+              E-mail
+            </span>
+            <input
+              type="email"
+              name="email"
+              autoComplete="username"
+              autoFocus
+              required
+              inputMode="email"
+              className="glass-input"
+              style={{
+                marginTop: 10,
+                width: "100%",
+                padding: "12px 14px",
+                fontSize: 14,
+                fontWeight: 400,
+              }}
+              placeholder="voce@anomalo.com"
+            />
+          </label>
+
+          <label className="block" style={{ marginTop: 14 }}>
+            <span
+              style={{
+                fontSize: 9,
+                letterSpacing: "2px",
+                color: "rgba(255,255,255,0.35)",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
+              Senha
             </span>
             <input
               type="password"
               name="senha"
-              autoFocus
+              autoComplete="current-password"
               required
               className="glass-input"
               style={{
@@ -85,7 +116,7 @@ export default function LoginPage({
 
           {comErro && (
             <p style={{ fontSize: 12, color: "#e24b4a", marginTop: 12 }}>
-              Senha incorreta. Tente novamente.
+              E-mail ou senha inválidos.
             </p>
           )}
           {bloqueado && (
