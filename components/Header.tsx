@@ -1,8 +1,7 @@
 /**
  * Top bar minimalista que algumas páginas internas (/dashboard/[empresa],
- * comissionamento, configuracoes, etc.) ainda usam pra ancorar o
- * SeletorPeriodo. Não mostra logo nem ações — a navegação inteira
- * vive no rail (AppShell).
+ * configuracoes, etc.) ainda usam pra ancorar o SeletorPeriodo. Não
+ * mostra logo nem ações — a navegação inteira vive no rail (AppShell).
  *
  * /dashboard e /dashboard/empresas não usam mais este componente —
  * elas embutem o SeletorPeriodo direto no hero da página, sem cabeçalho

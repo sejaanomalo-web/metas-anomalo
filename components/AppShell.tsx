@@ -17,8 +17,9 @@ import { sairAction } from "@/app/login/actions"
  *     hambúrguer com logo no canto superior esquerdo abre o drawer.
  *     Backdrop atrás do drawer fecha ao clicar.
  *
- * Items do rail: Dashboard, Empresas, Time, Configurações, Sair.
- * Time é link direto pra /dashboard/time (sem sub-itens no rail).
+ * Items do rail: Dashboard, Empresas, Formulários, Configurações, Sair.
+ * Formulários é link direto pra /dashboard/preenchedores (gestão dos
+ * preenchedores de gestor de tráfego e SDR).
  *
  * Indicador de rota ativa: barra vertical ouro à esquerda do item +
  * ícone em ouro + texto em text-1. Calculado via usePathname.
@@ -49,8 +50,6 @@ const RAIL_EXPANDED = 240
 const ROTAS_NAO_EMPRESA = new Set([
   "/dashboard",
   "/dashboard/empresas",
-  "/dashboard/time",
-  "/dashboard/comissionamento",
   "/dashboard/preenchedores",
   "/dashboard/configuracoes",
 ])
@@ -162,10 +161,7 @@ function SidebarRail({
 
   const dashboardAtivo = pathname === "/dashboard"
   const empresasAtivo = ehRotaEmpresa(pathname)
-  const timeAtivo =
-    pathname === "/dashboard/time" ||
-    pathname === "/dashboard/comissionamento" ||
-    pathname === "/dashboard/preenchedores"
+  const formulariosAtivo = pathname === "/dashboard/preenchedores"
   const configAtivo = pathname === "/dashboard/configuracoes"
 
   return (
@@ -207,11 +203,11 @@ function SidebarRail({
           ativo={empresasAtivo}
         />
         <ItemMenu
-          icon={<IconeTime />}
-          rotulo="Time"
-          href="/dashboard/time"
+          icon={<IconeFormularios />}
+          rotulo="Formulários"
+          href="/dashboard/preenchedores"
           expandido={expandido}
-          ativo={timeAtivo}
+          ativo={formulariosAtivo}
         />
       </nav>
 
@@ -452,7 +448,7 @@ function IconeEmpresas() {
   )
 }
 
-function IconeTime() {
+function IconeFormularios() {
   return (
     <svg
       width="20"
@@ -465,10 +461,10 @@ function IconeTime() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="13" y2="17" />
     </svg>
   )
 }

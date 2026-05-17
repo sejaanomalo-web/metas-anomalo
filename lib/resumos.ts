@@ -15,7 +15,6 @@ import {
   getDadosReaisDoMes,
 } from "./dados-reais"
 import { getDeltasDoPeriodo } from "./dados-diarios"
-import { getComissionamentoMes } from "./comissionamento-actions"
 import { listarEmpresas } from "./empresas-actions"
 import { getOverridesTodasEmpresasMes } from "./metas-empresa"
 
@@ -275,7 +274,6 @@ export async function montarResumoSemanal(
 
   const { empresas, overridesMes } = await carregarContexto(mes, ano)
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
-  const comissoes = await getComissionamentoMes(mes, ano)
 
   // Deltas da semana — só o que foi reportado de segunda a hoje
   const inicioISO = isoDate(inicioSemana)
@@ -347,28 +345,6 @@ export async function montarResumoSemanal(
     linhas.push("Nenhuma empresa reportou nesta semana ainda.")
   }
 
-  linhas.push("")
-  linhas.push(`💼 *COMISSIONAMENTO ESTIMADO (acumulado do mês)*`)
-  const felipe = comissoes.find((c) => c.colaborador === "felipe")
-  const vinicius = comissoes.find((c) => c.colaborador === "vinicius")
-  const emanuel = comissoes.find((c) => c.colaborador === "emanuel")
-  const gatilhosFelipe = felipe?.detalhes
-    ? Object.values(felipe.detalhes).filter(Boolean).length
-    : 0
-  linhas.push(
-    `• Felipe: ${formatBRL(felipe?.bonus_calculado ?? 0)} (${gatilhosFelipe}/4 gatilhos)`
-  )
-  linhas.push(
-    `• Vinicius: ${formatBRL(vinicius?.bonus_calculado ?? 0)} (${
-      vinicius?.entregas_validas ?? 0
-    } entregas)`
-  )
-  linhas.push(
-    `• Emanuel: ${formatBRL(emanuel?.bonus_calculado ?? 0)} (${
-      emanuel?.entregas_validas ?? 0
-    } entregas)`
-  )
-
   if (linkFormulario) {
     linhas.push("")
     linhas.push(`📝 *INSERIR DADOS DA SEMANA*`)
@@ -385,15 +361,11 @@ export async function montarResumoMensal(): Promise<string> {
   const mesAnteriorIdx = MESES.indexOf(mes) - 1
   const mesAnterior = mesAnteriorIdx >= 0 ? MESES[mesAnteriorIdx] : null
 
-  // Carrega tudo em paralelo: mes atual, mes anterior (se houver) e
-  // comissionamento. Antes era N+1 — uma chamada de getDadosReais por
-  // empresa por origem dentro do loop.
-  const [reaisDoMes, reaisMesAnterior, comissoes] = await Promise.all([
+  const [reaisDoMes, reaisMesAnterior] = await Promise.all([
     getDadosReaisDoMes(mes, ano),
     mesAnterior
       ? getDadosReaisDoMes(mesAnterior, ano)
       : Promise.resolve(new Map<string, DadosReaisPorOrigem>()),
-    getComissionamentoMes(mes, ano),
   ])
 
   const { somaFat, somaInv, somaLeads, somaReunioes, somaContratos } =
@@ -446,14 +418,6 @@ export async function montarResumoMensal(): Promise<string> {
   const cpl = somaLeads > 0 ? somaInv / somaLeads : 0
   const cpa = somaContratos > 0 ? somaInv / somaContratos : 0
 
-  const felipe = comissoes.find((c) => c.colaborador === "felipe")
-  const vinicius = comissoes.find((c) => c.colaborador === "vinicius")
-  const emanuel = comissoes.find((c) => c.colaborador === "emanuel")
-  const totalComissao =
-    (felipe?.bonus_calculado ?? 0) +
-    (vinicius?.bonus_calculado ?? 0) +
-    (emanuel?.bonus_calculado ?? 0)
-
   const linhas: string[] = [
     `🛒 *FECHAMENTO - Anômalo Hub*`,
     `📅 ${mes} ${ano}`,
@@ -494,12 +458,6 @@ export async function montarResumoMensal(): Promise<string> {
     )
   }
 
-  linhas.push("")
-  linhas.push(`💼 *COMISSIONAMENTO FINAL*`)
-  linhas.push(`• Felipe: ${formatBRL(felipe?.bonus_calculado ?? 0)}`)
-  linhas.push(`• Vinicius: ${formatBRL(vinicius?.bonus_calculado ?? 0)}`)
-  linhas.push(`• Emanuel: ${formatBRL(emanuel?.bonus_calculado ?? 0)}`)
-  linhas.push(`• Total: ${formatBRL(totalComissao)}`)
   linhas.push("")
   linhas.push("_Bom trabalho a todos._")
 

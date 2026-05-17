@@ -25,14 +25,14 @@ export default function FormConfig({
 
       <SecaoResumo
         titulo="Resumo semanal"
-        legenda="📊 Consolidado da semana + comissionamento estimado. Inclui link para o formulário de dados da semana."
+        legenda="📊 Consolidado da semana com funil, eficiência e movimento por empresa. Inclui link para o formulário de dados da semana."
         mensagem={mensagemSemanal}
         tipo="semanal"
       />
 
       <SecaoResumo
         titulo="Resumo mensal"
-        legenda="🏆 Fechamento do mês: metas por empresa, tráfego pago e comissionamento final com destaques."
+        legenda="🏆 Fechamento do mês: metas por empresa, tráfego pago e destaques de performance."
         mensagem={mensagemMensal}
         tipo="mensal"
       />
