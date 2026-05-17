@@ -6,6 +6,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import logo from "@/public/logo-anomalo.png"
 import { sairAction } from "@/app/login/actions"
+import SinoNotificacoes from "./SinoNotificacoes"
+import type { NotificacaoItem } from "@/lib/notificacoes"
 
 /**
  * Shell global de /dashboard/*:
@@ -64,7 +66,13 @@ function ehRotaEmpresa(pathname: string): boolean {
   return !ROTAS_NAO_EMPRESA.has(rotaBase)
 }
 
-export default function AppShell({ children }: { children: ReactNode }) {
+export default function AppShell({
+  children,
+  notificacoesIniciais,
+}: {
+  children: ReactNode
+  notificacoesIniciais: { count: number; itens: NotificacaoItem[] }
+}) {
   const [expandido, setExpandido] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   const pathname = usePathname()
@@ -132,7 +140,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
         />
       )}
 
-      <SidebarRail expandido={hydrated ? expandido : false} onToggle={toggle} />
+      <SidebarRail
+        expandido={hydrated ? expandido : false}
+        onToggle={toggle}
+        notificacoesIniciais={notificacoesIniciais}
+      />
 
       <div
         className="app-main"
@@ -152,9 +164,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
 function SidebarRail({
   expandido,
   onToggle,
+  notificacoesIniciais,
 }: {
   expandido: boolean
   onToggle: () => void
+  notificacoesIniciais: { count: number; itens: NotificacaoItem[] }
 }) {
   const pathname = usePathname()
   const width = expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
@@ -211,7 +225,7 @@ function SidebarRail({
         />
       </nav>
 
-      {/* Rodapé: Configurações + Sair */}
+      {/* Rodapé: Notificações + Configurações + Sair */}
       <div
         style={{
           display: "flex",
@@ -221,6 +235,10 @@ function SidebarRail({
           borderTop: "1px solid rgba(255,255,255,0.06)",
         }}
       >
+        <SinoNotificacoes
+          expandido={expandido}
+          inicial={notificacoesIniciais}
+        />
         <ItemMenu
           icon={<IconeConfig />}
           rotulo="Configurações"
