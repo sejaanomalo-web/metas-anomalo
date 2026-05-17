@@ -54,18 +54,49 @@ export interface IdentidadeEscrita {
   nome: string
 }
 
+/** Resolve nome canônico da empresa a partir do db slug. Hardcoded
+ *  lookup primeiro (O(1)); fallback em empresas_config pra empresas
+ *  adicionadas via UI (IBB, Mãe Divina Yoga, etc.). Último fallback:
+ *  retorna o próprio slug. */
+async function resolverNomeEmpresa(empresaDb: string): Promise<string> {
+  const local = getEmpresaPorDb(empresaDb)
+  if (local) return local.nome
+  const supabase = getSupabase()
+  if (supabase) {
+    const { data } = await supabase
+      .from("empresas_config")
+      .select("nome")
+      .eq("db", empresaDb)
+      .maybeSingle()
+    if (data?.nome) return String(data.nome)
+  }
+  return empresaDb
+}
+
 /**
- * Helper único de escrita em dados_reais. Garante atomicidade lógica
- * entre o estado mensal (dados_reais) e a trilha de auditoria
- * (dados_diarios_log):
- *   1. Lê o estado anterior daquela linha
- *   2. Faz upsert do novo estado
- *   3. Registra delta no log com identidade do preenchedor
+ * Helper único de escrita em dados_reais (estado mensal) +
+ * dados_diarios_log (trilha diária). Garante consistência lógica
+ * entre os dois universos:
  *
- * Toda escrita em dados_reais que vier do app deve passar por aqui —
- * isso evita divergência entre o dashboard (que lê dados_reais) e os
- * resumos diário/semanal (que somam deltas do log). Se for adicionar
- * uma terceira action que escreve em dados_reais, use esta helper.
+ *   1. Resolve empresa.nome a partir do slug (Sentinela usa o nome
+ *      canônico em dados_diarios_log.empresa; aqui também usamos pra
+ *      unificar com o agente — antes era slug, gerava 2 universos).
+ *   2. Lê o estado anterior em dados_reais (pra _anterior do log).
+ *   3. Lê linha existente em dados_diarios_log do mesmo dia.
+ *   4. Se NÃO existe → INSERT completo (todos os campos).
+ *      Se EXISTE   → UPDATE SELETIVO: só campos manuais e identidade.
+ *      investimento_real / leads_real / cpl_real / cpa_real são
+ *      PRESERVADOS — Sentinela é fonte da verdade desses. Override
+ *      manual desses 3 campos precisa de caminho dedicado (não MVP).
+ *   5. Upsert em dados_reais.
+ *   6. Rollback do passo 4 se passo 5 falhar (DELETE se era INSERT,
+ *      UPDATE de volta pros valores antigos se era UPDATE).
+ *
+ * UNIQUE (empresa, data, origem) em dados_diarios_log torna o INSERT
+ * cego inviável depois que o agente Sentinela já gravou no mesmo dia —
+ * por isso o select + INSERT/UPDATE separados.
+ *
+ * Toda escrita em dados_reais que vier do app deve passar por aqui.
  */
 export async function gravarDadosReaisComLog(
   payload: DadosReais,
@@ -76,79 +107,148 @@ export async function gravarDadosReaisComLog(
     return { ok: false, erro: "Supabase indisponível.", anterior: null }
   }
 
+  const empresaNome = await resolverNomeEmpresa(payload.empresa)
+  const origem = payload.origem ?? ORIGEM_PADRAO
+  const hojeISO = new Date().toISOString().slice(0, 10)
+
+  // 1. Estado anterior de dados_reais (pros campos _anterior do log).
   const { data: anteriorRow } = await supabase
     .from("dados_reais")
     .select("*")
     .eq("empresa", payload.empresa)
     .eq("mes", payload.mes)
     .eq("ano", payload.ano)
-    .eq("origem", payload.origem ?? ORIGEM_PADRAO)
+    .eq("origem", origem)
     .maybeSingle()
   const anterior = (anteriorRow ?? null) as DadosReais | null
 
-  // Grava o log ANTES do upsert: se o log falhar, o upsert não acontece.
-  // Reduz divergência entre dashboard (lê dados_reais) e resumos (somam
-  // log) — sem transação Postgres real ainda, mas é o próximo melhor.
-  const log = {
-    empresa: payload.empresa,
-    data: new Date().toISOString().slice(0, 10),
-    origem: payload.origem ?? ORIGEM_PADRAO,
+  // 2. Linha existente em dados_diarios_log do mesmo dia (pra UPSERT
+  // seletivo). Filtra por empresa.nome (que é o que o Sentinela usa).
+  const { data: logExistenteRow } = await supabase
+    .from("dados_diarios_log")
+    .select(
+      "id, preenchedor_id, preenchedor_nome, reunioes_real, contratos_real, faturamento_real, criativos_entregues, clientes_ativos, observacoes, criativos_usados, criativos_detalhe, respostas, publicos_prospectados"
+    )
+    .eq("empresa", empresaNome)
+    .eq("data", hojeISO)
+    .eq("origem", origem)
+    .maybeSingle()
+  const logExistente = logExistenteRow as null | {
+    id: string
+    preenchedor_id: string | null
+    preenchedor_nome: string | null
+    reunioes_real: number | null
+    contratos_real: number | null
+    faturamento_real: number | null
+    criativos_entregues: number | null
+    clientes_ativos: number | null
+    observacoes: string | null
+    criativos_usados: number | null
+    criativos_detalhe: unknown
+    respostas: number | null
+    publicos_prospectados: unknown
+  }
+
+  // Campos que o gestor/SDR controla — entram no UPDATE seletivo. Os
+  // campos do Sentinela (investimento_real, leads_real, cpl_real,
+  // cpa_real) ficam de fora pra não serem sobrescritos por null.
+  const camposManuais = {
     preenchedor_id: identidade.id,
     preenchedor_nome: identidade.nome,
-    investimento_real: payload.investimento_real,
-    leads_real: payload.leads_real,
     reunioes_real: payload.reunioes_real,
     contratos_real: payload.contratos_real,
     faturamento_real: payload.faturamento_real,
     criativos_entregues: payload.criativos_entregues,
     clientes_ativos: payload.clientes_ativos,
     observacoes: payload.observacoes,
-    cpl_real: payload.cpl_real,
-    cpa_real: payload.cpa_real ?? null,
     criativos_usados: payload.criativos_usados ?? null,
     criativos_detalhe: payload.criativos_detalhe ?? null,
     respostas: payload.respostas ?? null,
     publicos_prospectados: payload.publicos_prospectados ?? null,
-    investimento_anterior: anterior?.investimento_real ?? null,
-    leads_anterior: anterior?.leads_real ?? null,
-    reunioes_anterior: anterior?.reunioes_real ?? null,
-    contratos_anterior: anterior?.contratos_real ?? null,
-    faturamento_anterior: anterior?.faturamento_real ?? null,
-    criativos_anterior: anterior?.criativos_entregues ?? null,
-    cpl_anterior: anterior?.cpl_real ?? null,
-    cpa_anterior: anterior?.cpa_real ?? null,
-    criativos_usados_anterior: anterior?.criativos_usados ?? null,
-    criativos_detalhe_anterior: anterior?.criativos_detalhe ?? null,
-    respostas_anterior: anterior?.respostas ?? null,
-    publicos_prospectados_anterior:
-      anterior?.publicos_prospectados ?? null,
-  }
-  const { error: erroLog } = await supabase
-    .from("dados_diarios_log")
-    .insert(log)
-  if (erroLog) {
-    console.error("[dados_diarios_log] insert error", erroLog.message)
-    return { ok: false, erro: erroLog.message, anterior }
   }
 
+  if (logExistente) {
+    // UPDATE seletivo. investimento/leads/cpl/cpa do Sentinela ficam.
+    const { error } = await supabase
+      .from("dados_diarios_log")
+      .update(camposManuais)
+      .eq("id", logExistente.id)
+    if (error) {
+      console.error("[dados_diarios_log] update error", error.message)
+      return { ok: false, erro: error.message, anterior }
+    }
+  } else {
+    // INSERT completo. Inclui campos do Sentinela vindos do payload
+    // (formulário do gestor de tráfego — quando o agente ainda não
+    // rodou no dia ou esta empresa não tem token).
+    const logCompleto = {
+      empresa: empresaNome,
+      data: hojeISO,
+      origem,
+      investimento_real: payload.investimento_real,
+      leads_real: payload.leads_real,
+      cpl_real: payload.cpl_real,
+      cpa_real: payload.cpa_real ?? null,
+      investimento_anterior: anterior?.investimento_real ?? null,
+      leads_anterior: anterior?.leads_real ?? null,
+      reunioes_anterior: anterior?.reunioes_real ?? null,
+      contratos_anterior: anterior?.contratos_real ?? null,
+      faturamento_anterior: anterior?.faturamento_real ?? null,
+      criativos_anterior: anterior?.criativos_entregues ?? null,
+      cpl_anterior: anterior?.cpl_real ?? null,
+      cpa_anterior: anterior?.cpa_real ?? null,
+      criativos_usados_anterior: anterior?.criativos_usados ?? null,
+      criativos_detalhe_anterior: anterior?.criativos_detalhe ?? null,
+      respostas_anterior: anterior?.respostas ?? null,
+      publicos_prospectados_anterior:
+        anterior?.publicos_prospectados ?? null,
+      ...camposManuais,
+    }
+    const { error } = await supabase
+      .from("dados_diarios_log")
+      .insert(logCompleto)
+    if (error) {
+      console.error("[dados_diarios_log] insert error", error.message)
+      return { ok: false, erro: error.message, anterior }
+    }
+  }
+
+  // 3. Upsert em dados_reais.
   const { error: erroUpsert } = await supabase
     .from("dados_reais")
     .upsert(payload, { onConflict: "empresa,mes,ano,origem" })
   if (erroUpsert) {
     console.error("[dados_reais] upsert error", erroUpsert.message)
-    // Tenta compensar removendo o log que acabou de gravar — sem
-    // transação real, é o melhor que dá. Se a remoção falhar também,
-    // log fica órfão mas o erro principal é retornado.
-    await supabase
-      .from("dados_diarios_log")
-      .delete()
-      .eq("empresa", payload.empresa)
-      .eq("data", log.data)
-      .eq("origem", log.origem)
-      .gte(
-        "created_at",
-        new Date(Date.now() - 5000).toISOString()
-      )
+    // Rollback compensador do log:
+    //  • Se era UPDATE → reverte campos manuais ao estado anterior.
+    //  • Se era INSERT → deleta a linha recém-criada.
+    if (logExistente) {
+      await supabase
+        .from("dados_diarios_log")
+        .update({
+          preenchedor_id: logExistente.preenchedor_id,
+          preenchedor_nome: logExistente.preenchedor_nome,
+          reunioes_real: logExistente.reunioes_real,
+          contratos_real: logExistente.contratos_real,
+          faturamento_real: logExistente.faturamento_real,
+          criativos_entregues: logExistente.criativos_entregues,
+          clientes_ativos: logExistente.clientes_ativos,
+          observacoes: logExistente.observacoes,
+          criativos_usados: logExistente.criativos_usados,
+          criativos_detalhe: logExistente.criativos_detalhe,
+          respostas: logExistente.respostas,
+          publicos_prospectados: logExistente.publicos_prospectados,
+        })
+        .eq("id", logExistente.id)
+    } else {
+      await supabase
+        .from("dados_diarios_log")
+        .delete()
+        .eq("empresa", empresaNome)
+        .eq("data", hojeISO)
+        .eq("origem", origem)
+        .gte("created_at", new Date(Date.now() - 5000).toISOString())
+    }
     return { ok: false, erro: erroUpsert.message, anterior }
   }
 

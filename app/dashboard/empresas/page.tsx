@@ -7,13 +7,17 @@ import {
   formatNumero,
   mesValido,
 } from "@/lib/data"
-import { getDadosReaisDoMes } from "@/lib/dados-reais"
+import { getResumoMensalPorEmpresa } from "@/lib/sentinela"
 import {
   listarEmpresas,
   listarEmpresasInativas,
 } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
 import { supabaseConfigurado } from "@/lib/supabase"
+
+// Página dinâmica: força SSR sem Data Cache. Mesmo motivo de /dashboard
+// — trocar filtros não pode reaproveitar respostas anteriores.
+export const dynamic = "force-dynamic"
 
 /**
  * Página Empresas do Hub — dedicada à listagem completa de empresas
@@ -32,9 +36,12 @@ export default async function EmpresasPage({
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
 
-  const [reaisDoMes, empresas, empresasInativas, overridesMes] =
+  const [resumo, empresas, empresasInativas, overridesMes] =
     await Promise.all([
-      getDadosReaisDoMes(mes, ano),
+      // Fonte unificada do dashboard: dados_diarios_log agregado
+      // (lib/sentinela). Pago fixo aqui — orgânico fica no detalhe
+      // via ToggleOrigem em /dashboard/[empresa].
+      getResumoMensalPorEmpresa(mes, ano, "pago"),
       listarEmpresas(true),
       listarEmpresasInativas(),
       getOverridesTodasEmpresasMes(mes, ano),
@@ -134,20 +141,13 @@ export default async function EmpresasPage({
             style={{ gap: 16 }}
           >
             {empresas.map((empresa) => {
-              const bucket = reaisDoMes.get(empresa.db)
-              const pago = bucket?.pago ?? null
-              const organico = bucket?.organico ?? null
-              const faturamentoSoma =
-                (pago?.faturamento_real ?? 0) +
-                (organico?.faturamento_real ?? 0)
+              // Lookup pelo NOME (case-sensitive, com acentos) — chave
+              // que o agente Sentinela usa em dados_diarios_log.empresa.
+              const r = resumo.get(empresa.nome)
               const faturamentoReal =
-                pago?.faturamento_real === null &&
-                organico?.faturamento_real === null
-                  ? null
-                  : pago?.faturamento_real !== undefined ||
-                    organico?.faturamento_real !== undefined
-                  ? faturamentoSoma
-                  : null
+                r && r.faturamento > 0 ? r.faturamento : null
+              const investimentoReal =
+                r && r.investimento > 0 ? r.investimento : null
               return (
                 <CardEmpresa
                   key={empresa.slug}
@@ -155,7 +155,7 @@ export default async function EmpresasPage({
                   mes={mes}
                   ano={ano}
                   faturamentoReal={faturamentoReal}
-                  investimentoReal={pago?.investimento_real ?? null}
+                  investimentoReal={investimentoReal}
                   override={overridesMes.get(empresa.db)}
                 />
               )

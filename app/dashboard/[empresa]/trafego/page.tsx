@@ -30,6 +30,11 @@ import {
   type LinhaDoMes,
 } from "@/lib/sentinela"
 
+// Página dinâmica: força SSR sem Data Cache (mesmo motivo das outras
+// pages do dashboard). Resolve o bug de "desconfiguração" ao alternar
+// entre meses no SeletorPeriodo.
+export const dynamic = "force-dynamic"
+
 /**
  * Painel de tráfego pago da empresa, alimentado pelo agente Sentinela
  * Anomalo. Lê SOMENTE de tabelas do Supabase — sem chamada Meta Graph
@@ -89,7 +94,13 @@ export default async function TrafegoPage({
 
   return (
     <>
-      <TrafegoRealtime empresaNome={empresa.nome} />
+      {/* key força remontar o canal Realtime ao trocar filtros — sem
+          isso o canal permanece "preso" ao primeiro empresaNome/mes/ano
+          montado e refreshes vêm com contexto desatualizado. */}
+      <TrafegoRealtime
+        key={`${empresa.nome}-${mes}-${ano}`}
+        empresaNome={empresa.nome}
+      />
 
       <main
         className="mx-auto px-8 py-10 space-y-8"

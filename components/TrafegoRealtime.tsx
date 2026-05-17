@@ -46,7 +46,10 @@ export default function TrafegoRealtime({
           event: "*",
           schema: "public",
           table: "dados_diarios_log",
-          filter: `empresa=eq.${empresaNome}`,
+          // URL-encode obrigatório: nomes com acento ou espaço (ex:
+          // "Aton Estofados", "Mãe Divina Yoga") quebram o filter PG
+          // do realtime se passados crus.
+          filter: `empresa=eq.${encodeURIComponent(empresaNome)}`,
         },
         () => router.refresh()
       )

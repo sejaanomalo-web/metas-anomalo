@@ -14,11 +14,18 @@ import {
   metaAcumuladaAteHoje,
 } from "@/lib/data"
 import {
-  getDadosReaisDoMes,
-  getFaturamentoMensalHub,
-} from "@/lib/dados-reais"
+  getFaturamentoMensalHubFromLogs,
+  getResumoMensalPorEmpresa,
+  type ResumoEmpresaMes,
+} from "@/lib/sentinela"
 import { listarEmpresas } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
+
+// Página dinâmica: força SSR sem Data Cache. Necessário porque trocar
+// mês/ano pelo SeletorPeriodo precisa sempre buscar dados frescos do
+// Supabase (o cache de fetch do Next 14 reaproveitava respostas e dava
+// desconfiguração ao alternar entre meses).
+export const dynamic = "force-dynamic"
 
 type StatusKPI = "success" | "warning" | "danger" | "neutral"
 
@@ -112,17 +119,14 @@ function mesAnterior(mes: Mes): Mes | null {
 }
 
 function somarFaturamento(
-  reaisDoMes: Awaited<ReturnType<typeof getDadosReaisDoMes>>
+  resumos: Map<string, ResumoEmpresaMes>
 ): { soma: number; tem: boolean } {
   let soma = 0
   let tem = false
-  for (const bucket of reaisDoMes.values()) {
-    for (const d of [bucket.pago, bucket.organico]) {
-      if (!d) continue
-      if (d.faturamento_real !== null && d.faturamento_real !== undefined) {
-        soma += d.faturamento_real
-        tem = true
-      }
+  for (const r of resumos.values()) {
+    if (r.faturamento > 0) {
+      soma += r.faturamento
+      tem = true
     }
   }
   return { soma, tem }
@@ -139,42 +143,41 @@ export default async function DashboardPage({
   const temProjecao = anoTemProjecao(ano)
   const mesPrev = mesAnterior(mes)
 
+  // Fonte unificada do dashboard: dados_diarios_log agregado por
+  // empresa (lib/sentinela). origem=pago em todas as 3 pages do
+  // dashboard (overview, /empresas, /[empresa]) — decisão consistente
+  // com o painel de tráfego pago. Orgânico fica restrito ao detalhe
+  // de empresa via ToggleOrigem (página individual).
   const [
-    reaisDoMes,
-    reaisMesAnterior,
+    resumoAtual,
+    resumoAnterior,
     empresas,
     overridesMes,
     faturamentoMensal,
   ] = await Promise.all([
-    getDadosReaisDoMes(mes, ano),
-    mesPrev ? getDadosReaisDoMes(mesPrev, ano) : Promise.resolve(new Map()),
+    getResumoMensalPorEmpresa(mes, ano, "pago"),
+    mesPrev
+      ? getResumoMensalPorEmpresa(mesPrev, ano, "pago")
+      : Promise.resolve(new Map<string, ResumoEmpresaMes>()),
     listarEmpresas(true),
     getOverridesTodasEmpresasMes(mes, ano),
-    getFaturamentoMensalHub(ano),
+    getFaturamentoMensalHubFromLogs(ano, "pago"),
   ])
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
 
-  const { soma: somaFat, tem: temFat } = somarFaturamento(reaisDoMes)
+  const { soma: somaFat, tem: temFat } = somarFaturamento(resumoAtual)
   let somaInv = 0
   let temInv = false
   let somaContratos = 0
   let temContratos = false
-  for (const bucket of reaisDoMes.values()) {
-    if (
-      bucket.pago?.investimento_real !== null &&
-      bucket.pago?.investimento_real !== undefined
-    ) {
-      somaInv += bucket.pago.investimento_real
+  for (const r of resumoAtual.values()) {
+    if (r.investimento > 0) {
+      somaInv += r.investimento
       temInv = true
     }
-    // Contratos: tanto pago quanto orgânico, sem distinção — o que importa
-    // é quantos fechamentos aconteceram pra calcular ticket médio real.
-    for (const d of [bucket.pago, bucket.organico]) {
-      if (!d) continue
-      if (d.contratos_real !== null && d.contratos_real !== undefined) {
-        somaContratos += d.contratos_real
-        temContratos = true
-      }
+    if (r.contratos > 0) {
+      somaContratos += r.contratos
+      temContratos = true
     }
   }
 
@@ -187,7 +190,7 @@ export default async function DashboardPage({
       ? resumo.faturamento / resumo.contratos
       : 0
 
-  const { soma: somaFatPrev, tem: temFatPrev } = somarFaturamento(reaisMesAnterior)
+  const { soma: somaFatPrev, tem: temFatPrev } = somarFaturamento(resumoAnterior)
   const podeCalcularDelta = !!mesPrev && temFat && temFatPrev && somaFatPrev > 0
   const deltaPct = podeCalcularDelta
     ? ((somaFat - somaFatPrev) / somaFatPrev) * 100

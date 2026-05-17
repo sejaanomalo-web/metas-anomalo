@@ -8,7 +8,14 @@
 // Sem 'use server': há funções async (que rodam no servidor a partir
 // de Server Components) misturadas com utilitários síncronos puros.
 
-import { getSupabase } from "./supabase"
+import { getSupabase, type DadosReais } from "./supabase"
+import {
+  MES_NUM,
+  MESES,
+  type Mes,
+  type OrigemDadosReais,
+  diasNoMes,
+} from "./data"
 
 export const SENTINELA_NOME = "Sentinela Anomalo"
 
@@ -250,5 +257,333 @@ export function resumirMesSentinela(dias: DiaSentinela[]): ResumoMesSentinela {
     dias: dias.length,
     diasParciais: dias.filter((d) => d.parcial).length,
     ultimaExecucao,
+  }
+}
+
+// ============================================================
+// Resumo mensal por empresa — fonte unificada pro dashboard
+// ============================================================
+//
+// Agrega TODAS as linhas (Sentinela + manuais) de dados_diarios_log
+// num resumo mensal por empresa. Substitui as leituras de dados_reais
+// no dashboard:
+//
+//   • /dashboard           → getResumoMensalPorEmpresa
+//   • /dashboard/empresas  → getResumoMensalPorEmpresa
+//   • /dashboard/[empresa] → getResumoMensalDaEmpresa + getResumoAnualDaEmpresa
+//                            (+ adapter resumoComoDadosReais)
+//
+// dados_reais segue existindo: o drawer "Inserir dados reais" continua
+// escrevendo lá via gravarDadosReaisComLog (que também loga em
+// dados_diarios_log). A LEITURA do dashboard, porém, vem 100% dos logs
+// — assim o Sentinela (que só toca dados_diarios_log) aparece.
+//
+// Regras de agregação (uma linha por (empresa, data, origem) garantida
+// pelo UNIQUE):
+//   • Cumulativos → SOMA das linhas no mês
+//     (investimento_real, leads_real, faturamento_real, reunioes_real,
+//      contratos_real, criativos_entregues, respostas)
+//   • Snapshots   → ÚLTIMO valor não-null
+//     (criativos_usados, clientes_ativos, observacoes)
+//   • Razões      → RECALCULADAS dos totais
+//     (cpl = soma_invest / soma_leads; cpa = soma_invest / soma_contratos)
+//   • Jsonb       → não agregamos (vai vazio); criativos_detalhe e
+//     publicos_prospectados ficam pra views especializadas (timeline).
+
+export interface ResumoEmpresaMes {
+  empresa: string
+  investimento: number
+  leads: number
+  reunioes: number
+  contratos: number
+  faturamento: number
+  criativosEntregues: number
+  criativosUsados: number | null
+  clientesAtivos: number | null
+  cplReal: number | null
+  cpaReal: number | null
+  observacoes: string | null
+  respostas: number
+  temSentinela: boolean
+}
+
+/** Range YYYY-MM-DD do mês/ano selecionado (lte fim para incluir o último dia). */
+function rangeDoMesISO(
+  mes: Mes,
+  ano: number
+): { inicio: string; fim: string } {
+  const mesNum = String(MES_NUM[mes]).padStart(2, "0")
+  const ultimoDia = String(diasNoMes(mes, ano)).padStart(2, "0")
+  return {
+    inicio: `${ano}-${mesNum}-01`,
+    fim: `${ano}-${mesNum}-${ultimoDia}`,
+  }
+}
+
+/** Inverso de MES_NUM: data ISO → Mes (Abril..Dezembro) ou null se mês
+ *  cair fora da nossa janela (Jan/Fev/Mar). */
+function dataISOParaMes(isoDate: string): Mes | null {
+  const m = parseInt(isoDate.slice(5, 7), 10)
+  if (!Number.isFinite(m)) return null
+  for (const mes of MESES) {
+    if (MES_NUM[mes] === m) return mes
+  }
+  return null
+}
+
+/** Subset das colunas de dados_diarios_log que precisamos pra agregar. */
+interface LinhaAgregavel {
+  empresa: string
+  data: string
+  investimento_real: number | null
+  leads_real: number | null
+  reunioes_real: number | null
+  contratos_real: number | null
+  faturamento_real: number | null
+  criativos_entregues: number | null
+  criativos_usados: number | null
+  clientes_ativos: number | null
+  observacoes: string | null
+  respostas: number | null
+  preenchedor_nome: string | null
+}
+
+const COLUNAS_AGREGAR =
+  "empresa, data, investimento_real, leads_real, reunioes_real, contratos_real, faturamento_real, criativos_entregues, criativos_usados, clientes_ativos, observacoes, respostas, preenchedor_nome"
+
+/** Agrega uma lista de linhas (mesma empresa, mesmo mês) num resumo. */
+function agregarLinhas(
+  empresa: string,
+  linhas: LinhaAgregavel[]
+): ResumoEmpresaMes {
+  let investimento = 0
+  let leads = 0
+  let reunioes = 0
+  let contratos = 0
+  let faturamento = 0
+  let criativosEntregues = 0
+  let respostas = 0
+  let criativosUsados: number | null = null
+  let clientesAtivos: number | null = null
+  let observacoes: string | null = null
+  let temSentinela = false
+
+  // Ordena por data DESC pra pegar o ÚLTIMO valor não-null de snapshots
+  // sem precisar checar timestamps depois.
+  const ordenadas = [...linhas].sort((a, b) => b.data.localeCompare(a.data))
+
+  for (const l of ordenadas) {
+    investimento += Number(l.investimento_real ?? 0)
+    leads += Number(l.leads_real ?? 0)
+    reunioes += Number(l.reunioes_real ?? 0)
+    contratos += Number(l.contratos_real ?? 0)
+    faturamento += Number(l.faturamento_real ?? 0)
+    criativosEntregues += Number(l.criativos_entregues ?? 0)
+    respostas += Number(l.respostas ?? 0)
+
+    if (criativosUsados === null && l.criativos_usados != null) {
+      criativosUsados = l.criativos_usados
+    }
+    if (clientesAtivos === null && l.clientes_ativos != null) {
+      clientesAtivos = l.clientes_ativos
+    }
+    if (
+      observacoes === null &&
+      l.observacoes &&
+      l.observacoes.trim().length > 0
+    ) {
+      observacoes = l.observacoes
+    }
+    if (l.preenchedor_nome === SENTINELA_NOME) {
+      temSentinela = true
+    }
+  }
+
+  return {
+    empresa,
+    investimento,
+    leads,
+    reunioes,
+    contratos,
+    faturamento,
+    criativosEntregues,
+    criativosUsados,
+    clientesAtivos,
+    cplReal: leads > 0 ? investimento / leads : null,
+    cpaReal: contratos > 0 ? investimento / contratos : null,
+    observacoes,
+    respostas,
+    temSentinela,
+  }
+}
+
+/** Map<empresaNome, resumo> de TODAS as empresas no mês. */
+export async function getResumoMensalPorEmpresa(
+  mes: Mes,
+  ano: number,
+  origem: OrigemDadosReais = "pago"
+): Promise<Map<string, ResumoEmpresaMes>> {
+  const supabase = getSupabase()
+  if (!supabase) return new Map()
+  const { inicio, fim } = rangeDoMesISO(mes, ano)
+  const { data, error } = await supabase
+    .from("dados_diarios_log")
+    .select(COLUNAS_AGREGAR)
+    .eq("origem", origem)
+    .gte("data", inicio)
+    .lte("data", fim)
+  if (error) {
+    console.error("[sentinela] getResumoMensalPorEmpresa error", error.message)
+    return new Map()
+  }
+  const porEmpresa = new Map<string, LinhaAgregavel[]>()
+  for (const l of (data ?? []) as LinhaAgregavel[]) {
+    const lista = porEmpresa.get(l.empresa)
+    if (lista) lista.push(l)
+    else porEmpresa.set(l.empresa, [l])
+  }
+  const resultado = new Map<string, ResumoEmpresaMes>()
+  for (const [empresa, linhas] of porEmpresa) {
+    resultado.set(empresa, agregarLinhas(empresa, linhas))
+  }
+  return resultado
+}
+
+/** Resumo mensal de UMA empresa. Retorna null se não houver nenhuma
+ *  linha no mês (estado vazio fica explícito). */
+export async function getResumoMensalDaEmpresa(
+  empresaNome: string,
+  mes: Mes,
+  ano: number,
+  origem: OrigemDadosReais = "pago"
+): Promise<ResumoEmpresaMes | null> {
+  const supabase = getSupabase()
+  if (!supabase) return null
+  const { inicio, fim } = rangeDoMesISO(mes, ano)
+  const { data, error } = await supabase
+    .from("dados_diarios_log")
+    .select(COLUNAS_AGREGAR)
+    .eq("empresa", empresaNome)
+    .eq("origem", origem)
+    .gte("data", inicio)
+    .lte("data", fim)
+  if (error) {
+    console.error("[sentinela] getResumoMensalDaEmpresa error", error.message)
+    return null
+  }
+  const linhas = (data ?? []) as LinhaAgregavel[]
+  if (linhas.length === 0) return null
+  return agregarLinhas(empresaNome, linhas)
+}
+
+/** Map<Mes, resumo> dos 9 meses (Abril..Dezembro) do ano pra uma empresa.
+ *  Substitui o array DadosReais[] que getDadosReais devolvia. */
+export async function getResumoAnualDaEmpresa(
+  empresaNome: string,
+  ano: number,
+  origem: OrigemDadosReais = "pago"
+): Promise<Map<Mes, ResumoEmpresaMes>> {
+  const supabase = getSupabase()
+  if (!supabase) return new Map()
+  const { data, error } = await supabase
+    .from("dados_diarios_log")
+    .select(COLUNAS_AGREGAR)
+    .eq("empresa", empresaNome)
+    .eq("origem", origem)
+    .gte("data", `${ano}-01-01`)
+    .lte("data", `${ano}-12-31`)
+  if (error) {
+    console.error("[sentinela] getResumoAnualDaEmpresa error", error.message)
+    return new Map()
+  }
+  const porMes = new Map<Mes, LinhaAgregavel[]>()
+  for (const l of (data ?? []) as LinhaAgregavel[]) {
+    const mes = dataISOParaMes(l.data)
+    if (!mes) continue
+    const lista = porMes.get(mes)
+    if (lista) lista.push(l)
+    else porMes.set(mes, [l])
+  }
+  const resultado = new Map<Mes, ResumoEmpresaMes>()
+  for (const [mes, linhas] of porMes) {
+    resultado.set(mes, agregarLinhas(empresaNome, linhas))
+  }
+  return resultado
+}
+
+/** Série mensal de faturamento agregado de TODAS as empresas no ano.
+ *  Substitui getFaturamentoMensalHub (que lia de dados_reais). */
+export async function getFaturamentoMensalHubFromLogs(
+  ano: number,
+  origem: OrigemDadosReais = "pago"
+): Promise<{ mes: Mes; real: number | null }[]> {
+  const supabase = getSupabase()
+  if (!supabase) return MESES.map((mes) => ({ mes, real: null }))
+  const { data, error } = await supabase
+    .from("dados_diarios_log")
+    .select("data, faturamento_real")
+    .eq("origem", origem)
+    .gte("data", `${ano}-01-01`)
+    .lte("data", `${ano}-12-31`)
+  if (error) {
+    console.error(
+      "[sentinela] getFaturamentoMensalHubFromLogs error",
+      error.message
+    )
+    return MESES.map((mes) => ({ mes, real: null }))
+  }
+  const acc = new Map<Mes, { soma: number; tem: boolean }>()
+  for (const row of (data ?? []) as {
+    data: string
+    faturamento_real: number | null
+  }[]) {
+    const mes = dataISOParaMes(row.data)
+    if (!mes) continue
+    const bucket = acc.get(mes) ?? { soma: 0, tem: false }
+    if (row.faturamento_real != null) {
+      bucket.soma += Number(row.faturamento_real)
+      bucket.tem = true
+    }
+    acc.set(mes, bucket)
+  }
+  return MESES.map((mes) => {
+    const bucket = acc.get(mes)
+    return { mes, real: bucket?.tem ? bucket.soma : null }
+  })
+}
+
+/** Adapter: monta um shape DadosReais a partir de ResumoEmpresaMes,
+ *  pra compatibilidade com CenarioReal e DrawerDadosReais (que esperam
+ *  DadosReais). Zero vira null pros campos numéricos — assim a UI
+ *  trata "vazio" igual ao que getDadosReaisMes devolvia. */
+export function resumoComoDadosReais(
+  r: ResumoEmpresaMes | null,
+  mes: Mes,
+  ano: number,
+  origem: OrigemDadosReais
+): DadosReais | null {
+  if (!r) return null
+  const zeroOuNum = (n: number) => (n > 0 ? n : null)
+  return {
+    empresa: r.empresa,
+    mes,
+    ano,
+    origem,
+    investimento_real: zeroOuNum(r.investimento),
+    leads_real: zeroOuNum(r.leads),
+    reunioes_real: zeroOuNum(r.reunioes),
+    contratos_real: zeroOuNum(r.contratos),
+    faturamento_real: zeroOuNum(r.faturamento),
+    criativos_entregues: zeroOuNum(r.criativosEntregues),
+    criativos_usados: r.criativosUsados,
+    clientes_ativos: r.clientesAtivos,
+    cpl_real: r.cplReal,
+    cpa_real: r.cpaReal,
+    observacoes: r.observacoes,
+    respostas: zeroOuNum(r.respostas),
+    // Não agregamos jsonb — views detalhadas (timeline) leem
+    // diretamente de dados_diarios_log via getDadosDiariosDoMes*.
+    criativos_detalhe: [],
+    publicos_prospectados: [],
   }
 }

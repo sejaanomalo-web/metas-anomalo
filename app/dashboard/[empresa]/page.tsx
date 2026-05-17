@@ -24,11 +24,19 @@ import {
   origemValida,
   subtituloDaEmpresa,
 } from "@/lib/data"
-import { supabaseConfigurado } from "@/lib/supabase"
-import { getDadosReais, getDadosReaisMes } from "@/lib/dados-reais"
-import { getDadosDiariosDoMes } from "@/lib/dados-diarios"
+import { supabaseConfigurado, type DadosReais } from "@/lib/supabase"
+import {
+  getResumoAnualDaEmpresa,
+  getResumoMensalDaEmpresa,
+  resumoComoDadosReais,
+} from "@/lib/sentinela"
+import { getDadosDiariosDoMesPorNome } from "@/lib/dados-diarios"
 import { getMetasOverrideEmpresa } from "@/lib/metas-empresa"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
+
+// Página dinâmica: força SSR sem Data Cache. Igual /dashboard e
+// /dashboard/empresas — evita resposta stale ao trocar mês/origem.
+export const dynamic = "force-dynamic"
 
 export default async function EmpresaPage({
   params,
@@ -53,12 +61,28 @@ export default async function EmpresaPage({
 
   const dadosHardcoded = getDadosEmpresa(empresa.slug as EmpresaSlug, ano)
 
-  const [real, todosReais, overrides, dadosDiarios] = await Promise.all([
-    getDadosReaisMes(empresa.db, mes, ano, origem),
-    getDadosReais(empresa.db, ano, origem),
+  // Fonte unificada com o restante do dashboard: dados_diarios_log
+  // agregado via lib/sentinela. O Sentinela grava em
+  // dados_diarios_log com empresa = empresa.nome (não slug), por isso
+  // os helpers usam empresa.nome aqui. CenarioReal e DrawerDadosReais
+  // recebem shape DadosReais compatível via resumoComoDadosReais.
+  // Origem respeita o ?origem do searchParam (ToggleOrigem preserva a
+  // flexibilidade pago/orgânico nessa view detalhada).
+  const [resumoMes, resumoAno, overrides, dadosDiarios] = await Promise.all([
+    getResumoMensalDaEmpresa(empresa.nome, mes, ano, origem),
+    getResumoAnualDaEmpresa(empresa.nome, ano, origem),
     getMetasOverrideEmpresa(empresa.db, ano, origem),
-    getDadosDiariosDoMes(empresa.db, mes, ano, origem),
+    getDadosDiariosDoMesPorNome(empresa.nome, mes, ano, origem),
   ])
+  const real: DadosReais | null = resumoComoDadosReais(
+    resumoMes,
+    mes,
+    ano,
+    origem
+  )
+  const todosReais: DadosReais[] = Array.from(resumoAno.entries())
+    .map(([mesAno, r]) => resumoComoDadosReais(r, mesAno, ano, origem))
+    .filter((x): x is DadosReais => x !== null)
 
   // Para empresas sem projeções hardcoded (adicionadas via UI), gera
   // skeleton com 9 meses vazios para que gráfico e tabela apareçam.

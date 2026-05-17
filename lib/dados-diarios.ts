@@ -124,8 +124,38 @@ function diferencaPublicos(
   return out
 }
 
+/**
+ * Igual a getDadosDiariosDoMes, mas filtra empresa pelo NOME de exibição
+ * (case-sensitive, com acentos) em vez do db slug. Usado pelo dashboard
+ * porque o agente Sentinela grava em dados_diarios_log com
+ * empresa = empresas_config.nome ("Aton Estofados", "Mãe Divina Yoga"),
+ * enquanto outros consumidores legados (preencher/[token], resumos)
+ * filtram pelo db slug ("aton", "mae_divina_yoga"). As duas convivem.
+ */
+export async function getDadosDiariosDoMesPorNome(
+  empresaNome: string,
+  mes: Mes,
+  ano: number = ANO_PADRAO,
+  origem: OrigemDadosReais = ORIGEM_PADRAO
+): Promise<DiaDetalhado[]> {
+  return getDadosDiariosDoMesImpl(empresaNome, mes, ano, origem)
+}
+
 export async function getDadosDiariosDoMes(
   empresa: string,
+  mes: Mes,
+  ano: number = ANO_PADRAO,
+  origem: OrigemDadosReais = ORIGEM_PADRAO
+): Promise<DiaDetalhado[]> {
+  return getDadosDiariosDoMesImpl(empresa, mes, ano, origem)
+}
+
+// Implementação compartilhada entre as duas variantes (por db slug e por
+// nome). O filtro `empresa=eq.${valor}` é o único diferente, e ambas as
+// versões usam o mesmo formato pra consultar dados_diarios_log — quem
+// chama é quem decide o tipo do identificador.
+async function getDadosDiariosDoMesImpl(
+  empresaFilter: string,
   mes: Mes,
   ano: number = ANO_PADRAO,
   origem: OrigemDadosReais = ORIGEM_PADRAO
@@ -136,7 +166,7 @@ export async function getDadosDiariosDoMes(
   const { data, error } = await supabase
     .from("dados_diarios_log")
     .select("*")
-    .eq("empresa", empresa)
+    .eq("empresa", empresaFilter)
     .eq("origem", origem)
     .gte("data", inicio)
     .lt("data", fim)
