@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import {
+  excluirNotificacaoAction,
   getNotificacoesDaSessaoAction,
   marcarComoLidaAction,
   marcarTodasComoLidasAction,
@@ -89,6 +90,26 @@ export default function SinoNotificacoes({
     })
   }
 
+  function excluir(id: string) {
+    // Optimistic: remove da lista. Se era não-lida, decrementa count.
+    let eraNaoLida = false
+    setItens((atual) =>
+      atual.filter((n) => {
+        if (n.id === id) {
+          eraNaoLida = n.lida_em == null
+          return false
+        }
+        return true
+      })
+    )
+    if (eraNaoLida) setCount((c) => Math.max(0, c - 1))
+    startTransition(() => {
+      const fd = new FormData()
+      fd.set("id", id)
+      excluirNotificacaoAction(fd)
+    })
+  }
+
   function marcarTodas() {
     setItens((atual) =>
       atual.map((n) =>
@@ -135,6 +156,7 @@ export default function SinoNotificacoes({
           itens={itens}
           onFechar={() => setAberto(false)}
           onMarcarLida={marcarLida}
+          onExcluir={excluir}
           onMarcarTodas={marcarTodas}
           temNaoLidas={count > 0}
         />
@@ -177,12 +199,14 @@ function PainelNotificacoes({
   itens,
   onFechar,
   onMarcarLida,
+  onExcluir,
   onMarcarTodas,
   temNaoLidas,
 }: {
   itens: NotificacaoItem[]
   onFechar: () => void
   onMarcarLida: (id: string) => void
+  onExcluir: (id: string) => void
   onMarcarTodas: () => void
   temNaoLidas: boolean
 }) {
@@ -331,6 +355,7 @@ function PainelNotificacoes({
                   key={n.id}
                   notificacao={n}
                   onMarcarLida={() => onMarcarLida(n.id)}
+                  onExcluir={() => onExcluir(n.id)}
                 />
               ))}
             </div>
@@ -344,17 +369,22 @@ function PainelNotificacoes({
 function ItemNotificacao({
   notificacao: n,
   onMarcarLida,
+  onExcluir,
 }: {
   notificacao: NotificacaoItem
   onMarcarLida: () => void
+  onExcluir: () => void
 }) {
   const naoLida = n.lida_em == null
+  // deltaX em ref pra leitura síncrona no onTouchEnd (evita state stale)
+  // + state pra forçar re-render visual do transform/opacity
+  const deltaXRef = useRef(0)
   const [deltaX, setDeltaX] = useState(0)
   const [saindo, setSaindo] = useState(false)
   const inicioX = useRef<number | null>(null)
   const arrastando = useRef(false)
 
-  const LIMITE_DISMISS = 100 // px de arrasto pra dispensar
+  const LIMITE_DISMISS = 90 // px de arrasto pra excluir
 
   function onTouchStart(e: React.TouchEvent) {
     inicioX.current = e.touches[0].clientX
@@ -364,21 +394,23 @@ function ItemNotificacao({
   function onTouchMove(e: React.TouchEvent) {
     if (inicioX.current == null) return
     const dx = e.touches[0].clientX - inicioX.current
-    // Pequeno deadzone pra distinguir tap de swipe
     if (Math.abs(dx) > 6) arrastando.current = true
-    // Permite arrastar nos dois sentidos com resistência
+    deltaXRef.current = dx
     setDeltaX(dx)
   }
 
   function onTouchEnd() {
     inicioX.current = null
-    if (Math.abs(deltaX) >= LIMITE_DISMISS) {
-      // Dispensa: anima pra fora e marca como lida
+    const dx = deltaXRef.current
+    if (Math.abs(dx) >= LIMITE_DISMISS) {
+      // Excluir: anima pra fora e deleta
       setSaindo(true)
-      setDeltaX(deltaX > 0 ? 400 : -400)
-      setTimeout(onMarcarLida, 180)
+      setDeltaX(dx > 0 ? 500 : -500)
+      deltaXRef.current = 0
+      setTimeout(onExcluir, 180)
     } else {
       // Volta pra posição
+      deltaXRef.current = 0
       setDeltaX(0)
     }
   }
@@ -388,7 +420,15 @@ function ItemNotificacao({
     if (naoLida) onMarcarLida()
   }
 
-  const opacity = saindo ? 0 : 1 - Math.min(0.5, Math.abs(deltaX) / 400)
+  function onLixeira(e: React.MouseEvent) {
+    e.stopPropagation()
+    setSaindo(true)
+    setDeltaX(-500)
+    setTimeout(onExcluir, 180)
+  }
+
+  const proximoDeDispensar = Math.abs(deltaX) >= LIMITE_DISMISS
+  const opacity = saindo ? 0 : 1 - Math.min(0.4, Math.abs(deltaX) / 500)
 
   return (
     <div
@@ -398,7 +438,7 @@ function ItemNotificacao({
         borderRadius: 14,
       }}
     >
-      {/* Fundo revelado durante swipe — indica "dispensar" */}
+      {/* Fundo revelado durante swipe — vermelho indica "excluir" */}
       {Math.abs(deltaX) > 6 && (
         <div
           style={{
@@ -408,38 +448,37 @@ function ItemNotificacao({
             alignItems: "center",
             justifyContent: deltaX > 0 ? "flex-start" : "flex-end",
             padding: "0 22px",
-            background:
-              Math.abs(deltaX) >= LIMITE_DISMISS
-                ? "rgba(76,175,80,0.18)"
-                : "rgba(255,255,255,0.04)",
-            color:
-              Math.abs(deltaX) >= LIMITE_DISMISS
-                ? "#4caf50"
-                : "var(--text-3)",
+            background: proximoDeDispensar
+              ? "rgba(226,75,74,0.22)"
+              : "rgba(226,75,74,0.10)",
+            color: proximoDeDispensar ? "#e24b4a" : "var(--text-3)",
             fontSize: 11,
             letterSpacing: "0.8px",
             textTransform: "uppercase",
             fontWeight: 600,
             transition: "background 0.15s ease",
             pointerEvents: "none",
+            gap: 8,
           }}
         >
-          {Math.abs(deltaX) >= LIMITE_DISMISS ? "Solte pra dispensar" : "Dispensar"}
+          <IconeLixeira />
+          {proximoDeDispensar ? "Solte pra excluir" : "Excluir"}
         </div>
       )}
 
-      <button
-        type="button"
+      <div
         onClick={onClick}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        className="no-ds"
+        role="button"
+        tabIndex={0}
         style={{
-          display: "block",
+          display: "flex",
+          alignItems: "stretch",
+          gap: 0,
           width: "100%",
-          textAlign: "left",
-          padding: "14px 16px",
+          padding: "12px 8px 12px 14px",
           background: naoLida
             ? "linear-gradient(180deg, rgba(201,149,58,0.10), rgba(201,149,58,0.04))"
             : "var(--surface-2)",
@@ -457,52 +496,112 @@ function ItemNotificacao({
             ? "none"
             : "transform 0.2s ease, opacity 0.2s ease",
           touchAction: "pan-y",
+          userSelect: "none",
         }}
       >
-        <div
+        {/* Conteúdo da notificação */}
+        <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: 8,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 14,
+                fontWeight: naoLida ? 600 : 500,
+                color: naoLida ? "var(--text-1)" : "var(--text-2)",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {n.titulo}
+            </span>
+            <time
+              dateTime={n.criada_em}
+              style={{
+                fontSize: 10,
+                color: "var(--text-4)",
+                whiteSpace: "nowrap",
+                fontVariantNumeric: "tabular-nums",
+                flexShrink: 0,
+              }}
+            >
+              {tempoRelativo(n.criada_em)}
+            </time>
+          </div>
+          <p
+            style={{
+              fontSize: 12.5,
+              color: naoLida ? "var(--text-2)" : "var(--text-3)",
+              marginTop: 6,
+              fontWeight: 400,
+              lineHeight: 1.5,
+            }}
+          >
+            {n.mensagem}
+          </p>
+        </div>
+
+        {/* Botão lixeira — clique direto pra excluir */}
+        <button
+          type="button"
+          onClick={onLixeira}
+          onTouchEnd={(e) => e.stopPropagation()}
+          aria-label="Excluir notificação"
+          className="no-ds"
           style={{
             display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            gap: 8,
+            alignItems: "center",
+            justifyContent: "center",
+            width: 36,
+            flexShrink: 0,
+            background: "transparent",
+            border: "none",
+            color: "var(--text-4)",
+            cursor: "pointer",
+            borderRadius: 8,
+            transition: "color 0.15s ease, background 0.15s ease",
+            alignSelf: "flex-start",
+            marginTop: 2,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "#e24b4a"
+            e.currentTarget.style.background = "rgba(226,75,74,0.10)"
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "var(--text-4)"
+            e.currentTarget.style.background = "transparent"
           }}
         >
-          <span
-            style={{
-              fontSize: 14,
-              fontWeight: naoLida ? 600 : 500,
-              color: naoLida ? "var(--text-1)" : "var(--text-2)",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            {n.titulo}
-          </span>
-          <time
-            dateTime={n.criada_em}
-            style={{
-              fontSize: 10,
-              color: "var(--text-4)",
-              whiteSpace: "nowrap",
-              fontVariantNumeric: "tabular-nums",
-              flexShrink: 0,
-            }}
-          >
-            {tempoRelativo(n.criada_em)}
-          </time>
-        </div>
-        <p
-          style={{
-            fontSize: 12.5,
-            color: naoLida ? "var(--text-2)" : "var(--text-3)",
-            marginTop: 6,
-            fontWeight: 400,
-            lineHeight: 1.5,
-          }}
-        >
-          {n.mensagem}
-        </p>
-      </button>
+          <IconeLixeira />
+        </button>
+      </div>
     </div>
+  )
+}
+
+function IconeLixeira() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    </svg>
   )
 }
 

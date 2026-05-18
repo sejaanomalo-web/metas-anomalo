@@ -605,13 +605,13 @@ table {
     width: auto !important;
     max-width: none !important;
     border-left: none !important;
-    animation: painel-slide-down 0.25s ease-out;
+    animation: painel-slide-up 0.28s ease-out;
   }
 }
 
-@keyframes painel-slide-down {
+@keyframes painel-slide-up {
   from {
-    transform: translateY(-100%);
+    transform: translateY(100%);
   }
   to {
     transform: translateY(0);

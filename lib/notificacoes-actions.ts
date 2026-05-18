@@ -41,6 +41,29 @@ export async function marcarTodasComoLidasAction() {
 }
 
 /**
+ * Exclui PERMANENTEMENTE uma linha de notificacoes_usuario do usuário
+ * logado. A notificação original em `notificacoes` permanece (pode
+ * ainda valer pra outros usuários no fan-out).
+ */
+export async function excluirNotificacaoAction(formData: FormData) {
+  const usuarioId = getUsuarioIdSync()
+  if (!usuarioId) return
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return
+  const { error } = await supabase
+    .from("notificacoes_usuario")
+    .delete()
+    .eq("id", id)
+    .eq("usuario_id", usuarioId) // defesa: só a própria linha
+  if (error) {
+    console.error("[notificacoes] excluir error", error.message)
+  }
+  revalidatePath("/dashboard", "layout")
+}
+
+/**
  * Polling: cliente chama via useTransition/server-action a cada 30s pra
  * receber count + lista atual. Mais simples que Realtime e suficiente
  * pra MVP (custo: 1 query por usuário ativo a cada 30s).
