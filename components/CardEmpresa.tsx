@@ -206,7 +206,22 @@ export default function CardEmpresa({
               }}
             >
               <span>
-                {temProjecao ? `Meta: ${formatBRL(meta)}` : "Sem projeção"}
+                {temProjecao ? (
+                  <>
+                    <span style={{ color: "var(--text-4)" }}>Meta: </span>
+                    <span
+                      style={{
+                        color: "var(--accent)",
+                        fontWeight: 600,
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {formatBRL(meta)}
+                    </span>
+                  </>
+                ) : (
+                  "Sem projeção"
+                )}
               </span>
               {temProjecao && (
                 <span>Invest. previsto: {formatBRL(investimento)}</span>
