@@ -20,8 +20,9 @@ import type { NotificacaoItem } from "@/lib/notificacoes"
  *     Backdrop atrás do drawer fecha ao clicar.
  *
  * Items do rail: Dashboard, Empresas, Formulários, Configurações, Sair.
- * Formulários é link direto pra /dashboard/preenchedores (gestão dos
- * preenchedores de gestor de tráfego e SDR).
+ * Formulários é link direto pra /dashboard/formularios — preenchimento
+ * manual com seletor de empresa. Substitui o antigo /dashboard/preenchedores
+ * (sistema de tokens individuais), agora é um link público único.
  *
  * Indicador de rota ativa: barra vertical ouro à esquerda do item +
  * ícone em ouro + texto em text-1. Calculado via usePathname.
@@ -52,7 +53,7 @@ const RAIL_EXPANDED = 240
 const ROTAS_NAO_EMPRESA = new Set([
   "/dashboard",
   "/dashboard/empresas",
-  "/dashboard/preenchedores",
+  "/dashboard/formularios",
   "/dashboard/configuracoes",
 ])
 
@@ -176,7 +177,7 @@ function SidebarRail({
 
   const dashboardAtivo = pathname === "/dashboard"
   const empresasAtivo = ehRotaEmpresa(pathname)
-  const formulariosAtivo = pathname === "/dashboard/preenchedores"
+  const formulariosAtivo = pathname === "/dashboard/formularios"
   const configAtivo = pathname === "/dashboard/configuracoes"
 
   return (
@@ -220,7 +221,7 @@ function SidebarRail({
         <ItemMenu
           icon={<IconeFormularios />}
           rotulo="Formulários"
-          href="/dashboard/preenchedores"
+          href="/dashboard/formularios"
           expandido={expandido}
           ativo={formulariosAtivo}
         />

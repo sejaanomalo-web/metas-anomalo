@@ -35,25 +35,6 @@ export interface DadosReais {
   updated_at?: string
 }
 
-export type PapelPreenchedor = "gestor_trafego" | "sdr"
-
-export interface Preenchedor {
-  id?: string
-  nome: string
-  papel: PapelPreenchedor
-  ativo: boolean
-  token: string
-  created_at?: string
-  updated_at?: string
-}
-
-export interface PreenchedorEmpresa {
-  id?: string
-  preenchedor_id: string
-  empresa: string
-  created_at?: string
-}
-
 export interface DadosDiariosLog {
   id?: string
   empresa: string
