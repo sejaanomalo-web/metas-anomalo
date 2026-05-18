@@ -15,9 +15,9 @@ import { usePathname } from "next/navigation"
  * a inativa fica em ghost/outline. Detecção da rota ativa via
  * usePathname (client component).
  *
- * O ícone "◆" na aba "Tráfego pago" sinaliza dado em tempo real
- * (atualizado pelo agente Sentinela). A diferença visual reforça que
- * é uma seção especial, conectada ao Meta Ads.
+ * A bolinha dourada pulsando na aba "Tráfego pago" sinaliza dado
+ * "live" — atualizado pelo agente Sentinela. Mesma linguagem visual
+ * do BadgeStatusSentinela, dá coerência ao painel.
  */
 export default function TabsEmpresa({
   slug,
@@ -51,10 +51,34 @@ export default function TabsEmpresa({
         Visão Geral
       </TabLink>
       <TabLink href={trafegoHref} ativa={noTrafego} destaque>
-        <IconeRaio />
+        <BolinhaLive ativa={noTrafego} />
         Tráfego pago
       </TabLink>
     </div>
+  )
+}
+
+/**
+ * Dot pulsando em ouro. Na aba ATIVA (ouro sólido) muda pra preto pra
+ * ficar legível sobre o background. Na inativa mantém o ouro vivo.
+ */
+function BolinhaLive({ ativa }: { ativa: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: "inline-block",
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        background: ativa ? "#000" : "var(--accent)",
+        boxShadow: ativa
+          ? "0 0 0 2px rgba(0,0,0,0.0)"
+          : "0 0 6px rgba(201,149,58,0.7)",
+        animation: "pulseGold 2s ease-in-out infinite",
+        flexShrink: 0,
+      }}
+    />
   )
 }
 
@@ -117,16 +141,3 @@ function TabLink({
   )
 }
 
-function IconeRaio() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-    </svg>
-  )
-}
