@@ -10,23 +10,21 @@ import type { NotificacaoItem } from "@/lib/notificacoes"
 import { useSidebar } from "./AppShell"
 
 /**
- * Sino global de notificações. Renderizado no rail do AppShell (via prop).
+ * Sino global de notificações — botão flutuante no canto superior
+ * direito (fixed, sempre visível em qualquer rota /dashboard).
  *
- *   • Mostra ícone com badge dourado quando há não-lidas
- *   • Click abre PainelNotificacoes (drawer da direita em mobile,
- *     popover ancorado no desktop)
+ *   • Ícone glass com badge dourado quando há não-lidas
+ *   • Click abre PainelNotificacoes (full-screen no mobile com slide
+ *     do topo, drawer 400px à direita no desktop)
  *   • Polling de 30s pra atualizar count/lista sem Realtime
- *     (Realtime ficaria pra um futuro sprint quando integrarmos com
- *     Supabase Auth — auth.uid() não bate com o cookie custom atual)
+ *     (Realtime ficaria pra futuro sprint integrado com Supabase Auth)
+ *   • Fecha o rail drawer no mobile ao abrir, pra UX limpa ao fechar
  *
- * Dados iniciais vêm SSR do dashboard/layout.tsx pra não piscar zero
- * antes do primeiro polling.
+ * Dados iniciais vêm SSR do dashboard/layout.tsx.
  */
 export default function SinoNotificacoes({
-  expandido,
   inicial,
 }: {
-  expandido: boolean
   inicial: { count: number; itens: NotificacaoItem[] }
 }) {
   const [count, setCount] = useState(inicial.count)
@@ -36,9 +34,6 @@ export default function SinoNotificacoes({
   const { setExpandido } = useSidebar()
 
   function abrirPainel() {
-    // No mobile, fecha o drawer do rail pra não ficar layer atrás do
-    // painel (UX mais limpa: ao fechar o painel, usuário volta direto
-    // pro conteúdo, sem o rail aberto).
     if (
       typeof window !== "undefined" &&
       window.matchMedia("(max-width: 1023px)").matches
@@ -111,30 +106,14 @@ export default function SinoNotificacoes({
       <button
         type="button"
         onClick={() => (aberto ? setAberto(false) : abrirPainel())}
-        title={!expandido ? "Notificações" : undefined}
-        aria-label="Notificações"
-        className="hover:bg-[var(--surface-2)] no-ds"
-        style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          width: "100%",
-          height: 44,
-          padding: expandido ? "0 12px" : "0",
-          justifyContent: expandido ? "flex-start" : "center",
-          background: aberto ? "var(--surface-2)" : "transparent",
-          border: "none",
-          borderRadius: 10,
-          color: "inherit",
-          cursor: "pointer",
-          textAlign: "left",
-          fontFamily: "inherit",
-          fontSize: "inherit",
-          textTransform: "none",
-          letterSpacing: "normal",
-          transition: "background 0.15s ease",
-        }}
+        aria-label={
+          count > 0
+            ? `${count} notificações não lidas`
+            : "Notificações"
+        }
+        className="sino-trigger no-ds"
+        data-tem-nao-lidas={count > 0 ? "true" : undefined}
+        data-aberto={aberto ? "true" : undefined}
       >
         <span
           style={{
@@ -144,28 +123,11 @@ export default function SinoNotificacoes({
             justifyContent: "center",
             width: 24,
             height: 24,
-            color: count > 0 ? "var(--accent)" : "var(--text-2)",
-            flexShrink: 0,
           }}
         >
           <IconeSino />
           {count > 0 && <Badge count={count} />}
         </span>
-        {expandido && (
-          <span
-            style={{
-              flex: 1,
-              fontSize: 13,
-              fontWeight: count > 0 ? 600 : 500,
-              color: count > 0 ? "var(--text-1)" : "var(--text-2)",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            Notificações
-          </span>
-        )}
       </button>
 
       {aberto && (

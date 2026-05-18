@@ -37,12 +37,50 @@ export function empresaTrackeadaPeloSentinela(nomeEmpresa: string): boolean {
   return (EMPRESAS_TRACKEADAS as readonly string[]).includes(nomeEmpresa)
 }
 
+/** Formata um ISO datetime no timezone BRT, escolhendo o rótulo mais
+ *  curto que ainda é inequívoco:
+ *    • mesmo dia que `agora` → "hoje HH:MM"
+ *    • dia anterior         → "ontem HH:MM"
+ *    • dia seguinte         → "amanhã HH:MM"
+ *    • qualquer outro       → "DD/MM HH:MM"
+ *  Usado pra exibir "última execução" e "próxima execução" do Sentinela. */
+export function formatarMomentoBRT(
+  iso: string,
+  agora: Date = new Date()
+): string {
+  const d = new Date(iso)
+  const fmtData = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+  })
+  const fmtHora = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+  const dataAlvo = fmtData.format(d)
+  const horaAlvo = fmtHora.format(d)
+  const dataHoje = fmtData.format(agora)
+  const dataAmanha = fmtData.format(new Date(agora.getTime() + 86400_000))
+  const dataOntem = fmtData.format(new Date(agora.getTime() - 86400_000))
+
+  if (dataAlvo === dataHoje) return `hoje ${horaAlvo}`
+  if (dataAlvo === dataAmanha) return `amanhã ${horaAlvo}`
+  if (dataAlvo === dataOntem) return `ontem ${horaAlvo}`
+  return `${dataAlvo} ${horaAlvo}`
+}
+
 /** Próxima execução do Sentinela em hora BRT (cron 09:00 e 15:00).
- *  Devolve { hora, label } — usado pra mostrar "próxima execução: 15:00". */
+ *  Devolve hora/minuto pra cálculos, label curto ("15:00 BRT") e
+ *  labelCompleto com data ("hoje 15:00 BRT" / "amanhã 09:00 BRT"). */
 export function proximaExecucao(agora: Date = new Date()): {
   hora: number
   minuto: number
   label: string
+  iso: string
+  labelCompleto: string
 } {
   // Hora atual em BRT (UTC-3, sem DST).
   const utcMs = agora.getTime() + agora.getTimezoneOffset() * 60_000
@@ -50,10 +88,18 @@ export function proximaExecucao(agora: Date = new Date()): {
   const h = brt.getHours()
   // antes das 09 → próxima é hoje 09; entre 09 e 15 → hoje 15; depois → amanhã 09.
   const proximaHora = h < 9 ? 9 : h < 15 ? 15 : 9
+  // Constrói data/hora exata da próxima execução, em BRT, e volta pra
+  // ISO UTC (somando o offset BRT de -3h → -(-3) = +3h pra ir pra UTC).
+  const proxBrt = new Date(brt)
+  proxBrt.setHours(proximaHora, 0, 0, 0)
+  if (h >= 15) proxBrt.setDate(proxBrt.getDate() + 1)
+  const proxIso = new Date(proxBrt.getTime() + 3 * 60 * 60_000).toISOString()
   return {
     hora: proximaHora,
     minuto: 0,
     label: `${String(proximaHora).padStart(2, "0")}:00 BRT`,
+    iso: proxIso,
+    labelCompleto: `${formatarMomentoBRT(proxIso, agora)} BRT`,
   }
 }
 

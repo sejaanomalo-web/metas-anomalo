@@ -22,6 +22,7 @@ import {
   getDiasSentinelaDaEmpresa,
   getLinhasDoMes,
   getUltimoLogSentinela,
+  formatarMomentoBRT,
   proximaExecucao,
   resumirMesSentinela,
   statusSentinela,
@@ -157,7 +158,7 @@ export default async function TrafegoPage({
               statusCor={stat.cor}
               rotulo={stat.rotulo}
               ultimaExecucao={ultimoLog?.data_execucao ?? null}
-              proximaLabel={prox.label}
+              proximaLabelCompleto={prox.labelCompleto}
             />
           </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
@@ -398,12 +399,12 @@ function BadgeStatusSentinela({
   statusCor,
   rotulo,
   ultimaExecucao,
-  proximaLabel,
+  proximaLabelCompleto,
 }: {
   statusCor: "success" | "warning" | "danger" | "neutral"
   rotulo: string
   ultimaExecucao: string | null
-  proximaLabel: string
+  proximaLabelCompleto: string
 }) {
   const corMap = {
     success: { fg: "var(--success)", bg: "var(--success-bg)", border: "rgba(22,163,74,0.25)" },
@@ -443,15 +444,26 @@ function BadgeStatusSentinela({
           </span>
         )}
       </span>
-      <span
+      <div
         style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 2,
           fontSize: 10,
           color: "var(--text-4)",
           fontVariantNumeric: "tabular-nums",
+          lineHeight: 1.4,
         }}
       >
-        próxima execução: {proximaLabel}
-      </span>
+        <span>
+          última execução:{" "}
+          {ultimaExecucao
+            ? `${formatarMomentoBRT(ultimaExecucao)} BRT`
+            : "—"}
+        </span>
+        <span>próxima execução: {proximaLabelCompleto}</span>
+      </div>
     </div>
   )
 }

@@ -143,8 +143,11 @@ export default function AppShell({
       <SidebarRail
         expandido={hydrated ? expandido : false}
         onToggle={toggle}
-        notificacoesIniciais={notificacoesIniciais}
       />
+
+      {/* Sino flutuante no canto superior direito — sempre visível
+       * em qualquer rota /dashboard (desktop e mobile). */}
+      <SinoNotificacoes inicial={notificacoesIniciais} />
 
       <div
         className="app-main"
@@ -164,11 +167,9 @@ export default function AppShell({
 function SidebarRail({
   expandido,
   onToggle,
-  notificacoesIniciais,
 }: {
   expandido: boolean
   onToggle: () => void
-  notificacoesIniciais: { count: number; itens: NotificacaoItem[] }
 }) {
   const pathname = usePathname()
   const width = expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
@@ -225,7 +226,8 @@ function SidebarRail({
         />
       </nav>
 
-      {/* Rodapé: Notificações + Configurações + Sair */}
+      {/* Rodapé: Configurações + Sair (sino vive agora no topo direito
+       * flutuante, fora do rail) */}
       <div
         style={{
           display: "flex",
@@ -235,10 +237,6 @@ function SidebarRail({
           borderTop: "1px solid rgba(255,255,255,0.06)",
         }}
       >
-        <SinoNotificacoes
-          expandido={expandido}
-          inicial={notificacoesIniciais}
-        />
         <ItemMenu
           icon={<IconeConfig />}
           rotulo="Configurações"

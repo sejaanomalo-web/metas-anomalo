@@ -529,12 +529,50 @@ table {
   }
 }
 
-/* ============ Painel de notificações (sino) ============
- * Desktop (>=1024px): drawer 400px à direita, full-height.
- * Mobile/tablet (<1024px): full-screen — mesma faixa onde o rail
- * também é overlay. Garante que iPad portrait (820px) também
- * pegue full-screen, não só iPhone.
- * z-index 201 cobre rail (max 50), hambúrguer (60) e backdrop (40).
+/* ============ Sino flutuante (botão) ============
+ * Botão fixo no canto superior direito, sempre visível.
+ * z-index 60 = mesmo do hambúrguer mobile (top-left); não conflitam.
+ */
+.sino-trigger {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(20, 20, 20, 0.7);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  z-index: 60;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.sino-trigger:hover {
+  background: rgba(30, 30, 30, 0.85);
+  color: var(--text-1);
+}
+.sino-trigger:active {
+  transform: scale(0.95);
+}
+.sino-trigger[data-tem-nao-lidas="true"] {
+  color: var(--accent);
+  border-color: rgba(201, 149, 58, 0.4);
+}
+.sino-trigger[data-aberto="true"] {
+  background: rgba(40, 40, 40, 0.9);
+}
+
+/* ============ Painel de notificações ============
+ * Desktop (>=1024px): drawer 400px à direita, full-height, slide da direita.
+ * Mobile/tablet (<1024px): full-screen, slide do topo (estilo iOS
+ * Notification Center). Mesma faixa onde o rail vira overlay.
+ * z-index 201 cobre rail (max 50), sino-trigger e hambúrguer (60), backdrop (40).
  */
 .painel-notif {
   top: 0;
@@ -543,13 +581,23 @@ table {
   width: 400px;
   max-width: 100vw;
   border-left: 0.5px solid rgba(255, 255, 255, 0.08);
+  animation: painel-slide-left 0.22s ease-out;
+}
+
+@keyframes painel-slide-left {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @media (max-width: 1023px) {
   .painel-notif {
-    /* !important pra cobrir qualquer regra inline residual. inset: 0
-     * faz o painel cobrir os 4 lados; width: auto deixa o navegador
-     * calcular pela diferença entre left/right (= viewport inteiro). */
+    /* !important cobre qualquer regra residual. inset: 0 faz o painel
+     * cobrir os 4 lados; width: auto deixa o navegador calcular pela
+     * diferença entre left/right (viewport inteiro). */
     top: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
@@ -557,6 +605,16 @@ table {
     width: auto !important;
     max-width: none !important;
     border-left: none !important;
+    animation: painel-slide-down 0.25s ease-out;
+  }
+}
+
+@keyframes painel-slide-down {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
   }
 }
 
