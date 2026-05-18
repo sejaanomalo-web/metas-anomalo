@@ -439,11 +439,12 @@ export async function salvarDadosReaisAction(
     return { ok: false, erro: resultado.erro }
   }
 
-  const empresaMeta = getEmpresaPorDb(empresa)
-  if (empresaMeta) {
-    revalidatePath(`/dashboard/${empresaMeta.slug}`)
-  }
-  revalidatePath("/dashboard")
+  // Invalida o cache de rota de TODO o /dashboard de uma vez (layout-scope).
+  // Antes só revalidava /dashboard e /dashboard/<slug> APENAS pra empresas
+  // hardcoded em lib/data.ts — empresas novas (Nardi, Mãe Divina, etc.)
+  // criadas via UI não tinham nem o próprio /dashboard/<slug> invalidado,
+  // e a listagem /dashboard/empresas nunca era invalidada pra nenhuma.
+  revalidatePath("/dashboard", "layout")
 
   return { ok: true }
 }

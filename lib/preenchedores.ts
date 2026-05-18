@@ -12,11 +12,7 @@ import {
   getSupabase,
   supabaseConfigurado,
 } from "./supabase"
-import {
-  type Mes,
-  type OrigemDadosReais,
-  getEmpresaPorDb,
-} from "./data"
+import { type Mes, type OrigemDadosReais } from "./data"
 import { gravarDadosReaisComLog } from "./dados-reais"
 
 export interface ResultadoPreenchedor {
@@ -530,10 +526,10 @@ export async function submeterFormularioAction(
     return { ok: false, erro: resultado.erro }
   }
 
-  // 9. Revalida dashboards
-  revalidatePath("/dashboard")
-  const emp = getEmpresaPorDb(empresa)
-  if (emp) revalidatePath(`/dashboard/${emp.slug}`)
+  // 9. Revalida dashboards — layout-scope cobre /dashboard,
+  // /dashboard/empresas, /dashboard/<slug>, /dashboard/<slug>/trafego
+  // de uma vez, incluindo empresas criadas via UI (não hardcoded).
+  revalidatePath("/dashboard", "layout")
 
   return { ok: true }
 }
