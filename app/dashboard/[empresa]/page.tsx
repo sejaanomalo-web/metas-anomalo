@@ -8,6 +8,7 @@ import GraficoFaturamento from "@/components/GraficoFaturamento"
 import TabelaMeses from "@/components/TabelaMeses"
 import DrawerDadosReais from "@/components/DrawerDadosReais"
 import ToggleOrigem from "@/components/ToggleOrigem"
+import BotaoAtualizar from "@/components/BotaoAtualizar"
 import { estaAutenticado } from "@/lib/auth"
 import {
   MESES,
@@ -150,7 +151,17 @@ export default async function EmpresaPage({
             }}
           >
             <h1 style={{ fontSize: 36 }}>{empresa.nome}</h1>
-            <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <BotaoAtualizar />
+              <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+            </div>
           </div>
           <div
             style={{
