@@ -278,9 +278,13 @@ export interface LinhaDoMes {
   created_at: string
 }
 
-/** Último log de execução do Sentinela (qualquer empresa). */
+/** Último log de execução do Sentinela (qualquer empresa).
+ *
+ * Usa getSupabaseAdmin porque logs_sentinela tem RLS habilitada sem
+ * policies — anon retornaria 0 linhas silenciosamente (sem erro), e a
+ * UI mostraria "última execução: —" mesmo com logs presentes. */
 export async function getUltimoLogSentinela(): Promise<LogSentinela | null> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return null
   const { data, error } = await supabase
     .from("logs_sentinela")
