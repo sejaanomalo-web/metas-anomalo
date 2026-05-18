@@ -8,7 +8,7 @@
 // Sem 'use server': há funções async (que rodam no servidor a partir
 // de Server Components) misturadas com utilitários síncronos puros.
 
-import { getSupabase, type DadosReais } from "./supabase"
+import { getSupabase, getSupabaseAdmin, type DadosReais } from "./supabase"
 import {
   MES_NUM,
   MESES,
@@ -19,12 +19,12 @@ import {
 
 export const SENTINELA_NOME = "Sentinela Anomalo"
 
-/** Empresas atualmente cobertas pelo agente Sentinela (têm token Meta
- *  cadastrado em tokens_meta e estão ativas). Como o dashboard usa
- *  empresas_config.nome (não slug), mantemos a lista pelo nome de
- *  exibição — bate com o que o agente grava em dados_diarios_log.empresa.
+/** Fallback hardcoded da lista de empresas trackeadas, usado APENAS se
+ *  a query a tokens_meta falhar (Supabase fora do ar, env vars não
+ *  setadas, etc.). A fonte da verdade é a tabela `tokens_meta` em
+ *  produção — adicione clientes lá, não aqui.
  */
-export const EMPRESAS_TRACKEADAS = [
+const EMPRESAS_TRACKEADAS_FALLBACK = [
   "Anômalo Hub",
   "Aton Estofados",
   "Diego Knebel",
@@ -33,8 +33,34 @@ export const EMPRESAS_TRACKEADAS = [
   "Mãe Divina Yoga",
 ] as const
 
-export function empresaTrackeadaPeloSentinela(nomeEmpresa: string): boolean {
-  return (EMPRESAS_TRACKEADAS as readonly string[]).includes(nomeEmpresa)
+/** Lê dinamicamente as empresas com token Meta ativo cadastrado em
+ *  tokens_meta. Resultado ordenado alfabeticamente. Fallback hardcoded
+ *  em caso de falha (sem service_role ou query error).
+ *
+ *  tokens_meta tem RLS sem policies → exige service_role pra ler. Por
+ *  isso usa getSupabaseAdmin, não getSupabase. */
+export async function getEmpresasTrackeadas(): Promise<string[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return [...EMPRESAS_TRACKEADAS_FALLBACK]
+  const { data, error } = await supabase
+    .from("tokens_meta")
+    .select("empresa")
+    .eq("ativo", true)
+    .order("empresa")
+  if (error || !data || data.length === 0) {
+    if (error) {
+      console.error("[sentinela] tokens_meta query error", error.message)
+    }
+    return [...EMPRESAS_TRACKEADAS_FALLBACK]
+  }
+  return data.map((r) => r.empresa as string)
+}
+
+export async function empresaTrackeadaPeloSentinela(
+  nomeEmpresa: string
+): Promise<boolean> {
+  const trackeadas = await getEmpresasTrackeadas()
+  return trackeadas.includes(nomeEmpresa)
 }
 
 /** Formata um ISO datetime no timezone BRT, escolhendo o rótulo mais

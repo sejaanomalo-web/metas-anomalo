@@ -16,9 +16,8 @@ import {
 } from "@/lib/data"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
-  EMPRESAS_TRACKEADAS,
   SENTINELA_NOME,
-  empresaTrackeadaPeloSentinela,
+  getEmpresasTrackeadas,
   getDiasSentinelaDaEmpresa,
   getLinhasDoMes,
   getUltimoLogSentinela,
@@ -72,14 +71,16 @@ export default async function TrafegoPage({
   const inicio = `${ano}-${mesNum}-01`
   const fim = `${ano}-${mesNum}-${ultimoDia}`
 
-  const [diasSentinela, linhas, ultimoLog] = await Promise.all([
-    getDiasSentinelaDaEmpresa(empresa.nome, inicio, fim),
-    getLinhasDoMes(empresa.nome, inicio, fim),
-    getUltimoLogSentinela(),
-  ])
+  const [diasSentinela, linhas, ultimoLog, empresasTrackeadas] =
+    await Promise.all([
+      getDiasSentinelaDaEmpresa(empresa.nome, inicio, fim),
+      getLinhasDoMes(empresa.nome, inicio, fim),
+      getUltimoLogSentinela(),
+      getEmpresasTrackeadas(),
+    ])
 
   const resumo = resumirMesSentinela(diasSentinela)
-  const trackeada = empresaTrackeadaPeloSentinela(empresa.nome)
+  const trackeada = empresasTrackeadas.includes(empresa.nome)
   const stat = statusSentinela(ultimoLog)
   const prox = proximaExecucao()
   const anomaliasEmpresa: AnomaliaSentinela[] = (
@@ -180,7 +181,7 @@ export default async function TrafegoPage({
             <strong>Token Meta não cadastrado pra esta empresa.</strong>{" "}
             O agente Sentinela só processa as empresas listadas em{" "}
             <code style={{ color: "var(--accent)" }}>tokens_meta</code>{" "}
-            (hoje: {EMPRESAS_TRACKEADAS.join(", ")}). Pra começar a
+            (hoje: {empresasTrackeadas.join(", ")}). Pra começar a
             trackear, cadastre o System User token no Supabase.
           </div>
         )}
