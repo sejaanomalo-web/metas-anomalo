@@ -1,6 +1,5 @@
 import Image from "next/image"
 import FormularioManual from "@/components/FormularioManual"
-import { anoValido, mesValido } from "@/lib/data"
 import { listarEmpresas } from "@/lib/empresas-actions"
 import logo from "@/public/logo-capa-app.png"
 
@@ -15,13 +14,7 @@ export const dynamic = "force-dynamic"
  * que aqui sem o botão "Copiar link público" (não faz sentido pra quem
  * já tá no link).
  */
-export default async function FormularioPublicoPage({
-  searchParams,
-}: {
-  searchParams: { mes?: string; ano?: string }
-}) {
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+export default async function FormularioPublicoPage() {
   const empresas = await listarEmpresas(true)
 
   return (
@@ -68,11 +61,11 @@ export default async function FormularioPublicoPage({
             lineHeight: 1.55,
           }}
         >
-          {mes} {ano} · escolha a empresa abaixo e lance os dados do dia
+          Escolha empresa e data, depois lance os dados.
         </p>
       </header>
 
-      <FormularioManual empresas={empresas} mes={mes} ano={ano} />
+      <FormularioManual empresas={empresas} />
 
       <p
         className="mt-8 text-center"

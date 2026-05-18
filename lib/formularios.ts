@@ -1,11 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import {
-  ANO_PADRAO,
-  MESES,
-  type Mes,
-} from "./data"
+import { MESES, type Mes } from "./data"
 import {
   type DadosReais,
   supabaseConfigurado,
@@ -33,8 +29,29 @@ function parseNumero(v: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function mesValido(m: string): m is Mes {
-  return (MESES as readonly string[]).includes(m)
+/** Converte YYYY-MM-DD em { dataISO, mes, ano }. mes/ano são derivados
+ *  da data — fonte única de verdade evita inconsistência entre o que
+ *  vai em dados_diarios_log.data e em dados_reais.{mes,ano}.
+ *
+ *  Mes em formato canônico ("Abril".."Dezembro"); retorna null se a
+ *  data não estiver dentro dos meses suportados pelo dashboard. */
+function derivarPeriodoDaData(
+  dataISO: string
+): { dataISO: string; mes: Mes; ano: number } | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataISO)) return null
+  // Constrói Date em UTC pra evitar shift de timezone que mudaria o dia
+  const [anoStr, mesStr] = dataISO.split("-")
+  const ano = parseInt(anoStr, 10)
+  const mesNum = parseInt(mesStr, 10)
+  if (!Number.isFinite(ano) || !Number.isFinite(mesNum)) return null
+  // Tabela mes_num → nome (mesma usada em lib/data.ts MES_NUM)
+  const nomes: Record<number, Mes> = {
+    4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+    9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
+  }
+  const mes = nomes[mesNum]
+  if (!mes || !(MESES as readonly string[]).includes(mes)) return null
+  return { dataISO, mes, ano }
 }
 
 /**
@@ -42,13 +59,15 @@ function mesValido(m: string): m is Mes {
  *   • /dashboard/formularios (admin, dentro da sidebar)
  *   • /formulario           (público, sem auth)
  *
- * Salva os campos manuais do dia em dados_diarios_log + dados_reais via
- * gravarDadosReaisComLog (mesma helper que o drawer admin usa). Campos
- * automáticos do Sentinela (investimento, leads, CPL) NÃO são tocados.
+ * Recebe `data` (YYYY-MM-DD) do formulário, deriva mes/ano dela e grava
+ * em dados_diarios_log (na linha do dia exato) + dados_reais (agregado
+ * mensal). Permite lançamento histórico — não trava em "hoje".
  *
- * O preenchedor é marcado como "Formulário público" pra distinguir de
- * escritas que vieram do drawer admin ("Drawer admin") ou do agente
- * Sentinela ("Sentinela Anomalo").
+ * Campos automáticos do Sentinela (investimento, leads, CPL) NÃO são
+ * tocados — apenas reuniões, contratos, faturamento, observações.
+ *
+ * O preenchedor é marcado como "Formulário público" em
+ * dados_diarios_log.preenchedor_nome.
  */
 export async function salvarFormularioManualAction(
   formData: FormData
@@ -58,19 +77,24 @@ export async function salvarFormularioManualAction(
   }
 
   const empresa = String(formData.get("empresa") ?? "").trim()
-  const mes = String(formData.get("mes") ?? "")
-  const ano = parseInt0(formData.get("ano")) ?? ANO_PADRAO
-  if (!empresa || !mesValido(mes)) {
-    return { ok: false, erro: "Selecione empresa e período." }
+  const dataInput = String(formData.get("data") ?? "")
+  if (!empresa) {
+    return { ok: false, erro: "Selecione uma empresa." }
+  }
+  const periodo = derivarPeriodoDaData(dataInput)
+  if (!periodo) {
+    return {
+      ok: false,
+      erro: "Data inválida (use o seletor — entre Abril e Dezembro).",
+    }
   }
 
-  // Origem fixa em "pago". Hoje o uso real do form é o gestor lançar
+  // Origem fixa em "pago". O fluxo manual hoje é o gestor lançar
   // reuniões/contratos/faturamento, que entram no bucket pago.
-  // Prospecção orgânica não tem fluxo manual ainda.
   const payload: DadosReais = {
     empresa,
-    mes,
-    ano,
+    mes: periodo.mes,
+    ano: periodo.ano,
     origem: "pago",
     investimento_real: null,
     leads_real: null,
@@ -84,10 +108,11 @@ export async function salvarFormularioManualAction(
     updated_at: new Date().toISOString(),
   }
 
-  const resultado = await gravarDadosReaisComLog(payload, {
-    id: null,
-    nome: "Formulário público",
-  })
+  const resultado = await gravarDadosReaisComLog(
+    payload,
+    { id: null, nome: "Formulário público" },
+    { dataISO: periodo.dataISO }
+  )
   if (!resultado.ok) {
     return { ok: false, erro: resultado.erro }
   }

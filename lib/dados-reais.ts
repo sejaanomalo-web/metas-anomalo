@@ -100,7 +100,8 @@ async function resolverNomeEmpresa(empresaDb: string): Promise<string> {
  */
 export async function gravarDadosReaisComLog(
   payload: DadosReais,
-  identidade: IdentidadeEscrita
+  identidade: IdentidadeEscrita,
+  opcoes: { dataISO?: string } = {}
 ): Promise<{ ok: boolean; erro?: string; anterior: DadosReais | null }> {
   const supabase = getSupabase()
   if (!supabase) {
@@ -109,7 +110,12 @@ export async function gravarDadosReaisComLog(
 
   const empresaNome = await resolverNomeEmpresa(payload.empresa)
   const origem = payload.origem ?? ORIGEM_PADRAO
-  const hojeISO = new Date().toISOString().slice(0, 10)
+  // dataISO opcional — formulário público permite escolher uma data
+  // específica (passado, hoje, futuro). Se omitido, default = hoje BRT.
+  // Aceita só formato YYYY-MM-DD; qualquer outra coisa cai pro default.
+  const dataISO = /^\d{4}-\d{2}-\d{2}$/.test(opcoes.dataISO ?? "")
+    ? (opcoes.dataISO as string)
+    : new Date().toISOString().slice(0, 10)
 
   // 1. Estado anterior de dados_reais (pros campos _anterior do log).
   const { data: anteriorRow } = await supabase
@@ -130,7 +136,7 @@ export async function gravarDadosReaisComLog(
       "id, preenchedor_id, preenchedor_nome, reunioes_real, contratos_real, faturamento_real, criativos_entregues, clientes_ativos, observacoes, criativos_usados, criativos_detalhe, respostas, publicos_prospectados"
     )
     .eq("empresa", empresaNome)
-    .eq("data", hojeISO)
+    .eq("data", dataISO)
     .eq("origem", origem)
     .maybeSingle()
   const logExistente = logExistenteRow as null | {
@@ -183,7 +189,7 @@ export async function gravarDadosReaisComLog(
     // rodou no dia ou esta empresa não tem token).
     const logCompleto = {
       empresa: empresaNome,
-      data: hojeISO,
+      data: dataISO,
       origem,
       investimento_real: payload.investimento_real,
       leads_real: payload.leads_real,
@@ -245,7 +251,7 @@ export async function gravarDadosReaisComLog(
         .from("dados_diarios_log")
         .delete()
         .eq("empresa", empresaNome)
-        .eq("data", hojeISO)
+        .eq("data", dataISO)
         .eq("origem", origem)
         .gte("created_at", new Date(Date.now() - 5000).toISOString())
     }

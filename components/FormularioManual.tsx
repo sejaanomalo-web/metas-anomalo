@@ -1,14 +1,21 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import type { EmpresaMeta, Mes } from "@/lib/data"
+import type { EmpresaMeta } from "@/lib/data"
 import { salvarFormularioManualAction } from "@/lib/formularios"
 
 interface Props {
   empresas: EmpresaMeta[]
-  mes: Mes
-  ano: number
   copiarLinkPublico?: boolean
+}
+
+/** Data atual em BRT no formato YYYY-MM-DD — usada como default do
+ *  seletor de data. BRT = UTC-3 sem DST. */
+function hojeBRT(): string {
+  const agora = new Date()
+  const utcMs = agora.getTime() + agora.getTimezoneOffset() * 60_000
+  const brt = new Date(utcMs - 3 * 60 * 60_000)
+  return brt.toISOString().slice(0, 10)
 }
 
 /**
@@ -22,11 +29,10 @@ interface Props {
  */
 export default function FormularioManual({
   empresas,
-  mes,
-  ano,
   copiarLinkPublico,
 }: Props) {
   const [empresaDb, setEmpresaDb] = useState(empresas[0]?.db ?? "")
+  const [data, setData] = useState(hojeBRT())
   const [feedback, setFeedback] = useState<
     | { tipo: "sucesso"; mensagem: string }
     | { tipo: "erro"; mensagem: string }
@@ -54,9 +60,10 @@ export default function FormularioManual({
     setFeedback(null)
     const resultado = await salvarFormularioManualAction(formData)
     if (resultado.ok) {
+      const dataFmt = formatarDataExtenso(data)
       setFeedback({
         tipo: "sucesso",
-        mensagem: `Dados de ${empresa?.nome ?? "empresa"} salvos com sucesso.`,
+        mensagem: `${empresa?.nome ?? "Empresa"} · ${dataFmt} salvo com sucesso.`,
       })
     } else {
       setFeedback({
@@ -105,7 +112,7 @@ export default function FormularioManual({
             fontWeight: 500,
           }}
         >
-          Preenchimento manual · {mes} {ano}
+          Preenchimento manual
         </p>
         {copiarLinkPublico && (
           <button
@@ -135,9 +142,6 @@ export default function FormularioManual({
         action={(fd) => startTransition(() => onSubmit(fd))}
         className="space-y-4"
       >
-        <input type="hidden" name="mes" value={mes} />
-        <input type="hidden" name="ano" value={ano} />
-
         <Campo label="Empresa">
           <select
             name="empresa"
@@ -155,7 +159,21 @@ export default function FormularioManual({
           </select>
         </Campo>
 
-        <Campo label={`${rotuloReunioes} realizadas hoje`}>
+        <Campo label="Data dos dados (ano, mês, dia)">
+          <input
+            type="date"
+            name="data"
+            value={data}
+            onChange={(e) => setData(e.target.value)}
+            required
+            min="2026-04-01"
+            max="2026-12-31"
+            className="glass-input"
+            style={inputEstilo}
+          />
+        </Campo>
+
+        <Campo label={`${rotuloReunioes} realizadas`}>
           <input
             type="number"
             name="reunioes_real"
@@ -167,7 +185,7 @@ export default function FormularioManual({
           />
         </Campo>
 
-        <Campo label={`${rotuloContratos} fechados hoje`}>
+        <Campo label={`${rotuloContratos} fechados`}>
           <input
             type="number"
             name="contratos_real"
@@ -179,7 +197,7 @@ export default function FormularioManual({
           />
         </Campo>
 
-        <Campo label="Faturamento do dia (R$)">
+        <Campo label="Faturamento (R$)">
           <input
             type="text"
             name="faturamento_real"
@@ -256,6 +274,16 @@ const inputEstilo: React.CSSProperties = {
   padding: "11px 14px",
   fontSize: 14,
   fontWeight: 400,
+}
+
+/** "2026-05-18" → "18 de Maio de 2026" — usado no feedback de sucesso. */
+function formatarDataExtenso(iso: string): string {
+  const [a, m, d] = iso.split("-").map((n) => parseInt(n, 10))
+  const meses = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  ]
+  return `${String(d).padStart(2, "0")} de ${meses[m - 1] ?? "?"} de ${a}`
 }
 
 function Campo({
