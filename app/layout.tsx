@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Anômalo Hub — Painel de Metas",
+  title: "METΛS",
   description: "Painel interno de metas e funil de vendas do Grupo Anômalo Hub.",
   manifest: "/manifest.json",
   appleWebApp: {
@@ -11,9 +11,12 @@ export const metadata: Metadata = {
     title: "Anômalo",
   },
   icons: {
+    // Favicon do navegador = Λ branco sem fundo (versão minimalista).
+    // PWA icons (apple-touch + manifest 192/512) seguem com fundo
+    // preto pra ficarem destacados na tela inicial do iOS/Android.
     icon: [
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
     ],
     apple: "/apple-touch-icon.png",
   },
