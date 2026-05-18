@@ -128,7 +128,9 @@ export default function SinoNotificacoes({
           borderRadius: 10,
           color: "inherit",
           cursor: "pointer",
+          textAlign: "left",
           fontFamily: "inherit",
+          fontSize: "inherit",
           textTransform: "none",
           letterSpacing: "normal",
           transition: "background 0.15s ease",
@@ -263,7 +265,6 @@ function PainelNotificacoes({
           display: "flex",
           flexDirection: "column",
           background: "var(--surface-1)",
-          borderLeft: "0.5px solid rgba(255,255,255,0.08)",
         }}
       >
         <header
