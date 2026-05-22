@@ -1,28 +1,33 @@
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import FormConfig from "@/components/FormConfig"
 import AtivarNotificacoes from "@/components/AtivarNotificacoes"
+import GerenciadorUsuarios from "@/components/GerenciadorUsuarios"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
 import {
   montarResumoDiario,
   montarResumoMensal,
   montarResumoSemanal,
 } from "@/lib/resumos"
-import { requererPermissao } from "@/lib/auth"
+import { requererPermissao, temPermissao } from "@/lib/auth"
+import { listarUsuariosAction } from "@/lib/usuarios-actions"
 
 export default async function ConfiguracoesPage({
   searchParams,
 }: {
   searchParams: { mes?: string }
 }) {
-  await requererPermissao("configuracoes")
+  const usuario = await requererPermissao("configuracoes")
+  const podeGerenciarUsuarios = temPermissao(usuario, "gerenciar_usuarios")
 
   const mes = mesValido(searchParams?.mes)
 
-  const [mensagemDiario, mensagemSemanal, mensagemMensal] = await Promise.all([
-    montarResumoDiario(),
-    montarResumoSemanal(),
-    montarResumoMensal(),
-  ])
+  const [mensagemDiario, mensagemSemanal, mensagemMensal, usuarios] =
+    await Promise.all([
+      montarResumoDiario(),
+      montarResumoSemanal(),
+      montarResumoMensal(),
+      podeGerenciarUsuarios ? listarUsuariosAction() : Promise.resolve([]),
+    ])
 
   return (
     <>
@@ -69,6 +74,13 @@ export default async function ConfiguracoesPage({
         <AtivarNotificacoes
           vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
         />
+
+        {podeGerenciarUsuarios && (
+          <GerenciadorUsuarios
+            usuariosIniciais={usuarios}
+            meuUsuarioId={usuario.id}
+          />
+        )}
 
         <FormConfig
           mensagemDiario={mensagemDiario}

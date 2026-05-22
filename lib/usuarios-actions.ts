@@ -1,0 +1,275 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+import { randomBytes, scryptSync } from "crypto"
+import {
+  PRESETS_PERMISSOES,
+  getUsuarioAtual,
+  requererPermissao,
+  type ChavePermissao,
+  type PapelUsuario,
+  type Permissoes,
+} from "./auth"
+import { getSupabaseAdmin } from "./supabase"
+
+export interface UsuarioRow {
+  id: string
+  email: string
+  nome: string
+  papel: PapelUsuario
+  permissoes: Permissoes
+  ativo: boolean
+  created_at: string
+  updated_at?: string
+}
+
+export interface ResultadoUsuario {
+  ok: boolean
+  erro?: string
+  senha_temporaria?: string
+}
+
+// ============================================================
+// Hash de senha (scrypt — mesma estratégia do lib/auth.ts)
+// ============================================================
+
+function hashSenha(senha: string): string {
+  const salt = randomBytes(16)
+  const derived = scryptSync(senha, salt, 64)
+  return salt.toString("hex") + ":" + derived.toString("hex")
+}
+
+function gerarSenhaTemporaria(): string {
+  // 12 bytes hex = 24 chars alfanuméricos — suficiente pra senha
+  // temporária que o usuário trocará depois.
+  return randomBytes(9).toString("base64").slice(0, 12)
+}
+
+function emailValido(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+const CHAVES: ChavePermissao[] = [
+  "dashboard_principal",
+  "dashboard_empresas",
+  "dashboard_empresa_detalhe",
+  "dashboard_trafego",
+  "formularios",
+  "configuracoes",
+  "gerenciar_usuarios",
+  "ver_notificacoes",
+]
+
+function permissoesFromFormData(formData: FormData): Permissoes {
+  const result = {} as Permissoes
+  for (const chave of CHAVES) {
+    result[chave] = formData.get(`perm_${chave}`) === "on"
+  }
+  return result
+}
+
+function permissoesFromPapel(papel: PapelUsuario): Permissoes {
+  return { ...PRESETS_PERMISSOES[papel] }
+}
+
+// ============================================================
+// Queries
+// ============================================================
+
+export async function listarUsuariosAction(): Promise<UsuarioRow[]> {
+  await requererPermissao("gerenciar_usuarios")
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select("id, email, nome, papel, permissoes, ativo, created_at, updated_at")
+    .order("created_at", { ascending: true })
+  if (error) {
+    console.error("[usuarios] listar error", error.message)
+    return []
+  }
+  return (data ?? []) as UsuarioRow[]
+}
+
+// ============================================================
+// CRUD
+// ============================================================
+
+export async function criarUsuarioAction(
+  formData: FormData
+): Promise<ResultadoUsuario> {
+  await requererPermissao("gerenciar_usuarios")
+
+  const email = String(formData.get("email") ?? "").toLowerCase().trim()
+  const nome = String(formData.get("nome") ?? "").trim()
+  const papelRaw = String(formData.get("papel") ?? "custom")
+  const papel: PapelUsuario =
+    papelRaw === "admin" || papelRaw === "gestor_trafego" ? papelRaw : "custom"
+  const senhaInput = String(formData.get("senha") ?? "").trim()
+
+  if (!emailValido(email)) {
+    return { ok: false, erro: "E-mail inválido." }
+  }
+  if (!nome) {
+    return { ok: false, erro: "Nome obrigatório." }
+  }
+  if (senhaInput && senhaInput.length < 8) {
+    return { ok: false, erro: "Senha mínima de 8 caracteres." }
+  }
+
+  // Se papel é admin ou gestor_trafego, usa o preset. Se custom, lê
+  // os checkboxes do form.
+  const permissoes =
+    papel === "custom"
+      ? permissoesFromFormData(formData)
+      : permissoesFromPapel(papel)
+
+  const senha = senhaInput || gerarSenhaTemporaria()
+  const senha_hash = hashSenha(senha)
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) {
+    return { ok: false, erro: "Supabase indisponível." }
+  }
+
+  const { error } = await supabase.from("usuarios").insert({
+    email,
+    nome,
+    papel,
+    permissoes,
+    senha_hash,
+    ativo: true,
+  })
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: false, erro: "E-mail já cadastrado." }
+    }
+    console.error("[usuarios] criar error", error.message)
+    return { ok: false, erro: error.message }
+  }
+
+  revalidatePath("/dashboard/configuracoes")
+  // Devolve a senha temporária se foi gerada (admin precisa pra
+  // entregar pro usuário). Se o admin colocou senha custom, não devolve.
+  return {
+    ok: true,
+    senha_temporaria: senhaInput ? undefined : senha,
+  }
+}
+
+export async function atualizarUsuarioAction(
+  formData: FormData
+): Promise<ResultadoUsuario> {
+  const admin = await requererPermissao("gerenciar_usuarios")
+
+  const id = String(formData.get("id") ?? "").trim()
+  const nome = String(formData.get("nome") ?? "").trim()
+  const papelRaw = String(formData.get("papel") ?? "custom")
+  const papel: PapelUsuario =
+    papelRaw === "admin" || papelRaw === "gestor_trafego" ? papelRaw : "custom"
+
+  if (!id || !nome) {
+    return { ok: false, erro: "Dados inválidos." }
+  }
+
+  // Defesa: admin não pode rebaixar a si mesmo (evita lockout do sistema).
+  if (admin.id === id && papel !== "admin") {
+    return {
+      ok: false,
+      erro: "Você não pode rebaixar seu próprio papel de admin.",
+    }
+  }
+
+  const permissoes =
+    papel === "custom"
+      ? permissoesFromFormData(formData)
+      : permissoesFromPapel(papel)
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) {
+    return { ok: false, erro: "Supabase indisponível." }
+  }
+
+  const { error } = await supabase
+    .from("usuarios")
+    .update({
+      nome,
+      papel,
+      permissoes,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+  if (error) {
+    console.error("[usuarios] atualizar error", error.message)
+    return { ok: false, erro: error.message }
+  }
+
+  revalidatePath("/dashboard/configuracoes")
+  return { ok: true }
+}
+
+export async function alternarAtivoUsuarioAction(
+  formData: FormData
+): Promise<ResultadoUsuario> {
+  const admin = await requererPermissao("gerenciar_usuarios")
+
+  const id = String(formData.get("id") ?? "").trim()
+  const ativoNovo = formData.get("ativo") === "true"
+  if (!id) return { ok: false, erro: "ID inválido." }
+
+  // Defesa: admin não pode desativar a si mesmo.
+  if (admin.id === id && !ativoNovo) {
+    return { ok: false, erro: "Você não pode desativar sua própria conta." }
+  }
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) {
+    return { ok: false, erro: "Supabase indisponível." }
+  }
+
+  const { error } = await supabase
+    .from("usuarios")
+    .update({ ativo: ativoNovo, updated_at: new Date().toISOString() })
+    .eq("id", id)
+  if (error) {
+    console.error("[usuarios] alternar ativo error", error.message)
+    return { ok: false, erro: error.message }
+  }
+
+  revalidatePath("/dashboard/configuracoes")
+  return { ok: true }
+}
+
+export async function redefinirSenhaAction(
+  formData: FormData
+): Promise<ResultadoUsuario> {
+  await requererPermissao("gerenciar_usuarios")
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, erro: "ID inválido." }
+
+  const novaSenha = gerarSenhaTemporaria()
+  const senha_hash = hashSenha(novaSenha)
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) {
+    return { ok: false, erro: "Supabase indisponível." }
+  }
+
+  const { error } = await supabase
+    .from("usuarios")
+    .update({ senha_hash, updated_at: new Date().toISOString() })
+    .eq("id", id)
+  if (error) {
+    console.error("[usuarios] redefinir senha error", error.message)
+    return { ok: false, erro: error.message }
+  }
+
+  revalidatePath("/dashboard/configuracoes")
+  return { ok: true, senha_temporaria: novaSenha }
+}
+
+// Re-export pra uso em pages que querem checar permissão na UI inline.
+export async function getUsuarioAtualAction() {
+  return getUsuarioAtual()
+}
