@@ -1,10 +1,10 @@
 import Link from "next/link"
-import { notFound, redirect } from "next/navigation"
+import { notFound } from "next/navigation"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import TabsEmpresa from "@/components/TabsEmpresa"
 import TrafegoRealtime from "@/components/TrafegoRealtime"
 import KPICard from "@/components/ui/KPICard"
-import { estaAutenticado } from "@/lib/auth"
+import { requererPermissao } from "@/lib/auth"
 import {
   MES_NUM,
   anoValido,
@@ -55,9 +55,7 @@ export default async function TrafegoPage({
   params: { empresa: string }
   searchParams: { mes?: string; ano?: string }
 }) {
-  if (!estaAutenticado()) {
-    redirect("/login")
-  }
+  await requererPermissao("dashboard_trafego")
 
   const empresa = await getEmpresaAsync(params.empresa)
   if (!empresa) notFound()

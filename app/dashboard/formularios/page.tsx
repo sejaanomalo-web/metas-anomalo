@@ -1,5 +1,6 @@
 import FormularioManual from "@/components/FormularioManual"
 import { listarEmpresas } from "@/lib/empresas-actions"
+import { requererPermissao } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
 
@@ -17,6 +18,8 @@ export const dynamic = "force-dynamic"
  * única — define em qual dia/mês/ano o registro entra no banco.
  */
 export default async function FormulariosPage() {
+  await requererPermissao("formularios")
+
   const empresas = await listarEmpresas(true)
 
   return (

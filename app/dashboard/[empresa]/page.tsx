@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { notFound, redirect } from "next/navigation"
+import { notFound } from "next/navigation"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import TabsEmpresa from "@/components/TabsEmpresa"
 import CenarioReal from "@/components/CenarioReal"
@@ -9,7 +9,7 @@ import TabelaMeses from "@/components/TabelaMeses"
 import DrawerDadosReais from "@/components/DrawerDadosReais"
 import ToggleOrigem from "@/components/ToggleOrigem"
 import BotaoAtualizar from "@/components/BotaoAtualizar"
-import { estaAutenticado } from "@/lib/auth"
+import { requererPermissao } from "@/lib/auth"
 import {
   MESES,
   anoTemProjecao,
@@ -46,9 +46,7 @@ export default async function EmpresaPage({
   params: { empresa: string }
   searchParams: { mes?: string; ano?: string; origem?: string }
 }) {
-  if (!estaAutenticado()) {
-    redirect("/login")
-  }
+  await requererPermissao("dashboard_empresa_detalhe")
 
   const empresa = await getEmpresaAsync(params.empresa)
   if (!empresa) {

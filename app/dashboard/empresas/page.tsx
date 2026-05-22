@@ -14,6 +14,7 @@ import {
 } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
 import { supabaseConfigurado } from "@/lib/supabase"
+import { requererPermissao } from "@/lib/auth"
 
 // Página dinâmica: força SSR sem Data Cache. Mesmo motivo de /dashboard
 // — trocar filtros não pode reaproveitar respostas anteriores.
@@ -33,6 +34,8 @@ export default async function EmpresasPage({
 }: {
   searchParams: { mes?: string; ano?: string }
 }) {
+  await requererPermissao("dashboard_empresas")
+
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
 

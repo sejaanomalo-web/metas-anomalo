@@ -7,12 +7,15 @@ import {
   montarResumoMensal,
   montarResumoSemanal,
 } from "@/lib/resumos"
+import { requererPermissao } from "@/lib/auth"
 
 export default async function ConfiguracoesPage({
   searchParams,
 }: {
   searchParams: { mes?: string }
 }) {
+  await requererPermissao("configuracoes")
+
   const mes = mesValido(searchParams?.mes)
 
   const [mensagemDiario, mensagemSemanal, mensagemMensal] = await Promise.all([

@@ -20,6 +20,7 @@ import {
 } from "@/lib/sentinela"
 import { listarEmpresas } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
+import { requererPermissao } from "@/lib/auth"
 
 // Página dinâmica: força SSR sem Data Cache. Necessário porque trocar
 // mês/ano pelo SeletorPeriodo precisa sempre buscar dados frescos do
@@ -137,7 +138,10 @@ export default async function DashboardPage({
 }: {
   searchParams: { mes?: string; ano?: string }
 }) {
-  // Auth guard já é feito no layout (app/dashboard/layout.tsx).
+  // RBAC: exige dashboard_principal. Sem auth → /login; sem permissão
+  // → rota padrão do usuário (gestor cai em /dashboard/trafego, por ex).
+  await requererPermissao("dashboard_principal")
+
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
   const temProjecao = anoTemProjecao(ano)
