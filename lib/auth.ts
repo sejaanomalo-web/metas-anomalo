@@ -1,4 +1,5 @@
 import { cookies } from "next/headers"
+import { redirect } from "next/navigation"
 import { createHmac, scryptSync, timingSafeEqual } from "crypto"
 import { getSupabaseAdmin } from "./supabase"
 
@@ -69,16 +70,120 @@ export function getUsuarioIdSync(): string | null {
   return verificarCookie(cookie)
 }
 
+// ============================================================
+// RBAC: papéis e permissões
+// ============================================================
+
+export type PapelUsuario = "admin" | "gestor_trafego" | "custom"
+
+export type ChavePermissao =
+  | "dashboard_principal"
+  | "dashboard_empresas"
+  | "dashboard_empresa_detalhe"
+  | "dashboard_trafego"
+  | "formularios"
+  | "configuracoes"
+  | "gerenciar_usuarios"
+  | "ver_notificacoes"
+
+export type Permissoes = Record<ChavePermissao, boolean>
+
+/** Preset de permissões por papel. admin não usa (bypassa via temPermissao).
+ *  gestor_trafego ganha SÓ as duas chaves de tráfego + notificações. custom
+ *  começa zerado e o admin escolhe os checkboxes. */
+export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
+  admin: {
+    dashboard_principal: true,
+    dashboard_empresas: true,
+    dashboard_empresa_detalhe: true,
+    dashboard_trafego: true,
+    formularios: true,
+    configuracoes: true,
+    gerenciar_usuarios: true,
+    ver_notificacoes: true,
+  },
+  gestor_trafego: {
+    dashboard_principal: false,
+    dashboard_empresas: false,
+    dashboard_empresa_detalhe: false,
+    dashboard_trafego: true,
+    formularios: false,
+    configuracoes: false,
+    gerenciar_usuarios: false,
+    ver_notificacoes: true,
+  },
+  custom: {
+    dashboard_principal: false,
+    dashboard_empresas: false,
+    dashboard_empresa_detalhe: false,
+    dashboard_trafego: false,
+    formularios: false,
+    configuracoes: false,
+    gerenciar_usuarios: false,
+    ver_notificacoes: false,
+  },
+}
+
 export interface UsuarioSessao {
   id: string
   email: string
   nome: string
+  papel: PapelUsuario
+  permissoes: Permissoes
+}
+
+/**
+ * Confere se o usuário tem permissão pra uma chave específica. admin
+ * sempre passa (bypassa o JSONB). Outros papéis respeitam exatamente o
+ * que está em usuario.permissoes — fail-closed (ausência = bloqueio).
+ */
+export function temPermissao(
+  usuario: UsuarioSessao | null,
+  chave: ChavePermissao
+): boolean {
+  if (!usuario) return false
+  if (usuario.papel === "admin") return true
+  return usuario.permissoes[chave] === true
+}
+
+/**
+ * Rota padrão pra onde redirecionar o usuário ao logar ou quando ele
+ * tenta acessar uma URL sem permissão. Prioriza: principal > tráfego >
+ * empresas > formulários > configurações. Se nenhuma permissão estiver
+ * ativa (config quebrada), volta pro /login (defensivo).
+ */
+export function rotaPadraoDoUsuario(usuario: UsuarioSessao): string {
+  if (temPermissao(usuario, "dashboard_principal")) return "/dashboard"
+  if (temPermissao(usuario, "dashboard_trafego")) return "/dashboard/trafego"
+  if (temPermissao(usuario, "dashboard_empresas")) return "/dashboard/empresas"
+  if (temPermissao(usuario, "formularios")) return "/dashboard/formularios"
+  if (temPermissao(usuario, "configuracoes")) return "/dashboard/configuracoes"
+  return "/login"
+}
+
+/**
+ * Server-side guard: usa em Server Components no topo da page. Se não
+ * autenticado, redireciona pro login; se autenticado mas sem a
+ * permissão exigida, redireciona pra rota padrão do usuário (não dá
+ * 403 frio — UX mais limpa).
+ *
+ * Retorna o UsuarioSessao pra evitar fetch duplicado na page.
+ */
+export async function requererPermissao(
+  chave: ChavePermissao
+): Promise<UsuarioSessao> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) redirect("/login")
+  if (!temPermissao(usuario, chave)) {
+    redirect(rotaPadraoDoUsuario(usuario))
+  }
+  return usuario
 }
 
 /**
  * Retorna o usuário da sessão atual com os campos da tabela usuarios.
  * null se não autenticado / cookie inválido / usuário não existe ou foi
- * desativado.
+ * desativado. Inclui papel e permissoes pra checagem RBAC nas pages.
  */
 export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
   const usuarioId = getUsuarioIdSync()
@@ -87,11 +192,17 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
   if (!supabase) return null
   const { data } = await supabase
     .from("usuarios")
-    .select("id, email, nome, ativo")
+    .select("id, email, nome, ativo, papel, permissoes")
     .eq("id", usuarioId)
     .maybeSingle()
   if (!data || !data.ativo) return null
-  return { id: data.id, email: data.email, nome: data.nome }
+  return {
+    id: data.id as string,
+    email: data.email as string,
+    nome: data.nome as string,
+    papel: (data.papel ?? "admin") as PapelUsuario,
+    permissoes: (data.permissoes ?? PRESETS_PERMISSOES.admin) as Permissoes,
+  }
 }
 
 /**
