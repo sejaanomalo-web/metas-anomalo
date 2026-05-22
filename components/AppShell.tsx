@@ -8,6 +8,21 @@ import logo from "@/public/logo-capa-app.png"
 import { sairAction } from "@/app/login/actions"
 import SinoNotificacoes from "./SinoNotificacoes"
 import type { NotificacaoItem } from "@/lib/notificacoes"
+import {
+  type ChavePermissao,
+  type Permissoes,
+  type UsuarioSessao,
+} from "@/lib/auth"
+
+// Helper local (não importa temPermissao do server pra evitar bundle
+// de server module no client). Replica a lógica: admin bypassa.
+function temPermissao(
+  usuario: UsuarioSessao,
+  chave: ChavePermissao
+): boolean {
+  if (usuario.papel === "admin") return true
+  return (usuario.permissoes as Permissoes)[chave] === true
+}
 
 /**
  * Shell global de /dashboard/*:
@@ -69,10 +84,14 @@ function ehRotaEmpresa(pathname: string): boolean {
 
 export default function AppShell({
   children,
+  usuarioAtual,
   notificacoesIniciais,
+  mostrarSino,
 }: {
   children: ReactNode
+  usuarioAtual: UsuarioSessao
   notificacoesIniciais: { count: number; itens: NotificacaoItem[] }
+  mostrarSino: boolean
 }) {
   const [expandido, setExpandido] = useState(false)
   const [hydrated, setHydrated] = useState(false)
@@ -144,11 +163,13 @@ export default function AppShell({
       <SidebarRail
         expandido={hydrated ? expandido : false}
         onToggle={toggle}
+        usuarioAtual={usuarioAtual}
       />
 
-      {/* Sino flutuante no canto superior direito — sempre visível
-       * em qualquer rota /dashboard (desktop e mobile). */}
-      <SinoNotificacoes inicial={notificacoesIniciais} />
+      {/* Sino flutuante no canto superior direito. Renderizado só pra
+       * usuários com permissão ver_notificacoes (gestor de tráfego sem
+       * essa permissão não vê o sino). */}
+      {mostrarSino && <SinoNotificacoes inicial={notificacoesIniciais} />}
 
       <div
         className="app-main"
@@ -168,17 +189,30 @@ export default function AppShell({
 function SidebarRail({
   expandido,
   onToggle,
+  usuarioAtual,
 }: {
   expandido: boolean
   onToggle: () => void
+  usuarioAtual: UsuarioSessao
 }) {
   const pathname = usePathname()
   const width = expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
 
   const dashboardAtivo = pathname === "/dashboard"
   const empresasAtivo = ehRotaEmpresa(pathname)
+  const trafegoAtivo =
+    pathname === "/dashboard/trafego" ||
+    pathname.endsWith("/trafego")
   const formulariosAtivo = pathname === "/dashboard/formularios"
   const configAtivo = pathname === "/dashboard/configuracoes"
+
+  // RBAC: cada item só aparece se o usuário tem a permissão correspondente.
+  // Admin (papel='admin') vê tudo via bypass dentro de temPermissao.
+  const podeDashboard = temPermissao(usuarioAtual, "dashboard_principal")
+  const podeEmpresas = temPermissao(usuarioAtual, "dashboard_empresas")
+  const podeTrafego = temPermissao(usuarioAtual, "dashboard_trafego")
+  const podeFormularios = temPermissao(usuarioAtual, "formularios")
+  const podeConfig = temPermissao(usuarioAtual, "configuracoes")
 
   return (
     <aside
@@ -204,27 +238,42 @@ function SidebarRail({
           flex: 1,
         }}
       >
-        <ItemMenu
-          icon={<IconeDashboard />}
-          rotulo="Dashboard"
-          href="/dashboard"
-          expandido={expandido}
-          ativo={dashboardAtivo}
-        />
-        <ItemMenu
-          icon={<IconeEmpresas />}
-          rotulo="Empresas"
-          href="/dashboard/empresas"
-          expandido={expandido}
-          ativo={empresasAtivo}
-        />
-        <ItemMenu
-          icon={<IconeFormularios />}
-          rotulo="Formulários"
-          href="/dashboard/formularios"
-          expandido={expandido}
-          ativo={formulariosAtivo}
-        />
+        {podeDashboard && (
+          <ItemMenu
+            icon={<IconeDashboard />}
+            rotulo="Dashboard"
+            href="/dashboard"
+            expandido={expandido}
+            ativo={dashboardAtivo}
+          />
+        )}
+        {podeEmpresas && (
+          <ItemMenu
+            icon={<IconeEmpresas />}
+            rotulo="Empresas"
+            href="/dashboard/empresas"
+            expandido={expandido}
+            ativo={empresasAtivo}
+          />
+        )}
+        {podeTrafego && (
+          <ItemMenu
+            icon={<IconeTrafego />}
+            rotulo="Tráfego"
+            href="/dashboard/trafego"
+            expandido={expandido}
+            ativo={trafegoAtivo}
+          />
+        )}
+        {podeFormularios && (
+          <ItemMenu
+            icon={<IconeFormularios />}
+            rotulo="Formulários"
+            href="/dashboard/formularios"
+            expandido={expandido}
+            ativo={formulariosAtivo}
+          />
+        )}
       </nav>
 
       {/* Rodapé: Configurações + Sair (sino vive agora no topo direito
@@ -238,13 +287,15 @@ function SidebarRail({
           borderTop: "1px solid rgba(255,255,255,0.06)",
         }}
       >
-        <ItemMenu
-          icon={<IconeConfig />}
-          rotulo="Configurações"
-          href="/dashboard/configuracoes"
-          expandido={expandido}
-          ativo={configAtivo}
-        />
+        {podeConfig && (
+          <ItemMenu
+            icon={<IconeConfig />}
+            rotulo="Configurações"
+            href="/dashboard/configuracoes"
+            expandido={expandido}
+            ativo={configAtivo}
+          />
+        )}
         <form action={sairAction} style={{ width: "100%" }}>
           <ItemMenu
             icon={<IconeSair />}
@@ -482,6 +533,26 @@ function IconeFormularios() {
       <polyline points="14 2 14 8 20 8" />
       <line x1="8" y1="13" x2="16" y2="13" />
       <line x1="8" y1="17" x2="13" y2="17" />
+    </svg>
+  )
+}
+
+function IconeTrafego() {
+  // Raio com sinalização de live data (mesma linguagem do dot pulsante
+  // da aba /trafego). Outline pra combinar com os outros ícones do rail.
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
     </svg>
   )
 }
