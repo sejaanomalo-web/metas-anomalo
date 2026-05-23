@@ -58,16 +58,18 @@ export default async function TrafegoOverviewPage({
   // Totais agregados pro hero (KPI consolidado).
   let somaInv = 0
   let somaLeads = 0
-  let somaContratos = 0
+  let somaImpressoes = 0
   for (const empresa of empresasTrafego) {
     const r = resumo.get(empresa.nome)
     if (!r) continue
     somaInv += r.investimento
     somaLeads += r.leads
-    somaContratos += r.contratos
+    somaImpressoes += r.impressoes
   }
   const cplMedio = somaLeads > 0 ? somaInv / somaLeads : null
-  const cpaMedio = somaContratos > 0 ? somaInv / somaContratos : null
+  // CPM ponderado: total_invest / total_impr * 1000. Enquanto Sentinela
+  // não popular impressoes_real, somaImpressoes=0 → cpmMedio=null → "—".
+  const cpmMedio = somaImpressoes > 0 ? (somaInv / somaImpressoes) * 1000 : null
 
   return (
     <>
@@ -147,8 +149,8 @@ export default async function TrafegoOverviewPage({
             valor={cplMedio ? fmtBRL(cplMedio) : "—"}
           />
           <KpiMini
-            label="CPA médio"
-            valor={cpaMedio ? fmtBRL(cpaMedio) : "—"}
+            label="CPM médio"
+            valor={cpmMedio ? fmtBRL(cpmMedio) : "—"}
           />
         </section>
 
@@ -194,9 +196,8 @@ export default async function TrafegoOverviewPage({
                   ano={ano}
                   investimento={r?.investimento ?? 0}
                   leads={r?.leads ?? 0}
-                  contratos={r?.contratos ?? 0}
                   cpl={r?.cplReal ?? null}
-                  cpa={r?.cpaReal ?? null}
+                  cpm={r?.cpmReal ?? null}
                 />
               )
             })}

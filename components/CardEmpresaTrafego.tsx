@@ -17,18 +17,16 @@ export default function CardEmpresaTrafego({
   ano,
   investimento,
   leads,
-  contratos,
   cpl,
-  cpa,
+  cpm,
 }: {
   empresa: EmpresaMeta
   mes: Mes
   ano: number
   investimento: number
   leads: number
-  contratos: number
   cpl: number | null
-  cpa: number | null
+  cpm: number | null
 }) {
   const href = `/dashboard/${empresa.slug}/trafego?mes=${mes}&ano=${ano}`
   const semDados = investimento === 0 && leads === 0
@@ -90,10 +88,7 @@ export default function CardEmpresaTrafego({
           valor={semDados ? "—" : formatNumero(leads)}
         />
         <Metric label="CPL" valor={cpl ? formatBRL(cpl) : "—"} />
-        <Metric
-          label="CPA"
-          valor={cpa && contratos > 0 ? formatBRL(cpa) : "—"}
-        />
+        <Metric label="CPM" valor={cpm ? formatBRL(cpm) : "—"} />
       </div>
 
       {/* Footer link */}

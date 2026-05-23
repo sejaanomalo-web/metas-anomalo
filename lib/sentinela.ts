@@ -378,6 +378,11 @@ export interface ResumoEmpresaMes {
   clientesAtivos: number | null
   cplReal: number | null
   cpaReal: number | null
+  // CPM = (investimento / impressões) * 1000. Calculado pelo agregar
+  // ponderado por impressões. NULL enquanto o Sentinela não popular
+  // impressoes_real (campo recém-adicionado em dados_diarios_log).
+  cpmReal: number | null
+  impressoes: number
   observacoes: string | null
   respostas: number
   temSentinela: boolean
@@ -422,10 +427,14 @@ interface LinhaAgregavel {
   observacoes: string | null
   respostas: number | null
   preenchedor_nome: string | null
+  // Campos automáticos do Sentinela (Meta Insights API). Nulos até o
+  // agente passar a coletar.
+  impressoes_real: number | null
+  cpm_real: number | null
 }
 
 const COLUNAS_AGREGAR =
-  "empresa, data, investimento_real, leads_real, reunioes_real, contratos_real, faturamento_real, criativos_entregues, criativos_usados, clientes_ativos, observacoes, respostas, preenchedor_nome"
+  "empresa, data, investimento_real, leads_real, reunioes_real, contratos_real, faturamento_real, criativos_entregues, criativos_usados, clientes_ativos, observacoes, respostas, preenchedor_nome, impressoes_real, cpm_real"
 
 /** Agrega uma lista de linhas (mesma empresa, mesmo mês) num resumo. */
 function agregarLinhas(
@@ -439,6 +448,7 @@ function agregarLinhas(
   let faturamento = 0
   let criativosEntregues = 0
   let respostas = 0
+  let impressoes = 0
   let criativosUsados: number | null = null
   let clientesAtivos: number | null = null
   let observacoes: string | null = null
@@ -456,6 +466,7 @@ function agregarLinhas(
     faturamento += Number(l.faturamento_real ?? 0)
     criativosEntregues += Number(l.criativos_entregues ?? 0)
     respostas += Number(l.respostas ?? 0)
+    impressoes += Number(l.impressoes_real ?? 0)
 
     if (criativosUsados === null && l.criativos_usados != null) {
       criativosUsados = l.criativos_usados
@@ -487,6 +498,11 @@ function agregarLinhas(
     clientesAtivos,
     cplReal: leads > 0 ? investimento / leads : null,
     cpaReal: contratos > 0 ? investimento / contratos : null,
+    // CPM ponderado por impressões: total_invest / total_impr * 1000.
+    // Enquanto Sentinela não popular impressoes_real, todas as linhas
+    // têm impressoes_real=null → soma=0 → cpmReal=null.
+    cpmReal: impressoes > 0 ? (investimento / impressoes) * 1000 : null,
+    impressoes,
     observacoes,
     respostas,
     temSentinela,
