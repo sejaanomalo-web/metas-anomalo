@@ -68,6 +68,7 @@ const RAIL_EXPANDED = 240
 const ROTAS_NAO_EMPRESA = new Set([
   "/dashboard",
   "/dashboard/empresas",
+  "/dashboard/trafego",
   "/dashboard/formularios",
   "/dashboard/configuracoes",
 ])
@@ -199,10 +200,12 @@ function SidebarRail({
   const width = expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
 
   const dashboardAtivo = pathname === "/dashboard"
-  const empresasAtivo = ehRotaEmpresa(pathname)
   const trafegoAtivo =
     pathname === "/dashboard/trafego" ||
     pathname.endsWith("/trafego")
+  // Empresas só ativa quando NÃO estamos em /trafego — evita destacar
+  // dois items ao mesmo tempo em /dashboard/[empresa]/trafego.
+  const empresasAtivo = !trafegoAtivo && ehRotaEmpresa(pathname)
   const formulariosAtivo = pathname === "/dashboard/formularios"
   const configAtivo = pathname === "/dashboard/configuracoes"
 
