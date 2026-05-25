@@ -2,6 +2,7 @@ import SeletorPeriodo from "@/components/SeletorPeriodo"
 import FormConfig from "@/components/FormConfig"
 import AtivarNotificacoes from "@/components/AtivarNotificacoes"
 import GerenciadorUsuarios from "@/components/GerenciadorUsuarios"
+import ReconciliarBotao from "@/components/ReconciliarBotao"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
 import {
   montarResumoDiario,
@@ -18,6 +19,7 @@ export default async function ConfiguracoesPage({
 }) {
   const usuario = await requererPermissao("configuracoes")
   const podeGerenciarUsuarios = temPermissao(usuario, "gerenciar_usuarios")
+  const podeReconciliar = usuario.papel === "admin"
 
   const mes = mesValido(searchParams?.mes)
 
@@ -81,6 +83,8 @@ export default async function ConfiguracoesPage({
             meuUsuarioId={usuario.id}
           />
         )}
+
+        {podeReconciliar && <ReconciliarBotao />}
 
         <FormConfig
           mensagemDiario={mensagemDiario}

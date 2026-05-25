@@ -604,19 +604,27 @@ export async function getResumoAnualDaEmpresa(
 }
 
 /** Série mensal de faturamento agregado de TODAS as empresas no ano.
- *  Substitui getFaturamentoMensalHub (que lia de dados_reais). */
+ *  Substitui getFaturamentoMensalHub (que lia de dados_reais).
+ *  Se `empresasAtivas` for passado, filtra para incluir apenas linhas
+ *  dessas empresas — evita vazar histórico de empresas desativadas
+ *  (mesmo critério do KPI consolidado do /dashboard). */
 export async function getFaturamentoMensalHubFromLogs(
   ano: number,
-  origem: OrigemDadosReais = "pago"
+  origem: OrigemDadosReais = "pago",
+  empresasAtivas?: string[]
 ): Promise<{ mes: Mes; real: number | null }[]> {
   const supabase = getSupabase()
   if (!supabase) return MESES.map((mes) => ({ mes, real: null }))
-  const { data, error } = await supabase
+  let q = supabase
     .from("dados_diarios_log")
-    .select("data, faturamento_real")
+    .select("empresa, data, faturamento_real")
     .eq("origem", origem)
     .gte("data", `${ano}-01-01`)
     .lte("data", `${ano}-12-31`)
+  if (empresasAtivas && empresasAtivas.length > 0) {
+    q = q.in("empresa", empresasAtivas)
+  }
+  const { data, error } = await q
   if (error) {
     console.error(
       "[sentinela] getFaturamentoMensalHubFromLogs error",
@@ -626,6 +634,7 @@ export async function getFaturamentoMensalHubFromLogs(
   }
   const acc = new Map<Mes, { soma: number; tem: boolean }>()
   for (const row of (data ?? []) as {
+    empresa: string
     data: string
     faturamento_real: number | null
   }[]) {

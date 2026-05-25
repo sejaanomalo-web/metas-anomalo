@@ -11,9 +11,9 @@ import {
   type Mes,
 } from "./data"
 import {
-  type DadosReaisPorOrigem,
-  getDadosReaisDoMes,
-} from "./dados-reais"
+  getResumoMensalPorEmpresa,
+  type ResumoEmpresaMes,
+} from "./sentinela"
 import { getDeltasDoPeriodo } from "./dados-diarios"
 import { listarEmpresas } from "./empresas-actions"
 import { getOverridesTodasEmpresasMes } from "./metas-empresa"
@@ -22,10 +22,47 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
+// Bucket por empresa para o mês — pago + orgânico vindos da MESMA fonte
+// que o dashboard (dados_diarios_log via lib/sentinela). Lookup é por
+// empresa.nome (coluna `empresa` em dados_diarios_log), não mais por
+// empresa.db (chave legada da extinta dados_reais).
+type ResumoPorOrigem = {
+  pago: ResumoEmpresaMes | null
+  organico: ResumoEmpresaMes | null
+}
+
+async function getReaisDoMesPorEmpresa(
+  mes: Mes,
+  ano: number
+): Promise<Map<string, ResumoPorOrigem>> {
+  const [pagoMap, organicoMap] = await Promise.all([
+    getResumoMensalPorEmpresa(mes, ano, "pago"),
+    getResumoMensalPorEmpresa(mes, ano, "organico"),
+  ])
+  const nomes = new Set<string>([
+    ...Array.from(pagoMap.keys()),
+    ...Array.from(organicoMap.keys()),
+  ])
+  const out = new Map<string, ResumoPorOrigem>()
+  for (const nome of nomes) {
+    out.set(nome, {
+      pago: pagoMap.get(nome) ?? null,
+      organico: organicoMap.get(nome) ?? null,
+    })
+  }
+  return out
+}
+
 // Soma dos reais do mês respeitando a semântica por origem:
 //   - investimento/CPL     → só 'pago' (orgânico não tem verba)
 //   - faturamento/leads/reunioes/contratos → 'pago' + 'organico'
-function agregarReaisDoMes(mapa: Map<string, DadosReaisPorOrigem>) {
+// Recebe `empresas` explicitamente: só agrega empresas ativas, mesmo
+// critério do KPI principal do /dashboard. Empresas removidas que ainda
+// têm linhas em dados_diarios_log não vazam pro resumo do WhatsApp.
+function agregarReaisDoMes(
+  mapa: Map<string, ResumoPorOrigem>,
+  empresas: EmpresaMeta[]
+) {
   let somaFat = 0
   let somaInv = 0
   let somaLeads = 0
@@ -34,23 +71,26 @@ function agregarReaisDoMes(mapa: Map<string, DadosReaisPorOrigem>) {
   let temFat = false
   let temInv = false
   let temLeads = false
-  for (const { pago, organico } of mapa.values()) {
-    if (pago?.investimento_real !== null && pago?.investimento_real !== undefined) {
-      somaInv += pago.investimento_real
+  for (const empresa of empresas) {
+    const bucket = mapa.get(empresa.nome)
+    if (!bucket) continue
+    const { pago, organico } = bucket
+    if (pago && pago.investimento > 0) {
+      somaInv += pago.investimento
       temInv = true
     }
     for (const d of [pago, organico]) {
       if (!d) continue
-      if (d.faturamento_real !== null) {
-        somaFat += d.faturamento_real
+      if (d.faturamento > 0) {
+        somaFat += d.faturamento
         temFat = true
       }
-      if (d.leads_real !== null) {
-        somaLeads += d.leads_real
+      if (d.leads > 0) {
+        somaLeads += d.leads
         temLeads = true
       }
-      if (d.reunioes_real !== null) somaReunioes += d.reunioes_real
-      if (d.contratos_real !== null) somaContratos += d.contratos_real
+      if (d.reunioes > 0) somaReunioes += d.reunioes
+      if (d.contratos > 0) somaContratos += d.contratos
     }
   }
   return {
@@ -65,10 +105,13 @@ function agregarReaisDoMes(mapa: Map<string, DadosReaisPorOrigem>) {
   }
 }
 
-function faturamentoTotalDoBucket(b: DadosReaisPorOrigem | undefined): number | null {
+function faturamentoTotalDoBucket(
+  b: ResumoPorOrigem | undefined
+): number | null {
   if (!b) return null
-  const p = b.pago?.faturamento_real ?? null
-  const o = b.organico?.faturamento_real ?? null
+  const p = b.pago && b.pago.faturamento > 0 ? b.pago.faturamento : null
+  const o =
+    b.organico && b.organico.faturamento > 0 ? b.organico.faturamento : null
   if (p === null && o === null) return null
   return (p ?? 0) + (o ?? 0)
 }
@@ -148,7 +191,7 @@ export async function montarResumoDiario(): Promise<string> {
 
   const { empresas, overridesMes } = await carregarContexto(mes, ano)
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
-  const reaisDoMes = await getDadosReaisDoMes(mes, ano)
+  const reaisDoMes = await getReaisDoMesPorEmpresa(mes, ano)
 
   // Deltas do dia — só o que foi reportado HOJE pelos formulários
   const hojeISO = isoDate(hoje)
@@ -160,7 +203,9 @@ export async function montarResumoDiario(): Promise<string> {
       ? Math.min(
           100,
           Math.round(
-            (agregarReaisDoMes(reaisDoMes).somaFat / resumo.faturamento) * 100
+            (agregarReaisDoMes(reaisDoMes, empresas).somaFat /
+              resumo.faturamento) *
+              100
           )
         )
       : 0
@@ -176,7 +221,7 @@ export async function montarResumoDiario(): Promise<string> {
       overridesMes.get(empresa.db)
     )
     if (metaMes === 0) continue
-    const fatReal = faturamentoTotalDoBucket(reaisDoMes.get(empresa.db))
+    const fatReal = faturamentoTotalDoBucket(reaisDoMes.get(empresa.nome))
     const metaAcum = metaAcumuladaAteHoje(metaMes, mes, ano, hoje)
     if (fatReal === null) {
       alertas.push({ nome: empresa.nome, texto: "sem dados" })
@@ -192,7 +237,7 @@ export async function montarResumoDiario(): Promise<string> {
   const empresasComMovimentoHoje = empresas
     .map((e) => ({
       nome: e.nome,
-      delta: dia.porEmpresa.get(e.db),
+      delta: dia.porEmpresa.get(e.nome),
     }))
     .filter((e) => e.delta !== undefined)
 
@@ -281,8 +326,8 @@ export async function montarResumoSemanal(
   const semanaAg = await getDeltasDoPeriodo(inicioISO, fimISO)
 
   // Progresso mensal pra contexto
-  const reaisDoMes = await getDadosReaisDoMes(mes, ano)
-  const { somaFat: faturamentoMes } = agregarReaisDoMes(reaisDoMes)
+  const reaisDoMes = await getReaisDoMesPorEmpresa(mes, ano)
+  const { somaFat: faturamentoMes } = agregarReaisDoMes(reaisDoMes, empresas)
   const progressoMes =
     resumo.faturamento > 0
       ? Math.min(100, Math.round((faturamentoMes / resumo.faturamento) * 100))
@@ -328,7 +373,7 @@ export async function montarResumoSemanal(
   linhas.push(`🏢 *MOVIMENTO POR EMPRESA NA SEMANA*`)
   let temAlgumaEmpresa = false
   for (const empresa of empresas) {
-    const d = semanaAg.porEmpresa.get(empresa.db)
+    const d = semanaAg.porEmpresa.get(empresa.nome)
     if (!d) continue
     temAlgumaEmpresa = true
     const partes: string[] = []
@@ -362,14 +407,14 @@ export async function montarResumoMensal(): Promise<string> {
   const mesAnterior = mesAnteriorIdx >= 0 ? MESES[mesAnteriorIdx] : null
 
   const [reaisDoMes, reaisMesAnterior] = await Promise.all([
-    getDadosReaisDoMes(mes, ano),
+    getReaisDoMesPorEmpresa(mes, ano),
     mesAnterior
-      ? getDadosReaisDoMes(mesAnterior, ano)
-      : Promise.resolve(new Map<string, DadosReaisPorOrigem>()),
+      ? getReaisDoMesPorEmpresa(mesAnterior, ano)
+      : Promise.resolve(new Map<string, ResumoPorOrigem>()),
   ])
 
   const { somaFat, somaInv, somaLeads, somaReunioes, somaContratos } =
-    agregarReaisDoMes(reaisDoMes)
+    agregarReaisDoMes(reaisDoMes, empresas)
 
   const atingido =
     resumo.faturamento > 0
@@ -391,7 +436,7 @@ export async function montarResumoMensal(): Promise<string> {
       ano,
       overridesMes.get(empresa.db)
     )
-    const real = faturamentoTotalDoBucket(reaisDoMes.get(empresa.db)) ?? 0
+    const real = faturamentoTotalDoBucket(reaisDoMes.get(empresa.nome)) ?? 0
     const pct = metaMes > 0 ? Math.round((real / metaMes) * 100) : 0
     const label =
       pct >= 100 ? "meta batida" : pct >= 70 ? `${pct}% da meta` : "abaixo"
@@ -404,7 +449,7 @@ export async function montarResumoMensal(): Promise<string> {
 
     if (mesAnterior) {
       const realAnterior =
-        faturamentoTotalDoBucket(reaisMesAnterior.get(empresa.db)) ?? 0
+        faturamentoTotalDoBucket(reaisMesAnterior.get(empresa.nome)) ?? 0
       if (realAnterior > 0) {
         const cresc = Math.round(((real - realAnterior) / realAnterior) * 100)
         if (cresc > crescimentoPct) {

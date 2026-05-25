@@ -6,7 +6,7 @@ import {
   type DadosReais,
   supabaseConfigurado,
 } from "./supabase"
-import { gravarDadosReaisComLog } from "./dados-reais"
+import { gravarDadosReaisComLog, parseNumeroForm } from "./dados-reais"
 
 export interface ResultadoFormulario {
   ok: boolean
@@ -21,13 +21,9 @@ function parseInt0(v: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function parseNumero(v: FormDataEntryValue | null): number | null {
-  if (v === null) return null
-  const s = String(v).trim().replace(/\./g, "").replace(",", ".")
-  if (s === "") return null
-  const n = Number(s)
-  return Number.isFinite(n) ? n : null
-}
+// parseNumero local removido — usa parseNumeroForm de lib/dados-reais
+// (parser robusto, rejeita ambiguidade tipo "22.275" em vez de
+// silenciosamente trocar por 22275).
 
 /** Converte YYYY-MM-DD em { dataISO, mes, ano }. mes/ano são derivados
  *  da data — fonte única de verdade evita inconsistência entre o que
@@ -89,6 +85,11 @@ export async function salvarFormularioManualAction(
     }
   }
 
+  const fatParsed = parseNumeroForm(formData.get("faturamento_real"))
+  if (fatParsed.erro) {
+    return { ok: false, erro: `Faturamento: ${fatParsed.erro}` }
+  }
+
   // Origem fixa em "pago". O fluxo manual hoje é o gestor lançar
   // reuniões/contratos/faturamento, que entram no bucket pago.
   const payload: DadosReais = {
@@ -100,7 +101,7 @@ export async function salvarFormularioManualAction(
     leads_real: null,
     reunioes_real: parseInt0(formData.get("reunioes_real")),
     contratos_real: parseInt0(formData.get("contratos_real")),
-    faturamento_real: parseNumero(formData.get("faturamento_real")),
+    faturamento_real: fatParsed.value,
     criativos_entregues: null,
     cpl_real: null,
     observacoes: String(formData.get("observacoes") ?? "").trim() || null,

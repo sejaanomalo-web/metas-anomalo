@@ -120,12 +120,14 @@ function mesAnterior(mes: Mes): Mes | null {
 }
 
 function somarFaturamento(
-  resumos: Map<string, ResumoEmpresaMes>
+  resumos: Map<string, ResumoEmpresaMes>,
+  empresas: { nome: string }[]
 ): { soma: number; tem: boolean } {
   let soma = 0
   let tem = false
-  for (const r of resumos.values()) {
-    if (r.faturamento > 0) {
+  for (const empresa of empresas) {
+    const r = resumos.get(empresa.nome)
+    if (r && r.faturamento > 0) {
       soma += r.faturamento
       tem = true
     }
@@ -152,10 +154,14 @@ export default async function DashboardPage({
   // dashboard (overview, /empresas, /[empresa]) — decisão consistente
   // com o painel de tráfego pago. Orgânico fica restrito ao detalhe
   // de empresa via ToggleOrigem (página individual).
+  // Empresas é buscado primeiro porque seu output (nomes ativos)
+  // restringe getFaturamentoMensalHubFromLogs — evita o gráfico
+  // somar histórico de empresas removidas.
+  const empresas = await listarEmpresas(true)
+  const nomesAtivos = empresas.map((e) => e.nome)
   const [
     resumoAtual,
     resumoAnterior,
-    empresas,
     overridesMes,
     faturamentoMensal,
   ] = await Promise.all([
@@ -163,18 +169,24 @@ export default async function DashboardPage({
     mesPrev
       ? getResumoMensalPorEmpresa(mesPrev, ano, "pago")
       : Promise.resolve(new Map<string, ResumoEmpresaMes>()),
-    listarEmpresas(true),
     getOverridesTodasEmpresasMes(mes, ano),
-    getFaturamentoMensalHubFromLogs(ano, "pago"),
+    getFaturamentoMensalHubFromLogs(ano, "pago", nomesAtivos),
   ])
   const resumo = getResumoGrupo(mes, ano, empresas, overridesMes)
 
-  const { soma: somaFat, tem: temFat } = somarFaturamento(resumoAtual)
+  // Agregação restrita a empresas ativas (listarEmpresas(true)). Iterar
+  // direto sobre resumoAtual.values() vazaria empresas removidas que
+  // ainda têm linhas em dados_diarios_log (ex.: tokens_meta ativos sem
+  // empresa correspondente em empresas_config). Mesmo padrão do
+  // /dashboard/trafego.
+  const { soma: somaFat, tem: temFat } = somarFaturamento(resumoAtual, empresas)
   let somaInv = 0
   let temInv = false
   let somaContratos = 0
   let temContratos = false
-  for (const r of resumoAtual.values()) {
+  for (const empresa of empresas) {
+    const r = resumoAtual.get(empresa.nome)
+    if (!r) continue
     if (r.investimento > 0) {
       somaInv += r.investimento
       temInv = true
@@ -194,7 +206,10 @@ export default async function DashboardPage({
       ? resumo.faturamento / resumo.contratos
       : 0
 
-  const { soma: somaFatPrev, tem: temFatPrev } = somarFaturamento(resumoAnterior)
+  const { soma: somaFatPrev, tem: temFatPrev } = somarFaturamento(
+    resumoAnterior,
+    empresas
+  )
   const podeCalcularDelta = !!mesPrev && temFat && temFatPrev && somaFatPrev > 0
   const deltaPct = podeCalcularDelta
     ? ((somaFat - somaFatPrev) / somaFatPrev) * 100

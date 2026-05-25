@@ -23,12 +23,137 @@ export interface DadosReaisPorOrigem {
   organico: DadosReais | null
 }
 
+/**
+ * Parser numérico tolerante a formatos PT-BR e US, com rejeição de
+ * entradas ambíguas. Retorna `{ value, erro }`:
+ *
+ *   - vazio (`null`/`""`)                → { value: null, erro: null }
+ *   - "222,75"                           → 222.75 (BR vírgula decimal)
+ *   - "1.234,56"                         → 1234.56 (BR ponto milhar)
+ *   - "1,234.56"                         → 1234.56 (US ponto decimal)
+ *   - "22,5" / "22.5" / "1.50"           → decimais óbvios
+ *   - "1.234.567"                        → 1234567 (milhares só-ponto)
+ *   - "22.275" (sem vírgula, ponto + 3)  → null + erro (AMBÍGUO)
+ *
+ * Heurística do passo 6: ponto seguido de exatamente 3 dígitos sem
+ * vírgula no input é ambíguo (pode ser milhar BR ou decimal extremo).
+ * O `replace(/\./g, "")` legado interpretava silenciosamente como
+ * milhar, criando entradas fantasma (ex.: "22.275" → 22275 em vez do
+ * 22,275 pretendido). Aqui rejeita explicitamente.
+ */
+export function parseNumeroForm(v: FormDataEntryValue | null): {
+  value: number | null
+  erro: string | null
+} {
+  if (v === null) return { value: null, erro: null }
+  const raw = String(v).trim()
+  if (raw === "") return { value: null, erro: null }
+  if (!/^-?[0-9.,]+$/.test(raw)) {
+    return { value: null, erro: `Número inválido: "${raw}".` }
+  }
+  const sinal = raw.startsWith("-") ? -1 : 1
+  const corpo = raw.replace(/^-/, "")
+  const temVirgula = corpo.includes(",")
+  const temPonto = corpo.includes(".")
+
+  const erroAmbiguo = (orig: string) =>
+    `Número ambíguo: "${orig}". Para milhar use ponto (1.234) só com 4+ dígitos; para decimal use vírgula (22,275).`
+
+  let normalizado: string
+
+  if (!temVirgula && !temPonto) {
+    normalizado = corpo
+  } else if (temVirgula && !temPonto) {
+    // Só vírgulas.
+    const grupos = corpo.split(",")
+    if (grupos.length === 2) {
+      const [a, b] = grupos
+      if (!/^[0-9]+$/.test(a) || !/^[0-9]+$/.test(b)) {
+        return { value: null, erro: `Número inválido: "${raw}".` }
+      }
+      normalizado = a + "." + b
+    } else {
+      // Múltiplas vírgulas — só vale como separador de milhar (todos os
+      // grupos após o primeiro devem ter 3 dígitos).
+      const primeiroOk = /^[0-9]{1,3}$/.test(grupos[0])
+      const demaisOk = grupos.slice(1).every((g) => /^[0-9]{3}$/.test(g))
+      if (primeiroOk && demaisOk) {
+        normalizado = grupos.join("")
+      } else {
+        return { value: null, erro: `Número inválido: "${raw}".` }
+      }
+    }
+  } else if (temPonto && !temVirgula) {
+    // Só pontos.
+    const grupos = corpo.split(".")
+    if (grupos.length === 2) {
+      const [a, b] = grupos
+      if (!/^[0-9]+$/.test(a) || !/^[0-9]+$/.test(b)) {
+        return { value: null, erro: `Número inválido: "${raw}".` }
+      }
+      if (b.length <= 2) {
+        // Decimal: "22.5" / "22.27" / "1.5".
+        normalizado = a + "." + b
+      } else if (b.length === 3) {
+        // Ambíguo: pode ser milhar (1234) ou decimal extremo (1.234).
+        return { value: null, erro: erroAmbiguo(raw) }
+      } else {
+        return { value: null, erro: `Número inválido: "${raw}".` }
+      }
+    } else {
+      // Múltiplos pontos: só vale como milhar.
+      const primeiroOk = /^[0-9]{1,3}$/.test(grupos[0])
+      const demaisOk = grupos.slice(1).every((g) => /^[0-9]{3}$/.test(g))
+      if (primeiroOk && demaisOk) {
+        normalizado = grupos.join("")
+      } else {
+        return { value: null, erro: `Número inválido: "${raw}".` }
+      }
+    }
+  } else {
+    // Tem vírgula E ponto. O separador à direita é decimal; o à
+    // esquerda é milhar (mas precisa ter exatamente 1 do tipo decimal).
+    const idxV = corpo.lastIndexOf(",")
+    const idxP = corpo.lastIndexOf(".")
+    if (idxV > idxP) {
+      // BR: pontos = milhar, vírgula = decimal.
+      const semPontos = corpo.replace(/\./g, "")
+      const partes = semPontos.split(",")
+      if (partes.length !== 2) {
+        return { value: null, erro: `Número inválido: "${raw}".` }
+      }
+      const [a, b] = partes
+      if (!/^[0-9]+$/.test(a) || !/^[0-9]+$/.test(b)) {
+        return { value: null, erro: `Número inválido: "${raw}".` }
+      }
+      normalizado = a + "." + b
+    } else {
+      // US: vírgulas = milhar, ponto = decimal.
+      const semVirgulas = corpo.replace(/,/g, "")
+      const partes = semVirgulas.split(".")
+      if (partes.length !== 2) {
+        return { value: null, erro: `Número inválido: "${raw}".` }
+      }
+      const [a, b] = partes
+      if (!/^[0-9]+$/.test(a) || !/^[0-9]+$/.test(b)) {
+        return { value: null, erro: `Número inválido: "${raw}".` }
+      }
+      normalizado = a + "." + b
+    }
+  }
+
+  const n = Number(normalizado)
+  if (!Number.isFinite(n)) {
+    return { value: null, erro: `Número inválido: "${raw}".` }
+  }
+  return { value: sinal * n, erro: null }
+}
+
+/** Mantido por callsites legados que só querem o valor (vazio/inválido
+ *  → null silencioso). NÃO use em validação de formulário — use
+ *  parseNumeroForm para distinguir vazio de inválido/ambíguo. */
 function parseNumero(v: FormDataEntryValue | null): number | null {
-  if (v === null) return null
-  const s = String(v).trim().replace(/\./g, "").replace(",", ".")
-  if (s === "") return null
-  const n = Number(s)
-  return Number.isFinite(n) ? n : null
+  return parseNumeroForm(v).value
 }
 
 function parseInt0(v: FormDataEntryValue | null): number | null {
@@ -261,6 +386,11 @@ export async function gravarDadosReaisComLog(
   return { ok: true, anterior }
 }
 
+/**
+ * @deprecated Use `getResumoAnualDaEmpresa` de `lib/sentinela`.
+ * dados_reais virou write-only-legacy: leituras devem sair de
+ * dados_diarios_log (fonte do Sentinela e do dashboard).
+ */
 export async function getDadosReais(
   empresa: EmpresaDb,
   ano: number = ANO_PADRAO,
@@ -281,6 +411,10 @@ export async function getDadosReais(
   return (data ?? []) as DadosReais[]
 }
 
+/**
+ * @deprecated Use `getResumoMensalDaEmpresa` de `lib/sentinela` (+
+ * `resumoComoDadosReais` se precisar do shape DadosReais).
+ */
 export async function getDadosReaisMes(
   empresa: EmpresaDb,
   mes: Mes,
@@ -305,11 +439,12 @@ export async function getDadosReaisMes(
 }
 
 /**
- * Soma o faturamento_real de todas as empresas (pago + organico) por mês,
- * para o ano informado. Usado pelo gráfico "Faturamento Mensal" no /dashboard.
+ * @deprecated Use `getFaturamentoMensalHubFromLogs` de `lib/sentinela`,
+ * que lê de dados_diarios_log (fonte unificada do dashboard) e aceita
+ * filtro por empresas ativas.
  *
- * Retorna sempre os 9 meses (Abril..Dezembro) na ordem de MESES; meses sem
- * nenhuma linha em dados_reais devolvem `real: null`.
+ * Soma o faturamento_real de todas as empresas (pago + organico) por mês,
+ * para o ano informado.
  */
 export async function getFaturamentoMensalHub(
   ano: number = ANO_PADRAO
@@ -344,6 +479,10 @@ export async function getFaturamentoMensalHub(
   })
 }
 
+/**
+ * @deprecated Use `getResumoMensalPorEmpresa` de `lib/sentinela` para
+ * pago e organico em paralelo. dados_reais virou write-only-legacy.
+ */
 export async function getDadosReaisDoMes(
   mes: Mes,
   ano: number = ANO_PADRAO
@@ -399,13 +538,20 @@ export async function salvarDadosReaisAction(
   const leads_real = parseInt0(formData.get("leads_real"))
   const reunioes_real = parseInt0(formData.get("reunioes_real"))
   const contratos_real = parseInt0(formData.get("contratos_real"))
-  const faturamento_real = parseNumero(formData.get("faturamento_real"))
+  const fatParsed = parseNumeroForm(formData.get("faturamento_real"))
+  if (fatParsed.erro) return { ok: false, erro: `Faturamento: ${fatParsed.erro}` }
+  const faturamento_real = fatParsed.value
   const observacoes = String(formData.get("observacoes") ?? "").trim() || null
   const clientes_ativos = parseInt0(formData.get("clientes_ativos"))
 
   // Campos só-pago — orgânico nunca os aceita, mesmo se vierem no FormData.
-  const investimento_real =
-    origem === "pago" ? parseNumero(formData.get("investimento_real")) : null
+  let investimento_real: number | null = null
+  if (origem === "pago") {
+    const invParsed = parseNumeroForm(formData.get("investimento_real"))
+    if (invParsed.erro)
+      return { ok: false, erro: `Investimento: ${invParsed.erro}` }
+    investimento_real = invParsed.value
+  }
   const criativos_entregues =
     origem === "pago" ? parseInt0(formData.get("criativos_entregues")) : null
   const cpl_real =
