@@ -6,7 +6,8 @@ import {
   type DadosReais,
   supabaseConfigurado,
 } from "./supabase"
-import { gravarDadosReaisComLog, parseNumeroForm } from "./dados-reais"
+import { gravarDadosReaisComLog } from "./dados-reais"
+import { parseNumeroForm } from "./parse-numero"
 
 export interface ResultadoFormulario {
   ok: boolean
