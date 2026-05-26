@@ -240,6 +240,54 @@ export async function alternarAtivoUsuarioAction(
   return { ok: true }
 }
 
+/**
+ * Exclusão definitiva do usuário. Diferente de desativar (preserva a
+ * linha com ativo=false), o delete remove a linha de public.usuarios
+ * por completo. FKs cuidam do resto:
+ *   • notificacoes_usuario → CASCADE (notificações vão junto)
+ *   • push_subscriptions   → CASCADE (subscriptions push vão junto)
+ *   • lancamento_financeiro.criado_por → SET NULL (lançamentos
+ *     financeiros do user permanecem, só esquece quem criou)
+ *
+ * O client exige digitar "Excluir" antes de chamar essa action —
+ * camada extra de UX, mas a validação textual server-side abaixo é
+ * defesa em profundidade contra request direta.
+ */
+export async function excluirUsuarioAction(
+  formData: FormData
+): Promise<ResultadoUsuario> {
+  const admin = await requererPermissao("gerenciar_usuarios")
+
+  const id = String(formData.get("id") ?? "").trim()
+  const confirmacao = String(formData.get("confirmacao") ?? "")
+  if (!id) return { ok: false, erro: "ID inválido." }
+
+  if (admin.id === id) {
+    return { ok: false, erro: "Você não pode excluir sua própria conta." }
+  }
+
+  if (confirmacao !== "Excluir") {
+    return {
+      ok: false,
+      erro: 'Digite exatamente "Excluir" pra confirmar a exclusão.',
+    }
+  }
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) {
+    return { ok: false, erro: "Supabase indisponível." }
+  }
+
+  const { error } = await supabase.from("usuarios").delete().eq("id", id)
+  if (error) {
+    console.error("[usuarios] excluir error", error.message)
+    return { ok: false, erro: error.message }
+  }
+
+  revalidatePath("/dashboard/configuracoes")
+  return { ok: true }
+}
+
 export async function redefinirSenhaAction(
   formData: FormData
 ): Promise<ResultadoUsuario> {

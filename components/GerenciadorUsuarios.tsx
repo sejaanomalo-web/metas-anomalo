@@ -5,6 +5,7 @@ import {
   alternarAtivoUsuarioAction,
   atualizarUsuarioAction,
   criarUsuarioAction,
+  excluirUsuarioAction,
   redefinirSenhaAction,
   type UsuarioRow,
 } from "@/lib/usuarios-actions"
@@ -80,6 +81,10 @@ export default function GerenciadorUsuarios({
         ? atual.map((x) => (x.id === u.id ? u : x))
         : [...atual, u]
     )
+  }
+
+  function removerDaLista(id: string) {
+    setUsuarios((atual) => atual.filter((x) => x.id !== id))
   }
 
   const usuarioEditando = editandoId
@@ -210,6 +215,7 @@ export default function GerenciadorUsuarios({
                 setFormAberto(true)
               }}
               onAtualizar={atualizarLista}
+              onExcluir={() => removerDaLista(u.id)}
             />
           </li>
         ))}
@@ -229,14 +235,19 @@ function AcoesLinha({
   ehMeuPerfil,
   onEditar,
   onAtualizar,
+  onExcluir,
 }: {
   usuario: UsuarioRow
   ehMeuPerfil: boolean
   onEditar: () => void
   onAtualizar: (u: UsuarioRow) => void
+  onExcluir: () => void
 }) {
   const [pending, startTransition] = useTransition()
   const [novaSenha, setNovaSenha] = useState<string | null>(null)
+  const [modoExcluir, setModoExcluir] = useState(false)
+  const [confirmacao, setConfirmacao] = useState("")
+  const [erroExcluir, setErroExcluir] = useState<string | null>(null)
 
   function alternarAtivo() {
     startTransition(async () => {
@@ -258,6 +269,110 @@ function AcoesLinha({
       if (r.ok && r.senha_temporaria) setNovaSenha(r.senha_temporaria)
       else alert(r.erro ?? "Erro ao redefinir senha")
     })
+  }
+
+  function confirmarExclusao() {
+    setErroExcluir(null)
+    if (confirmacao !== "Excluir") {
+      setErroExcluir('Digite exatamente "Excluir" pra confirmar.')
+      return
+    }
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("id", usuario.id)
+      fd.set("confirmacao", confirmacao)
+      const r = await excluirUsuarioAction(fd)
+      if (r.ok) {
+        onExcluir()
+      } else {
+        setErroExcluir(r.erro ?? "Erro ao excluir.")
+      }
+    })
+  }
+
+  function cancelarExclusao() {
+    setModoExcluir(false)
+    setConfirmacao("")
+    setErroExcluir(null)
+  }
+
+  // Modo confirmação: ocupa a linha de ações inteira até o usuário
+  // confirmar ou cancelar. Defende contra clique acidental.
+  if (modoExcluir) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          flexShrink: 0,
+          minWidth: 280,
+        }}
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="text"
+            autoFocus
+            value={confirmacao}
+            onChange={(e) => {
+              setConfirmacao(e.target.value)
+              setErroExcluir(null)
+            }}
+            placeholder='Digite "Excluir"'
+            disabled={pending}
+            className="no-ds"
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              fontSize: 12,
+              background: "rgba(226,75,74,0.08)",
+              border: "0.5px solid rgba(226,75,74,0.40)",
+              borderRadius: 6,
+              color: "var(--text-1)",
+              fontFamily: "inherit",
+              outline: "none",
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirmarExclusao()
+              if (e.key === "Escape") cancelarExclusao()
+            }}
+          />
+          <button
+            type="button"
+            onClick={confirmarExclusao}
+            disabled={pending || confirmacao !== "Excluir"}
+            className="no-ds"
+            style={{
+              ...botaoEstilo("danger"),
+              opacity: confirmacao === "Excluir" && !pending ? 1 : 0.5,
+              cursor: confirmacao === "Excluir" && !pending ? "pointer" : "not-allowed",
+            }}
+          >
+            {pending ? "Excluindo…" : "Confirmar"}
+          </button>
+          <button
+            type="button"
+            onClick={cancelarExclusao}
+            disabled={pending}
+            className="no-ds"
+            style={botaoEstilo("ghost")}
+          >
+            Cancelar
+          </button>
+        </div>
+        {erroExcluir && (
+          <p
+            style={{
+              fontSize: 11,
+              color: "#e24b4a",
+              margin: 0,
+            }}
+          >
+            {erroExcluir}
+          </p>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -305,6 +420,18 @@ function AcoesLinha({
           style={botaoEstilo(usuario.ativo ? "danger" : "success")}
         >
           {usuario.ativo ? "Desativar" : "Reativar"}
+        </button>
+      )}
+      {!ehMeuPerfil && (
+        <button
+          type="button"
+          onClick={() => setModoExcluir(true)}
+          disabled={pending}
+          className="no-ds"
+          style={botaoEstilo("danger")}
+          title="Exclusão definitiva (apaga a linha; notificações e push subs vão junto)"
+        >
+          Excluir
         </button>
       )}
     </div>
