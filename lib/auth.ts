@@ -81,6 +81,7 @@ export type ChavePermissao =
   | "dashboard_empresas"
   | "dashboard_empresa_detalhe"
   | "dashboard_trafego"
+  | "dashboard_financeiro"
   | "formularios"
   | "configuracoes"
   | "gerenciar_usuarios"
@@ -97,6 +98,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     dashboard_empresas: true,
     dashboard_empresa_detalhe: true,
     dashboard_trafego: true,
+    dashboard_financeiro: true,
     formularios: true,
     configuracoes: true,
     gerenciar_usuarios: true,
@@ -107,6 +109,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     dashboard_empresas: false,
     dashboard_empresa_detalhe: false,
     dashboard_trafego: true,
+    dashboard_financeiro: false,
     formularios: false,
     configuracoes: false,
     gerenciar_usuarios: false,
@@ -117,6 +120,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     dashboard_empresas: false,
     dashboard_empresa_detalhe: false,
     dashboard_trafego: false,
+    dashboard_financeiro: false,
     formularios: false,
     configuracoes: false,
     gerenciar_usuarios: false,
@@ -155,6 +159,7 @@ export function temPermissao(
 export function rotaPadraoDoUsuario(usuario: UsuarioSessao): string {
   if (temPermissao(usuario, "dashboard_principal")) return "/dashboard"
   if (temPermissao(usuario, "dashboard_trafego")) return "/dashboard/trafego"
+  if (temPermissao(usuario, "dashboard_financeiro")) return "/dashboard/financeiro"
   if (temPermissao(usuario, "dashboard_empresas")) return "/dashboard/empresas"
   if (temPermissao(usuario, "formularios")) return "/dashboard/formularios"
   if (temPermissao(usuario, "configuracoes")) return "/dashboard/configuracoes"

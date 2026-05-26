@@ -32,6 +32,11 @@ const CHAVES: { chave: ChavePermissao; rotulo: string; descricao: string }[] = [
     descricao: "/dashboard/trafego + /dashboard/[empresa]/trafego",
   },
   {
+    chave: "dashboard_financeiro",
+    rotulo: "Financeiro",
+    descricao: "/dashboard/financeiro (caixa, lançamentos, recorrentes)",
+  },
+  {
     chave: "formularios",
     rotulo: "Formulários",
     descricao: "/dashboard/formularios (preenchimento manual)",
@@ -677,6 +682,7 @@ const PRESET_ADMIN: Permissoes = {
   dashboard_empresas: true,
   dashboard_empresa_detalhe: true,
   dashboard_trafego: true,
+  dashboard_financeiro: true,
   formularios: true,
   configuracoes: true,
   gerenciar_usuarios: true,
@@ -688,6 +694,7 @@ const PRESET_GESTOR: Permissoes = {
   dashboard_empresas: false,
   dashboard_empresa_detalhe: false,
   dashboard_trafego: true,
+  dashboard_financeiro: false,
   formularios: false,
   configuracoes: false,
   gerenciar_usuarios: false,

@@ -203,9 +203,11 @@ function SidebarRail({
   const trafegoAtivo =
     pathname === "/dashboard/trafego" ||
     pathname.endsWith("/trafego")
-  // Empresas só ativa quando NÃO estamos em /trafego — evita destacar
-  // dois items ao mesmo tempo em /dashboard/[empresa]/trafego.
-  const empresasAtivo = !trafegoAtivo && ehRotaEmpresa(pathname)
+  const financeiroAtivo = pathname.startsWith("/dashboard/financeiro")
+  // Empresas só ativa quando NÃO estamos em /trafego nem /financeiro —
+  // evita destacar dois items ao mesmo tempo em rotas aninhadas.
+  const empresasAtivo =
+    !trafegoAtivo && !financeiroAtivo && ehRotaEmpresa(pathname)
   const formulariosAtivo = pathname === "/dashboard/formularios"
   const configAtivo = pathname === "/dashboard/configuracoes"
 
@@ -214,6 +216,7 @@ function SidebarRail({
   const podeDashboard = temPermissao(usuarioAtual, "dashboard_principal")
   const podeEmpresas = temPermissao(usuarioAtual, "dashboard_empresas")
   const podeTrafego = temPermissao(usuarioAtual, "dashboard_trafego")
+  const podeFinanceiro = temPermissao(usuarioAtual, "dashboard_financeiro")
   const podeFormularios = temPermissao(usuarioAtual, "formularios")
   const podeConfig = temPermissao(usuarioAtual, "configuracoes")
 
@@ -266,6 +269,15 @@ function SidebarRail({
             href="/dashboard/trafego"
             expandido={expandido}
             ativo={trafegoAtivo}
+          />
+        )}
+        {podeFinanceiro && (
+          <ItemMenu
+            icon={<IconeFinanceiro />}
+            rotulo="Financeiro"
+            href="/dashboard/financeiro"
+            expandido={expandido}
+            ativo={financeiroAtivo}
           />
         )}
         {podeFormularios && (
@@ -556,6 +568,28 @@ function IconeTrafego() {
       aria-hidden="true"
     >
       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  )
+}
+
+function IconeFinanceiro() {
+  // Carteira (wallet) — semântico de caixa/dinheiro guardado. Outline
+  // pra combinar com o resto do rail.
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+      <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+      <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
     </svg>
   )
 }
