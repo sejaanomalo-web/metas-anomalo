@@ -119,14 +119,14 @@ export default function GraficoFluxoCaixa({
             <Bar
               name="Receitas"
               dataKey="receitas"
-              fill="#00a868"
+              fill="#16a34a"
               radius={[2, 2, 0, 0]}
               maxBarSize={28}
             />
             <Bar
               name="Despesas"
               dataKey="despesas"
-              fill="#d96758"
+              fill="#ef4444"
               radius={[2, 2, 0, 0]}
               maxBarSize={28}
             />
@@ -134,9 +134,9 @@ export default function GraficoFluxoCaixa({
               name="Resultado"
               type="monotone"
               dataKey="resultado"
-              stroke="#4c4e54"
+              stroke="#C9953A"
               strokeWidth={2}
-              dot={{ r: 3, fill: "#4c4e54", stroke: "#ffffff", strokeWidth: 1.5 }}
+              dot={{ r: 3, fill: "#C9953A", stroke: "#0f0f12", strokeWidth: 1.5 }}
               activeDot={{ r: 4 }}
             />
           </ComposedChart>

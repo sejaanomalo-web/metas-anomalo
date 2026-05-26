@@ -227,7 +227,7 @@ export default function DrawerEditarMeta({
               background: "rgba(15,15,15,0.9)",
               backdropFilter: "blur(24px)",
               WebkitBackdropFilter: "blur(24px)",
-              borderLeft: "0.5px solid rgba(0,0,0,0.08)",
+              borderLeft: "0.5px solid rgba(255,255,255,0.08)",
             }}
           >
             <div
@@ -235,7 +235,7 @@ export default function DrawerEditarMeta({
               style={{
                 background: "rgba(10,10,10,0.7)",
                 backdropFilter: "blur(16px)",
-                borderBottom: "0.5px solid rgba(0,0,0,0.06)",
+                borderBottom: "0.5px solid rgba(255,255,255,0.06)",
                 padding: "18px 24px",
                 zIndex: 5,
               }}
@@ -246,7 +246,7 @@ export default function DrawerEditarMeta({
                     style={{
                       fontSize: 9,
                       letterSpacing: "2px",
-                      color: "rgba(0,0,0,0.35)",
+                      color: "rgba(255,255,255,0.35)",
                       textTransform: "uppercase",
                       fontWeight: 500,
                     }}
@@ -267,7 +267,7 @@ export default function DrawerEditarMeta({
                     style={{
                       fontSize: 10,
                       letterSpacing: "1.2px",
-                      color: "#4c4e54",
+                      color: "#C9953A",
                       fontWeight: 600,
                       marginTop: 6,
                       textTransform: "uppercase",
@@ -280,7 +280,7 @@ export default function DrawerEditarMeta({
                   type="button"
                   onClick={() => setAberto(false)}
                   style={{
-                    color: "rgba(0,0,0,0.5)",
+                    color: "rgba(255,255,255,0.5)",
                     fontSize: 22,
                     lineHeight: 1,
                   }}
@@ -296,7 +296,7 @@ export default function DrawerEditarMeta({
                     style={{
                       fontSize: 9,
                       letterSpacing: "2px",
-                      color: "rgba(0,0,0,0.4)",
+                      color: "rgba(255,255,255,0.4)",
                       textTransform: "uppercase",
                       fontWeight: 500,
                     }}
@@ -330,7 +330,7 @@ export default function DrawerEditarMeta({
                     style={{
                       fontSize: 9,
                       letterSpacing: "2px",
-                      color: "rgba(0,0,0,0.4)",
+                      color: "rgba(255,255,255,0.4)",
                       textTransform: "uppercase",
                       fontWeight: 500,
                     }}
@@ -364,7 +364,7 @@ export default function DrawerEditarMeta({
                 <p
                   style={{
                     fontSize: 10,
-                    color: "rgba(0,0,0,0.35)",
+                    color: "rgba(255,255,255,0.35)",
                     fontWeight: 300,
                     marginTop: 8,
                     fontStyle: "italic",
@@ -380,7 +380,7 @@ export default function DrawerEditarMeta({
               <p
                 style={{
                   fontSize: 11,
-                  color: "rgba(0,0,0,0.5)",
+                  color: "rgba(255,255,255,0.5)",
                   fontWeight: 300,
                   marginBottom: 14,
                 }}
@@ -408,7 +408,7 @@ export default function DrawerEditarMeta({
                         style={{
                           fontSize: 9,
                           letterSpacing: "2px",
-                          color: "rgba(0,0,0,0.4)",
+                          color: "rgba(255,255,255,0.4)",
                           textTransform: "uppercase",
                           fontWeight: 500,
                         }}
@@ -434,7 +434,7 @@ export default function DrawerEditarMeta({
                       <span
                         style={{
                           fontSize: 9,
-                          color: "rgba(0,0,0,0.3)",
+                          color: "rgba(255,255,255,0.3)",
                           marginTop: 4,
                           display: "block",
                         }}
@@ -461,7 +461,7 @@ export default function DrawerEditarMeta({
                   onClick={() => setAberto(false)}
                   style={{
                     fontSize: 11,
-                    color: "rgba(0,0,0,0.5)",
+                    color: "rgba(255,255,255,0.5)",
                     letterSpacing: "0.5px",
                     textTransform: "uppercase",
                     padding: "8px 14px",

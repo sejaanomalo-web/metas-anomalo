@@ -140,7 +140,7 @@ export default function AtivarNotificacoes({
       <p
         style={{
           fontSize: 12,
-          color: "rgba(0,0,0,0.45)",
+          color: "rgba(255,255,255,0.45)",
           fontWeight: 300,
           marginTop: 4,
           marginBottom: 14,
@@ -163,11 +163,11 @@ export default function AtivarNotificacoes({
 
 function StatusBadge({ estado }: { estado: Estado }) {
   const map: Record<Estado, { label: string; cor: string }> = {
-    carregando: { label: "...", cor: "rgba(0,0,0,0.35)" },
-    nao_suportado: { label: "indisponível", cor: "rgba(0,0,0,0.35)" },
+    carregando: { label: "...", cor: "rgba(255,255,255,0.35)" },
+    nao_suportado: { label: "indisponível", cor: "rgba(255,255,255,0.35)" },
     negado: { label: "negado", cor: "#e24b4a" },
-    inativo: { label: "inativo", cor: "rgba(0,0,0,0.55)" },
-    ativando: { label: "ativando", cor: "#4c4e54" },
+    inativo: { label: "inativo", cor: "rgba(255,255,255,0.55)" },
+    ativando: { label: "ativando", cor: "#C9953A" },
     ativo: { label: "ativo", cor: "#4caf50" },
     erro: { label: "erro", cor: "#e24b4a" },
   }
@@ -242,8 +242,8 @@ function CorpoEstado({
             fontSize: 11,
             letterSpacing: "0.5px",
             textTransform: "uppercase",
-            color: "rgba(0,0,0,0.55)",
-            border: "0.5px solid rgba(0,0,0,0.15)",
+            color: "rgba(255,255,255,0.55)",
+            border: "0.5px solid rgba(255,255,255,0.15)",
             borderRadius: 6,
             background: "transparent",
             fontWeight: 500,
@@ -256,7 +256,7 @@ function CorpoEstado({
         <span
           style={{
             fontSize: 11,
-            color: "rgba(0,0,0,0.45)",
+            color: "rgba(255,255,255,0.45)",
             fontWeight: 300,
           }}
         >
@@ -290,7 +290,7 @@ function Aviso({ children }: { children: React.ReactNode }) {
     <p
       style={{
         fontSize: 12,
-        color: "rgba(0,0,0,0.55)",
+        color: "rgba(255,255,255,0.55)",
         lineHeight: 1.55,
         fontWeight: 400,
       }}

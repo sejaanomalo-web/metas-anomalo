@@ -75,7 +75,7 @@ function TooltipConteudo({
   const real = ponto.real
   const diff = real !== null ? real - ponto.meta : null
   const corStatus = real === null
-    ? "rgba(0,0,0,0.5)"
+    ? "rgba(255,255,255,0.5)"
     : real >= ponto.meta
     ? "#4caf50"
     : "#e24b4a"
@@ -84,7 +84,7 @@ function TooltipConteudo({
     <div
       style={{
         background: "rgba(0,0,0,0.85)",
-        border: "0.5px solid rgba(0,0,0,0.1)",
+        border: "0.5px solid rgba(255,255,255,0.1)",
         borderRadius: 8,
         backdropFilter: "blur(16px)",
         padding: "10px 14px",
@@ -98,7 +98,7 @@ function TooltipConteudo({
       <p
         style={{
           fontSize: 10,
-          color: "rgba(0,0,0,0.5)",
+          color: "rgba(255,255,255,0.5)",
           letterSpacing: "1px",
           textTransform: "uppercase",
           marginBottom: 6,
@@ -106,7 +106,7 @@ function TooltipConteudo({
       >
         {mesLabel}
       </p>
-      <p style={{ color: "#4c4e54", marginBottom: 2 }}>
+      <p style={{ color: "#C9953A", marginBottom: 2 }}>
         Meta: {formatBRL(ponto.meta)}
       </p>
       {real !== null ? (
@@ -122,7 +122,7 @@ function TooltipConteudo({
           )}
         </>
       ) : (
-        <p style={{ color: "rgba(0,0,0,0.3)" }}>Real: não inserido</p>
+        <p style={{ color: "rgba(255,255,255,0.3)" }}>Real: não inserido</p>
       )}
     </div>
   )
@@ -143,7 +143,7 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
           style={{
             fontSize: 9,
             letterSpacing: "2px",
-            color: "rgba(0,0,0,0.35)",
+            color: "rgba(255,255,255,0.35)",
             textTransform: "uppercase",
             fontWeight: 500,
           }}
@@ -154,7 +154,7 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
           <span
             style={{
               fontSize: 9,
-              color: "rgba(0,0,0,0.2)",
+              color: "rgba(255,255,255,0.2)",
               fontWeight: 300,
             }}
           >
@@ -170,19 +170,19 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
             margin={{ top: 10, right: 16, bottom: 4, left: 0 }}
           >
             <CartesianGrid
-              stroke="rgba(0,0,0,0.04)"
+              stroke="rgba(255,255,255,0.04)"
               strokeDasharray="2 4"
               vertical={false}
             />
             <XAxis
               dataKey="mes"
-              stroke="rgba(0,0,0,0.3)"
+              stroke="rgba(255,255,255,0.3)"
               tickLine={false}
               axisLine={false}
               style={{ fontSize: 9, fontFamily: "Inter" }}
             />
             <YAxis
-              stroke="rgba(0,0,0,0.3)"
+              stroke="rgba(255,255,255,0.3)"
               tickLine={false}
               axisLine={false}
               style={{ fontSize: 9, fontFamily: "Inter" }}
@@ -191,17 +191,17 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
               }
             />
             <Tooltip
-              cursor={{ stroke: "rgba(76, 78, 84,0.25)" }}
+              cursor={{ stroke: "rgba(201,149,58,0.25)" }}
               content={<TooltipConteudo pontos={dados} />}
             />
             <Line
               type="monotone"
               dataKey="meta"
               name="Meta"
-              stroke="#4c4e54"
+              stroke="#C9953A"
               strokeWidth={1.5}
               dot={false}
-              activeDot={{ r: 4, fill: "#4c4e54", stroke: "#000" }}
+              activeDot={{ r: 4, fill: "#C9953A", stroke: "#000" }}
             />
             {segmentos.map((seg, idx) => (
               <Line
@@ -273,13 +273,13 @@ export default function GraficoFaturamento({ dados }: { dados: Ponto[] }) {
         style={{
           marginTop: 12,
           paddingTop: 12,
-          borderTop: "0.5px solid rgba(0,0,0,0.05)",
+          borderTop: "0.5px solid rgba(255,255,255,0.05)",
           fontSize: 10,
           fontWeight: 400,
-          color: "rgba(0,0,0,0.4)",
+          color: "rgba(255,255,255,0.4)",
         }}
       >
-        <span style={{ color: "#4c4e54" }}>── Meta</span>
+        <span style={{ color: "#C9953A" }}>── Meta</span>
         {temReal && (
           <>
             <span style={{ color: "#4caf50" }}>┅ Real acima da meta</span>

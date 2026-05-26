@@ -114,7 +114,7 @@ export default async function TrafegoPage({
               color: "var(--text-3)",
               fontWeight: 500,
             }}
-            className="hover:text-[#4c4e54] transition"
+            className="hover:text-[#C9953A] transition"
           >
             ← {empresa.nome}
           </Link>
@@ -169,8 +169,8 @@ export default async function TrafegoPage({
             style={{
               padding: 18,
               borderRadius: 12,
-              border: "1px solid rgba(76, 78, 84,0.30)",
-              background: "rgba(76, 78, 84,0.06)",
+              border: "1px solid rgba(201,149,58,0.30)",
+              background: "rgba(201,149,58,0.06)",
               color: "var(--text-2)",
               fontSize: 13,
               lineHeight: 1.6,
@@ -364,7 +364,7 @@ export default async function TrafegoPage({
                           textAlign: "left",
                           padding: "10px 14px",
                           borderBottom:
-                            "1px solid rgba(0,0,0,0.06)",
+                            "1px solid rgba(255,255,255,0.06)",
                           whiteSpace: "nowrap",
                           // Primeira coluna fica fixa ao rolar horizontalmente
                           // (relevante no celular onde a tabela transborda).
@@ -409,7 +409,7 @@ function BadgeStatusSentinela({
     success: { fg: "var(--success)", bg: "var(--success-bg)", border: "rgba(22,163,74,0.25)" },
     warning: { fg: "var(--warning)", bg: "var(--warning-bg)", border: "rgba(234,179,8,0.30)" },
     danger: { fg: "var(--danger)", bg: "var(--danger-bg)", border: "rgba(239,68,68,0.30)" },
-    neutral: { fg: "var(--text-3)", bg: "rgba(0,0,0,0.04)", border: "rgba(0,0,0,0.08)" },
+    neutral: { fg: "var(--text-3)", bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" },
   }
   const c = corMap[statusCor]
   return (
@@ -583,8 +583,8 @@ function LinhaTabela({ linha }: { linha: LinhaDoMes }) {
               fontSize: 11,
               color: ehSentinela ? "var(--accent)" : "var(--text-2)",
               background: ehSentinela
-                ? "rgba(76, 78, 84,0.10)"
-                : "rgba(0,0,0,0.04)",
+                ? "rgba(201,149,58,0.10)"
+                : "rgba(255,255,255,0.04)",
               padding: "3px 8px",
               borderRadius: 999,
               display: "inline-flex",
@@ -652,7 +652,7 @@ const celulaStyle: React.CSSProperties = {
   color: "var(--text-2)",
   fontWeight: 400,
   padding: "12px 14px",
-  borderBottom: "1px solid rgba(0,0,0,0.04)",
+  borderBottom: "1px solid rgba(255,255,255,0.04)",
   whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
 }

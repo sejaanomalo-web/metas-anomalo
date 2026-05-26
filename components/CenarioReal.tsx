@@ -119,7 +119,7 @@ export default function CenarioReal({
           style={{
             fontSize: 9,
             letterSpacing: "2px",
-            color: "rgba(0,0,0,0.35)",
+            color: "rgba(255,255,255,0.35)",
             textTransform: "uppercase",
             fontWeight: 500,
           }}
@@ -130,13 +130,13 @@ export default function CenarioReal({
           style={{
             fontSize: 9,
             letterSpacing: "1.5px",
-            color: "#4c4e54",
+            color: "#C9953A",
             textTransform: "uppercase",
             fontWeight: 600,
             padding: "3px 9px",
             borderRadius: 999,
-            border: "0.5px solid rgba(76, 78, 84,0.4)",
-            background: "rgba(76, 78, 84,0.08)",
+            border: "0.5px solid rgba(201,149,58,0.4)",
+            background: "rgba(201,149,58,0.08)",
           }}
         >
           {rotuloOrigem}
@@ -166,7 +166,7 @@ export default function CenarioReal({
                 style={{
                   fontSize: 9,
                   letterSpacing: "2px",
-                  color: "rgba(0,0,0,0.35)",
+                  color: "rgba(255,255,255,0.35)",
                   textTransform: "uppercase",
                   fontWeight: 500,
                 }}
@@ -190,7 +190,7 @@ export default function CenarioReal({
                 <p
                   style={{
                     fontSize: 13,
-                    color: "rgba(0,0,0,0.18)",
+                    color: "rgba(255,255,255,0.18)",
                     fontStyle: "italic",
                     fontWeight: 300,
                     marginTop: 8,
@@ -204,7 +204,7 @@ export default function CenarioReal({
                 <p
                   style={{
                     fontSize: 12,
-                    color: temReal ? cor : "rgba(0,0,0,0.25)",
+                    color: temReal ? cor : "rgba(255,255,255,0.25)",
                     fontWeight: 400,
                     marginTop: 6,
                   }}
@@ -228,7 +228,7 @@ export default function CenarioReal({
             style={{
               fontSize: 9,
               letterSpacing: "2px",
-              color: "rgba(0,0,0,0.35)",
+              color: "rgba(255,255,255,0.35)",
               textTransform: "uppercase",
               fontWeight: 500,
             }}
@@ -252,7 +252,7 @@ export default function CenarioReal({
             <p
               style={{
                 fontSize: 13,
-                color: "rgba(0,0,0,0.18)",
+                color: "rgba(255,255,255,0.18)",
                 fontStyle: "italic",
                 fontWeight: 300,
                 marginTop: 8,
@@ -264,7 +264,7 @@ export default function CenarioReal({
           <p
             style={{
               fontSize: 11,
-              color: "rgba(0,0,0,0.2)",
+              color: "rgba(255,255,255,0.2)",
               fontWeight: 400,
               marginTop: 6,
             }}
@@ -283,7 +283,7 @@ export default function CenarioReal({
             style={{
               fontSize: 9,
               letterSpacing: "2px",
-              color: "rgba(0,0,0,0.35)",
+              color: "rgba(255,255,255,0.35)",
               textTransform: "uppercase",
               fontWeight: 500,
             }}
@@ -307,7 +307,7 @@ export default function CenarioReal({
             <p
               style={{
                 fontSize: 13,
-                color: "rgba(0,0,0,0.18)",
+                color: "rgba(255,255,255,0.18)",
                 fontStyle: "italic",
                 fontWeight: 300,
                 marginTop: 8,
@@ -319,7 +319,7 @@ export default function CenarioReal({
           <p
             style={{
               fontSize: 11,
-              color: "rgba(0,0,0,0.2)",
+              color: "rgba(255,255,255,0.2)",
               fontWeight: 400,
               marginTop: 6,
             }}
@@ -338,7 +338,7 @@ export default function CenarioReal({
             style={{
               fontSize: 9,
               letterSpacing: "2px",
-              color: "rgba(0,0,0,0.35)",
+              color: "rgba(255,255,255,0.35)",
               textTransform: "uppercase",
               fontWeight: 500,
             }}
@@ -363,7 +363,7 @@ export default function CenarioReal({
             <p
               style={{
                 fontSize: 13,
-                color: "rgba(0,0,0,0.18)",
+                color: "rgba(255,255,255,0.18)",
                 fontStyle: "italic",
                 fontWeight: 300,
                 marginTop: 8,
@@ -375,7 +375,7 @@ export default function CenarioReal({
           <p
             style={{
               fontSize: 11,
-              color: "rgba(0,0,0,0.2)",
+              color: "rgba(255,255,255,0.2)",
               fontWeight: 400,
               marginTop: 6,
             }}
@@ -399,7 +399,7 @@ export default function CenarioReal({
             style={{
               fontSize: 9,
               letterSpacing: "2px",
-              color: "rgba(0,0,0,0.35)",
+              color: "rgba(255,255,255,0.35)",
               textTransform: "uppercase",
               fontWeight: 500,
             }}
@@ -409,7 +409,7 @@ export default function CenarioReal({
           <p
             style={{
               fontSize: 12,
-              color: "rgba(0,0,0,0.7)",
+              color: "rgba(255,255,255,0.7)",
               fontWeight: 300,
               marginTop: 4,
               whiteSpace: "pre-wrap",

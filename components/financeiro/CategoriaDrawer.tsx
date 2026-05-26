@@ -15,7 +15,7 @@ interface Props {
 }
 
 const CORES_PADRAO = [
-  "#4c4e54", "#00a868", "#0fcc7d", "#d96758", "#d4a017", "#3974e6", "#9333ea",
+  "#C9953A", "#16a34a", "#0fcc7d", "#ef4444", "#eab308", "#3974e6", "#9333ea",
 ]
 
 export default function CategoriaDrawer({ aberto, fechar, categoria }: Props) {
@@ -23,7 +23,7 @@ export default function CategoriaDrawer({ aberto, fechar, categoria }: Props) {
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
   const [tipo, setTipo] = useState<TipoLancamento>(categoria?.tipo ?? "despesa")
-  const [cor, setCor] = useState(categoria?.cor ?? "#4c4e54")
+  const [cor, setCor] = useState(categoria?.cor ?? "#C9953A")
 
   if (!aberto) return null
   const editando = !!categoria

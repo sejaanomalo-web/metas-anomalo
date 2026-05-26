@@ -9,69 +9,43 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // ----- Stone tokens canônicos -----
-        background: "var(--background)",
-        foreground: "var(--foreground)",
-        primary: {
-          DEFAULT: "var(--primary)",
-          foreground: "var(--primary-foreground)",
-          hover: "var(--primary-hover)",
-        },
-        secondary: {
-          DEFAULT: "var(--secondary)",
-          foreground: "var(--secondary-foreground)",
-        },
-        muted: {
-          DEFAULT: "var(--muted)",
-          foreground: "var(--muted-foreground)",
-        },
-        card: {
-          DEFAULT: "var(--card)",
-          foreground: "var(--card-foreground)",
-        },
-        popover: {
-          DEFAULT: "var(--popover)",
-          foreground: "var(--popover-foreground)",
-        },
-        border: "var(--border)",
-        ring: "var(--ring)",
-        destructive: {
-          DEFAULT: "var(--destructive)",
-          bg: "var(--destructive-bg)",
+        // Page background (preto puro pra contraste máximo com os cards).
+        bg: "#000000",
+
+        // Surface scale — preto fosco em escala suave.
+        surface: {
+          1: "#0f0f12",
+          2: "#16161b",
+          3: "#1c1c22",
         },
 
-        // ----- Aliases legados (mantém usos como bg-bg, text-text-1) -----
-        bg: "var(--background)",
-        surface: {
-          1: "var(--surface-1)",
-          2: "var(--surface-2)",
-          3: "var(--surface-3)",
-        },
+        // Escala fechada de texto.
         text: {
-          1: "var(--text-1)",
-          2: "var(--text-2)",
-          3: "var(--text-3)",
-          4: "var(--text-4)",
+          1: "#ffffff",
+          2: "#c7cdd9",
+          3: "#8a93a3",
+          4: "#5b6473",
         },
+
+        // Cor semântica.
         success: {
-          DEFAULT: "var(--success)",
-          bg: "var(--success-bg)",
+          DEFAULT: "#16a34a",
+          bg: "rgba(22, 163, 74, 0.12)",
         },
         warning: {
-          DEFAULT: "var(--warning)",
-          bg: "var(--warning-bg)",
+          DEFAULT: "#eab308",
+          bg: "rgba(234, 179, 8, 0.12)",
         },
         danger: {
-          DEFAULT: "var(--destructive)",
-          bg: "var(--destructive-bg)",
+          DEFAULT: "#ef4444",
+          bg: "rgba(239, 68, 68, 0.12)",
         },
 
-        // Antigo "gold" remapeado pro primary Stone — classes
-        // bg-gold/text-gold viram cinza-chumbo.
+        // Marca.
         gold: {
-          DEFAULT: "var(--primary)",
-          soft: "rgba(76, 78, 84, 0.08)",
-          muted: "var(--muted-foreground)",
+          DEFAULT: "#C9953A",
+          soft: "rgba(201, 149, 58, 0.12)",
+          muted: "#8a6628",
         },
       },
       fontFamily: {
@@ -86,13 +60,6 @@ const config: Config = {
           "Roboto",
           "sans-serif",
         ],
-        display: [
-          "Sharon Display",
-          "Inter",
-          "ui-sans-serif",
-          "system-ui",
-          "sans-serif",
-        ],
         mono: [
           "ui-monospace",
           "SFMono-Regular",
@@ -103,20 +70,18 @@ const config: Config = {
         ],
       },
       borderRadius: {
-        none: "0px",
-        button: "2px",
-        input: "8px",
         card: "16px",
-        chip: "9999px",
+        input: "10px",
+        button: "10px",
+        chip: "999px",
       },
       letterSpacing: {
-        // Stone case=none — tracking sutil em vez do exagerado 1.17px.
-        label: "0.04em",
-        nav: "0.02em",
-        micro: "0",
+        label: "1.17px",
+        nav: "1.17px",
+        micro: "1px",
       },
       spacing: {
-        // Escala mantida pra compat com pages existentes.
+        // Múltiplos rígidos de 4/8 — abandona 3, 5, 12, 14, 18, 22.
         xs: "4px",
         sm: "8px",
         md: "16px",
@@ -125,9 +90,7 @@ const config: Config = {
         "2xl": "48px",
       },
       boxShadow: {
-        // Stone: flat. Sombras só pra overlays (modal/drawer).
-        modal: "0px 8px 50px 0px rgba(66, 74, 83, 0.30)",
-        gold: "0 0 0 1px var(--border)",
+        gold: "0 0 0 1px rgba(201,149,58,0.20)",
         none: "0 0 0 0 transparent",
       },
     },

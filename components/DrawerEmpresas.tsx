@@ -69,7 +69,7 @@ export default function DrawerEmpresas({
               background: "rgba(15,15,15,0.92)",
               backdropFilter: "blur(24px)",
               WebkitBackdropFilter: "blur(24px)",
-              borderLeft: "0.5px solid rgba(0,0,0,0.08)",
+              borderLeft: "0.5px solid rgba(255,255,255,0.08)",
             }}
           >
             <div
@@ -77,7 +77,7 @@ export default function DrawerEmpresas({
               style={{
                 background: "rgba(10,10,10,0.75)",
                 backdropFilter: "blur(16px)",
-                borderBottom: "0.5px solid rgba(0,0,0,0.06)",
+                borderBottom: "0.5px solid rgba(255,255,255,0.06)",
                 padding: "18px 24px",
                 zIndex: 5,
               }}
@@ -88,7 +88,7 @@ export default function DrawerEmpresas({
                     style={{
                       fontSize: 9,
                       letterSpacing: "2px",
-                      color: "rgba(0,0,0,0.35)",
+                      color: "rgba(255,255,255,0.35)",
                       textTransform: "uppercase",
                       fontWeight: 500,
                     }}
@@ -110,7 +110,7 @@ export default function DrawerEmpresas({
                   type="button"
                   onClick={() => setAberto(false)}
                   style={{
-                    color: "rgba(0,0,0,0.5)",
+                    color: "rgba(255,255,255,0.5)",
                     fontSize: 22,
                     lineHeight: 1,
                   }}
@@ -214,7 +214,7 @@ function Conteudo({
             style={{
               fontSize: 9,
               letterSpacing: "2px",
-              color: "rgba(0,0,0,0.3)",
+              color: "rgba(255,255,255,0.3)",
               textTransform: "uppercase",
               fontWeight: 500,
               marginBottom: 8,
@@ -297,7 +297,7 @@ function FormEmpresa({
   return (
     <div
       style={{
-        border: "0.5px solid rgba(0,0,0,0.08)",
+        border: "0.5px solid rgba(255,255,255,0.08)",
         borderRadius: 12,
         padding: 18,
       }}
@@ -313,9 +313,9 @@ function FormEmpresa({
             fontSize: 10,
             letterSpacing: "0.5px",
             textTransform: "uppercase",
-            color: "rgba(0,0,0,0.3)",
+            color: "rgba(255,255,255,0.3)",
           }}
-          className="hover:text-[#4c4e54] transition"
+          className="hover:text-[#C9953A] transition"
         >
           Cancelar
         </button>
@@ -373,7 +373,7 @@ function FormEmpresa({
                   borderRadius: 6,
                   background:
                     tipo === t.chave
-                      ? "rgba(76, 78, 84,0.08)"
+                      ? "rgba(201,149,58,0.08)"
                       : "transparent",
                 }}
               >
@@ -381,13 +381,13 @@ function FormEmpresa({
                   type="radio"
                   checked={tipo === t.chave}
                   onChange={() => setTipo(t.chave)}
-                  style={{ accentColor: "#4c4e54" }}
+                  style={{ accentColor: "#C9953A" }}
                 />
                 <span
                   style={{
                     fontSize: 12,
                     color:
-                      tipo === t.chave ? "#4c4e54" : "rgba(0,0,0,0.75)",
+                      tipo === t.chave ? "#C9953A" : "rgba(255,255,255,0.75)",
                     fontWeight: tipo === t.chave ? 500 : 400,
                   }}
                 >
@@ -396,7 +396,7 @@ function FormEmpresa({
                 <span
                   style={{
                     fontSize: 10,
-                    color: "rgba(0,0,0,0.3)",
+                    color: "rgba(255,255,255,0.3)",
                     fontWeight: 300,
                   }}
                 >
@@ -457,7 +457,7 @@ function SecaoListaEmpresas({
         style={{
           fontSize: 9,
           letterSpacing: "2px",
-          color: "rgba(0,0,0,0.35)",
+          color: "rgba(255,255,255,0.35)",
           textTransform: "uppercase",
           fontWeight: 500,
           marginBottom: 10,
@@ -468,7 +468,7 @@ function SecaoListaEmpresas({
           <span
             style={{
               marginLeft: 8,
-              color: "rgba(0,0,0,0.25)",
+              color: "rgba(255,255,255,0.25)",
               fontWeight: 400,
               letterSpacing: "0.5px",
             }}
@@ -572,7 +572,7 @@ function ListaEmpresas({
             className="flex items-center justify-between gap-2"
             style={{
               padding: "10px 12px",
-              border: "0.5px solid rgba(0,0,0,0.06)",
+              border: "0.5px solid rgba(255,255,255,0.06)",
               borderRadius: 8,
               opacity: inativa ? 0.65 : 1,
             }}
@@ -602,14 +602,14 @@ function ListaEmpresas({
                     height: 18,
                     color:
                       !podeReordenar || idx === 0
-                        ? "rgba(0,0,0,0.15)"
-                        : "rgba(0,0,0,0.55)",
-                    border: "0.5px solid rgba(0,0,0,0.10)",
+                        ? "rgba(255,255,255,0.15)"
+                        : "rgba(255,255,255,0.55)",
+                    border: "0.5px solid rgba(255,255,255,0.10)",
                     borderRadius: 4,
                     cursor:
                       !podeReordenar || idx === 0 ? "default" : "pointer",
                   }}
-                  className="hover:text-[#4c4e54] transition"
+                  className="hover:text-[#C9953A] transition"
                 >
                   ▲
                 </button>
@@ -636,16 +636,16 @@ function ListaEmpresas({
                     height: 18,
                     color:
                       !podeReordenar || idx === lista.length - 1
-                        ? "rgba(0,0,0,0.15)"
-                        : "rgba(0,0,0,0.55)",
-                    border: "0.5px solid rgba(0,0,0,0.10)",
+                        ? "rgba(255,255,255,0.15)"
+                        : "rgba(255,255,255,0.55)",
+                    border: "0.5px solid rgba(255,255,255,0.10)",
                     borderRadius: 4,
                     cursor:
                       !podeReordenar || idx === lista.length - 1
                         ? "default"
                         : "pointer",
                   }}
-                  className="hover:text-[#4c4e54] transition"
+                  className="hover:text-[#C9953A] transition"
                 >
                   ▼
                 </button>
@@ -665,7 +665,7 @@ function ListaEmpresas({
               <p
                 style={{
                   fontSize: 10,
-                  color: "rgba(0,0,0,0.4)",
+                  color: "rgba(255,255,255,0.4)",
                   fontWeight: 300,
                 }}
                 className="truncate"
@@ -682,10 +682,10 @@ function ListaEmpresas({
                 style={{
                   fontSize: 12,
                   padding: "2px 6px",
-                  color: "rgba(0,0,0,0.3)",
+                  color: "rgba(255,255,255,0.3)",
                   opacity: !supabaseOk || semId ? 0.3 : 1,
                 }}
-                className="hover:text-[#4c4e54] transition"
+                className="hover:text-[#C9953A] transition"
               >
                 ✎
               </button>
@@ -696,11 +696,11 @@ function ListaEmpresas({
                   disabled={pending || semId}
                   style={{
                     fontSize: 10,
-                    color: "#4c4e54",
+                    color: "#C9953A",
                     letterSpacing: "0.5px",
                     textTransform: "uppercase",
                     padding: "3px 8px",
-                    border: "0.5px solid rgba(76, 78, 84,0.35)",
+                    border: "0.5px solid rgba(201,149,58,0.35)",
                     borderRadius: 4,
                     opacity: semId ? 0.3 : 1,
                   }}
@@ -718,7 +718,7 @@ function ListaEmpresas({
                   style={{
                     fontSize: 12,
                     padding: "2px 6px",
-                    color: "rgba(0,0,0,0.2)",
+                    color: "rgba(255,255,255,0.2)",
                     opacity: semId ? 0.3 : 1,
                   }}
                   className="hover:text-[#e24b4a] transition"
@@ -738,7 +738,7 @@ function ListaEmpresas({
                 style={{
                   fontSize: 12,
                   padding: "2px 6px",
-                  color: "rgba(0,0,0,0.2)",
+                  color: "rgba(255,255,255,0.2)",
                   opacity: !supabaseOk || semId ? 0.3 : 1,
                 }}
                 className="hover:text-[#e24b4a] transition"
@@ -809,7 +809,7 @@ function ModalExcluirEmpresa({
         <p
           style={{
             fontSize: 12,
-            color: "rgba(0,0,0,0.45)",
+            color: "rgba(255,255,255,0.45)",
             fontWeight: 300,
             marginBottom: 14,
           }}
@@ -834,7 +834,7 @@ function ModalExcluirEmpresa({
             onClick={onCancel}
             style={{
               fontSize: 11,
-              color: "rgba(0,0,0,0.5)",
+              color: "rgba(255,255,255,0.5)",
               letterSpacing: "0.5px",
               textTransform: "uppercase",
               padding: "8px 14px",
@@ -873,7 +873,7 @@ function LabelSmall({ children }: { children: React.ReactNode }) {
       style={{
         fontSize: 9,
         letterSpacing: "2px",
-        color: "rgba(0,0,0,0.4)",
+        color: "rgba(255,255,255,0.4)",
         textTransform: "uppercase",
         fontWeight: 500,
       }}

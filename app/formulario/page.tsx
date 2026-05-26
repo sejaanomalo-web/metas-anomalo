@@ -54,7 +54,7 @@ export default async function FormularioPublicoPage() {
         <p
           style={{
             fontSize: 12,
-            color: "rgba(0,0,0,0.45)",
+            color: "rgba(255,255,255,0.45)",
             fontWeight: 300,
             marginTop: 14,
             textAlign: "center",
@@ -72,7 +72,7 @@ export default async function FormularioPublicoPage() {
         style={{
           fontSize: 10,
           letterSpacing: "1.5px",
-          color: "rgba(0,0,0,0.2)",
+          color: "rgba(255,255,255,0.2)",
           textTransform: "uppercase",
           fontWeight: 400,
         }}

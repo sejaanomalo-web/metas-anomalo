@@ -18,7 +18,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
         style={{
           fontSize: 9,
           letterSpacing: "2px",
-          color: "rgba(0,0,0,0.35)",
+          color: "rgba(255,255,255,0.35)",
           textTransform: "uppercase",
           fontWeight: 500,
           marginBottom: 14,
@@ -56,7 +56,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
                 style={{
                   fontSize: 9,
                   letterSpacing: "2px",
-                  color: "rgba(0,0,0,0.35)",
+                  color: "rgba(255,255,255,0.35)",
                   textTransform: "uppercase",
                   fontWeight: 500,
                 }}
@@ -81,7 +81,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
                   <p
                     style={{
                       fontSize: 14,
-                      color: "rgba(0,0,0,0.18)",
+                      color: "rgba(255,255,255,0.18)",
                       fontStyle: "italic",
                       fontWeight: 300,
                       lineHeight: 1,
@@ -102,7 +102,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
                   style={{
                     fontSize: 9,
                     letterSpacing: "2px",
-                    color: "rgba(0,0,0,0.3)",
+                    color: "rgba(255,255,255,0.3)",
                     textTransform: "uppercase",
                     fontWeight: 500,
                   }}
@@ -112,7 +112,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
                 <span
                   style={{
                     fontSize: 14,
-                    color: "#4c4e54",
+                    color: "#C9953A",
                     fontWeight: 500,
                   }}
                 >
@@ -128,7 +128,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
                   <span
                     style={{
                       fontSize: 10,
-                      color: "rgba(0,0,0,0.25)",
+                      color: "rgba(255,255,255,0.25)",
                       fontWeight: 300,
                     }}
                   >
@@ -138,7 +138,7 @@ export default function FunilCascata({ etapas, reais }: Props) {
                     <span
                       style={{
                         fontSize: 10,
-                        color: "rgba(0,0,0,0.25)",
+                        color: "rgba(255,255,255,0.25)",
                         fontWeight: 400,
                       }}
                     >

@@ -44,15 +44,15 @@ export default function BotaoAtualizar({
       type="button"
       onClick={atualizar}
       disabled={pending}
-      className="hover:text-[#4c4e54] hover:border-[#4c4e5455] transition no-ds"
+      className="hover:text-[#C9953A] hover:border-[#C9953A55] transition no-ds"
       style={{
         padding: "8px 14px",
         fontSize: 11,
         letterSpacing: "0.5px",
         textTransform: "uppercase",
-        color: atualizado ? "#4caf50" : "rgba(0,0,0,0.55)",
+        color: atualizado ? "#4caf50" : "rgba(255,255,255,0.55)",
         border: `0.5px solid ${
-          atualizado ? "rgba(76,175,80,0.45)" : "rgba(0,0,0,0.15)"
+          atualizado ? "rgba(76,175,80,0.45)" : "rgba(255,255,255,0.15)"
         }`,
         borderRadius: 6,
         background: "transparent",

@@ -118,14 +118,14 @@ export default function FormularioManual({
           <button
             type="button"
             onClick={copiar}
-            className="hover:text-[#4c4e54] hover:border-[#4c4e5455] transition no-ds"
+            className="hover:text-[#C9953A] hover:border-[#C9953A55] transition no-ds"
             style={{
               padding: "8px 14px",
               fontSize: 11,
               letterSpacing: "0.5px",
               textTransform: "uppercase",
-              color: "rgba(0,0,0,0.55)",
-              border: "0.5px solid rgba(0,0,0,0.15)",
+              color: "rgba(255,255,255,0.55)",
+              border: "0.5px solid rgba(255,255,255,0.15)",
               borderRadius: 6,
               background: "transparent",
               fontWeight: 500,
@@ -299,7 +299,7 @@ function Campo({
         style={{
           fontSize: 10,
           letterSpacing: "1.5px",
-          color: "rgba(0,0,0,0.45)",
+          color: "rgba(255,255,255,0.45)",
           textTransform: "uppercase",
           fontWeight: 500,
         }}

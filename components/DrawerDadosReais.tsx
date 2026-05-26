@@ -82,7 +82,7 @@ export default function DrawerDadosReais({
               background: "rgba(15,15,15,0.85)",
               backdropFilter: "blur(24px)",
               WebkitBackdropFilter: "blur(24px)",
-              borderLeft: "0.5px solid rgba(0,0,0,0.08)",
+              borderLeft: "0.5px solid rgba(255,255,255,0.08)",
             }}
           >
             <div
@@ -90,7 +90,7 @@ export default function DrawerDadosReais({
               style={{
                 background: "rgba(10,10,10,0.7)",
                 backdropFilter: "blur(16px)",
-                borderBottom: "0.5px solid rgba(0,0,0,0.06)",
+                borderBottom: "0.5px solid rgba(255,255,255,0.06)",
                 padding: "18px 24px",
               }}
             >
@@ -100,7 +100,7 @@ export default function DrawerDadosReais({
                     style={{
                       fontSize: 9,
                       letterSpacing: "2px",
-                      color: "rgba(0,0,0,0.35)",
+                      color: "rgba(255,255,255,0.35)",
                       textTransform: "uppercase",
                       fontWeight: 500,
                     }}
@@ -121,7 +121,7 @@ export default function DrawerDadosReais({
                     style={{
                       fontSize: 10,
                       letterSpacing: "1.2px",
-                      color: "#4c4e54",
+                      color: "#C9953A",
                       fontWeight: 600,
                       marginTop: 6,
                       textTransform: "uppercase",
@@ -134,7 +134,7 @@ export default function DrawerDadosReais({
                   type="button"
                   onClick={() => setAberto(false)}
                   style={{
-                    color: "rgba(0,0,0,0.5)",
+                    color: "rgba(255,255,255,0.5)",
                     fontSize: 22,
                     lineHeight: 1,
                   }}
@@ -228,7 +228,7 @@ export default function DrawerDadosReais({
                   style={{
                     fontSize: 9,
                     letterSpacing: "2px",
-                    color: "rgba(0,0,0,0.35)",
+                    color: "rgba(255,255,255,0.35)",
                     textTransform: "uppercase",
                     fontWeight: 500,
                   }}
@@ -275,7 +275,7 @@ export default function DrawerDadosReais({
                   onClick={() => setAberto(false)}
                   style={{
                     fontSize: 12,
-                    color: "rgba(0,0,0,0.45)",
+                    color: "rgba(255,255,255,0.45)",
                     padding: "10px 16px",
                     fontWeight: 400,
                   }}
@@ -311,7 +311,7 @@ function Campo({
         style={{
           fontSize: 9,
           letterSpacing: "2px",
-          color: "rgba(0,0,0,0.35)",
+          color: "rgba(255,255,255,0.35)",
           textTransform: "uppercase",
           fontWeight: 500,
         }}

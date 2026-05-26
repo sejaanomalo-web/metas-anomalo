@@ -33,7 +33,7 @@ function TooltipConteudo({
     <div
       style={{
         background: "var(--surface-2)",
-        border: "1px solid rgba(0,0,0,0.10)",
+        border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: 10,
         padding: "10px 14px",
         fontFamily: "Inter",
@@ -67,7 +67,7 @@ function formatarTickY(v: number): string {
 
 /**
  * Gráfico de linha do faturamento mensal do Hub. Linha única em ouro
- * (#4c4e54), sem comparar contra meta (a referência mostra só a evolução
+ * (#C9953A), sem comparar contra meta (a referência mostra só a evolução
  * do real). Y axis em BRL compacto, sem grid X, grid Y bem sutil.
  *
  * Renderizado dentro de um card (.glass) provido pelo caller — esse
@@ -144,7 +144,7 @@ export default function GraficoHub({
             margin={{ top: 10, right: 16, bottom: 4, left: 8 }}
           >
             <CartesianGrid
-              stroke="rgba(0,0,0,0.04)"
+              stroke="rgba(255,255,255,0.04)"
               strokeDasharray="2 4"
               vertical={false}
             />
@@ -168,22 +168,22 @@ export default function GraficoHub({
               allowDataOverflow={false}
             />
             <Tooltip
-              cursor={{ stroke: "rgba(76, 78, 84,0.25)", strokeWidth: 1 }}
+              cursor={{ stroke: "rgba(201,149,58,0.25)", strokeWidth: 1 }}
               content={<TooltipConteudo />}
             />
             <Line
               type="monotone"
               dataKey="real"
               name="Faturamento"
-              stroke="#4c4e54"
+              stroke="#C9953A"
               strokeWidth={2}
               dot={{
                 r: 4,
-                fill: "#4c4e54",
+                fill: "#C9953A",
                 stroke: "var(--surface-1)",
                 strokeWidth: 2,
               }}
-              activeDot={{ r: 6, fill: "#4c4e54", stroke: "var(--surface-1)", strokeWidth: 2 }}
+              activeDot={{ r: 6, fill: "#C9953A", stroke: "var(--surface-1)", strokeWidth: 2 }}
               connectNulls={false}
               isAnimationActive={false}
             />
