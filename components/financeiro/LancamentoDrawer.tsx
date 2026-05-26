@@ -56,17 +56,36 @@ export default function LancamentoDrawer({
     lancamento?.status ?? "realizado"
   )
   const editando = !!lancamento
-  // Toggle Recorrente/Variável só faz sentido em criação. Em edição,
-  // o tipo é determinado pela existência de recorrente_id e não é
-  // alterável (pra editar template, vai na aba Recorrentes).
   const [frequencia, setFrequencia] = useState<Frequencia>(
     editando && lancamento?.recorrente_id ? "recorrente" : "variavel"
   )
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>("mensal")
 
+  // Selects controlled — pra pré-selecionar primeira opção válida e
+  // reagir a troca de tipo (categoria muda lista; resetamos seleção
+  // pra não enviar UUID de outro tipo). Sem isso, lançamentos eram
+  // salvos sem conta (=> saldo não atualizava) por usuário esquecer.
+  const contasAtivas = contas.filter((c) => c.ativa)
+  const categoriasIniciais = categorias.filter(
+    (c) => c.tipo === (lancamento?.tipo ?? "despesa") && c.ativa
+  )
+  const [contaId, setContaId] = useState<string>(
+    lancamento?.conta_id ?? contasAtivas[0]?.id ?? ""
+  )
+  const [categoriaId, setCategoriaId] = useState<string>(
+    lancamento?.categoria_id ?? categoriasIniciais[0]?.id ?? ""
+  )
+
+  function trocarTipo(novoTipo: TipoLancamento) {
+    setTipo(novoTipo)
+    // Categoria depende do tipo: reseta pra primeira do novo tipo
+    // (evita enviar UUID de categoria que não existe pra esse tipo).
+    const primeiraDoTipo = categorias.find((c) => c.tipo === novoTipo && c.ativa)
+    setCategoriaId(primeiraDoTipo?.id ?? "")
+  }
+
   if (!aberto) return null
 
-  const categoriasFiltradas = categorias.filter((c) => c.tipo === tipo)
   const lancamentoDeRecorrente = editando && !!lancamento?.recorrente_id
 
   /**
@@ -247,7 +266,7 @@ export default function LancamentoDrawer({
                 <ToggleBtn
                   key={t}
                   ativo={tipo === t}
-                  onClick={() => setTipo(t)}
+                  onClick={() => trocarTipo(t)}
                   label={t === "receita" ? "Receita" : "Despesa"}
                   flex
                 />
@@ -426,33 +445,50 @@ export default function LancamentoDrawer({
           <Campo label="Categoria">
             <select
               name="categoria_id"
-              defaultValue={lancamento?.categoria_id ?? ""}
+              value={categoriaId}
+              onChange={(e) => setCategoriaId(e.target.value)}
               className="glass-input"
               style={{ width: "100%" }}
             >
               <option value="">— Sem categoria —</option>
-              {categoriasFiltradas.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
+              {categorias
+                .filter((c) => c.tipo === tipo && c.ativa)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
             </select>
           </Campo>
 
           <Campo label="Conta">
             <select
               name="conta_id"
-              defaultValue={lancamento?.conta_id ?? ""}
+              value={contaId}
+              onChange={(e) => setContaId(e.target.value)}
               className="glass-input"
               style={{ width: "100%" }}
             >
               <option value="">— Sem conta —</option>
-              {contas.map((c) => (
+              {contasAtivas.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nome}
                 </option>
               ))}
             </select>
+            {!contaId && frequencia === "variavel" && (
+              <p
+                style={{
+                  fontSize: 11,
+                  color: "#eab308",
+                  marginTop: 6,
+                  lineHeight: 1.4,
+                }}
+              >
+                ⚠ Sem conta selecionada: o lançamento será registrado mas
+                <strong> não vai afetar o saldo</strong> de nenhuma conta.
+              </p>
+            )}
           </Campo>
 
           {tipo === "receita" && frequencia === "variavel" && empresas.length > 0 && (

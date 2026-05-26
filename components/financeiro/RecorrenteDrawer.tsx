@@ -20,6 +20,10 @@ interface Props {
   categorias: CategoriaFinanceira[]
   contas: ContaFinanceira[]
   recorrente?: PagamentoRecorrente | null
+  /** Mês/ano vigentes — materializa lançamentos do recorrente recém-criado
+   *  no mês atual da listagem (igual o LancamentoDrawer faz). */
+  mesAtual?: string
+  anoAtual?: number
 }
 
 export default function RecorrenteDrawer({
@@ -28,10 +32,13 @@ export default function RecorrenteDrawer({
   categorias,
   contas,
   recorrente,
+  mesAtual,
+  anoAtual,
 }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
+  const [sucesso, setSucesso] = useState<string | null>(null)
   const [tipo, setTipo] = useState<TipoLancamento>(recorrente?.tipo ?? "despesa")
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>(
     recorrente?.periodicidade ?? "mensal"
@@ -39,7 +46,8 @@ export default function RecorrenteDrawer({
 
   if (!aberto) return null
   const editando = !!recorrente
-  const categoriasFiltradas = categorias.filter((c) => c.tipo === tipo)
+  const contasAtivas = contas.filter((c) => c.ativa)
+  const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo && c.ativa)
 
   function refreshUI() {
     router.refresh()
@@ -48,14 +56,38 @@ export default function RecorrenteDrawer({
 
   async function onSubmit(fd: FormData) {
     setErro(null)
+    setSucesso(null)
     fd.set("tipo", tipo)
     fd.set("periodicidade", periodicidade)
     if (editando) fd.set("id", recorrente!.id)
     startTransition(async () => {
       const r = await salvarRecorrenteAction(fd)
       if (!r.ok) { setErro(r.erro ?? "Erro"); return }
+
+      // Materializa lançamento do mês corrente pra aparecer imediatamente
+      // na lista — espelha o que LancamentoDrawer (toggle Recorrente) faz.
+      // Só na criação (não em edição: usuário pode estar só ajustando
+      // dia/valor e não quer um lançamento duplicado).
+      if (!editando && mesAtual && anoAtual) {
+        try {
+          const resp = await fetch(
+            `/api/financeiro/materializar?mes=${encodeURIComponent(mesAtual)}&ano=${anoAtual}`,
+            { method: "POST" }
+          )
+          if (resp.ok) {
+            const data = (await resp.json()) as { criados: number }
+            if (data.criados > 0) {
+              setSucesso(`${data.criados} lançamento(s) previsto(s) gerado(s) pra ${mesAtual}/${anoAtual}.`)
+            }
+          }
+        } catch {
+          // Recorrente criado, materialização opcional — cron mensal pega depois.
+        }
+      }
+
       refreshUI()
-      fechar()
+      // Espera um beat pra usuário ler a mensagem antes de fechar.
+      setTimeout(() => fechar(), sucesso || erro ? 800 : 0)
     })
   }
 
@@ -188,11 +220,12 @@ export default function RecorrenteDrawer({
           <Campo label="Categoria">
             <select
               name="categoria_id"
-              defaultValue={recorrente?.categoria_id ?? ""}
+              defaultValue={recorrente?.categoria_id ?? categoriasDoTipo[0]?.id ?? ""}
+              key={tipo /* força re-render quando troca tipo */}
               className="glass-input" style={{ width: "100%" }}
             >
               <option value="">— Sem categoria —</option>
-              {categoriasFiltradas.map((c) => (
+              {categoriasDoTipo.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
               ))}
             </select>
@@ -201,11 +234,11 @@ export default function RecorrenteDrawer({
           <Campo label="Conta">
             <select
               name="conta_id"
-              defaultValue={recorrente?.conta_id ?? ""}
+              defaultValue={recorrente?.conta_id ?? contasAtivas[0]?.id ?? ""}
               className="glass-input" style={{ width: "100%" }}
             >
               <option value="">— Sem conta —</option>
-              {contas.map((c) => (
+              {contasAtivas.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
               ))}
             </select>
@@ -225,6 +258,20 @@ export default function RecorrenteDrawer({
           </label>
 
           {erro && <div style={erroBox}>{erro}</div>}
+          {sucesso && (
+            <div
+              style={{
+                padding: 12,
+                background: "rgba(22, 163, 74, 0.12)",
+                border: "0.5px solid rgba(22, 163, 74, 0.40)",
+                borderRadius: 8,
+                color: "var(--text-1)",
+                fontSize: 13,
+              }}
+            >
+              {sucesso}
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button type="submit" disabled={pending} className="btn-gold-filled" style={{ flex: 1, opacity: pending ? 0.6 : 1 }}>

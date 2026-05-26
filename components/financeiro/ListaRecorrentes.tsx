@@ -190,6 +190,8 @@ export default function ListaRecorrentes({
         categorias={categorias}
         contas={contas}
         recorrente={editando}
+        mesAtual={mesAtual}
+        anoAtual={anoAtual}
       />
     </>
   )
