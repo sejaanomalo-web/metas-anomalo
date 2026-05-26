@@ -11,7 +11,7 @@ const STATUS_COLORS: Record<
   success: { fg: "#16a34a", bg: "rgba(22, 163, 74, 0.12)" },
   warning: { fg: "#eab308", bg: "rgba(234, 179, 8, 0.12)" },
   danger: { fg: "#ef4444", bg: "rgba(239, 68, 68, 0.12)" },
-  gold: { fg: "#C9953A", bg: "rgba(201, 149, 58, 0.12)" },
+  gold: { fg: "#4c4e54", bg: "rgba(76, 78, 84, 0.12)" },
 }
 
 const SIZE_PX: Record<IconBadgeSize, { box: number; font: number }> = {

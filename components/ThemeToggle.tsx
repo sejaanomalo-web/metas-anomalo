@@ -27,7 +27,7 @@ const META: Record<
   },
   gold: {
     label: "Dourado",
-    swatch: "linear-gradient(135deg, #000 50%, #C9953A 50%)",
+    swatch: "linear-gradient(135deg, #000 50%, #4c4e54 50%)",
     next: "Preto",
   },
 }

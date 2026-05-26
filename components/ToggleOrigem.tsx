@@ -32,8 +32,8 @@ export default function ToggleOrigem({ origem }: Props) {
       style={{
         padding: 3,
         borderRadius: 999,
-        border: "0.5px solid rgba(255,255,255,0.08)",
-        background: "rgba(255,255,255,0.02)",
+        border: "0.5px solid rgba(0,0,0,0.08)",
+        background: "rgba(0,0,0,0.02)",
         gap: 2,
       }}
       role="tablist"
@@ -55,10 +55,10 @@ export default function ToggleOrigem({ origem }: Props) {
               fontWeight: 600,
               letterSpacing: "1.2px",
               textTransform: "uppercase",
-              background: ativo ? "rgba(201,149,58,0.18)" : "transparent",
-              color: ativo ? "#C9953A" : "rgba(255,255,255,0.45)",
+              background: ativo ? "rgba(76, 78, 84,0.18)" : "transparent",
+              color: ativo ? "#4c4e54" : "rgba(0,0,0,0.45)",
               border: `0.5px solid ${
-                ativo ? "rgba(201,149,58,0.5)" : "transparent"
+                ativo ? "rgba(76, 78, 84,0.5)" : "transparent"
               }`,
               transition: "all 180ms ease",
             }}
@@ -69,7 +69,7 @@ export default function ToggleOrigem({ origem }: Props) {
                 display: "block",
                 fontSize: 8,
                 letterSpacing: "1.5px",
-                color: ativo ? "rgba(201,149,58,0.65)" : "rgba(255,255,255,0.3)",
+                color: ativo ? "rgba(76, 78, 84,0.65)" : "rgba(0,0,0,0.3)",
                 fontWeight: 400,
                 marginTop: 2,
               }}

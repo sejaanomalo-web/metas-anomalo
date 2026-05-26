@@ -45,7 +45,7 @@ export default function LoginPage({
           <p
             style={{
               fontSize: 12,
-              color: "rgba(255,255,255,0.45)",
+              color: "rgba(0,0,0,0.45)",
               fontWeight: 300,
             }}
           >
@@ -59,7 +59,7 @@ export default function LoginPage({
               style={{
                 fontSize: 9,
                 letterSpacing: "2px",
-                color: "rgba(255,255,255,0.35)",
+                color: "rgba(0,0,0,0.35)",
                 textTransform: "uppercase",
                 fontWeight: 500,
               }}
@@ -90,7 +90,7 @@ export default function LoginPage({
               style={{
                 fontSize: 9,
                 letterSpacing: "2px",
-                color: "rgba(255,255,255,0.35)",
+                color: "rgba(0,0,0,0.35)",
                 textTransform: "uppercase",
                 fontWeight: 500,
               }}
@@ -146,7 +146,7 @@ export default function LoginPage({
           style={{
             fontSize: 10,
             letterSpacing: "1.5px",
-            color: "rgba(255,255,255,0.2)",
+            color: "rgba(0,0,0,0.2)",
             textTransform: "uppercase",
             fontWeight: 400,
           }}

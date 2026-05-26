@@ -289,9 +289,9 @@ function Bloco({
         padding: 12,
         background: vazio
           ? "rgba(34,197,94,0.08)"
-          : "rgba(201,149,58,0.08)",
+          : "rgba(76, 78, 84,0.08)",
         border: `1px solid ${
-          vazio ? "rgba(34,197,94,0.30)" : "rgba(201,149,58,0.30)"
+          vazio ? "rgba(34,197,94,0.30)" : "rgba(76, 78, 84,0.30)"
         }`,
         borderRadius: 6,
       }}

@@ -60,7 +60,7 @@ export default function KPICard({
         flexDirection: "column",
         gap: 14,
         borderColor: destaque
-          ? "rgba(201, 149, 58, 0.30)"
+          ? "rgba(76, 78, 84, 0.30)"
           : undefined,
       }}
     >
@@ -144,7 +144,7 @@ export default function KPICard({
             color: "var(--text-3)",
             lineHeight: 1.3,
             paddingTop: 4,
-            borderTop: "1px solid rgba(255,255,255,0.05)",
+            borderTop: "1px solid rgba(0,0,0,0.05)",
           }}
         >
           <span style={{ color: "var(--text-4)", marginRight: 6 }}>Meta</span>

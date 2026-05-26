@@ -260,7 +260,7 @@ function PainelNotificacoes({
             justifyContent: "space-between",
             padding: "20px 20px 14px",
             paddingTop: "max(20px, env(safe-area-inset-top))",
-            borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+            borderBottom: "0.5px solid rgba(0,0,0,0.06)",
             flexShrink: 0,
           }}
         >
@@ -304,7 +304,7 @@ function PainelNotificacoes({
                   textTransform: "uppercase",
                   color: "var(--text-3)",
                   background: "transparent",
-                  border: "0.5px solid rgba(255,255,255,0.15)",
+                  border: "0.5px solid rgba(0,0,0,0.15)",
                   borderRadius: 6,
                   cursor: "pointer",
                   fontWeight: 500,
@@ -325,7 +325,7 @@ function PainelNotificacoes({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background: "rgba(255,255,255,0.04)",
+                background: "rgba(0,0,0,0.04)",
                 border: "none",
                 borderRadius: 8,
                 color: "var(--text-2)",
@@ -480,11 +480,11 @@ function ItemNotificacao({
           width: "100%",
           padding: "12px 8px 12px 14px",
           background: naoLida
-            ? "linear-gradient(180deg, rgba(201,149,58,0.10), rgba(201,149,58,0.04))"
+            ? "linear-gradient(180deg, rgba(76, 78, 84,0.10), rgba(76, 78, 84,0.04))"
             : "var(--surface-2)",
           border: naoLida
-            ? "0.5px solid rgba(201,149,58,0.35)"
-            : "0.5px solid rgba(255,255,255,0.06)",
+            ? "0.5px solid rgba(76, 78, 84,0.35)"
+            : "0.5px solid rgba(0,0,0,0.06)",
           borderRadius: 14,
           cursor: naoLida ? "pointer" : "default",
           fontFamily: "inherit",
@@ -622,7 +622,7 @@ function EmptyState() {
           width: 48,
           height: 48,
           borderRadius: 24,
-          background: "rgba(255,255,255,0.04)",
+          background: "rgba(0,0,0,0.04)",
           color: "var(--text-4)",
           marginBottom: 14,
         }}

@@ -148,7 +148,7 @@ export default function GerenciadorUsuarios({
             key={u.id}
             style={{
               padding: "14px 0",
-              borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+              borderBottom: "0.5px solid rgba(0,0,0,0.06)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -316,7 +316,7 @@ function botaoEstilo(
     textTransform: "uppercase",
     borderRadius: 6,
     background: "transparent",
-    border: "0.5px solid rgba(255,255,255,0.15)",
+    border: "0.5px solid rgba(0,0,0,0.15)",
     color: "var(--text-3)",
     cursor: "pointer",
     fontWeight: 500,
@@ -403,8 +403,8 @@ function FormUsuario({
       style={{
         padding: 18,
         marginBottom: 18,
-        background: "rgba(255,255,255,0.02)",
-        border: "0.5px solid rgba(201,149,58,0.20)",
+        background: "rgba(0,0,0,0.02)",
+        border: "0.5px solid rgba(76, 78, 84,0.20)",
         borderRadius: 10,
       }}
       className="space-y-3"
@@ -479,12 +479,12 @@ function FormUsuario({
                   borderRadius: 8,
                   background:
                     papel === p
-                      ? "rgba(201,149,58,0.20)"
+                      ? "rgba(76, 78, 84,0.20)"
                       : "transparent",
                   border:
                     papel === p
-                      ? "1px solid rgba(201,149,58,0.5)"
-                      : "0.5px solid rgba(255,255,255,0.15)",
+                      ? "1px solid rgba(76, 78, 84,0.5)"
+                      : "0.5px solid rgba(0,0,0,0.15)",
                   color: papel === p ? "var(--accent)" : "var(--text-3)",
                   cursor: "pointer",
                   fontWeight: 600,
@@ -520,7 +520,7 @@ function FormUsuario({
                 padding: "8px 10px",
                 background:
                   permissoes[chave]
-                    ? "rgba(201,149,58,0.06)"
+                    ? "rgba(76, 78, 84,0.06)"
                     : "transparent",
                 borderRadius: 8,
                 cursor: papel === "admin" ? "not-allowed" : "pointer",
@@ -658,7 +658,7 @@ function Campo({
         style={{
           fontSize: 10,
           letterSpacing: "1.5px",
-          color: "rgba(255,255,255,0.45)",
+          color: "rgba(0,0,0,0.45)",
           textTransform: "uppercase",
           fontWeight: 500,
         }}

@@ -187,7 +187,7 @@ export default function TabelaMeses({
           style={{
             fontSize: 9,
             letterSpacing: "2px",
-            color: "rgba(255,255,255,0.35)",
+            color: "rgba(0,0,0,0.35)",
             textTransform: "uppercase",
             fontWeight: 500,
           }}
@@ -215,8 +215,8 @@ export default function TabelaMeses({
                 marginLeft: 6,
                 padding: 2,
                 borderRadius: 999,
-                border: "0.5px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.02)",
+                border: "0.5px solid rgba(0,0,0,0.08)",
+                background: "rgba(0,0,0,0.02)",
               }}
             >
               <SubBotao
@@ -256,12 +256,12 @@ export default function TabelaMeses({
                     style={{
                       fontSize: 9,
                       letterSpacing: "2px",
-                      color: "rgba(255,255,255,0.3)",
+                      color: "rgba(0,0,0,0.3)",
                       textTransform: "uppercase",
                       fontWeight: 500,
                       textAlign: "left",
                       padding: "12px 14px",
-                      borderBottom: "0.5px solid rgba(255,255,255,0.05)",
+                      borderBottom: "0.5px solid rgba(0,0,0,0.05)",
                       whiteSpace: "nowrap",
                       ...(eMes
                         ? {
@@ -270,7 +270,7 @@ export default function TabelaMeses({
                             zIndex: 3,
                             background: STICKY_BG,
                             borderRight:
-                              "0.5px solid rgba(255,255,255,0.06)",
+                              "0.5px solid rgba(0,0,0,0.06)",
                           }
                         : null),
                     }}
@@ -287,7 +287,7 @@ export default function TabelaMeses({
                 !modoDiario &&
                 mesAtual !== undefined &&
                 linha.mes === mesAtual
-              const rowBg = destacado ? "rgba(201,149,58,0.03)" : "transparent"
+              const rowBg = destacado ? "rgba(76, 78, 84,0.03)" : "transparent"
               return (
                 <tr key={i} style={{ background: rowBg }}>
                   {colunasVisiveis.map((c, idx) => {
@@ -298,11 +298,11 @@ export default function TabelaMeses({
                         key={c.chave}
                         style={{
                           fontSize: 13,
-                          color: ehFat ? "#C9953A" : "rgba(255,255,255,0.7)",
+                          color: ehFat ? "#4c4e54" : "rgba(0,0,0,0.7)",
                           fontWeight: ehFat ? 500 : 400,
                           padding: "12px 14px",
                           borderBottom:
-                            "0.5px solid rgba(255,255,255,0.04)",
+                            "0.5px solid rgba(0,0,0,0.04)",
                           whiteSpace: "nowrap",
                           ...(eMes
                             ? {
@@ -313,7 +313,7 @@ export default function TabelaMeses({
                                   ? STICKY_BG
                                   : STICKY_BG,
                                 borderRight:
-                                  "0.5px solid rgba(255,255,255,0.06)",
+                                  "0.5px solid rgba(0,0,0,0.06)",
                               }
                             : null),
                         }}
@@ -339,7 +339,7 @@ export default function TabelaMeses({
               return (
                 <tr
                   style={{
-                    background: "rgba(201,149,58,0.04)",
+                    background: "rgba(76, 78, 84,0.04)",
                   }}
                 >
                   {colunasVisiveis.map((c, idx) => {
@@ -362,10 +362,10 @@ export default function TabelaMeses({
                         key={c.chave}
                         style={{
                           fontSize: 12,
-                          color: ehFat ? "#C9953A" : "rgba(255,255,255,0.75)",
+                          color: ehFat ? "#4c4e54" : "rgba(0,0,0,0.75)",
                           fontWeight: 600,
                           padding: "14px 14px",
-                          borderTop: "0.5px solid rgba(201,149,58,0.25)",
+                          borderTop: "0.5px solid rgba(76, 78, 84,0.25)",
                           whiteSpace: "nowrap",
                           textTransform: eMes ? "uppercase" : undefined,
                           letterSpacing: eMes ? "1px" : undefined,
@@ -374,11 +374,11 @@ export default function TabelaMeses({
                                 position: "sticky",
                                 left: 0,
                                 zIndex: 2,
-                                background: "rgba(201,149,58,0.05)",
+                                background: "rgba(76, 78, 84,0.05)",
                                 borderRight:
-                                  "0.5px solid rgba(255,255,255,0.06)",
+                                  "0.5px solid rgba(0,0,0,0.06)",
                                 fontSize: 9,
-                                color: "rgba(201,149,58,0.8)",
+                                color: "rgba(76, 78, 84,0.8)",
                               }
                             : null),
                         }}
@@ -419,14 +419,14 @@ function SecaoCriativosPorDia({
       style={{
         marginTop: 24,
         paddingTop: 20,
-        borderTop: "0.5px solid rgba(255,255,255,0.06)",
+        borderTop: "0.5px solid rgba(0,0,0,0.06)",
       }}
     >
       <p
         style={{
           fontSize: 9,
           letterSpacing: "2px",
-          color: "rgba(255,255,255,0.35)",
+          color: "rgba(0,0,0,0.35)",
           textTransform: "uppercase",
           fontWeight: 500,
           marginBottom: 12,
@@ -450,7 +450,7 @@ function SecaoCriativosPorDia({
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: "#C9953A",
+                color: "#4c4e54",
                 letterSpacing: "1px",
                 textTransform: "uppercase",
                 minWidth: 44,
@@ -466,18 +466,18 @@ function SecaoCriativosPorDia({
                     fontSize: 11,
                     padding: "4px 10px",
                     borderRadius: 999,
-                    border: "0.5px solid rgba(255,255,255,0.08)",
-                    background: "rgba(255,255,255,0.02)",
-                    color: "rgba(255,255,255,0.75)",
+                    border: "0.5px solid rgba(0,0,0,0.08)",
+                    background: "rgba(0,0,0,0.02)",
+                    color: "rgba(0,0,0,0.75)",
                     fontWeight: 400,
                     whiteSpace: "nowrap",
                   }}
                 >
-                  <span style={{ color: "#C9953A", fontWeight: 600 }}>
+                  <span style={{ color: "#4c4e54", fontWeight: 600 }}>
                     {c.nome || "(sem nome)"}
                   </span>{" "}
-                  <span style={{ color: "rgba(255,255,255,0.3)" }}>→</span>{" "}
-                  <span style={{ color: "rgba(255,255,255,0.55)" }}>
+                  <span style={{ color: "rgba(0,0,0,0.3)" }}>→</span>{" "}
+                  <span style={{ color: "rgba(0,0,0,0.55)" }}>
                     {c.publico || "(sem público)"}
                   </span>
                 </span>
@@ -509,14 +509,14 @@ function SecaoAtividadeOrganicaPorDia({
       style={{
         marginTop: 24,
         paddingTop: 20,
-        borderTop: "0.5px solid rgba(255,255,255,0.06)",
+        borderTop: "0.5px solid rgba(0,0,0,0.06)",
       }}
     >
       <p
         style={{
           fontSize: 9,
           letterSpacing: "2px",
-          color: "rgba(255,255,255,0.35)",
+          color: "rgba(0,0,0,0.35)",
           textTransform: "uppercase",
           fontWeight: 500,
           marginBottom: 12,
@@ -571,7 +571,7 @@ function SecaoAtividadeOrganicaPorDia({
                   <span
                     style={{
                       fontSize: 10,
-                      color: "rgba(255,255,255,0.3)",
+                      color: "rgba(0,0,0,0.3)",
                       alignSelf: "center",
                       marginLeft: 2,
                     }}
@@ -596,9 +596,9 @@ function SecaoAtividadeOrganicaPorDia({
                         fontSize: 11,
                         padding: "4px 10px",
                         borderRadius: 999,
-                        border: "0.5px solid rgba(255,255,255,0.08)",
-                        background: "rgba(255,255,255,0.02)",
-                        color: "rgba(255,255,255,0.75)",
+                        border: "0.5px solid rgba(0,0,0,0.08)",
+                        background: "rgba(0,0,0,0.02)",
+                        color: "rgba(0,0,0,0.75)",
                         fontWeight: 400,
                         whiteSpace: "nowrap",
                       }}
@@ -606,8 +606,8 @@ function SecaoAtividadeOrganicaPorDia({
                       <span style={{ color: "#8cb4dc", fontWeight: 600 }}>
                         {p.publico || "(sem público)"}
                       </span>{" "}
-                      <span style={{ color: "rgba(255,255,255,0.3)" }}>→</span>{" "}
-                      <span style={{ color: "rgba(255,255,255,0.55)" }}>
+                      <span style={{ color: "rgba(0,0,0,0.3)" }}>→</span>{" "}
+                      <span style={{ color: "rgba(0,0,0,0.55)" }}>
                         {formatNumero(p.leads)}{" "}
                         {p.leads === 1 ? "lead" : "leads"}
                       </span>
@@ -619,12 +619,12 @@ function SecaoAtividadeOrganicaPorDia({
                 <p
                   style={{
                     fontSize: 12,
-                    color: "rgba(255,255,255,0.65)",
+                    color: "rgba(0,0,0,0.65)",
                     fontWeight: 300,
                     lineHeight: 1.45,
                     whiteSpace: "pre-wrap",
                     padding: "6px 10px",
-                    background: "rgba(255,255,255,0.02)",
+                    background: "rgba(0,0,0,0.02)",
                     borderLeft: "2px solid rgba(140,180,220,0.3)",
                     borderRadius: 4,
                   }}
@@ -660,10 +660,10 @@ function SubBotao({
         fontWeight: 600,
         letterSpacing: "1.2px",
         textTransform: "uppercase",
-        background: ativo ? "rgba(201,149,58,0.18)" : "transparent",
-        color: ativo ? "#C9953A" : "rgba(255,255,255,0.45)",
+        background: ativo ? "rgba(76, 78, 84,0.18)" : "transparent",
+        color: ativo ? "#4c4e54" : "rgba(0,0,0,0.45)",
         border: `0.5px solid ${
-          ativo ? "rgba(201,149,58,0.4)" : "transparent"
+          ativo ? "rgba(76, 78, 84,0.4)" : "transparent"
         }`,
       }}
     >
@@ -691,11 +691,11 @@ function BotaoModo({
         fontSize: 10,
         fontWeight: 500,
         letterSpacing: "0.3px",
-        background: ativo ? "rgba(201,149,58,0.15)" : "transparent",
+        background: ativo ? "rgba(76, 78, 84,0.15)" : "transparent",
         border: `0.5px solid ${
-          ativo ? "#C9953A" : "rgba(255,255,255,0.1)"
+          ativo ? "#4c4e54" : "rgba(0,0,0,0.1)"
         }`,
-        color: ativo ? "#C9953A" : "rgba(255,255,255,0.35)",
+        color: ativo ? "#4c4e54" : "rgba(0,0,0,0.35)",
         transition: "background 0.15s ease, color 0.15s ease",
       }}
     >

@@ -74,7 +74,7 @@ function BolinhaLive({ ativa }: { ativa: boolean }) {
         background: ativa ? "#000" : "var(--accent)",
         boxShadow: ativa
           ? "0 0 0 2px rgba(0,0,0,0.0)"
-          : "0 0 6px rgba(201,149,58,0.7)",
+          : "0 0 6px rgba(76, 78, 84,0.7)",
         animation: "pulseGold 2s ease-in-out infinite",
         flexShrink: 0,
       }}
@@ -102,19 +102,19 @@ function TabLink({
         background: "var(--accent)",
         color: "#000",
         border: "1px solid var(--accent)",
-        boxShadow: "0 0 16px rgba(201,149,58,0.22)",
+        boxShadow: "0 0 16px rgba(76, 78, 84,0.22)",
       }
     : destaque
     ? {
-        background: "rgba(201,149,58,0.08)",
+        background: "rgba(76, 78, 84,0.08)",
         color: "var(--accent)",
-        border: "1px solid rgba(201,149,58,0.45)",
-        boxShadow: "0 0 12px rgba(201,149,58,0.10)",
+        border: "1px solid rgba(76, 78, 84,0.45)",
+        boxShadow: "0 0 12px rgba(76, 78, 84,0.10)",
       }
     : {
         background: "transparent",
         color: "var(--text-2)",
-        border: "1px solid rgba(255,255,255,0.10)",
+        border: "1px solid rgba(0,0,0,0.10)",
       }
 
   return (

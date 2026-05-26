@@ -101,7 +101,7 @@ function SecaoResumo({
           style={{
             fontSize: 9,
             letterSpacing: "2px",
-            color: "#C9953A",
+            color: "#4c4e54",
             textTransform: "uppercase",
             fontWeight: 500,
           }}
@@ -113,7 +113,7 @@ function SecaoResumo({
       <p
         style={{
           fontSize: 12,
-          color: "rgba(255,255,255,0.45)",
+          color: "rgba(0,0,0,0.45)",
           fontWeight: 300,
           marginTop: 4,
           marginBottom: 14,
@@ -126,11 +126,11 @@ function SecaoResumo({
         style={{
           padding: "14px 16px",
           background: "rgba(0,0,0,0.4)",
-          border: "0.5px solid rgba(255,255,255,0.06)",
+          border: "0.5px solid rgba(0,0,0,0.06)",
           borderRadius: 8,
           fontSize: 12,
           lineHeight: 1.55,
-          color: "rgba(255,255,255,0.78)",
+          color: "rgba(0,0,0,0.78)",
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
           fontFamily:
@@ -160,16 +160,16 @@ function SecaoResumo({
             fontSize: 11,
             letterSpacing: "0.5px",
             textTransform: "uppercase",
-            color: atualizado ? "#4caf50" : "rgba(255,255,255,0.55)",
+            color: atualizado ? "#4caf50" : "rgba(0,0,0,0.55)",
             border: `0.5px solid ${
-              atualizado ? "rgba(76,175,80,0.45)" : "rgba(255,255,255,0.15)"
+              atualizado ? "rgba(76,175,80,0.45)" : "rgba(0,0,0,0.15)"
             }`,
             borderRadius: 6,
             background: "transparent",
             fontWeight: 500,
             opacity: atualizando ? 0.6 : 1,
           }}
-          className="hover:text-[#C9953A] hover:border-[#C9953A55] transition"
+          className="hover:text-[#4c4e54] hover:border-[#4c4e5455] transition"
         >
           {atualizando
             ? "Atualizando..."
@@ -186,7 +186,7 @@ function SecaoResumo({
           <span
             style={{
               fontSize: 11,
-              color: "rgba(255,255,255,0.45)",
+              color: "rgba(0,0,0,0.45)",
               fontWeight: 300,
             }}
           >

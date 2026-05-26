@@ -121,7 +121,7 @@ export default async function EmpresasPage({
                 padding: "32px 28px",
                 textAlign: "center",
                 borderStyle: "dashed",
-                borderColor: "rgba(201,149,58,0.35)",
+                borderColor: "rgba(76, 78, 84,0.35)",
               }}
             >
               <p

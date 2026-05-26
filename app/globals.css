@@ -3,259 +3,184 @@
 @tailwind utilities;
 
 /* ============================================================
- * Anômalo Hub — Design System (SaaS dashboard)
+ * Anômalo Hub — Stone Design System (light-only)
  *
- * Linguagem: produto de software para operação. Hierarquia por
- * tamanho/peso, não por uppercase. Cards sólidos (sem blur) com
- * elevation por luminância. Cor semântica explícita (success /
- * warning / danger) ao lado do ouro pontual da marca (#C9953A).
+ * Linguagem: light, hairline, calmo. Primary CTA cinza-chumbo
+ * (#4c4e54), surface branco, foreground preto-azulado (#20252a),
+ * borders hairline (#d5dee8). Radius pequenos (botões 2px, cards
+ * 16px), tipografia Inter, sem uppercase.
  *
- * Fonte: Inter, com Helvetica Neue/Helvetica como fallback.
- * Raios: cards 16px, inputs 10px, botões 10px. Sem sombras.
+ * Tokens canônicos (shadcn-style):
+ *   --background / --foreground
+ *   --primary / --primary-foreground
+ *   --muted-foreground / --border / --ring
+ *   --card / --card-foreground / --input / --popover
+ *   --success / --warning / --destructive
  *
- * Tokens centrais:
- *   --bg                  → background da página (navy escuro)
- *   --surface-1/2/3       → camadas de elevation (card / hover / input)
- *   --text-1/2/3/4        → escala fechada de texto
- *   --success/warning/danger → cor semântica (+ -bg variant)
- *   --accent              → ouro #C9953A (marca, usado pontualmente)
- *
- * Os 4 temas (dark/light/mono/gold) são preservados — o sistema
- * usa data-theme=\"dark\" fixo, mas as outras paletas continuam
- * disponíveis caso o time queira reativar o seletor.
+ * Aliases legados (--bg, --text-1..4, --accent, --surface-1..3,
+ * --card-bg, --gold-*) apontam pros tokens canônicos pra não
+ * quebrar centenas de inline styles existentes.
  * ============================================================ */
-:root,
-[data-theme="dark"] {
-  color-scheme: dark;
+:root {
+  color-scheme: light;
 
-  /* Background: preto puro pra dar máximo contraste com os cards.
-   * Os cards usam surface-1 (preto fosco) — diferença de luminância
-   * sutil cria a separação sem precisar de sombra ou borda forte. */
-  --bg: #000000;
-  --fg: #ffffff;
-  --accent: #C9953A;
-  --accent-rgb: 201, 149, 58;
-  --spectral: #ffffff;
-  --spectral-rgb: 255, 255, 255;
+  /* ----- Canônicos Stone ----- */
+  --background: #ffffff;
+  --foreground: #20252a;
+  --primary: #4c4e54;
+  --primary-foreground: #ffffff;
+  --primary-hover: #3a3c41;
+  --primary-rgb: 76, 78, 84;
 
-  /* Surface scale — preto fosco pra cards, sem reflexo navy.
-   * surface-1 = card padrão (preto fosco menos puro); surface-2 = hover;
-   * surface-3 = input (mais claro pra distinguir do card). */
-  --surface-1: #0f0f12;
-  --surface-2: #16161b;
-  --surface-3: #1c1c22;
+  --secondary: #20252a;
+  --secondary-foreground: #ffffff;
 
-  /* Text scale fechada — abandona dezenas de rgba(255,255,255,X). */
-  --text-1: #ffffff;   /* números, títulos */
-  --text-2: #c7cdd9;   /* corpo, valores secundários */
-  --text-3: #8a93a3;   /* labels, captions */
-  --text-4: #5b6473;   /* placeholder, disabled */
+  --muted: #f4f6f8;
+  --muted-foreground: #667781;
 
-  /* Semântica de status (deltas, progresso, status de meta). */
-  --success: #16a34a;
-  --success-bg: rgba(22, 163, 74, 0.12);
-  --warning: #eab308;
-  --warning-bg: rgba(234, 179, 8, 0.12);
-  --danger: #ef4444;
-  --danger-bg: rgba(239, 68, 68, 0.12);
+  --card: #ffffff;
+  --card-foreground: #20252a;
+  --popover: #ffffff;
+  --popover-foreground: #20252a;
+  --input: #ffffff;
+  --input-fg: #20252a;
 
-  --card-bg: var(--surface-1);
-  --card-border: rgba(255, 255, 255, 0.06);
-  --card-border-hover: rgba(255, 255, 255, 0.12);
-  --card-fg: var(--text-1);
+  --border: #d5dee8;
+  --ring: #4c4e54;
 
-  --header-bg: rgba(0, 0, 0, 0.85);
-  --header-border: rgba(255, 255, 255, 0.06);
-  --input-bg: var(--surface-3);
-  --input-border: rgba(255, 255, 255, 0.10);
-  --divider: rgba(255, 255, 255, 0.06);
+  --success: #00a868;
+  --success-bg: rgba(0, 168, 104, 0.12);
+  --warning: #d4a017;
+  --warning-bg: rgba(212, 160, 23, 0.12);
+  --destructive: #d96758;
+  --destructive-bg: rgba(217, 103, 88, 0.12);
 
-  /* Cards sólidos não precisam de sombra/inset — elevation vem do bg. */
+  /* ----- Aliases legados (mapeiam pros tokens Stone) ----- */
+  --bg: var(--background);
+  --fg: var(--foreground);
+  --accent: var(--primary);
+  --accent-rgb: var(--primary-rgb);
+  --spectral: var(--foreground);
+  --spectral-rgb: 32, 37, 42;
+
+  /* Surface ladder: tudo branco, separação por hairline.
+   * surface-1 = canvas dos cards, surface-2 = hover sutil,
+   * surface-3 = inputs/muted. */
+  --surface-1: #ffffff;
+  --surface-2: #f4f6f8;
+  --surface-3: #eff4f8;
+
+  /* Text scale — antes era branco/cinza-claro, agora é
+   * foreground escuro / muted-foreground / disabled. */
+  --text-1: var(--foreground);
+  --text-2: #4c4e54;
+  --text-3: var(--muted-foreground);
+  --text-4: #98a3b0;
+
+  /* Status (compat) */
+  --danger: var(--destructive);
+  --danger-bg: var(--destructive-bg);
+
+  --card-bg: var(--card);
+  --card-border: var(--border);
+  --card-border-hover: #b8c5d2;
+  --card-fg: var(--card-foreground);
+
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --header-border: var(--border);
+  --input-bg: var(--input);
+  --input-border: var(--border);
+  --divider: var(--border);
+
+  /* Cards Stone são flat — usamos hairline em vez de glow. */
   --shadow-glass: none;
   --shadow-glass-hover: none;
 
-  --selection-bg: #C9953A;
-  --selection-fg: #000;
+  --selection-bg: var(--primary);
+  --selection-fg: var(--primary-foreground);
 
-  --toggle-bg: rgba(255, 255, 255, 0.06);
-  --toggle-border: rgba(255, 255, 255, 0.18);
-  --toggle-fg: #ffffff;
-}
-
-/* ---------- Branco: spectral invertido ---------- */
-[data-theme="light"] {
-  color-scheme: light;
-  --bg: #ffffff;
-  --fg: #000000;
-  --accent: #C9953A;
-  --accent-rgb: 201, 149, 58;
-  --spectral: #ffffff;
-  --spectral-rgb: 255, 255, 255;
-
-  /* Cards pretos (canvas invertido — texto spectral dentro): */
-  --card-bg: #000000;
-  --card-border: rgba(255, 255, 255, 0.10);
-  --card-border-hover: rgba(255, 255, 255, 0.22);
-  --card-fg: #ffffff;
-
-  --header-bg: #000000;
-  --header-border: rgba(255, 255, 255, 0.10);
-
-  --input-bg: rgba(0, 0, 0, 0.04);
-  --input-border: rgba(0, 0, 0, 0.16);
-  --divider: rgba(0, 0, 0, 0.08);
-
-  --shadow-glass: 0 0 0 0.5px rgba(255, 255, 255, 0.04) inset;
-  --shadow-glass-hover: 0 0 0 0.5px rgba(255, 255, 255, 0.18) inset;
-
-  --selection-bg: #000000;
-  --selection-fg: #ffffff;
-
-  --toggle-bg: rgba(255, 255, 255, 0.10);
-  --toggle-border: rgba(255, 255, 255, 0.35);
-  --toggle-fg: #ffffff;
-}
-
-/* ---------- Contraste: canvas preto, surface branca ---------- */
-[data-theme="mono"] {
-  color-scheme: dark;
-  --bg: #000000;
-  --fg: #ffffff;
-  --accent: #C9953A;
-  --accent-rgb: 201, 149, 58;
-  --spectral: #ffffff;
-  --spectral-rgb: 255, 255, 255;
-
-  --card-bg: #ffffff;
-  --card-border: rgba(0, 0, 0, 0.16);
-  --card-border-hover: rgba(0, 0, 0, 0.32);
-  --card-fg: #000000;
-
-  --header-bg: rgba(0, 0, 0, 0.70);
-  --header-border: rgba(255, 255, 255, 0.10);
-  --input-bg: rgba(255, 255, 255, 0.04);
-  --input-border: rgba(255, 255, 255, 0.16);
-  --divider: rgba(255, 255, 255, 0.10);
-
-  --shadow-glass: 0 0 0 0.5px rgba(0, 0, 0, 0.08) inset;
-  --shadow-glass-hover: 0 0 0 0.5px rgba(0, 0, 0, 0.20) inset;
-
-  --selection-bg: #000000;
-  --selection-fg: #ffffff;
-
-  --toggle-bg: rgba(255, 255, 255, 0.10);
-  --toggle-border: rgba(255, 255, 255, 0.35);
-  --toggle-fg: #ffffff;
-}
-
-/* ---------- Dourado: variante de marca ---------- */
-[data-theme="gold"] {
-  color-scheme: dark;
-  --bg: #000000;
-  --fg: #ffffff;
-  --accent: #C9953A;
-  --accent-rgb: 201, 149, 58;
-  --spectral: #ffffff;
-  --spectral-rgb: 255, 255, 255;
-
-  --card-bg: #C9953A;
-  --card-border: rgba(0, 0, 0, 0.20);
-  --card-border-hover: rgba(0, 0, 0, 0.40);
-  --card-fg: #000000;
-
-  --header-bg: rgba(0, 0, 0, 0.75);
-  --header-border: rgba(201, 149, 58, 0.30);
-  --input-bg: rgba(255, 255, 255, 0.05);
-  --input-border: rgba(201, 149, 58, 0.30);
-  --divider: rgba(201, 149, 58, 0.25);
-
-  --shadow-glass: 0 0 0 0.5px rgba(0, 0, 0, 0.12) inset;
-  --shadow-glass-hover: 0 0 0 0.5px rgba(0, 0, 0, 0.28) inset;
-
-  --selection-bg: #000000;
-  --selection-fg: #C9953A;
-
-  --toggle-bg: rgba(255, 255, 255, 0.10);
-  --toggle-border: rgba(201, 149, 58, 0.40);
-  --toggle-fg: #ffffff;
+  --toggle-bg: var(--muted);
+  --toggle-border: var(--border);
+  --toggle-fg: var(--foreground);
 }
 
 html,
 body {
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--background);
+  color: var(--foreground);
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   touch-action: manipulation;
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 body {
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Inter", "Helvetica Neue", "Helvetica", ui-sans-serif,
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial,
+    sans-serif;
   font-weight: 400;
   font-feature-settings: "ss01", "cv11", "tnum";
   letter-spacing: 0;
 }
 
 /* ============================================================
- * Tipografia — hierarquia por tamanho/peso, NÃO por uppercase.
- * Headlines são sentence case com tracking quase neutro (sutil
- * tightening em h1/h2 pra dar caráter editorial). Uppercase fica
- * reservado às utilitárias .ds-label, .ds-nav, .ds-caption,
- * .ds-micro (chips, status, breadcrumbs, badges).
+ * Tipografia — Stone case=none. Hierarquia por tamanho/peso.
+ * Sentence case em headlines, labels e botões.
  * ============================================================ */
 h1, h2, h3, h4, h5, h6,
 .ds-display, .ds-headline {
-  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Sharon Display", "Inter", ui-sans-serif, system-ui, sans-serif;
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.01em;
-  color: var(--text-1);
+  color: var(--foreground);
 }
 
-h1, .ds-display { font-size: 32px; letter-spacing: -0.02em; line-height: 1.1; }
-h2 { font-size: 24px; letter-spacing: -0.015em; }
-h3 { font-size: 20px; letter-spacing: -0.01em; font-weight: 600; }
-h4 { font-size: 16px; font-weight: 600; }
-h5 { font-size: 14px; font-weight: 600; }
-h6 { font-size: 13px; font-weight: 600; }
+h1, .ds-display { font-size: 2.5rem; line-height: 3rem; letter-spacing: -0.01em; }
+h2 { font-size: 2rem; line-height: 2.375rem; letter-spacing: -0.005em; }
+h3 { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: 0; }
+h4 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; letter-spacing: 0; }
+h5 { font-size: 1rem; line-height: 1.5rem; font-weight: 600; letter-spacing: 0; }
+h6 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; letter-spacing: 0; }
 
+/* Labels/captions: sentence case (Stone), tracking leve, cor muted. */
 .ds-label {
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   font-size: 12px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: 1.17px;
-  text-transform: uppercase;
+  font-weight: 500;
+  line-height: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--muted-foreground);
 }
 
 .ds-nav {
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   font-size: 13px;
-  font-weight: 700;
-  line-height: 0.94;
-  letter-spacing: 1.17px;
-  text-transform: uppercase;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .ds-caption {
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   font-size: 12px;
   font-weight: 400;
-  line-height: 1.0;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  line-height: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted-foreground);
 }
 
 .ds-micro {
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
-  line-height: 0.94;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  line-height: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted-foreground);
 }
 
 .ds-mono {
@@ -279,9 +204,8 @@ textarea {
   touch-action: manipulation;
 }
 
-/* Botões: uppercase + tracking só nos botões com classe .btn-* legados,
- * não em todo <button>. Componentes neutros (ex: chevrons, dropdowns,
- * controles de UI) ficam em sentence case. */
+/* Botões legados (.btn-gold-*, .ds-btn, .theme-toggle) — Stone case=none.
+ * Repaginados abaixo; aqui só removemos uppercase legado. */
 .ds-btn,
 .btn-gold-filled,
 .btn-gold-outline,
@@ -289,9 +213,9 @@ textarea {
 .btn-semanal-pulse,
 .btn-ghost,
 .theme-toggle {
-  text-transform: uppercase;
-  letter-spacing: 1.17px;
-  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-weight: 500;
 }
 
 /* iOS: evita auto-zoom em inputs (mínimo 16px) */
@@ -307,157 +231,68 @@ table {
   border-collapse: collapse;
 }
 
-/* ============ Background ambiental (orbs) ============
- * Reduzido drasticamente — SpaceX é radicalmente liso.
- * Mantemos um glow mínimo pra dar profundidade espacial.
- */
-.motion-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  will-change: transform;
-}
-
-.orb-1 {
-  width: 600px;
-  height: 600px;
-  top: -200px;
-  right: -100px;
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.025) 0%,
-    transparent 70%
-  );
-  animation: float1 25s infinite alternate ease-in-out;
-}
-
-.orb-2 {
-  width: 400px;
-  height: 400px;
-  bottom: -100px;
-  left: -80px;
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.018) 0%,
-    transparent 70%
-  );
-  animation: float2 35s infinite alternate ease-in-out;
-}
-
+/* Stone é light puro — orbs do tema dark foram removidos. */
+.motion-bg,
+.orb,
+.orb-1,
+.orb-2,
 .orb-3 {
-  width: 300px;
-  height: 300px;
-  top: 40%;
-  left: 40%;
-  background: radial-gradient(
-    circle,
-    rgba(201, 149, 58, 0.02) 0%,
-    transparent 70%
-  );
-  animation: float3 45s infinite alternate ease-in-out;
-}
-
-[data-theme="light"] .orb-1,
-[data-theme="light"] .orb-2 {
-  background: radial-gradient(
-    circle,
-    rgba(0, 0, 0, 0.025) 0%,
-    transparent 70%
-  );
-}
-
-@keyframes float1 {
-  0% { transform: translate(40px, 60px) scale(1.08); }
-  100% { transform: translate(-20px, -30px) scale(0.95); }
-}
-@keyframes float2 {
-  0% { transform: translate(-30px, -50px) scale(1.05); }
-  100% { transform: translate(50px, 30px) scale(0.92); }
-}
-@keyframes float3 {
-  0% { transform: translate(60px, -40px) scale(1.1); }
-  100% { transform: translate(-40px, 60px) scale(0.9); }
+  display: none !important;
 }
 
 /* ============ Card primitive ============
- * Raio 16px, fundo sólido (preto fosco), borda fina. Inclui um glow
- * externo bem sutil em ouro (rgba do --accent) pra dar o aspecto
- * premium pedido — sem exagero: 24px de blur, ~4% de opacidade, só
- * o suficiente pra dar profundidade na borda escura. No hover o glow
- * aparece mais forte e a borda fica em ouro.
+ * Stone: flat sobre branco, borda hairline #d5dee8, radius 16px.
+ * Hover apenas escurece um toque a border (sem glow, sem sombra).
  */
 .glass {
-  background: var(--card-bg);
+  background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: 16px;
-  color: var(--card-fg);
-  box-shadow:
-    0 0 0 1px rgba(201, 149, 58, 0.03),
-    0 2px 24px rgba(201, 149, 58, 0.04),
-    0 1px 0 rgba(255, 255, 255, 0.02) inset;
-  transition: background-color 0.2s ease, border-color 0.2s ease,
-    box-shadow 0.25s ease;
+  color: var(--card-foreground);
+  box-shadow: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .glass-hover:hover {
   background: var(--surface-2);
-  border-color: rgba(201, 149, 58, 0.28);
-  box-shadow:
-    0 0 0 1px rgba(201, 149, 58, 0.10),
-    0 4px 36px rgba(201, 149, 58, 0.10),
-    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  border-color: var(--card-border-hover);
 }
 
 .glass-header {
   background: var(--header-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--header-border);
+  color: var(--foreground);
 }
 
 .glass-input {
-  background: var(--input-bg);
+  background: var(--input);
   border: 1px solid var(--input-border);
-  border-radius: 10px;
-  color: var(--fg);
+  border-radius: 8px;
+  color: var(--input-fg);
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   padding: 10px 14px;
 }
 
 .glass-input:focus {
-  border-color: rgba(var(--spectral-rgb), 0.55);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgba(76, 78, 84, 0.15);
 }
 
-/* ============ AppShell — rail global e responsividade ============
- *
- * Desktop (>= 1024px):
- *   • .app-rail é fixed à esquerda, width controlado via style inline
- *   • .app-main offseta com margin-left = var(--rail-width)
- *   • .app-mobile-trigger e .app-mobile-backdrop ficam escondidos
- *
- * Mobile (< 1024px):
- *   • .app-rail vira overlay drawer (width fixa 240px), começa fora
- *     da tela (translateX(-100%)) e desliza pra dentro quando aberto
- *   • .app-main não offseta (rail flutua por cima do conteúdo)
- *   • .app-mobile-trigger aparece no canto superior esquerdo (logo +
- *     hamburger). Clicar abre/fecha.
- *   • .app-mobile-backdrop é o overlay escuro atrás do drawer aberto;
- *     clicar fecha.
- */
+.glass-input::placeholder {
+  color: var(--text-4);
+}
+
+/* ============ AppShell — rail + responsividade ============ */
 .app-rail {
   position: fixed;
   left: 0;
   top: 0;
   bottom: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--background);
+  border-right: 1px solid var(--border);
   transition: width 0.2s ease, transform 0.2s ease;
   z-index: 30;
   display: flex;
@@ -469,6 +304,8 @@ table {
 .app-main {
   margin-left: var(--rail-width, 72px);
   transition: margin-left 0.2s ease;
+  background: var(--background);
+  min-height: 100vh;
 }
 
 .app-mobile-trigger {
@@ -480,10 +317,10 @@ table {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--surface-1);
-  color: var(--text-2);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   cursor: pointer;
   font-family: inherit;
   font-size: inherit;
@@ -499,9 +336,9 @@ table {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(32, 37, 42, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   z-index: 40;
   border: none;
   cursor: pointer;
@@ -512,6 +349,7 @@ table {
   .app-rail {
     width: 240px !important;
     transform: translateX(-100%);
+    box-shadow: 0px 8px 50px 0px rgba(66, 74, 83, 0.12);
   }
   .app-rail[data-expandido="true"] {
     transform: translateX(0);
@@ -529,10 +367,7 @@ table {
   }
 }
 
-/* ============ Sino flutuante (botão) ============
- * Botão fixo no canto superior direito, sempre visível.
- * z-index 60 = mesmo do hambúrguer mobile (top-left); não conflitam.
- */
+/* ============ Sino flutuante ============ */
 .sino-trigger {
   position: fixed;
   top: 16px;
@@ -543,61 +378,50 @@ table {
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: rgba(20, 20, 20, 0.7);
-  border: 0.5px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  color: var(--text-2);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--foreground);
   cursor: pointer;
   z-index: 60;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease,
+    border-color 0.15s ease;
 }
 .sino-trigger:hover {
-  background: rgba(30, 30, 30, 0.85);
-  color: var(--text-1);
+  background: var(--surface-2);
+  border-color: var(--card-border-hover);
 }
 .sino-trigger:active {
   transform: scale(0.95);
 }
 .sino-trigger[data-tem-nao-lidas="true"] {
-  color: var(--accent);
-  border-color: rgba(201, 149, 58, 0.4);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 .sino-trigger[data-aberto="true"] {
-  background: rgba(40, 40, 40, 0.9);
+  background: var(--surface-2);
 }
 
-/* ============ Painel de notificações ============
- * Desktop (>=1024px): drawer 400px à direita, full-height, slide da direita.
- * Mobile/tablet (<1024px): full-screen, slide do topo (estilo iOS
- * Notification Center). Mesma faixa onde o rail vira overlay.
- * z-index 201 cobre rail (max 50), sino-trigger e hambúrguer (60), backdrop (40).
- */
+/* ============ Painel de notificações ============ */
 .painel-notif {
   top: 0;
   right: 0;
   bottom: 0;
   width: 400px;
   max-width: 100vw;
-  border-left: 0.5px solid rgba(255, 255, 255, 0.08);
+  background: var(--background);
+  border-left: 1px solid var(--border);
+  box-shadow: 0px 8px 50px 0px rgba(66, 74, 83, 0.15);
   animation: painel-slide-left 0.22s ease-out;
 }
 
 @keyframes painel-slide-left {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
 }
 
 @media (max-width: 1023px) {
   .painel-notif {
-    /* !important cobre qualquer regra residual. inset: 0 faz o painel
-     * cobrir os 4 lados; width: auto deixa o navegador calcular pela
-     * diferença entre left/right (viewport inteiro). */
     top: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
@@ -610,466 +434,244 @@ table {
 }
 
 @keyframes painel-slide-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
 }
 
-/* ============ Gold divider — linha premium entre hero e conteúdo ============
- * Gradiente que começa em ouro pleno e some no nada, com um sutil
- * glow ao redor pra dar profundidade. Usado entre o título da página e
- * a primeira seção de blocos.
+/* ============ Divider hairline ============
+ * Antes era gold-divider (gradiente dourado com glow). Agora é
+ * uma hairline neutra de 1px. Nome mantido pra não tocar nas pages.
  */
 .gold-divider {
   width: 64px;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    rgba(201, 149, 58, 0.85) 0%,
-    rgba(201, 149, 58, 0.6) 35%,
-    rgba(201, 149, 58, 0) 100%
-  );
-  border-radius: 2px;
-  box-shadow: 0 0 12px rgba(201, 149, 58, 0.25);
+  height: 1px;
+  background: var(--border);
+  border-radius: 0;
+  box-shadow: none;
 }
 
-/* ============ Botão fantasma — variante em ouro suave ============
- * Mesma forma do outline, mas com um leve preenchimento gold em vez de
- * transparente. Usado pra ações secundárias que ainda precisam de
- * destaque (ex: chips de filtro, toggles).
+/* ============ Botões — recipes Stone ============
+ * Geometria: height 32px, padding 8px / 16px, radius 2px, weight 500.
+ * Variantes:
+ *   .btn-gold-filled / .btn-semanal-pulse → primary solid
+ *   .btn-gold-outline / .btn-ghost         → outline hairline
+ *   .btn-gold-solid                        → primary solid (alias)
  */
-.btn-ghost {
+.btn-ghost,
+.btn-gold-outline {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(var(--accent-rgb), 0.10);
-  color: var(--accent);
-  border: 1px solid rgba(var(--accent-rgb), 0.35);
-  border-radius: 10px;
-  padding: 12px 22px;
-  font-family: "Inter", sans-serif;
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 1.17px;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-.btn-ghost:hover {
-  background: rgba(var(--accent-rgb), 0.18);
-  border-color: rgba(var(--accent-rgb), 0.6);
-  box-shadow: 0 0 16px rgba(201, 149, 58, 0.18);
-}
-
-/* ============ Botões legados (mapeados pra linguagem SpaceX) ============
- * Mantemos os nomes (.btn-gold-outline, .btn-gold-filled, etc.) para
- * compatibilidade com componentes existentes, mas com a estética nova:
- * raio 32px, padding 14/24, tracking 1.17px, sem sombras.
- */
-.btn-gold-outline {
   background: transparent;
-  border: 1px solid rgba(var(--accent-rgb), 0.4);
-  color: var(--accent);
-  border-radius: 10px;
-  padding: 12px 22px;
+  color: var(--foreground);
+  border: 1px solid var(--foreground);
+  border-radius: 2px;
+  padding: 0 16px;
+  height: 32px;
   font-family: "Inter", sans-serif;
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 1.17px;
-  text-transform: uppercase;
-  transition: background 0.2s ease, border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
+.btn-ghost:hover,
 .btn-gold-outline:hover {
-  background: rgba(var(--accent-rgb), 0.10);
-  border-color: rgba(var(--accent-rgb), 0.65);
-  box-shadow: 0 0 16px rgba(201, 149, 58, 0.18);
+  background: var(--surface-2);
+  border-color: var(--foreground);
 }
 
-.btn-gold-filled {
-  background: var(--accent);
-  color: #000;
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 12px 22px;
+.btn-gold-filled,
+.btn-gold-solid,
+.btn-semanal-pulse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid var(--primary);
+  border-radius: 2px;
+  padding: 0 16px;
+  height: 32px;
   font-family: "Inter", sans-serif;
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 1.17px;
-  text-transform: uppercase;
-  box-shadow: 0 0 16px rgba(201, 149, 58, 0.12);
-  transition: filter 0.2s ease, box-shadow 0.2s ease;
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease;
 }
-.btn-gold-filled:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 0 24px rgba(201, 149, 58, 0.30);
+.btn-gold-filled:hover,
+.btn-gold-solid:hover,
+.btn-semanal-pulse:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .btn-semanal-pulse {
-  background: var(--accent);
-  color: #000;
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 12px 22px;
-  font-family: "Inter", sans-serif;
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 1.17px;
-  text-transform: uppercase;
-  animation: pulseGold 1.8s ease-in-out infinite;
+  animation: pulseStone 1.8s ease-in-out infinite;
 }
-.btn-semanal-pulse:hover { filter: brightness(1.1); }
-
-@keyframes pulseGold {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.45); }
-  50%      { box-shadow: 0 0 0 10px rgba(var(--accent-rgb), 0); }
+@keyframes pulseStone {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(76, 78, 84, 0.45); }
+  50%      { box-shadow: 0 0 0 10px rgba(76, 78, 84, 0); }
 }
-
-.btn-gold-solid {
-  background: var(--accent);
-  color: #000;
-  border-radius: 10px;
-  font-family: "Inter", sans-serif;
-  font-weight: 700;
-  letter-spacing: 1.17px;
-  text-transform: uppercase;
-  transition: filter 0.2s ease;
-}
-.btn-gold-solid:hover { filter: brightness(1.1); }
 
 .scrollbar-thin::-webkit-scrollbar {
   height: 6px;
   width: 6px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(var(--spectral-rgb), 0.20);
+  background: var(--border);
   border-radius: 0;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--card-border-hover);
 }
 
 .divider-h {
-  height: 0.5px;
+  height: 1px;
   background: var(--divider);
 }
 .divider-v {
-  width: 0.5px;
+  width: 1px;
   background: var(--divider);
 }
 
-/* ============================================================
- * Inline-style overrides — remapeia os centenas de inline styles
- * com rgba(255,255,255,X) e #fff/#ffffff usados no sistema legado.
- * Agora todos apontam para spectral white (#ffffff) por padrão e
- * são reescritos por tema dentro/fora dos cards.
- *
- * Os seletores cobrem tanto rgba(255,255,255) quanto #ffffff/#fff
- * para que componentes existentes herdem o spectral sem reescrita.
- * ============================================================ */
-
-/* Universal: branco puro vira spectral em qualquer tema */
-[style*="color: #ffffff"],
-[style*="color:#ffffff"],
-[style*='color: "#ffffff"'],
-[style*="color: #fff\""],
-[style*="color:#fff\""],
-[style*="color: rgb(255, 255, 255)"],
-[style*="color: rgb(255,255,255)"] {
-  color: #ffffff;
-}
-
-/* ---------- LIGHT (canvas branco + cards pretos) ---------- */
-[data-theme="light"] [style*="color: #ffffff"],
-[data-theme="light"] [style*="color:#ffffff"],
-[data-theme="light"] [style*='color: "#ffffff"'],
-[data-theme="light"] [style*="color: #fff\""],
-[data-theme="light"] [style*="color:#fff\""],
-[data-theme="light"] [style*="color: rgb(255, 255, 255)"],
-[data-theme="light"] [style*="color: rgb(255,255,255)"] {
-  color: #000000 !important;
-}
-
-[data-theme="light"] [style*="color: rgba(255,255,255,0.15)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.15)"] { color: rgba(0,0,0,0.40) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.18)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.18)"] { color: rgba(0,0,0,0.42) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.2)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.2)"] { color: rgba(0,0,0,0.44) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.25)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.25)"] { color: rgba(0,0,0,0.48) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.3)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.3)"] { color: rgba(0,0,0,0.54) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.35)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.35)"] { color: rgba(0,0,0,0.60) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.4)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.4)"] { color: rgba(0,0,0,0.64) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.45)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.45)"] { color: rgba(0,0,0,0.70) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.5)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.5)"] { color: rgba(0,0,0,0.74) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.55)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.55)"] { color: rgba(0,0,0,0.78) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.6)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.6)"] { color: rgba(0,0,0,0.82) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.65)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.65)"] { color: rgba(0,0,0,0.86) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.7)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.7)"] { color: rgba(0,0,0,0.90) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.75)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.75)"] { color: rgba(0,0,0,0.92) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.78)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.78)"] { color: rgba(0,0,0,0.94) !important; }
-[data-theme="light"] [style*="color: rgba(255,255,255,0.8)"],
-[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.8)"] { color: rgba(0,0,0,0.96) !important; }
-
-[data-theme="light"] [style*="background: rgba(255,255,255,0.02)"],
-[data-theme="light"] [style*="background: rgba(255, 255, 255, 0.02)"] { background: rgba(0,0,0,0.03) !important; }
-[data-theme="light"] [style*="background: rgba(255,255,255,0.05)"],
-[data-theme="light"] [style*="background: rgba(255, 255, 255, 0.05)"] { background: rgba(0,0,0,0.05) !important; }
-[data-theme="light"] [style*="background: rgba(255,255,255,0.06)"],
-[data-theme="light"] [style*="background: rgba(255, 255, 255, 0.06)"] { background: rgba(0,0,0,0.07) !important; }
-[data-theme="light"] [style*="background: rgba(255,255,255,0.15)"],
-[data-theme="light"] [style*="background: rgba(255, 255, 255, 0.15)"] { background: rgba(0,0,0,0.12) !important; }
-
-[data-theme="light"] [style*="color: #C9953A"],
-[data-theme="light"] [style*="color:#C9953A"] { color: #B07F25 !important; }
-
-/* DENTRO dos cards pretos no tema light — devolve spectral */
-[data-theme="light"] .glass [style*="color: #ffffff"],
-[data-theme="light"] .glass [style*="color:#ffffff"],
-[data-theme="light"] .glass [style*="color: #fff\""],
-[data-theme="light"] .glass [style*="color:#fff\""],
-[data-theme="light"] .glass [style*="color: rgb(255, 255, 255)"],
-[data-theme="light"] .glass [style*="color: rgb(255,255,255)"] { color: #ffffff !important; }
-
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.15)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.15)"] { color: rgba(255,255,255,0.30) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.18)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.18)"] { color: rgba(255,255,255,0.32) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.2)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.2)"] { color: rgba(255,255,255,0.34) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.25)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.25)"] { color: rgba(255,255,255,0.40) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.3)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.3)"] { color: rgba(255,255,255,0.50) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.35)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.35)"] { color: rgba(255,255,255,0.55) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.4)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.4)"] { color: rgba(255,255,255,0.60) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.45)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.45)"] { color: rgba(255,255,255,0.65) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.5)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.5)"] { color: rgba(255,255,255,0.70) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.55)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.55)"] { color: rgba(255,255,255,0.74) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.6)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.6)"] { color: rgba(255,255,255,0.78) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.65)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.65)"] { color: rgba(255,255,255,0.82) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.7)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.7)"] { color: rgba(255,255,255,0.86) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.75)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.75)"] { color: rgba(255,255,255,0.88) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.78)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.78)"] { color: rgba(255,255,255,0.90) !important; }
-[data-theme="light"] .glass [style*="color: rgba(255,255,255,0.8)"],
-[data-theme="light"] .glass [style*="color: rgba(255, 255, 255, 0.8)"] { color: rgba(255,255,255,0.92) !important; }
-
-[data-theme="light"] .glass [style*="background: rgba(255,255,255,0.02)"],
-[data-theme="light"] .glass [style*="background: rgba(255, 255, 255, 0.02)"] { background: rgba(255,255,255,0.04) !important; }
-[data-theme="light"] .glass [style*="background: rgba(255,255,255,0.05)"],
-[data-theme="light"] .glass [style*="background: rgba(255, 255, 255, 0.05)"] { background: rgba(255,255,255,0.07) !important; }
-[data-theme="light"] .glass [style*="background: rgba(255,255,255,0.06)"],
-[data-theme="light"] .glass [style*="background: rgba(255, 255, 255, 0.06)"] { background: rgba(255,255,255,0.08) !important; }
-[data-theme="light"] .glass [style*="background: rgba(255,255,255,0.15)"],
-[data-theme="light"] .glass [style*="background: rgba(255, 255, 255, 0.15)"] { background: rgba(255,255,255,0.18) !important; }
-
-[data-theme="light"] .glass [style*="color: #C9953A"],
-[data-theme="light"] .glass [style*="color:#C9953A"] { color: #C9953A !important; }
-
-/* DENTRO do cabeçalho preto (.glass-header) — texto spectral */
-[data-theme="light"] .glass-header [style*="color: #ffffff"],
-[data-theme="light"] .glass-header [style*="color:#ffffff"],
-[data-theme="light"] .glass-header [style*="color: #fff\""],
-[data-theme="light"] .glass-header [style*="color:#fff\""],
-[data-theme="light"] .glass-header [style*="color: rgb(255, 255, 255)"],
-[data-theme="light"] .glass-header [style*="color: rgb(255,255,255)"] { color: #ffffff !important; }
-
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.15)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.15)"] { color: rgba(255,255,255,0.30) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.18)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.18)"] { color: rgba(255,255,255,0.32) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.2)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.2)"] { color: rgba(255,255,255,0.34) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.25)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.25)"] { color: rgba(255,255,255,0.40) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.3)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.3)"] { color: rgba(255,255,255,0.50) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.35)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.35)"] { color: rgba(255,255,255,0.55) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.4)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.4)"] { color: rgba(255,255,255,0.60) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.45)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.45)"] { color: rgba(255,255,255,0.65) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.5)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.5)"] { color: rgba(255,255,255,0.70) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.55)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.55)"] { color: rgba(255,255,255,0.74) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.6)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.6)"] { color: rgba(255,255,255,0.78) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.65)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.65)"] { color: rgba(255,255,255,0.82) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.7)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.7)"] { color: rgba(255,255,255,0.86) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.75)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.75)"] { color: rgba(255,255,255,0.90) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.78)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.78)"] { color: rgba(255,255,255,0.92) !important; }
-[data-theme="light"] .glass-header [style*="color: rgba(255,255,255,0.8)"],
-[data-theme="light"] .glass-header [style*="color: rgba(255, 255, 255, 0.8)"] { color: rgba(255,255,255,0.94) !important; }
-
-[data-theme="light"] .glass-header [style*="color: #C9953A"],
-[data-theme="light"] .glass-header [style*="color:#C9953A"] { color: #C9953A !important; }
-
-/* ---------- MONO (canvas preto + cards de surface branca) ---------- */
-[data-theme="mono"] .glass [style*="color: #ffffff"],
-[data-theme="mono"] .glass [style*="color:#ffffff"],
-[data-theme="mono"] .glass [style*="color: #fff\""],
-[data-theme="mono"] .glass [style*="color:#fff\""],
-[data-theme="mono"] .glass [style*="color: rgb(255, 255, 255)"],
-[data-theme="mono"] .glass [style*="color: rgb(255,255,255)"] { color: #000000 !important; }
-
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.15)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.15)"] { color: rgba(0,0,0,0.72) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.18)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.18)"] { color: rgba(0,0,0,0.74) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.2)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.2)"] { color: rgba(0,0,0,0.76) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.25)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.25)"] { color: rgba(0,0,0,0.78) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.3)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.3)"] { color: rgba(0,0,0,0.80) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.35)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.35)"] { color: rgba(0,0,0,0.82) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.4)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.4)"] { color: rgba(0,0,0,0.85) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.45)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.45)"] { color: rgba(0,0,0,0.88) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.5)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.5)"] { color: rgba(0,0,0,0.90) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.55)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.55)"] { color: rgba(0,0,0,0.92) !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.6)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.6)"] { color: #000000 !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.65)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.65)"] { color: #000000 !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.7)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.7)"] { color: #000000 !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.75)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.75)"] { color: #000000 !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.78)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.78)"] { color: #000000 !important; }
-[data-theme="mono"] .glass [style*="color: rgba(255,255,255,0.8)"],
-[data-theme="mono"] .glass [style*="color: rgba(255, 255, 255, 0.8)"] { color: #000000 !important; }
-
-[data-theme="mono"] .glass [style*="color: #C9953A"],
-[data-theme="mono"] .glass [style*="color:#C9953A"] { color: #000000 !important; }
-
-[data-theme="mono"] .glass [style*="background: rgba(255,255,255,0.02)"],
-[data-theme="mono"] .glass [style*="background: rgba(255, 255, 255, 0.02)"] { background: rgba(0,0,0,0.05) !important; }
-[data-theme="mono"] .glass [style*="background: rgba(255,255,255,0.05)"],
-[data-theme="mono"] .glass [style*="background: rgba(255, 255, 255, 0.05)"] { background: rgba(0,0,0,0.07) !important; }
-[data-theme="mono"] .glass [style*="background: rgba(255,255,255,0.06)"],
-[data-theme="mono"] .glass [style*="background: rgba(255, 255, 255, 0.06)"] { background: rgba(0,0,0,0.10) !important; }
-[data-theme="mono"] .glass [style*="background: rgba(255,255,255,0.15)"],
-[data-theme="mono"] .glass [style*="background: rgba(255, 255, 255, 0.15)"] { background: rgba(0,0,0,0.18) !important; }
-
-/* ---------- GOLD (canvas preto + cards dourados) ---------- */
-[data-theme="gold"] .glass [style*="color: #ffffff"],
-[data-theme="gold"] .glass [style*="color:#ffffff"],
-[data-theme="gold"] .glass [style*="color: #fff\""],
-[data-theme="gold"] .glass [style*="color:#fff\""],
-[data-theme="gold"] .glass [style*="color: rgb(255, 255, 255)"],
-[data-theme="gold"] .glass [style*="color: rgb(255,255,255)"] { color: #000000 !important; }
-
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.15)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.15)"] { color: rgba(0,0,0,0.74) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.18)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.18)"] { color: rgba(0,0,0,0.76) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.2)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.2)"] { color: rgba(0,0,0,0.78) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.25)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.25)"] { color: rgba(0,0,0,0.80) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.3)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.3)"] { color: rgba(0,0,0,0.82) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.35)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.35)"] { color: rgba(0,0,0,0.85) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.4)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.4)"] { color: rgba(0,0,0,0.88) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.45)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.45)"] { color: rgba(0,0,0,0.90) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.5)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.5)"] { color: rgba(0,0,0,0.92) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.55)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.55)"] { color: rgba(0,0,0,0.94) !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.6)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.6)"] { color: #000000 !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.65)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.65)"] { color: #000000 !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.7)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.7)"] { color: #000000 !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.75)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.75)"] { color: #000000 !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.78)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.78)"] { color: #000000 !important; }
-[data-theme="gold"] .glass [style*="color: rgba(255,255,255,0.8)"],
-[data-theme="gold"] .glass [style*="color: rgba(255, 255, 255, 0.8)"] { color: #000000 !important; }
-
-[data-theme="gold"] .glass [style*="background: rgba(255,255,255,0.02)"],
-[data-theme="gold"] .glass [style*="background: rgba(255, 255, 255, 0.02)"] { background: rgba(0,0,0,0.06) !important; }
-[data-theme="gold"] .glass [style*="background: rgba(255,255,255,0.05)"],
-[data-theme="gold"] .glass [style*="background: rgba(255, 255, 255, 0.05)"] { background: rgba(0,0,0,0.10) !important; }
-[data-theme="gold"] .glass [style*="background: rgba(255,255,255,0.06)"],
-[data-theme="gold"] .glass [style*="background: rgba(255, 255, 255, 0.06)"] { background: rgba(0,0,0,0.12) !important; }
-[data-theme="gold"] .glass [style*="background: rgba(255,255,255,0.15)"],
-[data-theme="gold"] .glass [style*="background: rgba(255, 255, 255, 0.15)"] { background: rgba(0,0,0,0.20) !important; }
-
-[data-theme="gold"] .glass [style*="color: #C9953A"],
-[data-theme="gold"] .glass [style*="color:#C9953A"] { color: #000000 !important; }
-
-
-/* ============ Theme toggle pílula no cabeçalho ============
- * Estilo ghost button espectral (SpaceX).
+/* ============ Theme toggle pílula ============
+ * Stone é light-only — toggle vira controle inerte mas mantém o
+ * shape de botão pra não quebrar layouts. Componentes que ainda
+ * tentam alternar tema ficam visualmente discretos.
  */
 .theme-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--toggle-border);
-  background: var(--toggle-bg);
-  color: var(--toggle-fg);
+  padding: 0 14px;
+  height: 32px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
   font-family: "Inter", sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1.17px;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .theme-toggle:hover {
-  border-color: rgba(var(--spectral-rgb), 0.6);
-  background: rgba(var(--spectral-rgb), 0.18);
+  border-color: var(--foreground);
+  background: var(--surface-2);
 }
 .theme-toggle .swatch {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  border: 0.5px solid rgba(0, 0, 0, 0.20);
-  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--border);
+  background: var(--primary);
   flex-shrink: 0;
+}
+
+/* ============================================================
+ * Compat overrides — pages legadas têm centenas de inline styles
+ * com rgba(255,255,255,X) e #fff (escritos pro tema dark). No
+ * Stone (light) isso vira branco-em-branco invisível.
+ *
+ * Os seletores abaixo invertem essas cores em texto/background
+ * pro equivalente preto-em-branco. Override por estilo inline é
+ * caro mas evita refator de 11k linhas neste primeiro commit.
+ * Em commits seguintes, os components serão limpos e essas
+ * regras podem sair.
+ * ============================================================ */
+
+/* Texto literal branco / spectral → foreground */
+[style*="color: #ffffff"],
+[style*="color:#ffffff"],
+[style*="color: \"#ffffff\""],
+[style*='color: "#ffffff"'],
+[style*="color: #fff\""],
+[style*="color:#fff\""],
+[style*="color: rgb(255, 255, 255)"],
+[style*="color: rgb(255,255,255)"] {
+  color: var(--foreground) !important;
+}
+
+/* Texto branco com alpha → muted-foreground (cinza médio) */
+[style*="color: rgba(255,255,255,0.15)"], [style*="color: rgba(255, 255, 255, 0.15)"],
+[style*="color: rgba(255,255,255,0.18)"], [style*="color: rgba(255, 255, 255, 0.18)"],
+[style*="color: rgba(255,255,255,0.2)"],  [style*="color: rgba(255, 255, 255, 0.2)"],
+[style*="color: rgba(255,255,255,0.25)"], [style*="color: rgba(255, 255, 255, 0.25)"],
+[style*="color: rgba(255,255,255,0.3)"],  [style*="color: rgba(255, 255, 255, 0.3)"],
+[style*="color: rgba(255,255,255,0.35)"], [style*="color: rgba(255, 255, 255, 0.35)"],
+[style*="color: rgba(255,255,255,0.4)"],  [style*="color: rgba(255, 255, 255, 0.4)"],
+[style*="color: rgba(255,255,255,0.45)"], [style*="color: rgba(255, 255, 255, 0.45)"],
+[style*="color: rgba(255,255,255,0.5)"],  [style*="color: rgba(255, 255, 255, 0.5)"],
+[style*="color: rgba(255,255,255,0.55)"], [style*="color: rgba(255, 255, 255, 0.55)"] {
+  color: var(--muted-foreground) !important;
+}
+
+[style*="color: rgba(255,255,255,0.6)"],  [style*="color: rgba(255, 255, 255, 0.6)"],
+[style*="color: rgba(255,255,255,0.65)"], [style*="color: rgba(255, 255, 255, 0.65)"],
+[style*="color: rgba(255,255,255,0.7)"],  [style*="color: rgba(255, 255, 255, 0.7)"],
+[style*="color: rgba(255,255,255,0.75)"], [style*="color: rgba(255, 255, 255, 0.75)"],
+[style*="color: rgba(255,255,255,0.78)"], [style*="color: rgba(255, 255, 255, 0.78)"],
+[style*="color: rgba(255,255,255,0.8)"],  [style*="color: rgba(255, 255, 255, 0.8)"],
+[style*="color: rgba(255,255,255,0.9)"],  [style*="color: rgba(255, 255, 255, 0.9)"] {
+  color: #4c4e54 !important;
+}
+
+/* Backgrounds brancos com alpha → surface-2 (muted suave) */
+[style*="background: rgba(255,255,255,0.02)"], [style*="background: rgba(255, 255, 255, 0.02)"],
+[style*="background: rgba(255,255,255,0.04)"], [style*="background: rgba(255, 255, 255, 0.04)"],
+[style*="background: rgba(255,255,255,0.05)"], [style*="background: rgba(255, 255, 255, 0.05)"],
+[style*="background: rgba(255,255,255,0.06)"], [style*="background: rgba(255, 255, 255, 0.06)"],
+[style*="background: rgba(255,255,255,0.08)"], [style*="background: rgba(255, 255, 255, 0.08)"],
+[style*="background: rgba(255,255,255,0.10)"], [style*="background: rgba(255, 255, 255, 0.10)"],
+[style*="background: rgba(255,255,255,0.15)"], [style*="background: rgba(255, 255, 255, 0.15)"] {
+  background: var(--surface-2) !important;
+}
+
+[style*="background:rgba(255,255,255,0.02)"], [style*="background:rgba(255, 255, 255, 0.02)"],
+[style*="background:rgba(255,255,255,0.05)"], [style*="background:rgba(255, 255, 255, 0.05)"],
+[style*="background:rgba(255,255,255,0.06)"], [style*="background:rgba(255, 255, 255, 0.06)"],
+[style*="background:rgba(255,255,255,0.15)"], [style*="background:rgba(255, 255, 255, 0.15)"] {
+  background: var(--surface-2) !important;
+}
+
+/* Borders brancos com alpha → border hairline */
+[style*="border-color: rgba(255,255,255,"],
+[style*="border-color: rgba(255, 255, 255,"] {
+  border-color: var(--border) !important;
+}
+
+/* Ouro hardcoded (#C9953A) → primary Stone */
+[style*="color: #C9953A"],
+[style*="color:#C9953A"],
+[style*="color: #c9953a"],
+[style*="color:#c9953a"] {
+  color: var(--primary) !important;
+}
+[style*="background: #C9953A"],
+[style*="background:#C9953A"],
+[style*="background: #c9953a"],
+[style*="background:#c9953a"] {
+  background: var(--primary) !important;
+}
+[style*="border-color: #C9953A"],
+[style*="border-color:#C9953A"],
+[style*="border-color: rgba(201,149,58"],
+[style*="border-color: rgba(201, 149, 58"] {
+  border-color: var(--primary) !important;
+}
+[style*="background: rgba(201,149,58"],
+[style*="background: rgba(201, 149, 58"] {
+  background: rgba(76, 78, 84, 0.08) !important;
+}
+[style*="color: rgba(201,149,58"],
+[style*="color: rgba(201, 149, 58"] {
+  color: var(--primary) !important;
 }

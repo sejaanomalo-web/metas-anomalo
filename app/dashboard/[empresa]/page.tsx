@@ -134,7 +134,7 @@ export default async function EmpresaPage({
               color: "var(--text-3)",
               fontWeight: 500,
             }}
-            className="hover:text-[#C9953A] transition"
+            className="hover:text-[#4c4e54] transition"
           >
             ← Empresas
           </Link>
@@ -241,7 +241,7 @@ export default async function EmpresaPage({
                 <p
                   style={{
                     fontSize: 13,
-                    color: "rgba(255,255,255,0.25)",
+                    color: "rgba(0,0,0,0.25)",
                     fontWeight: 300,
                     fontStyle: "italic",
                     textAlign: "center",
@@ -332,7 +332,7 @@ function MetadadosEmpresa({
     <p
       style={{
         fontSize: 12,
-        color: "rgba(255,255,255,0.35)",
+        color: "rgba(0,0,0,0.35)",
         fontWeight: 300,
       }}
     >
