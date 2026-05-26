@@ -41,6 +41,11 @@ export default function RecorrenteDrawer({
   const editando = !!recorrente
   const categoriasFiltradas = categorias.filter((c) => c.tipo === tipo)
 
+  function refreshUI() {
+    router.refresh()
+    setTimeout(() => window.location.reload(), 250)
+  }
+
   async function onSubmit(fd: FormData) {
     setErro(null)
     fd.set("tipo", tipo)
@@ -49,7 +54,7 @@ export default function RecorrenteDrawer({
     startTransition(async () => {
       const r = await salvarRecorrenteAction(fd)
       if (!r.ok) { setErro(r.erro ?? "Erro"); return }
-      router.refresh()
+      refreshUI()
       fechar()
     })
   }
@@ -61,7 +66,7 @@ export default function RecorrenteDrawer({
     startTransition(async () => {
       const r = await excluirRecorrenteAction(recorrente.id)
       if (!r.ok) { setErro(r.erro ?? "Erro"); return }
-      router.refresh()
+      refreshUI()
       fechar()
     })
   }

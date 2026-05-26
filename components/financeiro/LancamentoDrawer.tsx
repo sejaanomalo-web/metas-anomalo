@@ -6,11 +6,13 @@ import {
   criarLancamentoAction,
   atualizarLancamentoAction,
   excluirLancamentoAction,
+  salvarRecorrenteAction,
 } from "@/lib/financeiro-actions"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
   LancamentoFinanceiro,
+  Periodicidade,
   StatusLancamento,
   TipoLancamento,
 } from "@/lib/financeiro"
@@ -27,7 +29,13 @@ interface Props {
   contas: ContaFinanceira[]
   empresas: Empresa[]
   lancamento?: LancamentoFinanceiro | null
+  /** Mês/ano vigentes — usados pra materializar lançamentos do recorrente
+   *  recém-criado no mês corrente da listagem. */
+  mesAtual?: string
+  anoAtual?: number
 }
+
+type Frequencia = "variavel" | "recorrente"
 
 export default function LancamentoDrawer({
   aberto,
@@ -36,35 +44,102 @@ export default function LancamentoDrawer({
   contas,
   empresas,
   lancamento,
+  mesAtual,
+  anoAtual,
 }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
+  const [sucesso, setSucesso] = useState<string | null>(null)
   const [tipo, setTipo] = useState<TipoLancamento>(lancamento?.tipo ?? "despesa")
   const [status, setStatus] = useState<StatusLancamento>(
     lancamento?.status ?? "realizado"
   )
+  const editando = !!lancamento
+  // Toggle Recorrente/Variável só faz sentido em criação. Em edição,
+  // o tipo é determinado pela existência de recorrente_id e não é
+  // alterável (pra editar template, vai na aba Recorrentes).
+  const [frequencia, setFrequencia] = useState<Frequencia>(
+    editando && lancamento?.recorrente_id ? "recorrente" : "variavel"
+  )
+  const [periodicidade, setPeriodicidade] = useState<Periodicidade>("mensal")
 
   if (!aberto) return null
 
   const categoriasFiltradas = categorias.filter((c) => c.tipo === tipo)
-  const editando = !!lancamento
+  const lancamentoDeRecorrente = editando && !!lancamento?.recorrente_id
 
-  async function onSubmit(fd: FormData) {
-    setErro(null)
+  /**
+   * Refresh defensivo: router.refresh() + reload duro depois de 250ms.
+   * O reload garante invalidação do Router Cache do Next + Service Worker
+   * PWA — sem ele, usuários relataram que o lançamento criado aparecia
+   * só após hard refresh manual.
+   */
+  function refreshUI() {
+    router.refresh()
+    setTimeout(() => {
+      window.location.reload()
+    }, 250)
+  }
+
+  async function onSubmitVariavel(fd: FormData) {
     fd.set("tipo", tipo)
     fd.set("status", status)
     if (editando) fd.set("id", lancamento!.id)
+    const action = editando ? atualizarLancamentoAction : criarLancamentoAction
+    const r = await action(fd)
+    if (!r.ok) {
+      setErro(r.erro ?? "Erro desconhecido.")
+      return
+    }
+    refreshUI()
+    fechar()
+  }
 
-    startTransition(async () => {
-      const action = editando ? atualizarLancamentoAction : criarLancamentoAction
-      const r = await action(fd)
-      if (!r.ok) {
-        setErro(r.erro ?? "Erro desconhecido.")
-        return
+  async function onSubmitRecorrente(fd: FormData) {
+    // Mapeia descricao→nome pra bater com a coluna pagamento_recorrente.nome.
+    const nome = String(fd.get("descricao") ?? "").trim()
+    fd.set("nome", nome)
+    fd.set("tipo", tipo)
+    fd.set("periodicidade", periodicidade)
+    fd.set("ativo", "on")
+    const r = await salvarRecorrenteAction(fd)
+    if (!r.ok) {
+      setErro(r.erro ?? "Erro ao criar recorrente.")
+      return
+    }
+    // Materializa lançamentos do mês corrente pra aparecer já na lista.
+    if (mesAtual && anoAtual) {
+      try {
+        const url = `/api/financeiro/materializar?mes=${encodeURIComponent(
+          mesAtual
+        )}&ano=${anoAtual}`
+        const resp = await fetch(url, { method: "POST" })
+        if (resp.ok) {
+          const data = (await resp.json()) as { criados: number }
+          setSucesso(
+            `Recorrente criado. ${data.criados} lançamento(s) gerado(s) pra ${mesAtual}/${anoAtual}.`
+          )
+        }
+      } catch {
+        // Não falha o fluxo — recorrente já foi criado. Materializa
+        // no próximo cron mensal ou no botão da aba Recorrentes.
       }
-      router.refresh()
-      fechar()
+    }
+    refreshUI()
+    // Espera um beat pra usuário ler a mensagem antes do fechar+reload.
+    setTimeout(() => fechar(), 800)
+  }
+
+  async function onSubmit(fd: FormData) {
+    setErro(null)
+    setSucesso(null)
+    startTransition(async () => {
+      if (frequencia === "recorrente" && !editando) {
+        await onSubmitRecorrente(fd)
+      } else {
+        await onSubmitVariavel(fd)
+      }
     })
   }
 
@@ -78,7 +153,7 @@ export default function LancamentoDrawer({
         setErro(r.erro ?? "Erro ao excluir.")
         return
       }
-      router.refresh()
+      refreshUI()
       fechar()
     })
   }
@@ -88,7 +163,9 @@ export default function LancamentoDrawer({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(32, 37, 42, 0.45)",
+        background: "rgba(0, 0, 0, 0.7)",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
         zIndex: 100,
         display: "flex",
         justifyContent: "flex-end",
@@ -99,113 +176,216 @@ export default function LancamentoDrawer({
     >
       <div
         style={{
-          width: "min(520px, 100vw)",
-          background: "var(--background)",
-          borderLeft: "1px solid var(--border)",
+          width: "min(540px, 100vw)",
+          background: "var(--surface-1)",
+          borderLeft: "0.5px solid rgba(255,255,255,0.10)",
           overflowY: "auto",
           padding: "32px 28px",
           animation: "painel-slide-left 0.22s ease-out",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ fontSize: 22 }}>{editando ? "Editar lançamento" : "Novo lançamento"}</h2>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 24,
+          }}
+        >
+          <h2 style={{ fontSize: 22 }}>
+            {editando
+              ? lancamentoDeRecorrente
+                ? "Editar lançamento (de recorrência)"
+                : "Editar lançamento"
+              : "Novo lançamento"}
+          </h2>
           <button
             type="button"
             onClick={fechar}
             aria-label="Fechar"
             style={{
               background: "transparent",
-              border: "1px solid var(--border)",
+              border: "0.5px solid rgba(255,255,255,0.18)",
               borderRadius: 8,
               padding: "6px 10px",
               cursor: "pointer",
-              color: "var(--foreground)",
+              color: "var(--text-2)",
             }}
           >
             ✕
           </button>
         </div>
 
-        <form action={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Tipo toggle */}
+        {lancamentoDeRecorrente && (
+          <div
+            style={{
+              padding: 12,
+              background: "rgba(201,149,58,0.08)",
+              border: "0.5px solid rgba(201,149,58,0.30)",
+              borderRadius: 8,
+              color: "var(--text-2)",
+              fontSize: 12,
+              marginBottom: 16,
+              lineHeight: 1.5,
+            }}
+          >
+            Esse lançamento foi gerado por uma recorrência. Editar aqui altera
+            só este lançamento. Pra mudar o template (valor, dia, fim), vá em{" "}
+            <strong>Recorrentes</strong>.
+          </div>
+        )}
+
+        <form
+          action={onSubmit}
+          style={{ display: "flex", flexDirection: "column", gap: 16 }}
+        >
+          {/* Tipo: receita / despesa */}
           <div>
             <Label>Tipo</Label>
             <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
               {(["receita", "despesa"] as const).map((t) => (
-                <button
+                <ToggleBtn
                   key={t}
-                  type="button"
+                  ativo={tipo === t}
                   onClick={() => setTipo(t)}
-                  style={{
-                    flex: 1,
-                    padding: "10px",
-                    borderRadius: 2,
-                    border: tipo === t ? "1px solid var(--foreground)" : "1px solid var(--border)",
-                    background: tipo === t ? "var(--surface-2)" : "transparent",
-                    color: "var(--foreground)",
-                    fontWeight: 500,
-                    fontSize: 13,
-                    cursor: "pointer",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {t}
-                </button>
+                  label={t === "receita" ? "Receita" : "Despesa"}
+                  flex
+                />
               ))}
             </div>
           </div>
 
-          {/* Status toggle */}
-          <div>
-            <Label>Status</Label>
-            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-              {(["previsto", "realizado", "cancelado"] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStatus(s)}
-                  style={{
-                    flex: 1,
-                    padding: "8px 6px",
-                    borderRadius: 2,
-                    border: status === s ? "1px solid var(--foreground)" : "1px solid var(--border)",
-                    background: status === s ? "var(--surface-2)" : "transparent",
-                    color: "var(--foreground)",
-                    fontWeight: 500,
-                    fontSize: 12,
-                    cursor: "pointer",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {s}
-                </button>
-              ))}
+          {/* Frequência: variável / recorrente — só na criação */}
+          {!editando && (
+            <div>
+              <Label>Frequência</Label>
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <ToggleBtn
+                  ativo={frequencia === "variavel"}
+                  onClick={() => setFrequencia("variavel")}
+                  label="Variável"
+                  flex
+                />
+                <ToggleBtn
+                  ativo={frequencia === "recorrente"}
+                  onClick={() => setFrequencia("recorrente")}
+                  label="Recorrente"
+                  flex
+                />
+              </div>
+              <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>
+                {frequencia === "variavel"
+                  ? "Lançamento único pra essa data."
+                  : "Cria um template que gera lançamentos automaticamente todo mês."}
+              </p>
             </div>
-          </div>
+          )}
 
-          <Campo label="Data de competência" obrigatorio>
-            <input
-              type="date"
-              name="data"
-              required
-              defaultValue={lancamento?.data ?? new Date().toISOString().slice(0, 10)}
-              className="glass-input"
-              style={{ width: "100%" }}
-            />
-          </Campo>
+          {/* === BLOCO VARIÁVEL === */}
+          {frequencia === "variavel" && (
+            <>
+              <div>
+                <Label>Status</Label>
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  {(["previsto", "realizado", "cancelado"] as const).map((s) => (
+                    <ToggleBtn
+                      key={s}
+                      ativo={status === s}
+                      onClick={() => setStatus(s)}
+                      label={s.charAt(0).toUpperCase() + s.slice(1)}
+                      flex
+                    />
+                  ))}
+                </div>
+              </div>
 
-          <Campo
-            label={status === "realizado" ? "Data de pagamento (obrigatória)" : "Data de pagamento"}
-          >
-            <input
-              type="date"
-              name="data_pagamento"
-              defaultValue={lancamento?.data_pagamento ?? ""}
-              className="glass-input"
-              style={{ width: "100%" }}
-            />
-          </Campo>
+              <Campo label="Data de competência" obrigatorio>
+                <input
+                  type="date"
+                  name="data"
+                  required
+                  defaultValue={
+                    lancamento?.data ?? new Date().toISOString().slice(0, 10)
+                  }
+                  className="glass-input"
+                  style={{ width: "100%" }}
+                />
+              </Campo>
 
+              <Campo
+                label={
+                  status === "realizado"
+                    ? "Data de pagamento (obrigatória)"
+                    : "Data de pagamento (opcional)"
+                }
+              >
+                <input
+                  type="date"
+                  name="data_pagamento"
+                  defaultValue={lancamento?.data_pagamento ?? ""}
+                  className="glass-input"
+                  style={{ width: "100%" }}
+                />
+              </Campo>
+            </>
+          )}
+
+          {/* === BLOCO RECORRENTE === */}
+          {frequencia === "recorrente" && !editando && (
+            <>
+              <div>
+                <Label>Periodicidade</Label>
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  {(["mensal", "anual", "semanal"] as const).map((p) => (
+                    <ToggleBtn
+                      key={p}
+                      ativo={periodicidade === p}
+                      onClick={() => setPeriodicidade(p)}
+                      label={p.charAt(0).toUpperCase() + p.slice(1)}
+                      flex
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {periodicidade === "mensal" && (
+                <Campo label="Dia do vencimento (1–31)" obrigatorio>
+                  <input
+                    type="number"
+                    name="dia_vencimento"
+                    min={1}
+                    max={31}
+                    required
+                    defaultValue={5}
+                    className="glass-input"
+                    style={{ width: 120 }}
+                  />
+                </Campo>
+              )}
+
+              <Campo label="Início" obrigatorio>
+                <input
+                  type="date"
+                  name="inicio"
+                  required
+                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  className="glass-input"
+                  style={{ width: "100%" }}
+                />
+              </Campo>
+
+              <Campo label="Fim (opcional — vazio = indeterminado)">
+                <input
+                  type="date"
+                  name="fim"
+                  className="glass-input"
+                  style={{ width: "100%" }}
+                />
+              </Campo>
+            </>
+          )}
+
+          {/* === CAMPOS COMUNS === */}
           <Campo label="Valor (R$)" obrigatorio>
             <input
               type="text"
@@ -213,19 +393,30 @@ export default function LancamentoDrawer({
               required
               inputMode="decimal"
               placeholder="Ex: 1.234,56"
-              defaultValue={lancamento ? String(lancamento.valor).replace(".", ",") : ""}
+              defaultValue={
+                lancamento ? String(lancamento.valor).replace(".", ",") : ""
+              }
               className="glass-input"
               style={{ width: "100%" }}
             />
           </Campo>
 
-          <Campo label="Descrição" obrigatorio>
+          <Campo
+            label={frequencia === "recorrente" ? "Nome do pagamento" : "Descrição"}
+            obrigatorio
+          >
             <input
               type="text"
               name="descricao"
               required
               maxLength={200}
-              placeholder={tipo === "receita" ? "Ex: Mensalidade Aton Estofados" : "Ex: Aluguel escritório"}
+              placeholder={
+                frequencia === "recorrente"
+                  ? "Ex: Aluguel · Vercel Pro · Salário Bruno"
+                  : tipo === "receita"
+                  ? "Ex: Mensalidade Aton Estofados"
+                  : "Ex: Aluguel escritório"
+              }
               defaultValue={lancamento?.descricao ?? ""}
               className="glass-input"
               style={{ width: "100%" }}
@@ -264,7 +455,7 @@ export default function LancamentoDrawer({
             </select>
           </Campo>
 
-          {tipo === "receita" && empresas.length > 0 && (
+          {tipo === "receita" && frequencia === "variavel" && empresas.length > 0 && (
             <Campo label="Empresa cliente (opcional)">
               <select
                 name="empresa_cliente"
@@ -297,14 +488,28 @@ export default function LancamentoDrawer({
             <div
               style={{
                 padding: 12,
-                background: "rgba(217, 103, 88, 0.12)",
-                border: "1px solid rgba(217, 103, 88, 0.35)",
+                background: "rgba(239, 68, 68, 0.12)",
+                border: "0.5px solid rgba(239, 68, 68, 0.40)",
                 borderRadius: 8,
-                color: "var(--foreground)",
+                color: "var(--text-1)",
                 fontSize: 13,
               }}
             >
               {erro}
+            </div>
+          )}
+          {sucesso && (
+            <div
+              style={{
+                padding: 12,
+                background: "rgba(22, 163, 74, 0.12)",
+                border: "0.5px solid rgba(22, 163, 74, 0.40)",
+                borderRadius: 8,
+                color: "var(--text-1)",
+                fontSize: 13,
+              }}
+            >
+              {sucesso}
             </div>
           )}
 
@@ -315,7 +520,13 @@ export default function LancamentoDrawer({
               className="btn-gold-filled"
               style={{ flex: 1, opacity: pending ? 0.6 : 1 }}
             >
-              {pending ? "Salvando..." : editando ? "Salvar alterações" : "Criar lançamento"}
+              {pending
+                ? "Salvando..."
+                : editando
+                ? "Salvar alterações"
+                : frequencia === "recorrente"
+                ? "Criar recorrente"
+                : "Criar lançamento"}
             </button>
             {editando && (
               <button
@@ -326,9 +537,9 @@ export default function LancamentoDrawer({
                   padding: "0 16px",
                   height: 32,
                   background: "transparent",
-                  border: "1px solid var(--destructive)",
-                  borderRadius: 2,
-                  color: "var(--destructive)",
+                  border: "0.5px solid rgba(239, 68, 68, 0.40)",
+                  borderRadius: 6,
+                  color: "#ef4444",
                   cursor: "pointer",
                   fontWeight: 500,
                   fontSize: 12,
@@ -344,14 +555,50 @@ export default function LancamentoDrawer({
   )
 }
 
+function ToggleBtn({
+  ativo,
+  onClick,
+  label,
+  flex,
+}: {
+  ativo: boolean
+  onClick: () => void
+  label: string
+  flex?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        flex: flex ? 1 : undefined,
+        padding: "10px 14px",
+        borderRadius: 6,
+        border: ativo
+          ? "0.5px solid var(--accent)"
+          : "0.5px solid rgba(255,255,255,0.10)",
+        background: ativo ? "rgba(201,149,58,0.15)" : "transparent",
+        color: ativo ? "var(--accent)" : "var(--text-2)",
+        fontWeight: ativo ? 600 : 500,
+        fontSize: 12,
+        letterSpacing: "0.3px",
+        cursor: "pointer",
+        transition: "all 0.15s ease",
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
 function Label({ children }: { children: React.ReactNode }) {
   return (
     <p
       style={{
         fontSize: 11,
-        fontWeight: 500,
-        color: "var(--muted-foreground)",
-        letterSpacing: "0.04em",
+        fontWeight: 600,
+        color: "var(--text-3)",
+        letterSpacing: "0.5px",
         textTransform: "uppercase",
       }}
     >
@@ -373,7 +620,7 @@ function Campo({
     <div>
       <Label>
         {label}
-        {obrigatorio && <span style={{ color: "var(--destructive)", marginLeft: 4 }}>*</span>}
+        {obrigatorio && <span style={{ color: "#ef4444", marginLeft: 4 }}>*</span>}
       </Label>
       <div style={{ marginTop: 6 }}>{children}</div>
     </div>

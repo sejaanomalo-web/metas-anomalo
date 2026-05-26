@@ -8,16 +8,21 @@ import {
 } from "@/lib/financeiro-actions"
 import type { ContaFinanceira, TipoConta } from "@/lib/financeiro"
 import { tipoContaRotulo } from "@/lib/financeiro"
+import { formatBRL } from "@/lib/data"
 
 interface Props {
   aberto: boolean
   fechar: () => void
   conta?: ContaFinanceira | null
+  /** Saldo atual calculado (inicial + receitas realizadas − despesas
+   *  realizadas). Só relevante em modo edição — usuário precisa ver
+   *  o impacto do saldo_inicial em relação ao que já entrou/saiu. */
+  saldoAtual?: number
 }
 
 const TIPOS_CONTA: TipoConta[] = ["banco", "caixa", "cartao_credito", "investimento"]
 
-export default function ContaDrawer({ aberto, fechar, conta }: Props) {
+export default function ContaDrawer({ aberto, fechar, conta, saldoAtual }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
@@ -26,6 +31,11 @@ export default function ContaDrawer({ aberto, fechar, conta }: Props) {
   if (!aberto) return null
   const editando = !!conta
 
+  function refreshUI() {
+    router.refresh()
+    setTimeout(() => window.location.reload(), 250)
+  }
+
   async function onSubmit(fd: FormData) {
     setErro(null)
     fd.set("tipo", tipo)
@@ -33,7 +43,7 @@ export default function ContaDrawer({ aberto, fechar, conta }: Props) {
     startTransition(async () => {
       const r = await salvarContaAction(fd)
       if (!r.ok) { setErro(r.erro ?? "Erro"); return }
-      router.refresh()
+      refreshUI()
       fechar()
     })
   }
@@ -45,7 +55,7 @@ export default function ContaDrawer({ aberto, fechar, conta }: Props) {
     startTransition(async () => {
       const r = await excluirContaAction(conta.id)
       if (!r.ok) { setErro(r.erro ?? "Erro"); return }
-      router.refresh()
+      refreshUI()
       fechar()
     })
   }
@@ -73,6 +83,70 @@ export default function ContaDrawer({ aberto, fechar, conta }: Props) {
           <h2 style={{ fontSize: 22 }}>{editando ? "Editar conta" : "Nova conta"}</h2>
           <button type="button" onClick={fechar} aria-label="Fechar" style={fecharBtn}>✕</button>
         </div>
+
+        {editando && saldoAtual !== undefined && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 12,
+              marginBottom: 20,
+              padding: "16px 18px",
+              background: "rgba(201,149,58,0.06)",
+              border: "0.5px solid rgba(201,149,58,0.25)",
+              borderRadius: 10,
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.8px",
+                  textTransform: "uppercase",
+                  color: "var(--text-3)",
+                  fontWeight: 600,
+                }}
+              >
+                Saldo inicial
+              </p>
+              <p
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: "var(--text-2)",
+                  fontVariantNumeric: "tabular-nums",
+                  marginTop: 4,
+                }}
+              >
+                {formatBRL(Number(conta!.saldo_inicial))}
+              </p>
+            </div>
+            <div>
+              <p
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.8px",
+                  textTransform: "uppercase",
+                  color: "var(--accent)",
+                  fontWeight: 600,
+                }}
+              >
+                Saldo atual
+              </p>
+              <p
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: saldoAtual >= 0 ? "var(--text-1)" : "#ef4444",
+                  fontVariantNumeric: "tabular-nums",
+                  marginTop: 4,
+                }}
+              >
+                {formatBRL(saldoAtual)}
+              </p>
+            </div>
+          </div>
+        )}
 
         <form action={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Campo label="Nome" obrigatorio>

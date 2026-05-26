@@ -1,4 +1,5 @@
 import SeletorPeriodo from "@/components/SeletorPeriodo"
+import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { mesValido, anoValido, formatBRL, formatNumero, MESES, type Mes } from "@/lib/data"
 import { getDREMes, getFluxoCaixaAnual } from "@/lib/financeiro"
 import { requererPermissao } from "@/lib/auth"
@@ -47,7 +48,7 @@ export default async function RelatoriosPage({
   return (
     <main className="mx-auto px-8 py-10 space-y-10" style={{ maxWidth: 1280 }}>
       <div>
-        <p style={{ fontSize: 12, fontWeight: 500, color: "var(--muted-foreground)" }}>
+        <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)" }}>
           Financeiro · Relatórios
         </p>
         <div
@@ -65,6 +66,8 @@ export default async function RelatoriosPage({
         </div>
         <div className="gold-divider" style={{ marginTop: 18 }} />
       </div>
+
+      <FinanceiroNav mes={mes} ano={ano} />
 
       {/* DRE simplificado */}
       <section className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 16, alignItems: "start" }}>

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import KPICard from "@/components/ui/KPICard"
+import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import GraficoFluxoCaixa from "@/components/financeiro/GraficoFluxoCaixa"
 import { mesValido, anoValido, formatBRL, formatNumero } from "@/lib/data"
 import {
@@ -147,18 +148,7 @@ export default async function FinanceiroOverviewPage({
         <div className="gold-divider" style={{ marginTop: 18 }} />
       </div>
 
-      {/* Quick links */}
-      <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <SubLink href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}`}>
-          Lançamentos
-        </SubLink>
-        <SubLink href="/dashboard/financeiro/recorrentes">Recorrentes</SubLink>
-        <SubLink href="/dashboard/financeiro/categorias">Categorias</SubLink>
-        <SubLink href="/dashboard/financeiro/contas">Contas</SubLink>
-        <SubLink href={`/dashboard/financeiro/relatorios?mes=${mes}&ano=${ano}`}>
-          Relatórios
-        </SubLink>
-      </nav>
+      <FinanceiroNav mes={mes} ano={ano} />
 
       {/* KPI cards */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4" style={{ gap: 16 }}>
@@ -427,23 +417,3 @@ export default async function FinanceiroOverviewPage({
   )
 }
 
-function SubLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        padding: "8px 14px",
-        background: "var(--background)",
-        border: "1px solid var(--border)",
-        borderRadius: 2,
-        color: "var(--foreground)",
-        fontSize: 13,
-        fontWeight: 500,
-        textDecoration: "none",
-        transition: "background 0.15s",
-      }}
-    >
-      {children}
-    </Link>
-  )
-}

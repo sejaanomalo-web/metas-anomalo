@@ -28,6 +28,11 @@ export default function CategoriaDrawer({ aberto, fechar, categoria }: Props) {
   if (!aberto) return null
   const editando = !!categoria
 
+  function refreshUI() {
+    router.refresh()
+    setTimeout(() => window.location.reload(), 250)
+  }
+
   async function onSubmit(fd: FormData) {
     setErro(null)
     fd.set("tipo", tipo)
@@ -36,7 +41,7 @@ export default function CategoriaDrawer({ aberto, fechar, categoria }: Props) {
     startTransition(async () => {
       const r = await salvarCategoriaAction(fd)
       if (!r.ok) { setErro(r.erro ?? "Erro"); return }
-      router.refresh()
+      refreshUI()
       fechar()
     })
   }
@@ -48,7 +53,7 @@ export default function CategoriaDrawer({ aberto, fechar, categoria }: Props) {
     startTransition(async () => {
       const r = await excluirCategoriaAction(categoria.id)
       if (!r.ok) { setErro(r.erro ?? "Erro"); return }
-      router.refresh()
+      refreshUI()
       fechar()
     })
   }

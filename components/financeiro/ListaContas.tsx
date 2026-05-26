@@ -82,6 +82,7 @@ export default function ListaContas({
         aberto={drawerAberto}
         fechar={() => setDrawerAberto(false)}
         conta={editando}
+        saldoAtual={editando ? saldos.get(editando.id) : undefined}
       />
     </>
   )

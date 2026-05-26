@@ -1,6 +1,7 @@
 import Link from "next/link"
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import TabelaLancamentos from "@/components/financeiro/TabelaLancamentos"
+import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { mesValido, anoValido } from "@/lib/data"
 import {
   listarLancamentos,
@@ -48,7 +49,7 @@ export default async function FinanceiroLancamentosPage({
   return (
     <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
       <div>
-        <p style={{ fontSize: 12, fontWeight: 500, color: "var(--muted-foreground)" }}>
+        <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)" }}>
           Financeiro · Lançamentos
         </p>
         <div
@@ -64,39 +65,42 @@ export default async function FinanceiroLancamentosPage({
           <h1 style={{ fontSize: 36 }}>Lançamentos de {mes}</h1>
           <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
         </div>
-        <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <FiltroChip
-            href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}`}
-            ativo={!tipo && !status}
-          >
-            Todos
-          </FiltroChip>
-          <FiltroChip
-            href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&tipo=receita`}
-            ativo={tipo === "receita"}
-          >
-            Receitas
-          </FiltroChip>
-          <FiltroChip
-            href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&tipo=despesa`}
-            ativo={tipo === "despesa"}
-          >
-            Despesas
-          </FiltroChip>
-          <FiltroChip
-            href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&status=previsto`}
-            ativo={status === "previsto"}
-          >
-            Previstos
-          </FiltroChip>
-          <FiltroChip
-            href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&status=realizado`}
-            ativo={status === "realizado"}
-          >
-            Realizados
-          </FiltroChip>
-        </div>
         <div className="gold-divider" style={{ marginTop: 18 }} />
+      </div>
+
+      <FinanceiroNav mes={mes} ano={ano} />
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <FiltroChip
+          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}`}
+          ativo={!tipo && !status}
+        >
+          Todos
+        </FiltroChip>
+        <FiltroChip
+          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&tipo=receita`}
+          ativo={tipo === "receita"}
+        >
+          Receitas
+        </FiltroChip>
+        <FiltroChip
+          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&tipo=despesa`}
+          ativo={tipo === "despesa"}
+        >
+          Despesas
+        </FiltroChip>
+        <FiltroChip
+          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&status=previsto`}
+          ativo={status === "previsto"}
+        >
+          Previstos
+        </FiltroChip>
+        <FiltroChip
+          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&status=realizado`}
+          ativo={status === "realizado"}
+        >
+          Realizados
+        </FiltroChip>
       </div>
 
       <TabelaLancamentos
@@ -104,6 +108,8 @@ export default async function FinanceiroLancamentosPage({
         categorias={categorias}
         contas={contas}
         empresas={empresasUI}
+        mesAtual={mes}
+        anoAtual={ano}
       />
     </main>
   )
@@ -122,14 +128,17 @@ function FiltroChip({
     <Link
       href={href}
       style={{
-        padding: "6px 12px",
+        padding: "6px 14px",
         borderRadius: 9999,
-        fontSize: 12,
-        fontWeight: 500,
-        border: `1px solid ${ativo ? "var(--foreground)" : "var(--border)"}`,
-        background: ativo ? "var(--surface-2)" : "transparent",
-        color: "var(--foreground)",
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: "0.5px",
+        textTransform: "uppercase",
+        border: `0.5px solid ${ativo ? "var(--accent)" : "rgba(255,255,255,0.10)"}`,
+        background: ativo ? "rgba(201,149,58,0.15)" : "transparent",
+        color: ativo ? "var(--accent)" : "var(--text-3)",
         textDecoration: "none",
+        transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease",
       }}
     >
       {children}

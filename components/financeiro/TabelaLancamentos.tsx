@@ -32,11 +32,15 @@ export default function TabelaLancamentos({
   categorias,
   contas,
   empresas,
+  mesAtual,
+  anoAtual,
 }: {
   lancamentos: LancamentoFinanceiro[]
   categorias: CategoriaFinanceira[]
   contas: ContaFinanceira[]
   empresas: Empresa[]
+  mesAtual?: string
+  anoAtual?: number
 }) {
   const [drawerAberto, setDrawerAberto] = useState(false)
   const [editando, setEditando] = useState<LancamentoFinanceiro | null>(null)
@@ -227,6 +231,8 @@ export default function TabelaLancamentos({
         contas={contas}
         empresas={empresas}
         lancamento={editando}
+        mesAtual={mesAtual}
+        anoAtual={anoAtual}
       />
     </>
   )
