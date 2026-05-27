@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual, temPermissao } from "./auth"
 import { parseNumeroForm } from "./parse-numero"
-import { MESES, type Mes } from "./data"
-import type {
-  TipoLancamento,
-  StatusLancamento,
-  TipoConta,
-  Periodicidade,
+import { type Mes } from "./data"
+import {
+  mesNumero,
+  type TipoLancamento,
+  type StatusLancamento,
+  type TipoConta,
+  type Periodicidade,
 } from "./financeiro"
 
 export interface ResultadoFinanceiro {
@@ -525,8 +526,12 @@ export async function materializarRecorrentesDoMes(
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, criados: 0, erro: "supabase_indisponivel" }
 
-  const mesNum = MESES.indexOf(mes) + 1
-  if (mesNum < 1) return { ok: false, criados: 0, erro: "Mes inválido." }
+  // mesNumero retorna o número do calendário (Abril=4, Maio=5, ...).
+  // Não confundir com MESES.indexOf(mes)+1 que dá o índice no array
+  // (Abril=1, Maio=2) — esse era o bug: queries filtravam por mês
+  // errado e nunca encontravam recorrentes elegíveis.
+  const mesNum = mesNumero(mes)
+  if (!mesNum || mesNum < 1) return { ok: false, criados: 0, erro: "Mes inválido." }
 
   const inicio = `${ano}-${String(mesNum).padStart(2, "0")}-01`
   const ultimoDia = new Date(ano, mesNum, 0).getDate()
