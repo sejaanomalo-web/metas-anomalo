@@ -494,6 +494,23 @@ export async function excluirRecorrenteAction(id: string): Promise<ResultadoFina
 // ============================================================
 
 /**
+ * Server action chamável do client (com auth). Wrapper sobre
+ * materializarRecorrentesDoMes que evita o round-trip HTTP via
+ * /api/financeiro/materializar (que dependia de cookie de sessão
+ * que o Service Worker às vezes intercepta/bloqueia).
+ *
+ * Os drawers de Lançamento e Recorrente chamam essa direto.
+ */
+export async function materializarMesAction(
+  mes: Mes,
+  ano: number
+): Promise<{ ok: boolean; criados: number; erro?: string }> {
+  const { erro } = await exigirPermissao()
+  if (erro) return { ok: false, criados: 0, erro }
+  return materializarRecorrentesDoMes(mes, ano)
+}
+
+/**
  * Gera os lancamentos previstos do mês/ano informado para todos os
  * recorrentes ativos. Idempotente: antes de inserir, verifica se já
  * existe lançamento com (recorrente_id, ano, mes). Chamado por cron

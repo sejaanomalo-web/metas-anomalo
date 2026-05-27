@@ -7,7 +7,9 @@ import {
   atualizarLancamentoAction,
   excluirLancamentoAction,
   salvarRecorrenteAction,
+  materializarMesAction,
 } from "@/lib/financeiro-actions"
+import { mesValido } from "@/lib/data"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
@@ -128,21 +130,21 @@ export default function LancamentoDrawer({
       return
     }
     // Materializa lançamentos do mês corrente pra aparecer já na lista.
+    // Chamada direta de server action (sem fetch HTTP) — antes tava
+    // dependendo de POST /api/financeiro/materializar e o cookie de
+    // sessão às vezes não chegava (PWA/SW intercepta).
     if (mesAtual && anoAtual) {
-      try {
-        const url = `/api/financeiro/materializar?mes=${encodeURIComponent(
-          mesAtual
-        )}&ano=${anoAtual}`
-        const resp = await fetch(url, { method: "POST" })
-        if (resp.ok) {
-          const data = (await resp.json()) as { criados: number }
-          setSucesso(
-            `Recorrente criado. ${data.criados} lançamento(s) gerado(s) pra ${mesAtual}/${anoAtual}.`
-          )
-        }
-      } catch {
-        // Não falha o fluxo — recorrente já foi criado. Materializa
-        // no próximo cron mensal ou no botão da aba Recorrentes.
+      const mesEnum = mesValido(mesAtual)
+      const matResult = await materializarMesAction(mesEnum, anoAtual)
+      if (matResult.ok) {
+        setSucesso(
+          `Recorrente criado. ${matResult.criados} lançamento(s) gerado(s) pra ${mesAtual}/${anoAtual}.`
+        )
+      } else if (matResult.erro) {
+        // Recorrente já salvou — só sinaliza problema de materialização.
+        setSucesso(
+          `Recorrente criado. (Materialização falhou: ${matResult.erro}.)`
+        )
       }
     }
     refreshUI()

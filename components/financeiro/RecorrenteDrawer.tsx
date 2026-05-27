@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation"
 import {
   salvarRecorrenteAction,
   excluirRecorrenteAction,
+  materializarMesAction,
 } from "@/lib/financeiro-actions"
+import { mesValido } from "@/lib/data"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
@@ -65,23 +67,16 @@ export default function RecorrenteDrawer({
       if (!r.ok) { setErro(r.erro ?? "Erro"); return }
 
       // Materializa lançamento do mês corrente pra aparecer imediatamente
-      // na lista — espelha o que LancamentoDrawer (toggle Recorrente) faz.
-      // Só na criação (não em edição: usuário pode estar só ajustando
-      // dia/valor e não quer um lançamento duplicado).
+      // na lista. Chamada direta de server action (sem fetch HTTP) —
+      // o endpoint exige cookie de sessão e o SW PWA bloqueava em
+      // certos casos. Server action herda contexto da sessão server.
       if (!editando && mesAtual && anoAtual) {
-        try {
-          const resp = await fetch(
-            `/api/financeiro/materializar?mes=${encodeURIComponent(mesAtual)}&ano=${anoAtual}`,
-            { method: "POST" }
+        const mesEnum = mesValido(mesAtual)
+        const matResult = await materializarMesAction(mesEnum, anoAtual)
+        if (matResult.ok && matResult.criados > 0) {
+          setSucesso(
+            `${matResult.criados} lançamento(s) previsto(s) gerado(s) pra ${mesAtual}/${anoAtual}.`
           )
-          if (resp.ok) {
-            const data = (await resp.json()) as { criados: number }
-            if (data.criados > 0) {
-              setSucesso(`${data.criados} lançamento(s) previsto(s) gerado(s) pra ${mesAtual}/${anoAtual}.`)
-            }
-          }
-        } catch {
-          // Recorrente criado, materialização opcional — cron mensal pega depois.
         }
       }
 

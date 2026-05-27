@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import RecorrenteDrawer from "./RecorrenteDrawer"
+import { materializarMesAction } from "@/lib/financeiro-actions"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
@@ -42,22 +43,20 @@ export default function ListaRecorrentes({
     setErro(null)
     setSucesso(null)
     startTransition(async () => {
-      const r = await fetch(
-        `/api/financeiro/materializar?mes=${encodeURIComponent(mesAtual)}&ano=${anoAtual}`,
-        { method: "POST" }
-      )
-      if (!r.ok) {
-        const txt = await r.text()
-        setErro(`Erro ${r.status}: ${txt}`)
+      // Chamada direta de server action (sem fetch HTTP) — mais
+      // confiável em PWA porque elimina dependência de cookie/SW.
+      const matResult = await materializarMesAction(mesAtual, anoAtual)
+      if (!matResult.ok) {
+        setErro(`Erro: ${matResult.erro ?? "falha desconhecida"}`)
         return
       }
-      const data = (await r.json()) as { criados: number }
       setSucesso(
-        data.criados === 0
+        matResult.criados === 0
           ? `Nenhum lançamento novo (todos já existem para ${mesAtual}/${anoAtual}).`
-          : `${data.criados} lançamento(s) criado(s) para ${mesAtual}/${anoAtual}.`
+          : `${matResult.criados} lançamento(s) criado(s) para ${mesAtual}/${anoAtual}.`
       )
       router.refresh()
+      setTimeout(() => window.location.reload(), 400)
     })
   }
 
