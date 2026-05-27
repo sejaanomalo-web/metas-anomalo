@@ -1,4 +1,4 @@
-import { getSupabase } from "./supabase"
+import { getSupabaseAdmin } from "./supabase"
 import { MESES, type Mes } from "./data"
 import { getResumoMensalPorEmpresa } from "./sentinela"
 
@@ -141,7 +141,7 @@ export async function listarCategorias(
   tipo?: TipoLancamento,
   ativasApenas = true
 ): Promise<CategoriaFinanceira[]> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return []
   let q = supabase
     .from("categoria_financeira")
@@ -159,7 +159,7 @@ export async function listarCategorias(
 }
 
 export async function listarContas(ativasApenas = true): Promise<ContaFinanceira[]> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return []
   let q = supabase
     .from("conta_financeira")
@@ -188,7 +188,7 @@ export interface FiltrosLancamento {
 export async function listarLancamentos(
   filtros: FiltrosLancamento = {}
 ): Promise<LancamentoFinanceiro[]> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return []
   let q = supabase
     .from("lancamento_financeiro")
@@ -220,7 +220,7 @@ export async function listarLancamentos(
 }
 
 export async function getLancamentoPorId(id: string): Promise<LancamentoFinanceiro | null> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return null
   const { data, error } = await supabase
     .from("lancamento_financeiro")
@@ -243,7 +243,7 @@ export async function getResumoFinanceiroMes(
   mes: Mes,
   ano: number
 ): Promise<ResumoFinanceiroMes> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   const base: ResumoFinanceiroMes = {
     mes,
     ano,
@@ -292,7 +292,7 @@ export async function getResumoFinanceiroMes(
  * data_pagamento posterior a data_saldo_inicial).
  */
 export async function getSaldoPorConta(): Promise<SaldoConta[]> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return []
   const contas = await listarContas(false) // inclui inativas pra mostrar saldo histórico
   if (contas.length === 0) return []
@@ -340,7 +340,7 @@ export async function getSaldoTotal(): Promise<number> {
 export async function getFluxoCaixaAnual(ano: number): Promise<
   { mes: Mes; receitas: number; despesas: number; resultado: number }[]
 > {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return MESES.map((mes) => ({ mes, receitas: 0, despesas: 0, resultado: 0 }))
   const { data, error } = await supabase
     .from("lancamento_financeiro")
@@ -379,7 +379,7 @@ export async function getFluxoCaixaAnual(ano: number): Promise<
  * por data. Usado no card "Próximos vencimentos" do overview.
  */
 export async function getProximosPrevistos(limit = 5): Promise<LancamentoFinanceiro[]> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return []
   const hoje = new Date().toISOString().slice(0, 10)
   const { data, error } = await supabase
@@ -398,7 +398,7 @@ export async function getProximosPrevistos(limit = 5): Promise<LancamentoFinance
 }
 
 export async function listarRecorrentes(ativosApenas = true): Promise<PagamentoRecorrente[]> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return []
   let q = supabase
     .from("pagamento_recorrente")
@@ -438,7 +438,7 @@ export interface DREMes {
 }
 
 export async function getDREMes(mes: Mes, ano: number): Promise<DREMes> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   const base: DREMes = {
     mes, ano,
     receitas: [], despesas: [],
@@ -525,7 +525,7 @@ export async function getConferenciaSentinela(
   mes: Mes,
   ano: number
 ): Promise<ConferenciaSentinela[]> {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   if (!supabase) return []
 
   const resumoMes = await getResumoMensalPorEmpresa(mes, ano, "pago")
