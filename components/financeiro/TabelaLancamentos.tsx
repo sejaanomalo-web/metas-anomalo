@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import LancamentoDrawer from "./LancamentoDrawer"
+import { marcarRealizadoAction } from "@/lib/financeiro-actions"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
@@ -42,11 +44,32 @@ export default function TabelaLancamentos({
   mesAtual?: string
   anoAtual?: number
 }) {
+  const router = useRouter()
+  const [pendingId, setPendingId] = useState<string | null>(null)
+  const [, startTransition] = useTransition()
   const [drawerAberto, setDrawerAberto] = useState(false)
   const [editando, setEditando] = useState<LancamentoFinanceiro | null>(null)
 
   const catById = new Map(categorias.map((c) => [c.id, c]))
   const contaById = new Map(contas.map((c) => [c.id, c]))
+
+  /** Marca um lançamento previsto como realizado em 1 clique.
+   *  Usa a data de hoje como data_pagamento. Pra escolher outra
+   *  data, abrir Editar. */
+  function marcarPago(id: string) {
+    setPendingId(id)
+    const hoje = new Date().toISOString().slice(0, 10)
+    startTransition(async () => {
+      const r = await marcarRealizadoAction(id, hoje)
+      setPendingId(null)
+      if (!r.ok) {
+        alert(`Erro: ${r.erro ?? "falha"}`)
+        return
+      }
+      router.refresh()
+      setTimeout(() => window.location.reload(), 250)
+    })
+  }
 
   function abrirNovo() {
     setEditando(null)
@@ -199,21 +222,44 @@ export default function TabelaLancamentos({
                         </span>
                       </Td>
                       <Td align="right">
-                        <button
-                          type="button"
-                          onClick={() => editar(l)}
-                          style={{
-                            background: "transparent",
-                            border: "1px solid var(--border)",
-                            borderRadius: 2,
-                            padding: "4px 10px",
-                            cursor: "pointer",
-                            fontSize: 12,
-                            color: "var(--foreground)",
-                          }}
-                        >
-                          Editar
-                        </button>
+                        <div style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
+                          {l.status === "previsto" && (
+                            <button
+                              type="button"
+                              onClick={() => marcarPago(l.id)}
+                              disabled={pendingId === l.id}
+                              title="Marcar como pago (data de hoje)"
+                              style={{
+                                background: "transparent",
+                                border: "1px solid var(--success)",
+                                borderRadius: 2,
+                                padding: "4px 10px",
+                                cursor: pendingId === l.id ? "wait" : "pointer",
+                                fontSize: 12,
+                                color: "var(--success)",
+                                opacity: pendingId === l.id ? 0.5 : 1,
+                                fontWeight: 500,
+                              }}
+                            >
+                              {pendingId === l.id ? "..." : "Marcar pago"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => editar(l)}
+                            style={{
+                              background: "transparent",
+                              border: "1px solid var(--border)",
+                              borderRadius: 2,
+                              padding: "4px 10px",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              color: "var(--foreground)",
+                            }}
+                          >
+                            Editar
+                          </button>
+                        </div>
                       </Td>
                     </tr>
                   )

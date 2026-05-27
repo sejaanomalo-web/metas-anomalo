@@ -57,6 +57,19 @@ export default function LancamentoDrawer({
   const [status, setStatus] = useState<StatusLancamento>(
     lancamento?.status ?? "realizado"
   )
+  const [dataPagamento, setDataPagamento] = useState<string>(
+    lancamento?.data_pagamento ?? ""
+  )
+
+  /** Auto-preenche data_pagamento ao marcar como realizado se estiver
+   *  vazia — evita fricção de "lançamento realizado precisa de data
+   *  de pagamento" em troca rápida do status. */
+  function trocarStatus(novoStatus: StatusLancamento) {
+    setStatus(novoStatus)
+    if (novoStatus === "realizado" && !dataPagamento) {
+      setDataPagamento(new Date().toISOString().slice(0, 10))
+    }
+  }
   const editando = !!lancamento
   const [frequencia, setFrequencia] = useState<Frequencia>(
     editando && lancamento?.recorrente_id ? "recorrente" : "variavel"
@@ -304,8 +317,10 @@ export default function LancamentoDrawer({
             </div>
           )}
 
-          {/* === BLOCO VARIÁVEL === */}
-          {frequencia === "variavel" && (
+          {/* === Status + datas: sempre visível em criação variável OU
+              em qualquer edição (mesmo lançamento que veio de recorrente,
+              o usuário precisa poder marcar como pago aqui) === */}
+          {(frequencia === "variavel" || editando) && (
             <>
               <div>
                 <Label>Status</Label>
@@ -314,7 +329,7 @@ export default function LancamentoDrawer({
                     <ToggleBtn
                       key={s}
                       ativo={status === s}
-                      onClick={() => setStatus(s)}
+                      onClick={() => trocarStatus(s)}
                       label={s.charAt(0).toUpperCase() + s.slice(1)}
                       flex
                     />
@@ -345,7 +360,8 @@ export default function LancamentoDrawer({
                 <input
                   type="date"
                   name="data_pagamento"
-                  defaultValue={lancamento?.data_pagamento ?? ""}
+                  value={dataPagamento}
+                  onChange={(e) => setDataPagamento(e.target.value)}
                   className="glass-input"
                   style={{ width: "100%" }}
                 />
