@@ -150,30 +150,40 @@ export default async function RelatoriosPage({
         {projecao.length === 0 ? (
           <p style={{ color: "var(--muted-foreground)" }}>Sem meses suficientes para projetar.</p>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                <Th>Mês</Th>
-                <Th align="right">Receita projetada</Th>
-                <Th align="right">Despesa projetada</Th>
-                <Th align="right">Resultado</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {projecao.map((p) => (
-                <tr key={p.mes} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <Td>{p.mes}</Td>
-                  <Td align="right" mono>{formatBRL(p.receitas)}</Td>
-                  <Td align="right" mono>{formatBRL(p.despesas)}</Td>
-                  <Td align="right" mono>
-                    <span style={{ color: p.resultado >= 0 ? "var(--success)" : "var(--destructive)", fontWeight: 600 }}>
-                      {formatBRL(p.resultado)}
-                    </span>
-                  </Td>
+          <div style={{ overflowX: "auto", marginLeft: -24, marginRight: -24 }}>
+            <table
+              style={{
+                width: "100%",
+                minWidth: 480,
+                borderCollapse: "collapse",
+                marginTop: 8,
+                fontSize: 13,
+              }}
+            >
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  <Th>Mês</Th>
+                  <Th align="right">Receita projetada</Th>
+                  <Th align="right">Despesa projetada</Th>
+                  <Th align="right">Resultado</Th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {projecao.map((p) => (
+                  <tr key={p.mes} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <Td>{p.mes}</Td>
+                    <Td align="right" mono>{formatBRL(p.receitas)}</Td>
+                    <Td align="right" mono>{formatBRL(p.despesas)}</Td>
+                    <Td align="right" mono>
+                      <span style={{ color: p.resultado >= 0 ? "var(--success)" : "var(--destructive)", fontWeight: 600 }}>
+                        {formatBRL(p.resultado)}
+                      </span>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
