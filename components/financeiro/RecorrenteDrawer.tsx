@@ -45,6 +45,9 @@ export default function RecorrenteDrawer({
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>(
     recorrente?.periodicidade ?? "mensal"
   )
+  const [statusPadrao, setStatusPadrao] = useState<"previsto" | "realizado">(
+    recorrente?.status_padrao ?? "previsto"
+  )
 
   if (!aberto) return null
   const editando = !!recorrente
@@ -61,6 +64,7 @@ export default function RecorrenteDrawer({
     setSucesso(null)
     fd.set("tipo", tipo)
     fd.set("periodicidade", periodicidade)
+    fd.set("status_padrao", statusPadrao)
     if (editando) fd.set("id", recorrente!.id)
     startTransition(async () => {
       const r = await salvarRecorrenteAction(fd)
@@ -184,6 +188,32 @@ export default function RecorrenteDrawer({
                 Periodicidade {periodicidade} não materializa automaticamente no MVP — só mensal.
               </p>
             )}
+          </div>
+
+          <div>
+            <Label>Status ao materializar</Label>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              {(["previsto", "realizado"] as const).map((s) => (
+                <button
+                  key={s} type="button" onClick={() => setStatusPadrao(s)}
+                  style={{
+                    flex: 1, padding: "10px", borderRadius: 2,
+                    border: statusPadrao === s ? "1px solid var(--accent)" : "1px solid var(--border)",
+                    background: statusPadrao === s ? "rgba(201,149,58,0.10)" : "transparent",
+                    color: statusPadrao === s ? "var(--accent)" : "var(--foreground)",
+                    fontWeight: 500, fontSize: 12,
+                    cursor: "pointer", textTransform: "capitalize",
+                  }}
+                >
+                  {s === "realizado" ? "Realizado (pago)" : "Previsto (em aberto)"}
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 6, lineHeight: 1.4 }}>
+              {statusPadrao === "realizado"
+                ? "Lançamentos materializados nascem como pagos — entram nos KPIs de receitas/despesas do mês imediatamente."
+                : "Lançamentos materializados aparecem em \"Próximos vencimentos\" até serem marcados como pagos manualmente."}
+            </p>
           </div>
 
           {periodicidade === "mensal" && (

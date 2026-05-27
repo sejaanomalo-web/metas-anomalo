@@ -440,6 +440,9 @@ export async function salvarRecorrenteAction(
   const conta_id = String(formData.get("conta_id") ?? "").trim() || null
   const observacoes = String(formData.get("observacoes") ?? "").trim() || null
   const ativo = formData.get("ativo") === "on"
+  const statusPadraoRaw = String(formData.get("status_padrao") ?? "previsto")
+  const status_padrao: "previsto" | "realizado" =
+    statusPadraoRaw === "realizado" ? "realizado" : "previsto"
 
   const payload = {
     nome,
@@ -453,6 +456,7 @@ export async function salvarRecorrenteAction(
     fim,
     ativo,
     observacoes,
+    status_padrao,
   }
 
   if (id) {
@@ -540,7 +544,7 @@ export async function materializarRecorrentesDoMes(
   // 1. Recorrentes ativos que cobrem o mês alvo.
   const { data: recs } = await supabase
     .from("pagamento_recorrente")
-    .select("id, tipo, valor, categoria_id, conta_id, periodicidade, dia_vencimento, inicio, fim, nome")
+    .select("id, tipo, valor, categoria_id, conta_id, periodicidade, dia_vencimento, inicio, fim, nome, status_padrao")
     .eq("ativo", true)
     .lte("inicio", fim)
     .or(`fim.is.null,fim.gte.${inicio}`)
@@ -560,6 +564,7 @@ export async function materializarRecorrentesDoMes(
     inicio: string
     fim: string | null
     nome: string
+    status_padrao: "previsto" | "realizado"
   }[]) {
     // Só periodicidade=mensal entra no MVP (anual/semanal viram refinamento depois).
     if (rec.periodicidade !== "mensal") continue
@@ -580,16 +585,22 @@ export async function materializarRecorrentesDoMes(
     const diaEfetivo = Math.min(rec.dia_vencimento, ultimoDia)
     const dataLanc = `${ano}-${String(mesNum).padStart(2, "0")}-${String(diaEfetivo).padStart(2, "0")}`
 
+    // status_padrao=realizado → também seta data_pagamento (regra
+    // da action: realizado exige data_pagamento). Usa a própria
+    // data do vencimento como aproximação — user pode editar depois.
+    const statusInsert = rec.status_padrao ?? "previsto"
+    const dataPagamentoInsert = statusInsert === "realizado" ? dataLanc : null
+
     const { error: errInsert } = await supabase.from("lancamento_financeiro").insert({
       data: dataLanc,
-      data_pagamento: null,
+      data_pagamento: dataPagamentoInsert,
       tipo: rec.tipo,
       valor: rec.valor,
       categoria_id: rec.categoria_id,
       conta_id: rec.conta_id,
       descricao: rec.nome,
       recorrente_id: rec.id,
-      status: "previsto",
+      status: statusInsert,
     })
 
     if (errInsert) {

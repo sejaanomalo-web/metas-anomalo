@@ -64,6 +64,10 @@ export interface PagamentoRecorrente {
   ativo: boolean
   ultimo_lancamento_gerado: string | null
   observacoes: string | null
+  /** Status com que o lançamento nasce ao materializar:
+   *  - 'realizado' contabiliza no KPI do mês imediatamente
+   *  - 'previsto' só aparece em "Próximos vencimentos" */
+  status_padrao: "previsto" | "realizado"
 }
 
 export interface MetaFinanceira {
@@ -403,7 +407,7 @@ export async function listarRecorrentes(ativosApenas = true): Promise<PagamentoR
   let q = supabase
     .from("pagamento_recorrente")
     .select(
-      "id, nome, tipo, valor, categoria_id, conta_id, periodicidade, dia_vencimento, inicio, fim, ativo, ultimo_lancamento_gerado, observacoes"
+      "id, nome, tipo, valor, categoria_id, conta_id, periodicidade, dia_vencimento, inicio, fim, ativo, ultimo_lancamento_gerado, observacoes, status_padrao"
     )
     .order("nome")
   if (ativosApenas) q = q.eq("ativo", true)

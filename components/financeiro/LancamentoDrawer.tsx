@@ -62,6 +62,7 @@ export default function LancamentoDrawer({
     editando && lancamento?.recorrente_id ? "recorrente" : "variavel"
   )
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>("mensal")
+  const [statusPadraoRec, setStatusPadraoRec] = useState<"previsto" | "realizado">("previsto")
 
   // Selects controlled — pra pré-selecionar primeira opção válida e
   // reagir a troca de tipo (categoria muda lista; resetamos seleção
@@ -124,6 +125,7 @@ export default function LancamentoDrawer({
     fd.set("tipo", tipo)
     fd.set("periodicidade", periodicidade)
     fd.set("ativo", "on")
+    fd.set("status_padrao", statusPadraoRec)
     const r = await salvarRecorrenteAction(fd)
     if (!r.ok) {
       setErro(r.erro ?? "Erro ao criar recorrente.")
@@ -367,6 +369,26 @@ export default function LancamentoDrawer({
                     />
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <Label>Status ao materializar</Label>
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  {(["previsto", "realizado"] as const).map((s) => (
+                    <ToggleBtn
+                      key={s}
+                      ativo={statusPadraoRec === s}
+                      onClick={() => setStatusPadraoRec(s)}
+                      label={s === "realizado" ? "Realizado (pago)" : "Previsto (em aberto)"}
+                      flex
+                    />
+                  ))}
+                </div>
+                <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6, lineHeight: 1.4 }}>
+                  {statusPadraoRec === "realizado"
+                    ? "Lançamentos nascem como pagos — entram nos KPIs do mês imediatamente."
+                    : 'Lançamentos aparecem em "Próximos vencimentos" até serem marcados como pagos.'}
+                </p>
               </div>
 
               {periodicidade === "mensal" && (
