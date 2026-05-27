@@ -1,5 +1,6 @@
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
+import BotoesExportarRelatorio from "@/components/financeiro/BotoesExportarRelatorio"
 import { mesValido, anoValido, formatBRL, formatNumero, MESES, type Mes } from "@/lib/data"
 import { getDREMes, getFluxoCaixaAnual } from "@/lib/financeiro"
 import { requererPermissao } from "@/lib/auth"
@@ -68,6 +69,19 @@ export default async function RelatoriosPage({
       </div>
 
       <FinanceiroNav mes={mes} ano={ano} />
+
+      <div
+        className="no-print"
+        style={{ display: "flex", justifyContent: "flex-end" }}
+      >
+        <BotoesExportarRelatorio
+          dre={dre}
+          fluxo={fluxo}
+          projecao={projecao}
+          mes={mes}
+          ano={ano}
+        />
+      </div>
 
       {/* DRE simplificado */}
       <section className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 16, alignItems: "start" }}>

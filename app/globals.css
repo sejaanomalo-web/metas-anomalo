@@ -1103,3 +1103,102 @@ table {
   box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.10);
   flex-shrink: 0;
 }
+
+/* ============================================================
+ * Print — usado pelo botão "Exportar PDF" do /financeiro/relatorios.
+ * window.print() abre o diálogo nativo; o user escolhe "Salvar como
+ * PDF" como destino. Aqui forçamos fundo branco, texto preto, tudo
+ * legível em papel A4, escondendo o que não deve sair impresso.
+ * ============================================================ */
+@media print {
+  /* Esconde sidebar, sino, header de navegação, botões interativos */
+  .app-rail,
+  .app-main > header,
+  .app-mobile-trigger,
+  .app-mobile-backdrop,
+  .sino-trigger,
+  .painel-notif,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Canvas branco com tinta preta — economiza toner e fica legível. */
+  html,
+  body,
+  .app-main,
+  .glass,
+  .glass-header {
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border-color: #d5d5d5 !important;
+  }
+
+  /* Remove offset da sidebar (rail sumiu, conteúdo vai pra margem 0) */
+  .app-main {
+    margin-left: 0 !important;
+    padding: 16mm !important;
+  }
+
+  /* Cards viram blocos com hairline preto */
+  .glass {
+    border: 1px solid #d5d5d5 !important;
+    border-radius: 8px !important;
+    page-break-inside: avoid;
+  }
+
+  /* Texto secundário — preto com leve cinza */
+  [style*="var(--text-3)"],
+  [style*="var(--muted-foreground)"] {
+    color: #555 !important;
+  }
+
+  /* Texto principal */
+  h1, h2, h3, h4, h5, h6,
+  p, span, td, th, div {
+    color: #000 !important;
+  }
+
+  /* Cores semânticas — preserva success/destructive porque o leitor
+   * precisa ver positivo vs negativo no DRE/projeção */
+  [style*="var(--success)"],
+  [style*="var(--accent)"] {
+    color: #006837 !important; /* verde escuro impresso */
+  }
+  [style*="var(--destructive)"],
+  [style*="var(--danger)"] {
+    color: #b3261e !important; /* vermelho escuro impresso */
+  }
+
+  /* Quebra de página: tente manter cada seção do relatório junta */
+  section {
+    page-break-inside: avoid;
+  }
+
+  /* Tabela: bordas finas, sem zebra */
+  table {
+    border-collapse: collapse !important;
+  }
+  th, td {
+    border-color: #d5d5d5 !important;
+  }
+
+  /* Gold-divider some na impressão (decorativo) */
+  .gold-divider {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* Force layout fixo — algumas tabelas têm minWidth grande e geram
+   * scroll horizontal na tela; na impressão queremos elas dimensionadas
+   * pra largura do papel. */
+  table {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  div[style*="overflowX"] {
+    overflow: visible !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+}
