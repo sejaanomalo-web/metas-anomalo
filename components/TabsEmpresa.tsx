@@ -35,9 +35,12 @@ export default function TabsEmpresa({
   if (origem && origem !== "pago") qs.set("origem", origem)
   const visaoHref = `/dashboard/${slug}?${qs.toString()}`
   const trafegoHref = `/dashboard/${slug}/trafego?${qs.toString()}`
+  const clientesHref = `/dashboard/${slug}/clientes?${qs.toString()}`
 
   const naVisao = pathname === `/dashboard/${slug}`
   const noTrafego = pathname === `/dashboard/${slug}/trafego`
+  // "Tráfego por Cliente" ativa em qualquer rota /clientes (lista ou detalhe).
+  const nosClientes = pathname.startsWith(`/dashboard/${slug}/clientes`)
 
   return (
     <div
@@ -53,6 +56,10 @@ export default function TabsEmpresa({
       <TabLink href={trafegoHref} ativa={noTrafego} destaque>
         <BolinhaLive ativa={noTrafego} />
         Tráfego pago
+      </TabLink>
+      <TabLink href={clientesHref} ativa={nosClientes} destaque>
+        <BolinhaLive ativa={nosClientes} />
+        Tráfego por Cliente
       </TabLink>
     </div>
   )
