@@ -5,10 +5,16 @@ import TabsEmpresa from "@/components/TabsEmpresa"
 import TrafegoRealtime from "@/components/TrafegoRealtime"
 import PainelTrafego from "@/components/trafego/PainelTrafego"
 import TagStatusCampanha from "@/components/trafego/TagStatusCampanha"
+import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
 import { requererPermissao } from "@/lib/auth"
 import { MES_NUM, anoValido, diasNoMes, mesValido } from "@/lib/data"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
-import { resumirMesSentinela } from "@/lib/sentinela"
+import {
+  getUltimoLogSentinela,
+  proximaExecucao,
+  resumirMesSentinela,
+  statusSentinela,
+} from "@/lib/sentinela"
 import {
   getClientePorSlug,
   getDiasSentinelaDoCliente,
@@ -50,12 +56,15 @@ export default async function ClienteTrafegoPage({
   const inicio = `${ano}-${mesNum}-01`
   const fim = `${ano}-${mesNum}-${ultimoDia}`
 
-  const [dias, linhas] = await Promise.all([
+  const [dias, linhas, ultimoLog] = await Promise.all([
     getDiasSentinelaDoCliente(cliente, inicio, fim),
     getLinhasDoMesCliente(cliente, inicio, fim),
+    getUltimoLogSentinela(),
   ])
   const resumo = resumirMesSentinela(dias)
   const nomeExibido = clienteDisplayName(cliente)
+  const stat = statusSentinela(ultimoLog)
+  const prox = proximaExecucao()
 
   return (
     <>
@@ -94,8 +103,23 @@ export default async function ClienteTrafegoPage({
             <code style={{ color: "var(--accent)", fontSize: 12 }}>{cliente.campaign_filter}</code>
           </p>
 
-          <div style={{ marginTop: 18 }}>
+          <div
+            style={{
+              marginTop: 18,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
             <TabsEmpresa slug={empresa.slug} mes={mes} ano={ano} />
+            <BadgeStatusSentinela
+              statusCor={stat.cor}
+              rotulo={stat.rotulo}
+              ultimaExecucao={ultimoLog?.data_execucao ?? null}
+              proximaLabelCompleto={prox.labelCompleto}
+            />
           </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>

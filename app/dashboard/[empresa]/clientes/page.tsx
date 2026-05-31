@@ -5,6 +5,7 @@ import TabsEmpresa from "@/components/TabsEmpresa"
 import TrafegoRealtime from "@/components/TrafegoRealtime"
 import CardClienteTrafego from "@/components/trafego/CardClienteTrafego"
 import GerenciadorClientes from "@/components/trafego/GerenciadorClientes"
+import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
 import { requererPermissao } from "@/lib/auth"
 import {
   MES_NUM,
@@ -19,6 +20,11 @@ import {
   getResumoTodosClientesMes,
 } from "@/lib/clientes"
 import { listarTokensDaEmpresa } from "@/lib/clientes-actions"
+import {
+  getUltimoLogSentinela,
+  proximaExecucao,
+  statusSentinela,
+} from "@/lib/sentinela"
 
 export const dynamic = "force-dynamic"
 
@@ -50,11 +56,14 @@ export default async function ClientesPage({
   const inicio = `${ano}-${mesNum}-01`
   const fim = `${ano}-${mesNum}-${ultimoDia}`
 
-  const [resumos, clientes, tokens] = await Promise.all([
+  const [resumos, clientes, tokens, ultimoLog] = await Promise.all([
     getResumoTodosClientesMes(empresa.nome, inicio, fim),
     listarClientesDaEmpresa(empresa.nome, false),
     listarTokensDaEmpresa(empresa.nome),
+    getUltimoLogSentinela(),
   ])
+  const stat = statusSentinela(ultimoLog)
+  const prox = proximaExecucao()
 
   return (
     <>
@@ -98,11 +107,19 @@ export default async function ClientesPage({
             }}
           >
             <TabsEmpresa slug={empresa.slug} mes={mes} ano={ano} />
-            <GerenciadorClientes
-              empresaNome={empresa.nome}
-              clientes={clientes}
-              tokens={tokens}
-            />
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+              <BadgeStatusSentinela
+                statusCor={stat.cor}
+                rotulo={stat.rotulo}
+                ultimaExecucao={ultimoLog?.data_execucao ?? null}
+                proximaLabelCompleto={prox.labelCompleto}
+              />
+              <GerenciadorClientes
+                empresaNome={empresa.nome}
+                clientes={clientes}
+                tokens={tokens}
+              />
+            </div>
           </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>

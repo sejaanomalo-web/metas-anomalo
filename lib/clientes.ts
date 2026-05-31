@@ -262,82 +262,57 @@ export async function getLinhasDoMesCliente(
 }
 
 // ============================================================
-// Derivação de status (modo origem)
+// Derivação de status (baseada em CONEXÃO, não em dados)
 // ============================================================
 
-/** Janela em dias pra avaliar "sem atividade recente". */
-const JANELA_DIAS_INATIVO = 7
-
-interface LinhaStatus {
-  data: string
-  investimento_real: number | null
-  leads_real: number | null
+/** Derivação canônica do status. Lógica:
+ *    desativado   → cliente foi desligado manualmente (cliente.ativo=false)
+ *    ativo        → cliente conectado (tem campaign_filter, OU tem
+ *                   empresa_origem_nome com tokens_meta.ativo=true)
+ *    sem_conexao  → cliente ativo no sistema mas sem conector funcional
+ *                   (placeholder sem modo, OU origem com token off)
+ *  Status reflete a configuração da CONTA — independente de já ter
+ *  pingado dado em dados_diarios_log. Assim que pingar, vira ativo
+ *  automaticamente porque a conexão já estava configurada. */
+function derivarStatusPorConexao(
+  cliente: ClienteTrafego,
+  origensComTokenAtivo: Set<string>
+): StatusCampanha {
+  if (!cliente.ativo) return "desativado"
+  if (cliente.campaign_filter) return "ativo"
+  if (cliente.empresa_origem_nome) {
+    return origensComTokenAtivo.has(cliente.empresa_origem_nome)
+      ? "ativo"
+      : "sem_conexao"
+  }
+  // Placeholder: sem modo configurado
+  return "sem_conexao"
 }
 
-/** Deriva status do cliente em modo origem a partir das últimas N
- *  linhas de dados_diarios_log[empresa=empresa_origem_nome]:
- *    sem_conexao → não há linha em até JANELA_DIAS_INATIVO dias
- *    desativado  → todas as linhas da janela têm investimento_real=0
- *    ativo       → caso contrário
- *  Status é cosmético — não bloqueia leitura. */
-function derivarStatusModoOrigem(linhas: LinhaStatus[]): StatusCampanha {
-  if (linhas.length === 0) return "sem_conexao"
-  const algumGasto = linhas.some(
-    (l) => Number(l.investimento_real ?? 0) > 0
-  )
-  return algumGasto ? "ativo" : "desativado"
+/** Carrega lista de empresas com tokens_meta.ativo=true. Usado pra
+ *  decidir status do modo origem ("conectado" ⇔ token ativo). */
+async function getOrigensComTokenAtivo(): Promise<Set<string>> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return new Set()
+  const { data, error } = await supabase
+    .from("tokens_meta")
+    .select("empresa")
+    .eq("ativo", true)
+  if (error) {
+    console.error("[clientes] getOrigensComTokenAtivo error", error.message)
+    return new Set()
+  }
+  return new Set(((data ?? []) as { empresa: string }[]).map((r) => r.empresa))
 }
 
-/** Deriva status SEMPRE a partir dos DADOS (dados_diarios_log /
- *  dados_diarios_cliente) na janela JANELA_DIAS_INATIVO. Garante que
- *  card e página interna mostrem o MESMO status — ambos puxam daqui.
- *  Placeholder (sem origem nem filter) usa o flag manual em
- *  cliente_trafego.status_campanhas (não há dados pra inferir). */
+/** Wrapper async pra usar em pontos isolados (página individual do
+ *  cliente). Em batch (getResumoTodosClientesMes), usa-se a versão
+ *  síncrona derivarStatusPorConexao com o Set pré-carregado uma vez. */
 export async function derivarStatusFresh(
   cliente: ClienteTrafego
 ): Promise<StatusCampanha> {
-  const supabase = getSupabaseAdmin()
-  if (!supabase) return cliente.status_campanhas
-
-  const hoje = new Date()
-  const inicio = new Date(hoje)
-  inicio.setUTCDate(inicio.getUTCDate() - JANELA_DIAS_INATIVO)
-  const inicioISO = inicio.toISOString().slice(0, 10)
-  const hojeISO = hoje.toISOString().slice(0, 10)
-
-  if (cliente.empresa_origem_nome) {
-    const { data, error } = await supabase
-      .from("dados_diarios_log")
-      .select("data, investimento_real, leads_real")
-      .eq("empresa", cliente.empresa_origem_nome)
-      .eq("origem", "pago")
-      .gte("data", inicioISO)
-      .lte("data", hojeISO)
-    if (error) {
-      console.error("[clientes] derivarStatusFresh origem error", error.message)
-      return cliente.status_campanhas
-    }
-    return derivarStatusModoOrigem((data ?? []) as LinhaStatus[])
-  }
-
-  if (cliente.campaign_filter) {
-    const { data, error } = await supabase
-      .from("dados_diarios_cliente")
-      .select("data, investimento_real, leads_real")
-      .eq("empresa_nome", cliente.empresa_nome)
-      .eq("cliente_nome", cliente.nome)
-      .eq("origem", "pago")
-      .gte("data", inicioISO)
-      .lte("data", hojeISO)
-    if (error) {
-      console.error("[clientes] derivarStatusFresh regex error", error.message)
-      return cliente.status_campanhas
-    }
-    return derivarStatusModoOrigem((data ?? []) as LinhaStatus[])
-  }
-
-  // Placeholder: sem modo, fica com o flag manual
-  return cliente.status_campanhas
+  const origens = await getOrigensComTokenAtivo()
+  return derivarStatusPorConexao(cliente, origens)
 }
 
 /** Resumo mensal de TODOS os clientes de uma empresa. Roteia por
@@ -368,12 +343,6 @@ export async function getResumoTodosClientesMes(
     (c) => !c.empresa_origem_nome && c.campaign_filter
   )
 
-  // Janela pra status: últimos JANELA_DIAS_INATIVO dias antes de hoje.
-  const hojeISO = new Date().toISOString().slice(0, 10)
-  const janelaInicio = new Date()
-  janelaInicio.setUTCDate(janelaInicio.getUTCDate() - JANELA_DIAS_INATIVO)
-  const janelaInicioISO = janelaInicio.toISOString().slice(0, 10)
-
   type LogRow = {
     empresa: string
     data: string
@@ -387,7 +356,7 @@ export async function getResumoTodosClientesMes(
     leads_real: number | null
   }
 
-  const [logRes, cliRes, statusOrigemRes, statusRegexRes] = await Promise.all([
+  const [logRes, cliRes, origens] = await Promise.all([
     empresasOrigem.length > 0
       ? supabase
           .from("dados_diarios_log")
@@ -406,26 +375,7 @@ export async function getResumoTodosClientesMes(
           .gte("data", inicio)
           .lte("data", fim)
       : Promise.resolve({ data: [] as ClienteRow[], error: null }),
-    // Janela 7d pra derivar status do modo origem.
-    empresasOrigem.length > 0
-      ? supabase
-          .from("dados_diarios_log")
-          .select("empresa, data, investimento_real, leads_real")
-          .in("empresa", empresasOrigem)
-          .eq("origem", "pago")
-          .gte("data", janelaInicioISO)
-          .lte("data", hojeISO)
-      : Promise.resolve({ data: [] as LogRow[], error: null }),
-    // Janela 7d pra derivar status do modo regex.
-    temClienteRegex
-      ? supabase
-          .from("dados_diarios_cliente")
-          .select("cliente_nome, data, investimento_real, leads_real")
-          .eq("empresa_nome", empresaNome)
-          .eq("origem", "pago")
-          .gte("data", janelaInicioISO)
-          .lte("data", hojeISO)
-      : Promise.resolve({ data: [] as ClienteRow[], error: null }),
+    getOrigensComTokenAtivo(),
   ])
 
   // Agrega por empresa-origem (modo origem)
@@ -438,25 +388,6 @@ export async function getResumoTodosClientesMes(
     aggOrigem.set(r.empresa, e)
   }
 
-  // Status fresco por empresa-origem (janela 7d)
-  const statusOrigem = new Map<string, StatusCampanha>()
-  const linhasJanelaPorEmpresa = new Map<string, LinhaStatus[]>()
-  for (const r of ((statusOrigemRes.data ?? []) as LogRow[])) {
-    const arr = linhasJanelaPorEmpresa.get(r.empresa) ?? []
-    arr.push({
-      data: r.data,
-      investimento_real: r.investimento_real,
-      leads_real: r.leads_real,
-    })
-    linhasJanelaPorEmpresa.set(r.empresa, arr)
-  }
-  for (const empresa of empresasOrigem) {
-    statusOrigem.set(
-      empresa,
-      derivarStatusModoOrigem(linhasJanelaPorEmpresa.get(empresa) ?? [])
-    )
-  }
-
   // Agrega por cliente_nome (modo regex)
   const aggRegex = new Map<string, { inv: number; leads: number; dias: Set<string> }>()
   for (const r of ((cliRes.data ?? []) as ClienteRow[])) {
@@ -467,44 +398,19 @@ export async function getResumoTodosClientesMes(
     aggRegex.set(r.cliente_nome, e)
   }
 
-  // Status fresco por cliente regex (janela 7d)
-  const statusRegex = new Map<string, StatusCampanha>()
-  const linhasJanelaPorCliente = new Map<string, LinhaStatus[]>()
-  for (const r of ((statusRegexRes.data ?? []) as ClienteRow[])) {
-    const arr = linhasJanelaPorCliente.get(r.cliente_nome) ?? []
-    arr.push({
-      data: r.data,
-      investimento_real: r.investimento_real,
-      leads_real: r.leads_real,
-    })
-    linhasJanelaPorCliente.set(r.cliente_nome, arr)
-  }
-
   return clientes.map((cliente) => {
-    // Roteamento por modo
+    // Roteamento por modo pros KPIs (investimento/leads/cpl/dias).
     const e = cliente.empresa_origem_nome
       ? aggOrigem.get(cliente.empresa_origem_nome) ?? { inv: 0, leads: 0, dias: new Set<string>() }
       : cliente.campaign_filter
       ? aggRegex.get(cliente.nome) ?? { inv: 0, leads: 0, dias: new Set<string>() }
       : { inv: 0, leads: 0, dias: new Set<string>() }
 
-    // Status: deriva fresco sempre que houver modo (origem ou regex);
-    // placeholder usa o flag manual gravado pelo Sentinela.
-    let statusFresh: StatusCampanha
-    if (cliente.empresa_origem_nome) {
-      statusFresh = statusOrigem.get(cliente.empresa_origem_nome) ?? "sem_conexao"
-    } else if (cliente.campaign_filter) {
-      const linhas = linhasJanelaPorCliente.get(cliente.nome)
-      if (!statusRegex.has(cliente.nome)) {
-        statusRegex.set(cliente.nome, derivarStatusModoOrigem(linhas ?? []))
-      }
-      statusFresh = statusRegex.get(cliente.nome) as StatusCampanha
-    } else {
-      statusFresh = cliente.status_campanhas
-    }
-
     return {
-      cliente: { ...cliente, status_campanhas: statusFresh },
+      cliente: {
+        ...cliente,
+        status_campanhas: derivarStatusPorConexao(cliente, origens),
+      },
       investimento: e.inv,
       leads: e.leads,
       cpl: e.leads > 0 ? e.inv / e.leads : null,
