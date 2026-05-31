@@ -100,7 +100,33 @@ export async function getClientePorSlug(
     console.error("[clientes] getClientePorSlug error", error.message)
     return null
   }
-  return (data ?? null) as ClienteTrafego | null
+  if (!data) return null
+  const cliente = data as ClienteTrafego
+  // Derivação fresh: tag deve refletir DADOS (dados_diarios_log /
+  // dados_diarios_cliente), não o flag manual em cliente_trafego.
+  // Sincroniza card × página interna — mesmo critério em ambos.
+  const statusFresh = await derivarStatusFresh(cliente)
+  return { ...cliente, status_campanhas: statusFresh }
+}
+
+/** Lista DISTINCT de empresas que têm pelo menos 1 cliente ativo
+ *  com algum modo configurado (origem ou regex). Usado pelo overview
+ *  de tráfego pra incluir agências que não têm token próprio mas
+ *  delegam aos clientes-folha (ex.: Assessoria Sun, Assessoria Aton). */
+export async function getEmpresasComClientesTrafego(): Promise<string[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("cliente_trafego")
+    .select("empresa_nome")
+    .eq("ativo", true)
+  if (error) {
+    console.error("[clientes] getEmpresasComClientesTrafego error", error.message)
+    return []
+  }
+  return Array.from(
+    new Set(((data ?? []) as { empresa_nome: string }[]).map((r) => r.empresa_nome))
+  )
 }
 
 // ============================================================
@@ -262,6 +288,58 @@ function derivarStatusModoOrigem(linhas: LinhaStatus[]): StatusCampanha {
   return algumGasto ? "ativo" : "desativado"
 }
 
+/** Deriva status SEMPRE a partir dos DADOS (dados_diarios_log /
+ *  dados_diarios_cliente) na janela JANELA_DIAS_INATIVO. Garante que
+ *  card e página interna mostrem o MESMO status — ambos puxam daqui.
+ *  Placeholder (sem origem nem filter) usa o flag manual em
+ *  cliente_trafego.status_campanhas (não há dados pra inferir). */
+export async function derivarStatusFresh(
+  cliente: ClienteTrafego
+): Promise<StatusCampanha> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return cliente.status_campanhas
+
+  const hoje = new Date()
+  const inicio = new Date(hoje)
+  inicio.setUTCDate(inicio.getUTCDate() - JANELA_DIAS_INATIVO)
+  const inicioISO = inicio.toISOString().slice(0, 10)
+  const hojeISO = hoje.toISOString().slice(0, 10)
+
+  if (cliente.empresa_origem_nome) {
+    const { data, error } = await supabase
+      .from("dados_diarios_log")
+      .select("data, investimento_real, leads_real")
+      .eq("empresa", cliente.empresa_origem_nome)
+      .eq("origem", "pago")
+      .gte("data", inicioISO)
+      .lte("data", hojeISO)
+    if (error) {
+      console.error("[clientes] derivarStatusFresh origem error", error.message)
+      return cliente.status_campanhas
+    }
+    return derivarStatusModoOrigem((data ?? []) as LinhaStatus[])
+  }
+
+  if (cliente.campaign_filter) {
+    const { data, error } = await supabase
+      .from("dados_diarios_cliente")
+      .select("data, investimento_real, leads_real")
+      .eq("empresa_nome", cliente.empresa_nome)
+      .eq("cliente_nome", cliente.nome)
+      .eq("origem", "pago")
+      .gte("data", inicioISO)
+      .lte("data", hojeISO)
+    if (error) {
+      console.error("[clientes] derivarStatusFresh regex error", error.message)
+      return cliente.status_campanhas
+    }
+    return derivarStatusModoOrigem((data ?? []) as LinhaStatus[])
+  }
+
+  // Placeholder: sem modo, fica com o flag manual
+  return cliente.status_campanhas
+}
+
 /** Resumo mensal de TODOS os clientes de uma empresa. Roteia por
  *  modo (origem/regex/placeholder) e deriva status fresco em modo
  *  origem a partir de dados_diarios_log — fonte mais robusta que
@@ -309,7 +387,7 @@ export async function getResumoTodosClientesMes(
     leads_real: number | null
   }
 
-  const [logRes, cliRes, statusRes] = await Promise.all([
+  const [logRes, cliRes, statusOrigemRes, statusRegexRes] = await Promise.all([
     empresasOrigem.length > 0
       ? supabase
           .from("dados_diarios_log")
@@ -328,7 +406,7 @@ export async function getResumoTodosClientesMes(
           .gte("data", inicio)
           .lte("data", fim)
       : Promise.resolve({ data: [] as ClienteRow[], error: null }),
-    // Janela pra status (últimos 7 dias). Só pra empresas origem.
+    // Janela 7d pra derivar status do modo origem.
     empresasOrigem.length > 0
       ? supabase
           .from("dados_diarios_log")
@@ -338,6 +416,16 @@ export async function getResumoTodosClientesMes(
           .gte("data", janelaInicioISO)
           .lte("data", hojeISO)
       : Promise.resolve({ data: [] as LogRow[], error: null }),
+    // Janela 7d pra derivar status do modo regex.
+    temClienteRegex
+      ? supabase
+          .from("dados_diarios_cliente")
+          .select("cliente_nome, data, investimento_real, leads_real")
+          .eq("empresa_nome", empresaNome)
+          .eq("origem", "pago")
+          .gte("data", janelaInicioISO)
+          .lte("data", hojeISO)
+      : Promise.resolve({ data: [] as ClienteRow[], error: null }),
   ])
 
   // Agrega por empresa-origem (modo origem)
@@ -353,7 +441,7 @@ export async function getResumoTodosClientesMes(
   // Status fresco por empresa-origem (janela 7d)
   const statusOrigem = new Map<string, StatusCampanha>()
   const linhasJanelaPorEmpresa = new Map<string, LinhaStatus[]>()
-  for (const r of ((statusRes.data ?? []) as LogRow[])) {
+  for (const r of ((statusOrigemRes.data ?? []) as LogRow[])) {
     const arr = linhasJanelaPorEmpresa.get(r.empresa) ?? []
     arr.push({
       data: r.data,
@@ -379,6 +467,19 @@ export async function getResumoTodosClientesMes(
     aggRegex.set(r.cliente_nome, e)
   }
 
+  // Status fresco por cliente regex (janela 7d)
+  const statusRegex = new Map<string, StatusCampanha>()
+  const linhasJanelaPorCliente = new Map<string, LinhaStatus[]>()
+  for (const r of ((statusRegexRes.data ?? []) as ClienteRow[])) {
+    const arr = linhasJanelaPorCliente.get(r.cliente_nome) ?? []
+    arr.push({
+      data: r.data,
+      investimento_real: r.investimento_real,
+      leads_real: r.leads_real,
+    })
+    linhasJanelaPorCliente.set(r.cliente_nome, arr)
+  }
+
   return clientes.map((cliente) => {
     // Roteamento por modo
     const e = cliente.empresa_origem_nome
@@ -387,11 +488,20 @@ export async function getResumoTodosClientesMes(
       ? aggRegex.get(cliente.nome) ?? { inv: 0, leads: 0, dias: new Set<string>() }
       : { inv: 0, leads: 0, dias: new Set<string>() }
 
-    // Status: modo origem deriva fresh; modo regex usa o que o Sentinela
-    // já gravou em cliente_trafego (se sem origem nem regex = placeholder).
-    const statusFresh: StatusCampanha = cliente.empresa_origem_nome
-      ? statusOrigem.get(cliente.empresa_origem_nome) ?? "sem_conexao"
-      : cliente.status_campanhas
+    // Status: deriva fresco sempre que houver modo (origem ou regex);
+    // placeholder usa o flag manual gravado pelo Sentinela.
+    let statusFresh: StatusCampanha
+    if (cliente.empresa_origem_nome) {
+      statusFresh = statusOrigem.get(cliente.empresa_origem_nome) ?? "sem_conexao"
+    } else if (cliente.campaign_filter) {
+      const linhas = linhasJanelaPorCliente.get(cliente.nome)
+      if (!statusRegex.has(cliente.nome)) {
+        statusRegex.set(cliente.nome, derivarStatusModoOrigem(linhas ?? []))
+      }
+      statusFresh = statusRegex.get(cliente.nome) as StatusCampanha
+    } else {
+      statusFresh = cliente.status_campanhas
+    }
 
     return {
       cliente: { ...cliente, status_campanhas: statusFresh },

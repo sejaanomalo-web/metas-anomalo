@@ -3,7 +3,6 @@ import BotaoAtualizar from "@/components/BotaoAtualizar"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
 import { anoValido, formatNumero, mesValido } from "@/lib/data"
 import {
-  getEmpresasTrackeadas,
   getResumoMensalPorEmpresa,
   getUltimoLogSentinela,
   statusSentinela,
@@ -42,18 +41,17 @@ export default async function TrafegoOverviewPage({
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
 
-  const [resumo, empresas, trackeadas, ultimoLog] = await Promise.all([
+  const [resumo, empresas, ultimoLog] = await Promise.all([
     getResumoMensalPorEmpresa(mes, ano, "pago"),
     listarEmpresas(true),
-    getEmpresasTrackeadas(),
     getUltimoLogSentinela(),
   ])
   const stat = statusSentinela(ultimoLog)
 
-  // Filtra: só empresas trackeadas pelo Sentinela (têm token Meta).
-  // A página é especificamente sobre tráfego pago — empresas sem
-  // token Meta não fazem sentido aqui.
-  const empresasTrafego = empresas.filter((e) => trackeadas.includes(e.nome))
+  // Aba de tráfego mostra TODAS as empresas ativas do Hub. Empresas
+  // sem token Meta (ex.: agências que delegam aos clientes-folha)
+  // aparecem zeradas — o gestor decide configurar o conector pelo Hub.
+  const empresasTrafego = empresas
 
   // Totais agregados pro hero (KPI consolidado).
   let somaInv = 0
@@ -175,9 +173,9 @@ export default async function TrafegoOverviewPage({
                   lineHeight: 1.5,
                 }}
               >
-                Nenhuma empresa com token Meta cadastrado. Cadastre em{" "}
-                <code style={{ color: "var(--accent)" }}>tokens_meta</code> no
-                Supabase pra começar a trackear.
+                Nenhuma empresa ativa no Hub. Cadastre uma empresa em{" "}
+                <code style={{ color: "var(--accent)" }}>/dashboard/empresas</code>{" "}
+                pra começar.
               </p>
             </div>
           )}
