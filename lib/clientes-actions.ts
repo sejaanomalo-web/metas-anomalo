@@ -166,3 +166,40 @@ export async function listarTokensDaEmpresa(
   }
   return (data ?? []) as { id: string; ad_account_id: string }[]
 }
+
+/** Persiste nova ordem dos clientes de uma empresa. Aceita FormData
+ *  com `empresa_nome` + `ids` (CSV) — mesmo padrão de
+ *  reordenarEmpresasAction. Cada id vira ordem=index. */
+export async function reordenarClientesAction(
+  formData: FormData
+): Promise<{ ok: boolean; erro?: string }> {
+  await requererPermissao("dashboard_trafego")
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const empresaNome = String(formData.get("empresa_nome") ?? "").trim()
+  const idsRaw = String(formData.get("ids") ?? "")
+  const ids = idsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+
+  if (!empresaNome) return { ok: false, erro: "Empresa obrigatória." }
+  if (ids.length === 0) return { ok: false, erro: "Lista de ordens vazia." }
+
+  const now = new Date().toISOString()
+  const results = await Promise.all(
+    ids.map((id, index) =>
+      supabase
+        .from("cliente_trafego")
+        .update({ ordem: index, updated_at: now })
+        .eq("id", id)
+        .eq("empresa_nome", empresaNome)
+    )
+  )
+  const erro = results.find((r) => r.error)?.error
+  if (erro) {
+    console.error("[cliente_trafego] reorder error", erro)
+    return { ok: false, erro: erro.message }
+  }
+
+  revalidatePath("/dashboard", "layout")
+  return { ok: true }
+}

@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   criarClienteAction,
   atualizarClienteAction,
   excluirClienteAction,
+  reordenarClientesAction,
 } from "@/lib/clientes-actions"
 import type { ClienteTrafego } from "@/lib/clientes"
 
@@ -28,8 +29,16 @@ export default function GerenciadorClientes({
   clientes: ClienteTrafego[]
   tokens: TokenOption[]
 }) {
+  const router = useRouter()
   const [aberto, setAberto] = useState(false)
   const [editando, setEditando] = useState<ClienteTrafego | null>(null)
+  const [ordem, setOrdem] = useState<ClienteTrafego[]>(clientes)
+  const [salvandoOrdem, setSalvandoOrdem] = useState(false)
+
+  // Resync com props (revalidate trazendo nova lista do server).
+  useEffect(() => {
+    setOrdem(clientes)
+  }, [clientes])
 
   function novo() {
     setEditando(null)
@@ -38,6 +47,26 @@ export default function GerenciadorClientes({
   function editar(c: ClienteTrafego) {
     setEditando(c)
     setAberto(true)
+  }
+
+  async function mover(idx: number, delta: -1 | 1) {
+    const destino = idx + delta
+    if (destino < 0 || destino >= ordem.length) return
+    const nova = [...ordem]
+    ;[nova[idx], nova[destino]] = [nova[destino], nova[idx]]
+    setOrdem(nova)
+    setSalvandoOrdem(true)
+    const fd = new FormData()
+    fd.set("empresa_nome", empresaNome)
+    fd.set("ids", nova.map((c) => c.id).join(","))
+    const r = await reordenarClientesAction(fd)
+    setSalvandoOrdem(false)
+    if (!r.ok) {
+      alert(r.erro ?? "Erro ao reordenar.")
+      setOrdem(clientes)
+      return
+    }
+    router.refresh()
   }
 
   return (
@@ -60,42 +89,117 @@ export default function GerenciadorClientes({
                 position: "absolute",
                 right: 0,
                 marginTop: 8,
-                width: 280,
-                maxHeight: 320,
+                width: 320,
+                maxHeight: 360,
                 overflowY: "auto",
                 padding: 8,
                 zIndex: 20,
               }}
             >
-              {clientes.map((c) => (
-                <button
+              <p
+                style={{
+                  fontSize: 10,
+                  color: "var(--text-4)",
+                  padding: "4px 8px 8px",
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                }}
+              >
+                use ▲▼ para reordenar
+              </p>
+              {ordem.map((c, idx) => (
+                <div
                   key={c.id}
-                  type="button"
-                  onClick={() => editar(c)}
-                  className="no-ds"
                   style={{
                     display: "flex",
-                    width: "100%",
-                    justifyContent: "space-between",
                     alignItems: "center",
-                    gap: 8,
-                    padding: "8px 10px",
-                    background: "transparent",
-                    border: "none",
-                    borderRadius: 8,
-                    color: "var(--text-2)",
-                    cursor: "pointer",
-                    fontSize: 13,
-                    textAlign: "left",
+                    gap: 2,
+                    padding: "2px 4px",
                   }}
                 >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {c.nome}
-                  </span>
-                  <span style={{ fontSize: 11, color: "var(--text-4)" }}>
-                    {c.ativo ? "editar" : "inativo"}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => mover(idx, -1)}
+                    disabled={idx === 0 || salvandoOrdem}
+                    className="no-ds"
+                    aria-label="Mover para cima"
+                    style={{
+                      width: 24,
+                      height: 24,
+                      padding: 0,
+                      background: "transparent",
+                      border: "none",
+                      borderRadius: 4,
+                      color: idx === 0 ? "var(--text-4)" : "var(--text-2)",
+                      cursor: idx === 0 || salvandoOrdem ? "default" : "pointer",
+                      fontSize: 10,
+                      opacity: idx === 0 || salvandoOrdem ? 0.4 : 1,
+                    }}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => mover(idx, 1)}
+                    disabled={idx === ordem.length - 1 || salvandoOrdem}
+                    className="no-ds"
+                    aria-label="Mover para baixo"
+                    style={{
+                      width: 24,
+                      height: 24,
+                      padding: 0,
+                      background: "transparent",
+                      border: "none",
+                      borderRadius: 4,
+                      color:
+                        idx === ordem.length - 1
+                          ? "var(--text-4)"
+                          : "var(--text-2)",
+                      cursor:
+                        idx === ordem.length - 1 || salvandoOrdem
+                          ? "default"
+                          : "pointer",
+                      fontSize: 10,
+                      opacity:
+                        idx === ordem.length - 1 || salvandoOrdem ? 0.4 : 1,
+                    }}
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => editar(c)}
+                    className="no-ds"
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 10px",
+                      background: "transparent",
+                      border: "none",
+                      borderRadius: 8,
+                      color: "var(--text-2)",
+                      cursor: "pointer",
+                      fontSize: 13,
+                      textAlign: "left",
+                    }}
+                  >
+                    <span
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {c.nome}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--text-4)" }}>
+                      {c.ativo ? "editar" : "inativo"}
+                    </span>
+                  </button>
+                </div>
               ))}
             </div>
           </details>

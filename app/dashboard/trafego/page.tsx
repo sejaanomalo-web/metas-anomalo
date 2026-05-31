@@ -1,13 +1,18 @@
 import SeletorPeriodo from "@/components/SeletorPeriodo"
 import BotaoAtualizar from "@/components/BotaoAtualizar"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
+import DrawerEmpresas from "@/components/DrawerEmpresas"
 import { anoValido, formatNumero, mesValido } from "@/lib/data"
 import {
   getResumoMensalPorEmpresa,
   getUltimoLogSentinela,
   statusSentinela,
 } from "@/lib/sentinela"
-import { listarEmpresas } from "@/lib/empresas-actions"
+import {
+  listarEmpresas,
+  listarEmpresasInativas,
+} from "@/lib/empresas-actions"
+import { supabaseConfigurado } from "@/lib/supabase"
 import { requererPermissao } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
@@ -41,12 +46,14 @@ export default async function TrafegoOverviewPage({
   const mes = mesValido(searchParams?.mes)
   const ano = anoValido(searchParams?.ano)
 
-  const [resumo, empresas, ultimoLog] = await Promise.all([
+  const [resumo, empresas, empresasInativas, ultimoLog] = await Promise.all([
     getResumoMensalPorEmpresa(mes, ano, "pago"),
     listarEmpresas(true),
+    listarEmpresasInativas(),
     getUltimoLogSentinela(),
   ])
   const stat = statusSentinela(ultimoLog)
+  const supabaseOk = supabaseConfigurado()
 
   // Aba de tráfego mostra TODAS as empresas ativas do Hub. Empresas
   // sem token Meta (ex.: agências que delegam aos clientes-folha)
@@ -106,6 +113,11 @@ export default async function TrafegoOverviewPage({
                 flexWrap: "wrap",
               }}
             >
+              <DrawerEmpresas
+                empresas={empresas}
+                empresasInativas={empresasInativas}
+                supabaseOk={supabaseOk}
+              />
               <BotaoAtualizar />
               <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
             </div>
