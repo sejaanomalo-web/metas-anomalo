@@ -48,7 +48,7 @@ export default async function RecorrentesPage({
         </div>
         <p style={{ fontSize: 14, color: "var(--text-3)", marginTop: 10 }}>
           Templates que geram lançamentos automaticamente (aluguel, plataformas, salários).
-          Use <strong>Gerar lançamentos</strong> pra materializar manualmente o mês selecionado —
+          Use <strong>Gerar lançamentos</strong> pra materializar manualmente o mês selecionado ·
           o cron mensal faz isso automaticamente todo dia 1.
         </p>
         <div className="gold-divider" style={{ marginTop: 18 }} />

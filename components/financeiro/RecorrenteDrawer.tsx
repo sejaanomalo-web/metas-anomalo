@@ -185,7 +185,7 @@ export default function RecorrenteDrawer({
             </div>
             {periodicidade !== "mensal" && (
               <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 6 }}>
-                Periodicidade {periodicidade} não materializa automaticamente no MVP — só mensal.
+                Periodicidade {periodicidade} não materializa automaticamente no MVP · só mensal.
               </p>
             )}
           </div>
@@ -211,7 +211,7 @@ export default function RecorrenteDrawer({
             </div>
             <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 6, lineHeight: 1.4 }}>
               {statusPadrao === "realizado"
-                ? "Lançamentos materializados nascem como pagos — entram nos KPIs de receitas/despesas do mês imediatamente."
+                ? "Lançamentos materializados nascem como pagos · entram nos KPIs de receitas/despesas do mês imediatamente."
                 : "Lançamentos materializados aparecem em \"Próximos vencimentos\" até serem marcados como pagos manualmente."}
             </p>
           </div>
@@ -234,7 +234,7 @@ export default function RecorrenteDrawer({
             />
           </Campo>
 
-          <Campo label="Fim (opcional — vazio = indeterminado)">
+          <Campo label="Fim (opcional · vazio = indeterminado)">
             <input
               type="date" name="fim"
               defaultValue={recorrente?.fim ?? ""}
@@ -249,7 +249,7 @@ export default function RecorrenteDrawer({
               key={tipo /* força re-render quando troca tipo */}
               className="glass-input" style={{ width: "100%" }}
             >
-              <option value="">— Sem categoria —</option>
+              <option value="">· Sem categoria ·</option>
               {categoriasDoTipo.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
               ))}
@@ -262,7 +262,7 @@ export default function RecorrenteDrawer({
               defaultValue={recorrente?.conta_id ?? contasAtivas[0]?.id ?? ""}
               className="glass-input" style={{ width: "100%" }}
             >
-              <option value="">— Sem conta —</option>
+              <option value="">· Sem conta ·</option>
               {contasAtivas.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
               ))}

@@ -78,7 +78,7 @@ function Bloco({
             textTransform: "uppercase",
           }}
         >
-          {titulo} — {tipo}
+          {titulo} · {tipo}
         </p>
         <p style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{categorias.length}</p>
       </div>

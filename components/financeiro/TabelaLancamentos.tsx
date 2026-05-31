@@ -18,7 +18,7 @@ interface Empresa {
 }
 
 function formatDataBR(iso: string | null): string {
-  if (!iso) return "—"
+  if (!iso) return "·"
   const [y, m, d] = iso.split("-")
   return `${d}/${m}/${y.slice(2)}`
 }
@@ -191,10 +191,10 @@ export default function TabelaLancamentos({
                             {cat.nome}
                           </span>
                         ) : (
-                          <span style={{ color: "var(--muted-foreground)" }}>—</span>
+                          <span style={{ color: "var(--muted-foreground)" }}>·</span>
                         )}
                       </Td>
-                      <Td>{conta?.nome ?? "—"}</Td>
+                      <Td>{conta?.nome ?? "·"}</Td>
                       <Td align="right">
                         <span
                           style={{

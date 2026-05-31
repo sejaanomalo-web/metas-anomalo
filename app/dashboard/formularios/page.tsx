@@ -49,7 +49,7 @@ export default async function FormulariosPage() {
             }}
           >
             Insira reuniões, contratos e faturamento de qualquer empresa,
-            em qualquer dia. Investimento, leads e CPL ficam de fora —
+            em qualquer dia. Investimento, leads e CPL ficam de fora ·
             esses vêm do agente Sentinela. Use o link público pra
             compartilhar com quem só vai preencher.
           </p>

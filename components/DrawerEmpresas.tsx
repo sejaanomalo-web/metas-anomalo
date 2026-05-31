@@ -133,7 +133,7 @@ export default function DrawerEmpresas({
                   borderRadius: 8,
                 }}
               >
-                Supabase não configurado — CRUD de empresas indisponível.
+                Supabase não configurado · CRUD de empresas indisponível.
               </div>
             )}
 

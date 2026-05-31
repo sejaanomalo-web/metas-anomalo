@@ -409,7 +409,7 @@ export default async function DashboardPage({
                 valor={
                   temFat && resumo.faturamento > 0
                     ? `${pctMeta.toFixed(1)}%`
-                    : "—"
+                    : "·"
                 }
                 icon={<IconeAlvo />}
                 iconStatus={iconStatusPctMeta}
@@ -437,7 +437,7 @@ export default async function DashboardPage({
             </div>
             <KPICard
               label="Ticket médio"
-              valor={temTicket ? formatBRL(ticketMedioReal) : "—"}
+              valor={temTicket ? formatBRL(ticketMedioReal) : "·"}
               icon={<IconeTicket />}
               iconStatus={iconStatusTicket}
               semDados={!temTicket}

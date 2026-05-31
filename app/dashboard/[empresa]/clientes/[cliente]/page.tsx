@@ -136,7 +136,7 @@ export default async function ClienteTrafegoPage({
               lineHeight: 1.6,
             }}
           >
-            <strong style={{ color: "var(--danger)" }}>Sem conexão</strong> — o
+            <strong style={{ color: "var(--danger)" }}>Sem conexão</strong> · o
             Sentinela não conseguiu ler as campanhas deste cliente na última
             execução
             {cliente.ultimo_erro ? `: ${cliente.ultimo_erro}` : "."}

@@ -370,7 +370,7 @@ export default function DrawerEditarMeta({
                     fontStyle: "italic",
                   }}
                 >
-                  Editando um ano diferente do atual — valores projetados não
+                  Editando um ano diferente do atual · valores projetados não
                   disponíveis aqui.
                 </p>
               )}
@@ -386,7 +386,7 @@ export default function DrawerEditarMeta({
                 }}
               >
                 Valores em branco usam o padrão do sistema. Ao salvar, só
-                persiste o que foi editado — os demais meses permanecem
+                persiste o que foi editado · os demais meses permanecem
                 intactos.
               </p>
 
@@ -422,7 +422,7 @@ export default function DrawerEditarMeta({
                         onChange={(e) =>
                           setValores({ ...valores, [c.chave]: e.target.value })
                         }
-                        placeholder="—"
+                        placeholder="·"
                         className="glass-input"
                         style={{
                           marginTop: 6,

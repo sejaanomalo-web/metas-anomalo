@@ -729,7 +729,7 @@ function FormUsuario({
             {senhaTemp}
           </p>
           <p style={{ fontSize: 10, color: "var(--text-4)", marginTop: 6 }}>
-            Anote agora — não vai aparecer de novo.
+            Anote agora · não vai aparecer de novo.
           </p>
         </div>
       )}

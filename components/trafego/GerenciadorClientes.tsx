@@ -359,7 +359,7 @@ function DrawerCliente({
               className="glass-input"
               style={{ width: "100%" }}
             >
-              <option value="">— Nenhuma —</option>
+              <option value="">· Nenhuma ·</option>
               {tokens.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.ad_account_id}

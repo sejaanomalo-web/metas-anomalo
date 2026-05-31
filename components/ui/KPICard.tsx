@@ -99,7 +99,7 @@ export default function KPICard({
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        {semDados ? "—" : valor}
+        {semDados ? "·" : valor}
       </p>
 
       {semDados && (

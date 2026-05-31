@@ -142,7 +142,7 @@ export default function CardEmpresa({
               }}
             >
               Sem dados neste mês
-              {empresa.inicioEm ? ` — início em ${empresa.inicioEm}` : ""}
+              {empresa.inicioEm ? ` · início em ${empresa.inicioEm}` : ""}
             </p>
           )}
         </div>

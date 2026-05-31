@@ -123,7 +123,7 @@ export default async function TrafegoPage({
               flexWrap: "wrap",
             }}
           >
-            <h1 style={{ fontSize: 36 }}>Tráfego pago — {empresa.nome}</h1>
+            <h1 style={{ fontSize: 36 }}>Tráfego pago · {empresa.nome}</h1>
             <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
           </div>
           <p
@@ -216,7 +216,7 @@ export default async function TrafegoPage({
             <strong style={{ color: "var(--warning)" }}>
               Sem atividade detectada no Meta Ads
             </strong>{" "}
-            na última execução do Sentinela — campanhas pausadas ou sem
+            na última execução do Sentinela · campanhas pausadas ou sem
             investimento no período.
           </div>
         )}

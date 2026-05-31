@@ -114,7 +114,7 @@ function montarCSV(
   const linhas: string[] = []
 
   // Cabeçalho geral
-  linhas.push(linhaCSV("Relatório financeiro — Anômalo Hub"))
+  linhas.push(linhaCSV("Relatório financeiro · Anômalo Hub"))
   linhas.push(linhaCSV(`Mês de referência: ${mes}/${ano}`))
   linhas.push(
     linhaCSV(
@@ -124,7 +124,7 @@ function montarCSV(
   linhas.push("")
 
   // === DRE Receitas ===
-  linhas.push(linhaCSV(`DRE Receitas — ${mes}/${ano}`))
+  linhas.push(linhaCSV(`DRE Receitas · ${mes}/${ano}`))
   linhas.push(linhaCSV("Categoria", "Lançamentos", "Total (R$)", "% do total"))
   for (const r of dre.receitas) {
     const pct = dre.total_receitas > 0 ? (r.total / dre.total_receitas) * 100 : 0
@@ -134,7 +134,7 @@ function montarCSV(
   linhas.push("")
 
   // === DRE Despesas ===
-  linhas.push(linhaCSV(`DRE Despesas — ${mes}/${ano}`))
+  linhas.push(linhaCSV(`DRE Despesas · ${mes}/${ano}`))
   linhas.push(linhaCSV("Categoria", "Lançamentos", "Total (R$)", "% do total"))
   for (const d of dre.despesas) {
     const pct = dre.total_despesas > 0 ? (d.total / dre.total_despesas) * 100 : 0

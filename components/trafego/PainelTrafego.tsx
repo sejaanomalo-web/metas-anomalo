@@ -54,7 +54,7 @@ export default function PainelTrafego({
         />
         <KPICard
           label="CPL médio"
-          valor={resumo.cpl !== null ? formatBRL(resumo.cpl) : "—"}
+          valor={resumo.cpl !== null ? formatBRL(resumo.cpl) : "·"}
           icon={<IconeAlvo />}
           iconStatus={resumo.cpl !== null ? "success" : "neutral"}
           semDados={resumo.cpl === null}
@@ -268,26 +268,26 @@ function LinhaTabela({ linha }: { linha: LinhaDoMes }) {
             {ehSentinela ? "🤖" : "👤"} {ehSentinela ? "Sentinela" : linha.preenchedor_nome}
           </span>
         ) : (
-          <span style={{ color: "var(--text-4)", fontSize: 11 }}>—</span>
+          <span style={{ color: "var(--text-4)", fontSize: 11 }}>·</span>
         )}
       </td>
       <td style={celulaStyle}>
-        {linha.investimento_real !== null ? formatBRL(Number(linha.investimento_real)) : "—"}
+        {linha.investimento_real !== null ? formatBRL(Number(linha.investimento_real)) : "·"}
       </td>
       <td style={celulaStyle}>
-        {linha.leads_real !== null ? formatNumero(linha.leads_real) : "—"}
+        {linha.leads_real !== null ? formatNumero(linha.leads_real) : "·"}
       </td>
       <td style={celulaStyle}>
-        {linha.cpl_real !== null ? formatBRL(Number(linha.cpl_real)) : "—"}
+        {linha.cpl_real !== null ? formatBRL(Number(linha.cpl_real)) : "·"}
       </td>
       <td style={{ ...celulaStyle, color: "var(--text-3)" }}>
-        {linha.reunioes_real !== null ? formatNumero(linha.reunioes_real) : "—"}
+        {linha.reunioes_real !== null ? formatNumero(linha.reunioes_real) : "·"}
       </td>
       <td style={{ ...celulaStyle, color: "var(--text-3)" }}>
-        {linha.contratos_real !== null ? formatNumero(linha.contratos_real) : "—"}
+        {linha.contratos_real !== null ? formatNumero(linha.contratos_real) : "·"}
       </td>
       <td style={{ ...celulaStyle, color: "var(--text-3)" }}>
-        {linha.faturamento_real !== null ? formatBRL(Number(linha.faturamento_real)) : "—"}
+        {linha.faturamento_real !== null ? formatBRL(Number(linha.faturamento_real)) : "·"}
       </td>
     </tr>
   )

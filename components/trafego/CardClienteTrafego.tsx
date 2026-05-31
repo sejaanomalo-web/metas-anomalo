@@ -75,7 +75,7 @@ export default function CardClienteTrafego({
       >
         <Metrica label="Investimento" valor={formatBRL(investimento)} destaque />
         <Metrica label="Resultados" valor={formatNumero(leads)} />
-        <Metrica label="CPL" valor={cpl !== null ? formatBRL(cpl) : "—"} />
+        <Metrica label="CPL" valor={cpl !== null ? formatBRL(cpl) : "·"} />
       </div>
 
       {cliente.status_campanhas === "sem_conexao" && cliente.ultimo_erro && (

@@ -145,7 +145,7 @@ export default function TabelaMeses({
     if (modoDiario) {
       const v = linha[coluna.chave]
       if (typeof v !== "number" || v === 0) {
-        return { conteudo: "—", ehFat }
+        return { conteudo: "·", ehFat }
       }
       if (coluna.tipo === "brl") return { conteudo: formatBRL(v), ehFat }
       return { conteudo: formatNumero(v), ehFat }
@@ -168,7 +168,7 @@ export default function TabelaMeses({
     }
 
     const v = linha[coluna.chave]
-    let conteudo: string = String(v ?? "—")
+    let conteudo: string = String(v ?? "·")
     if (typeof v === "number") {
       if (coluna.tipo === "brl") conteudo = formatBRL(v)
       else if (coluna.tipo === "percent") conteudo = `${v}%`

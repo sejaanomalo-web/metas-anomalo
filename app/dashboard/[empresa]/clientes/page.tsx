@@ -88,7 +88,7 @@ export default async function ClientesPage({
               flexWrap: "wrap",
             }}
           >
-            <h1 style={{ fontSize: 36 }}>Tráfego por Cliente — {empresa.nome}</h1>
+            <h1 style={{ fontSize: 36 }}>Tráfego por Cliente · {empresa.nome}</h1>
             <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
           </div>
           <p style={{ fontSize: 14, color: "var(--text-3)", marginTop: 10 }}>

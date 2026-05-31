@@ -80,15 +80,15 @@ export default function CardEmpresaTrafego({
       >
         <Metric
           label="Investimento"
-          valor={semDados ? "—" : formatBRL(investimento)}
+          valor={semDados ? "·" : formatBRL(investimento)}
           destacado
         />
         <Metric
           label="Leads"
-          valor={semDados ? "—" : formatNumero(leads)}
+          valor={semDados ? "·" : formatNumero(leads)}
         />
-        <Metric label="CPL" valor={cpl ? formatBRL(cpl) : "—"} />
-        <Metric label="CPM" valor={cpm ? formatBRL(cpm) : "—"} />
+        <Metric label="CPL" valor={cpl ? formatBRL(cpl) : "·"} />
+        <Metric label="CPM" valor={cpm ? formatBRL(cpm) : "·"} />
       </div>
 
       {/* Footer link */}

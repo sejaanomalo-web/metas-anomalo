@@ -247,7 +247,7 @@ export default async function EmpresaPage({
                     textAlign: "center",
                   }}
                 >
-                  Planejamento futuro — sem projeção definida para {ano}.
+                  Planejamento futuro · sem projeção definida para {ano}.
                 </p>
               </div>
             )}

@@ -67,7 +67,7 @@ export default function BadgeStatusSentinela({
           última execução:{" "}
           {ultimaExecucao
             ? `${formatarMomentoBRT(ultimaExecucao)} BRT`
-            : "—"}
+            : "·"}
         </span>
         <span>próxima execução: {proximaLabelCompleto}</span>
       </div>

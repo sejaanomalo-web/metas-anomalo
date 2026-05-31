@@ -402,7 +402,7 @@ export default function LancamentoDrawer({
                 </div>
                 <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6, lineHeight: 1.4 }}>
                   {statusPadraoRec === "realizado"
-                    ? "Lançamentos nascem como pagos — entram nos KPIs do mês imediatamente."
+                    ? "Lançamentos nascem como pagos · entram nos KPIs do mês imediatamente."
                     : 'Lançamentos aparecem em "Próximos vencimentos" até serem marcados como pagos.'}
                 </p>
               </div>
@@ -433,7 +433,7 @@ export default function LancamentoDrawer({
                 />
               </Campo>
 
-              <Campo label="Fim (opcional — vazio = indeterminado)">
+              <Campo label="Fim (opcional · vazio = indeterminado)">
                 <input
                   type="date"
                   name="fim"
@@ -490,7 +490,7 @@ export default function LancamentoDrawer({
               className="glass-input"
               style={{ width: "100%" }}
             >
-              <option value="">— Sem categoria —</option>
+              <option value="">· Sem categoria ·</option>
               {categorias
                 .filter((c) => c.tipo === tipo && c.ativa)
                 .map((c) => (
@@ -509,7 +509,7 @@ export default function LancamentoDrawer({
               className="glass-input"
               style={{ width: "100%" }}
             >
-              <option value="">— Sem conta —</option>
+              <option value="">· Sem conta ·</option>
               {contasAtivas.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nome}
@@ -539,7 +539,7 @@ export default function LancamentoDrawer({
                 className="glass-input"
                 style={{ width: "100%" }}
               >
-                <option value="">— Não vinculada —</option>
+                <option value="">· Não vinculada ·</option>
                 {empresas.map((e) => (
                   <option key={e.slug} value={e.nome}>
                     {e.nome}

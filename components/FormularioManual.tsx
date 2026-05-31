@@ -86,7 +86,7 @@ export default function FormularioManual({
     } catch {
       setFeedback({
         tipo: "erro",
-        mensagem: "Não consegui copiar — copie manualmente: " + url,
+        mensagem: "Não consegui copiar · copie manualmente: " + url,
       })
     }
   }
@@ -216,7 +216,7 @@ export default function FormularioManual({
             inputMode="numeric"
             className="glass-input"
             style={inputEstilo}
-            placeholder="—"
+            placeholder="·"
           />
         </Campo>
 

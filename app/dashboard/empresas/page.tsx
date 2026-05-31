@@ -134,7 +134,7 @@ export default async function EmpresasPage({
                 }}
               >
                 Nenhuma empresa cadastrada ainda. Comece criando sua primeira
-                — clique em <strong>Gerenciar empresas</strong>.
+                · clique em <strong>Gerenciar empresas</strong>.
               </p>
             </div>
           )}

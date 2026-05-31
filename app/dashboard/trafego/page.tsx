@@ -156,11 +156,11 @@ export default async function TrafegoOverviewPage({
           <KpiMini label="Leads totais" valor={formatNumero(somaLeads)} />
           <KpiMini
             label="CPL médio"
-            valor={cplMedio ? fmtBRL(cplMedio) : "—"}
+            valor={cplMedio ? fmtBRL(cplMedio) : "·"}
           />
           <KpiMini
             label="CPM médio"
-            valor={cpmMedio ? fmtBRL(cpmMedio) : "—"}
+            valor={cpmMedio ? fmtBRL(cpmMedio) : "·"}
           />
         </section>
 

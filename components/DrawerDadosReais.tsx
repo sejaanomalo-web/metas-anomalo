@@ -331,7 +331,7 @@ function Campo({
           fontSize: 13,
           fontWeight: 400,
         }}
-        placeholder="—"
+        placeholder="·"
       />
     </label>
   )

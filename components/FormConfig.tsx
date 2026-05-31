@@ -179,7 +179,7 @@ function SecaoResumo({
         </button>
         {erro && (
           <span style={{ fontSize: 11, color: "#e24b4a" }}>
-            Não consegui copiar — selecione o texto acima e use Ctrl+C.
+            Não consegui copiar · selecione o texto acima e use Ctrl+C.
           </span>
         )}
         {copiado && (

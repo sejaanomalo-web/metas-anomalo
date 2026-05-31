@@ -76,7 +76,7 @@ export default function ReconciliarBotao() {
       const r = await fetch("/api/reconciliar", { cache: "no-store" })
       if (!r.ok) {
         const txt = await r.text()
-        setEstado({ tipo: "erro", mensagem: `HTTP ${r.status} — ${txt}` })
+        setEstado({ tipo: "erro", mensagem: `HTTP ${r.status} · ${txt}` })
         return
       }
       const dados = (await r.json()) as ReconciliarResponse
@@ -253,7 +253,7 @@ function Resultado({ dados }: { dados: ReconciliarResponse }) {
 
       <Bloco
         titulo={`Divergências dr ↔ ddl em ${dados.mes_atual} ${dados.ano_atual} (${dados.divergencias.length})`}
-        descricao="Soma de dados_reais difere de dados_diarios_log. Sinal de write-divergence — leituras devem sair só de ddl."
+        descricao="Soma de dados_reais difere de dados_diarios_log. Sinal de write-divergence · leituras devem sair só de ddl."
         vazio={dados.divergencias.length === 0}
       >
         <ul style={listaStyle}>
