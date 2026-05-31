@@ -13,6 +13,7 @@ import {
   getClientePorSlug,
   getDiasSentinelaDoCliente,
   getLinhasDoMesCliente,
+  clienteDisplayName,
 } from "@/lib/clientes"
 
 export const dynamic = "force-dynamic"
@@ -50,10 +51,11 @@ export default async function ClienteTrafegoPage({
   const fim = `${ano}-${mesNum}-${ultimoDia}`
 
   const [dias, linhas] = await Promise.all([
-    getDiasSentinelaDoCliente(empresa.nome, cliente.nome, inicio, fim),
-    getLinhasDoMesCliente(empresa.nome, cliente.nome, inicio, fim),
+    getDiasSentinelaDoCliente(cliente, inicio, fim),
+    getLinhasDoMesCliente(cliente, inicio, fim),
   ])
   const resumo = resumirMesSentinela(dias)
+  const nomeExibido = clienteDisplayName(cliente)
 
   return (
     <>
@@ -82,7 +84,7 @@ export default async function ClienteTrafegoPage({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <h1 style={{ fontSize: 36 }}>{cliente.nome}</h1>
+              <h1 style={{ fontSize: 36 }}>{nomeExibido}</h1>
               <TagStatusCampanha status={cliente.status_campanhas} />
             </div>
             <SeletorPeriodo mesAtual={mes} anoAtual={ano} />

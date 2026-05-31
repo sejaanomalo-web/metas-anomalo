@@ -1,6 +1,7 @@
 import Link from "next/link"
 import TagStatusCampanha from "./TagStatusCampanha"
 import type { ResumoClienteMes } from "@/lib/clientes"
+import { clienteDisplayName } from "@/lib/clientes"
 import { formatBRL, formatNumero } from "@/lib/data"
 
 /** Mini-card de um cliente na lista de Tráfego por Cliente.
@@ -52,10 +53,14 @@ export default function CardClienteTrafego({
               whiteSpace: "nowrap",
             }}
           >
-            {cliente.nome}
+            {clienteDisplayName(cliente)}
           </h3>
           {!cliente.ativo && (
-            <span style={{ fontSize: 10, color: "var(--text-4)" }}>inativo</span>
+            <span style={{ fontSize: 10, color: "var(--text-4)" }}>
+              {cliente.empresa_origem_nome || cliente.campaign_filter
+                ? "inativo"
+                : "aguardando conta"}
+            </span>
           )}
         </div>
         <TagStatusCampanha status={cliente.status_campanhas} />
