@@ -56,13 +56,11 @@ async function getReaisDoMesPorEmpresa(
 // Soma dos reais do mês respeitando a semântica por origem:
 //   - investimento/CPL     → só 'pago' (orgânico não tem verba)
 //   - faturamento/leads/reunioes/contratos → 'pago' + 'organico'
-// Recebe `empresas` explicitamente: só agrega empresas ativas, mesmo
-// critério do KPI principal do /dashboard. Empresas removidas que ainda
-// têm linhas em dados_diarios_log não vazam pro resumo do WhatsApp.
-function agregarReaisDoMes(
-  mapa: Map<string, ResumoPorOrigem>,
-  empresas: EmpresaMeta[]
-) {
+// Itera o MAPA inteiro (todas as empresas com linhas em
+// dados_diarios_log no mês), não só as do Hub. Assim os clientes-folha
+// (Lidiane, IBB, Mãe Divina Yoga etc.) entram no total — antes ficavam
+// de fora porque o filtro era pelo array `empresas` do Hub.
+function agregarReaisDoMes(mapa: Map<string, ResumoPorOrigem>) {
   let somaFat = 0
   let somaInv = 0
   let somaLeads = 0
@@ -71,9 +69,7 @@ function agregarReaisDoMes(
   let temFat = false
   let temInv = false
   let temLeads = false
-  for (const empresa of empresas) {
-    const bucket = mapa.get(empresa.nome)
-    if (!bucket) continue
+  for (const bucket of mapa.values()) {
     const { pago, organico } = bucket
     if (pago && pago.investimento > 0) {
       somaInv += pago.investimento
@@ -203,9 +199,7 @@ export async function montarResumoDiario(): Promise<string> {
       ? Math.min(
           100,
           Math.round(
-            (agregarReaisDoMes(reaisDoMes, empresas).somaFat /
-              resumo.faturamento) *
-              100
+            (agregarReaisDoMes(reaisDoMes).somaFat / resumo.faturamento) * 100
           )
         )
       : 0
@@ -233,13 +227,20 @@ export async function montarResumoDiario(): Promise<string> {
     }
   }
 
-  // POR EMPRESA = quem reportou no dia (faturamento gerado hoje)
-  const empresasComMovimentoHoje = empresas
-    .map((e) => ({
-      nome: e.nome,
-      delta: dia.porEmpresa.get(e.nome),
-    }))
-    .filter((e) => e.delta !== undefined)
+  // POR EMPRESA = quem REALMENTE reportou no dia em dados_diarios_log.
+  // Lista todas as empresas com movimento real (não filtra por Hub) —
+  // inclui clientes-folha (Lidiane, IBB, Mãe Divina Yoga etc.) e ordena
+  // por faturamento desc pra colocar quem mais gerou no topo.
+  const empresasComMovimentoHoje = Array.from(dia.porEmpresa.values())
+    .filter(
+      (d) =>
+        d.faturamento > 0 ||
+        d.leads > 0 ||
+        d.contratos > 0 ||
+        d.reunioes > 0 ||
+        d.investimento > 0
+    )
+    .sort((a, b) => b.faturamento - a.faturamento)
 
   const cplDia = dia.somaLeads > 0 ? dia.somaInvestimento / dia.somaLeads : 0
   const cpaDia =
@@ -276,15 +277,16 @@ export async function montarResumoDiario(): Promise<string> {
   if (empresasComMovimentoHoje.length > 0) {
     linhas.push("")
     linhas.push(`🏢 *MOVIMENTO POR EMPRESA HOJE*`)
-    for (const e of empresasComMovimentoHoje) {
-      const d = e.delta!
+    for (const d of empresasComMovimentoHoje) {
       const partes: string[] = []
       if (d.faturamento > 0) partes.push(formatBRL(d.faturamento))
       if (d.leads > 0) partes.push(`${formatNumero(d.leads)} leads`)
       if (d.contratos > 0)
         partes.push(`${formatNumero(d.contratos)} contratos`)
+      if (d.investimento > 0 && partes.length === 0)
+        partes.push(`${formatBRL(d.investimento)} investido`)
       linhas.push(
-        `• ${e.nome} · ${partes.length > 0 ? partes.join(" · ") : "movimento sem números"}`
+        `• ${d.empresa} · ${partes.length > 0 ? partes.join(" · ") : "movimento sem números"}`
       )
     }
   } else {
@@ -327,7 +329,7 @@ export async function montarResumoSemanal(
 
   // Progresso mensal pra contexto
   const reaisDoMes = await getReaisDoMesPorEmpresa(mes, ano)
-  const { somaFat: faturamentoMes } = agregarReaisDoMes(reaisDoMes, empresas)
+  const { somaFat: faturamentoMes } = agregarReaisDoMes(reaisDoMes)
   const progressoMes =
     resumo.faturamento > 0
       ? Math.min(100, Math.round((faturamentoMes / resumo.faturamento) * 100))
@@ -368,25 +370,37 @@ export async function montarResumoSemanal(
     `• CPA: ${cpaSem > 0 ? formatBRL(cpaSem) : "—"}`,
   ]
 
-  // POR EMPRESA na semana
+  // POR EMPRESA na semana — todas as empresas com movimento real,
+  // ordenadas por faturamento desc. Inclui clientes-folha.
+  const empresasComMovimentoSemana = Array.from(semanaAg.porEmpresa.values())
+    .filter(
+      (d) =>
+        d.faturamento > 0 ||
+        d.leads > 0 ||
+        d.contratos > 0 ||
+        d.reunioes > 0 ||
+        d.investimento > 0
+    )
+    .sort((a, b) => b.faturamento - a.faturamento)
+
   linhas.push("")
   linhas.push(`🏢 *MOVIMENTO POR EMPRESA NA SEMANA*`)
-  let temAlgumaEmpresa = false
-  for (const empresa of empresas) {
-    const d = semanaAg.porEmpresa.get(empresa.nome)
-    if (!d) continue
-    temAlgumaEmpresa = true
-    const partes: string[] = []
-    if (d.faturamento > 0) partes.push(formatBRL(d.faturamento))
-    if (d.leads > 0) partes.push(`${formatNumero(d.leads)} leads`)
-    if (d.contratos > 0) partes.push(`${formatNumero(d.contratos)} contratos`)
-    linhas.push(
-      `• ${empresa.nome} · ${
-        partes.length > 0 ? partes.join(" · ") : "movimento sem números"
-      }`
-    )
-  }
-  if (!temAlgumaEmpresa) {
+  if (empresasComMovimentoSemana.length > 0) {
+    for (const d of empresasComMovimentoSemana) {
+      const partes: string[] = []
+      if (d.faturamento > 0) partes.push(formatBRL(d.faturamento))
+      if (d.leads > 0) partes.push(`${formatNumero(d.leads)} leads`)
+      if (d.contratos > 0)
+        partes.push(`${formatNumero(d.contratos)} contratos`)
+      if (d.investimento > 0 && partes.length === 0)
+        partes.push(`${formatBRL(d.investimento)} investido`)
+      linhas.push(
+        `• ${d.empresa} · ${
+          partes.length > 0 ? partes.join(" · ") : "movimento sem números"
+        }`
+      )
+    }
+  } else {
     linhas.push("Nenhuma empresa reportou nesta semana ainda.")
   }
 
@@ -414,7 +428,7 @@ export async function montarResumoMensal(): Promise<string> {
   ])
 
   const { somaFat, somaInv, somaLeads, somaReunioes, somaContratos } =
-    agregarReaisDoMes(reaisDoMes, empresas)
+    agregarReaisDoMes(reaisDoMes)
 
   const atingido =
     resumo.faturamento > 0
@@ -428,6 +442,8 @@ export async function montarResumoMensal(): Promise<string> {
   let crescimentoNome = ""
   let crescimentoPct = -1
 
+  // EMPRESAS DO HUB — com meta cadastrada, mostra % atingido
+  const nomesHub = new Set(empresas.map((e) => e.nome))
   const linhasEmpresa: string[] = []
   for (const empresa of empresas) {
     const metaMes = getFaturamentoMesComOverride(
@@ -437,12 +453,19 @@ export async function montarResumoMensal(): Promise<string> {
       overridesMes.get(empresa.db)
     )
     const real = faturamentoTotalDoBucket(reaisDoMes.get(empresa.nome)) ?? 0
+    if (metaMes === 0 && real === 0) continue
     const pct = metaMes > 0 ? Math.round((real / metaMes) * 100) : 0
     const label =
-      pct >= 100 ? "meta batida" : pct >= 70 ? `${pct}% da meta` : "abaixo"
+      metaMes === 0
+        ? "sem meta"
+        : pct >= 100
+        ? "meta batida"
+        : pct >= 70
+        ? `${pct}% da meta`
+        : "abaixo"
     linhasEmpresa.push(`• ${empresa.nome} · ${formatBRL(real)} · ${label}`)
 
-    if (pct > melhorPct) {
+    if (metaMes > 0 && pct > melhorPct) {
       melhorPct = pct
       melhorNome = empresa.nome
     }
@@ -459,6 +482,22 @@ export async function montarResumoMensal(): Promise<string> {
       }
     }
   }
+
+  // CLIENTES-FOLHA (Lidiane, IBB, Mãe Divina Yoga etc.) — empresas
+  // que aparecem em dados_diarios_log mas não são do Hub. Sem meta
+  // cadastrada, mostram só o faturamento.
+  const linhasClientes: string[] = []
+  for (const [nome, bucket] of reaisDoMes.entries()) {
+    if (nomesHub.has(nome)) continue
+    const real = faturamentoTotalDoBucket(bucket) ?? 0
+    const investP = bucket.pago?.investimento ?? 0
+    if (real === 0 && investP === 0) continue
+    const partes: string[] = []
+    if (real > 0) partes.push(formatBRL(real))
+    if (investP > 0) partes.push(`${formatBRL(investP)} investido`)
+    linhasClientes.push(`• ${nome} · ${partes.join(" · ")}`)
+  }
+  linhasClientes.sort()
 
   const cpl = somaLeads > 0 ? somaInv / somaLeads : 0
   const cpa = somaContratos > 0 ? somaInv / somaContratos : 0
@@ -484,10 +523,19 @@ export async function montarResumoMensal(): Promise<string> {
     `• CPA: ${cpa > 0 ? formatBRL(cpa) : "—"}`,
     "",
     `🏢 *EMPRESAS*`,
-    ...linhasEmpresa,
-    "",
-    `🏆 *DESTAQUES*`,
+    ...(linhasEmpresa.length > 0
+      ? linhasEmpresa
+      : ["Nenhuma empresa do Hub reportou no mês."]),
   ]
+
+  if (linhasClientes.length > 0) {
+    linhas.push("")
+    linhas.push(`👥 *CLIENTES*`)
+    linhas.push(...linhasClientes)
+  }
+
+  linhas.push("")
+  linhas.push(`🏆 *DESTAQUES*`)
 
   if (melhorNome) {
     const acima = Math.max(0, melhorPct - 100)
@@ -501,6 +549,9 @@ export async function montarResumoMensal(): Promise<string> {
     linhas.push(
       `• Maior crescimento: ${crescimentoNome} (+${crescimentoPct}% vs ${mesAnterior})`
     )
+  }
+  if (!melhorNome && !crescimentoNome) {
+    linhas.push("Sem destaques no mês.")
   }
 
   linhas.push("")
