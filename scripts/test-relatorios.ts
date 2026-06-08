@@ -5,7 +5,8 @@
  *
  * Pré-requisito: crie `.env.local` na raiz do projeto (gitignored) com:
  *   NEXT_PUBLIC_SUPABASE_URL=https://<projeto>.supabase.co
- *   SUPABASE_SERVICE_ROLE_KEY=<service_role_key>
+ *   NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon_key>      # tráfego/hub usam o cliente anon
+ *   SUPABASE_SERVICE_ROLE_KEY=<service_role_key>  # comercial/log usam o admin
  *
  * Rodar:  npx tsx scripts/test-relatorios.ts      (ou: npm run test:relatorios)
  */
@@ -46,10 +47,11 @@ function inspecionar(nome: string, rel: RelatorioWhatsApp): boolean {
 async function main() {
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     !process.env.SUPABASE_SERVICE_ROLE_KEY
   ) {
     console.error(
-      "❌ Faltam envs. Crie .env.local com NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY."
+      "❌ Faltam envs no .env.local: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY (tráfego/hub) e SUPABASE_SERVICE_ROLE_KEY (comercial/log)."
     )
     process.exit(1)
   }

@@ -21,18 +21,17 @@ import {
   getResumoPorIntervaloPorEmpresa,
   getUltimoLogSentinela,
   statusSentinela,
+  type ResumoEmpresaMes,
 } from "./sentinela"
 import { getResumoComercialPorIntervalo } from "./relatorios-comerciais"
 import {
   diasNoMes,
   empresas,
-  formatBRL,
   formatNumero,
   getResumoGrupo,
   metaAcumuladaAteHoje,
   type Mes,
 } from "./data"
-import { getDeltasDoPeriodo } from "./dados-diarios"
 import { getOverridesTodasEmpresasMes } from "./metas-empresa"
 import { sanitizarParaWa } from "./resumos"
 
@@ -207,20 +206,73 @@ function lista(...partes: (string | null | undefined | false)[]): string {
   return sl(limpa.join(" · "))
 }
 
+/**
+ * Dinheiro COM centavos (R$ 29,24) — específico dos relatórios. NÃO usa o
+ * `formatBRL` global, que arredonda pra inteiro e é usado no dashboard.
+ */
+function brl(n: number): string {
+  return `R$ ${n.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
 function pct(n: number, casas = 0): string {
-  return `${(n * 100).toFixed(casas)}%`
+  // Vírgula decimal PT-BR (1,5% em vez de 1.5%).
+  return `${(n * 100).toFixed(casas).replace(".", ",")}%`
 }
 function pctOuTraco(v: number | null, casas = 0): string {
   return v != null ? pct(v, casas) : TRACO
 }
 function brlOuTraco(v: number | null): string {
-  return v != null ? formatBRL(v) : TRACO
+  return v != null ? brl(v) : TRACO
 }
+// Sinal de menos padronizado em hífen ASCII "-" em TODOS os relatórios.
 function comSinal(n: number): string {
-  return `${n >= 0 ? "+" : "−"}${formatNumero(Math.abs(n))}`
+  return `${n >= 0 ? "+" : "-"}${formatNumero(Math.abs(n))}`
 }
 function brlComSinal(n: number): string {
-  return `${n >= 0 ? "+" : "−"}${formatBRL(Math.abs(n))}`
+  return `${n >= 0 ? "+" : "-"}${brl(Math.abs(n))}`
+}
+
+/** Agrega um Map<empresa, ResumoEmpresaMes> em totais RAW + top-3 por
+ *  investimento. Usado pelo Hub (mesma base do Tráfego, não deltas). */
+function agregarMapa(mapa: Map<string, ResumoEmpresaMes>): {
+  investimento: number
+  leads: number
+  faturamento: number
+  reunioes: number
+  contratos: number
+  contas: number
+  top3: { empresa: string; inv: number }[]
+} {
+  let investimento = 0
+  let leads = 0
+  let faturamento = 0
+  let reunioes = 0
+  let contratos = 0
+  const itens: { empresa: string; inv: number }[] = []
+  for (const [nome, e] of mapa) {
+    investimento += e.investimento
+    leads += e.leads
+    faturamento += e.faturamento
+    reunioes += e.reunioes
+    contratos += e.contratos
+    itens.push({ empresa: nome, inv: e.investimento })
+  }
+  const top3 = itens
+    .filter((x) => x.inv > 0)
+    .sort((a, b) => b.inv - a.inv)
+    .slice(0, 3)
+  return {
+    investimento,
+    leads,
+    faturamento,
+    reunioes,
+    contratos,
+    contas: itens.length,
+    top3,
+  }
 }
 
 // =============================================================================
@@ -270,7 +322,7 @@ export async function montarRelatorioTrafego(
 
   const v1 = sl(j.rotulo)
   const v2 = lista(
-    formatBRL(inv),
+    brl(inv),
     `${formatNumero(leads)} leads`,
     `CPL ${brlOuTraco(cpl)}`
   )
@@ -281,7 +333,7 @@ export async function montarRelatorioTrafego(
   )
   const v4 =
     top3.length > 0
-      ? lista(...top3.map((t) => `${t.nome} ${formatBRL(t.inv)}`))
+      ? lista(...top3.map((t) => `${t.nome} ${brl(t.inv)}`))
       : "Sem investimento no período"
   const v5 = lista(
     `${formatNumero(totalContas)} contas`,
@@ -372,7 +424,7 @@ export async function montarRelatorioComercial(
         `${formatNumero(c.reunioes_realizadas)} realiz`
       )
   const v6 = vazio ? TRACO : formatNumero(c.contratos_fechados)
-  const v7 = vazio ? TRACO : formatBRL(c.faturamento_gerado)
+  const v7 = vazio ? TRACO : brl(c.faturamento_gerado)
   const v8 = vazio
     ? sl(`⚠️ Sem dados comerciais preenchidos para ${j.rotuloCurto}`)
     : lista(
@@ -413,16 +465,21 @@ export async function montarRelatorioHub(
 ): Promise<RelatorioWhatsApp> {
   const j = calcularJanela(periodo, data)
 
-  const [atual, anterior, comercial, overrides] = await Promise.all([
-    getDeltasDoPeriodo(j.de, j.ate),
-    getDeltasDoPeriodo(j.anterior.de, j.anterior.ate),
+  const [mapaAtual, mapaAnterior, comercial, overrides] = await Promise.all([
+    getResumoPorIntervaloPorEmpresa(j.de, j.ate, "pago"),
+    getResumoPorIntervaloPorEmpresa(j.anterior.de, j.anterior.ate, "pago"),
     getResumoComercialPorIntervalo(j.de, j.ate),
     getOverridesTodasEmpresasMes(j.mes, j.ano),
   ])
 
-  const inv = atual.somaInvestimento
-  const fat = atual.somaFaturamento
-  const leads = atual.somaLeads
+  // Somas RAW (mesma base do Tráfego), NÃO deltas — o Hub é total
+  // consolidado do período. O "vs anterior" compara total raw do período
+  // atual com total raw do período anterior (não delta de delta).
+  const atual = agregarMapa(mapaAtual)
+  const anterior = agregarMapa(mapaAnterior)
+  const inv = atual.investimento
+  const fat = atual.faturamento
+  const leads = atual.leads
   const cpl = leads > 0 ? inv / leads : null
   // ROI honesto: ≈ −100% enquanto há investimento e nenhum faturamento real.
   const roi = inv > 0 ? (fat - inv) / inv : null
@@ -441,38 +498,33 @@ export async function montarRelatorioHub(
     const projecao = j.diaAtual > 0 ? (fat / j.diaAtual) * j.diasDoMes : 0
     v3 = lista(
       `${atingido}% da meta`,
-      `esperado ${formatBRL(esperado)}`,
-      `projeção ${formatBRL(projecao)}`
+      `esperado ${brl(esperado)}`,
+      `projeção ${brl(projecao)}`
     )
   }
 
-  const dInv = inv - anterior.somaInvestimento
-  const dLeads = leads - anterior.somaLeads
-
-  const top3 = Array.from(atual.porEmpresa.values())
-    .sort((a, b) => b.investimento - a.investimento)
-    .slice(0, 3)
-    .filter((e) => e.investimento > 0 || e.faturamento > 0 || e.leads > 0)
+  const dInv = inv - anterior.investimento
+  const dLeads = leads - anterior.leads
 
   const v1 = sl(j.rotulo)
   const v2 = lista(
-    `Investido ${formatBRL(inv)}`,
-    `Faturado ${formatBRL(fat)}`,
+    `Investido ${brl(inv)}`,
+    `Faturado ${brl(fat)}`,
     `ROI ${pctOuTraco(roi)}`
   )
   const v4 = lista(
     `Leads ${comSinal(dLeads)} (${formatNumero(leads)} vs ${formatNumero(
-      anterior.somaLeads
+      anterior.leads
     )})`,
     `Investimento ${brlComSinal(dInv)}`
   )
-  const v5 = `${formatNumero(atual.porEmpresa.size)} contas reportaram`
+  const v5 = `${formatNumero(atual.contas)} contas reportaram`
   const v6 =
-    top3.length > 0
-      ? lista(...top3.map((e) => `${e.empresa} ${formatBRL(e.investimento)}`))
+    atual.top3.length > 0
+      ? lista(...atual.top3.map((e) => `${e.empresa} ${brl(e.inv)}`))
       : "Sem movimento no período"
   const v7 = lista(
-    `Tráfego: ${formatBRL(inv)}`,
+    `Tráfego: ${brl(inv)}`,
     `${formatNumero(leads)} leads`,
     `CPL ${brlOuTraco(cpl)}`
   )
@@ -481,7 +533,7 @@ export async function montarRelatorioHub(
       ? "Comercial: sem dados"
       : lista(
           `Comercial: ${formatNumero(comercial.contratos_fechados)} contratos`,
-          formatBRL(comercial.faturamento_gerado)
+          brl(comercial.faturamento_gerado)
         )
 
   const variaveis = [v1, v2, v3, v4, v5, v6, v7, v8]
