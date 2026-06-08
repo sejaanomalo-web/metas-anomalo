@@ -132,7 +132,9 @@ export default function SeletorPeriodoGlobal({
   }
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    // Mobile: tudo alinhado à esquerda (items-start) pra ficar organizado
+    // junto do título. Desktop (lg+): volta pro topo à direita (items-end).
+    <div className="flex flex-col items-start lg:items-end gap-2">
       {/* Alternador de modo */}
       <div className="flex items-center gap-1">
         {(["mes", "dia", "intervalo"] as ModoPeriodo[]).map((m) => (

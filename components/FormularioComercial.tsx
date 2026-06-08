@@ -2,11 +2,7 @@
 
 import { useState, useTransition } from "react"
 import type { EmpresaMeta } from "@/lib/data"
-import { ETAPAS_FUNIL, ROTULO_ETAPA } from "@/lib/comercial-tipos"
-import {
-  salvarPipelineAction,
-  salvarRelatorioComercialAction,
-} from "@/lib/relatorios-comerciais"
+import { salvarRelatorioComercialAction } from "@/lib/relatorios-comerciais"
 
 /** Data atual em BRT (UTC-3 sem DST) no formato YYYY-MM-DD. */
 function hojeBRT(): string {
@@ -22,32 +18,23 @@ type Feedback =
   | null
 
 /**
- * Seção/formulário COMERCIAL. Reusado em três contextos:
+ * Formulário COMERCIAL — relatório diário do time. Escolhe EMPRESA +
+ * data + métricas do dia (prospecção, reuniões, propostas/fechamentos).
+ * Upsert por (empresa, data) — funciona com ou sem login. Reusado em:
  *   • Configurações (admin)  → copiarLinkPublico (mostra "Copiar link")
- *   • /formulario-comercial  → publico (sem chrome, sem bloco de pipeline)
- *
- * Dois blocos:
- *   1. Relatório diário — escolhe EMPRESA + data + métricas do dia
- *      (prospecção, reuniões, propostas/fechamentos). Upsert por
- *      (empresa, data) — funciona com ou sem login.
- *   2. Pipeline — cadastra/atualiza oportunidade. Só em contexto logado
- *      (escondido na versão pública, que não tem sessão).
+ *   • /formulario-comercial  → versão pública (sem o botão de copiar)
  */
 export default function FormularioComercial({
   empresas,
   copiarLinkPublico,
-  publico,
 }: {
   empresas: EmpresaMeta[]
   copiarLinkPublico?: boolean
-  publico?: boolean
 }) {
   const [empresa, setEmpresa] = useState(empresas[0]?.nome ?? "")
   const [data, setData] = useState(hojeBRT())
   const [feedback, setFeedback] = useState<Feedback>(null)
-  const [feedbackPipe, setFeedbackPipe] = useState<Feedback>(null)
   const [pending, startTransition] = useTransition()
-  const [pendingPipe, startPipe] = useTransition()
 
   async function onSubmit(formData: FormData) {
     setFeedback(null)
@@ -55,16 +42,6 @@ export default function FormularioComercial({
     setFeedback(
       r.ok
         ? { tipo: "sucesso", mensagem: `${empresa} · relatório do dia salvo.` }
-        : { tipo: "erro", mensagem: r.erro ?? "Erro." }
-    )
-  }
-
-  async function onSubmitPipe(formData: FormData) {
-    setFeedbackPipe(null)
-    const r = await salvarPipelineAction(formData)
-    setFeedbackPipe(
-      r.ok
-        ? { tipo: "sucesso", mensagem: "Oportunidade salva." }
         : { tipo: "erro", mensagem: r.erro ?? "Erro." }
     )
   }
@@ -217,92 +194,6 @@ export default function FormularioComercial({
           />
         </form>
       </div>
-
-      {/* Bloco 2 — Pipeline (só em contexto logado) */}
-      {!publico && (
-        <div className="glass" style={{ padding: 28 }}>
-          <Titulo texto="Oportunidade · pipeline" />
-          <form
-            action={(fd) => startPipe(() => onSubmitPipe(fd))}
-            className="space-y-4"
-          >
-            <Campo label="Nome da empresa / prospect">
-              <input
-                type="text"
-                name="nome"
-                required
-                className="glass-input"
-                style={inputEstilo}
-                placeholder="Ex.: Loja XPTO"
-              />
-            </Campo>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12 }}>
-              <Campo label="Etapa do funil">
-                <select name="etapa" className="glass-input" style={inputEstilo}>
-                  {ETAPAS_FUNIL.map((e) => (
-                    <option key={e} value={e}>
-                      {ROTULO_ETAPA[e]}
-                    </option>
-                  ))}
-                </select>
-              </Campo>
-              <Campo label="Valor estimado (R$)">
-                <input
-                  type="text"
-                  name="valor_estimado"
-                  inputMode="decimal"
-                  className="glass-input"
-                  style={inputEstilo}
-                  placeholder="0,00"
-                />
-              </Campo>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12 }}>
-              <Campo label="Empresa do hub (opcional)">
-                <select
-                  name="empresa_config_slug"
-                  className="glass-input"
-                  style={inputEstilo}
-                >
-                  <option value="">— prospect novo —</option>
-                  {empresas.map((e) => (
-                    <option key={e.slug} value={e.slug}>
-                      {e.nome}
-                    </option>
-                  ))}
-                </select>
-              </Campo>
-              <Campo label="Origem do contato (opcional)">
-                <input
-                  type="text"
-                  name="origem_contato"
-                  className="glass-input"
-                  style={inputEstilo}
-                  placeholder="inbound / outbound / indicação"
-                />
-              </Campo>
-            </div>
-
-            <Campo label="Observações (opcional)">
-              <textarea
-                name="observacoes"
-                rows={2}
-                className="glass-input"
-                style={{ ...inputEstilo, resize: "vertical", minHeight: 56 }}
-                placeholder="Notas da negociação…"
-              />
-            </Campo>
-
-            <BotaoLinha
-              pending={pendingPipe}
-              feedback={feedbackPipe}
-              rotulo="Salvar oportunidade"
-            />
-          </form>
-        </div>
-      )}
     </div>
   )
 }
@@ -313,23 +204,6 @@ const inputEstilo: React.CSSProperties = {
   padding: "11px 14px",
   fontSize: 14,
   fontWeight: 400,
-}
-
-function Titulo({ texto }: { texto: string }) {
-  return (
-    <p
-      style={{
-        fontSize: 11,
-        letterSpacing: "1.5px",
-        color: "var(--text-3)",
-        textTransform: "uppercase",
-        fontWeight: 500,
-        marginBottom: 22,
-      }}
-    >
-      {texto}
-    </p>
-  )
 }
 
 function Grupo({

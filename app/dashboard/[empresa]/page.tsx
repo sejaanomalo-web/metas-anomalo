@@ -172,17 +172,7 @@ export default async function EmpresaPage({
             }}
           >
             <h1 style={{ fontSize: 36 }}>{empresa.nome}</h1>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
-            >
-              <BotaoAtualizar />
-              <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
-            </div>
+            <BotaoAtualizar />
           </div>
           <div
             style={{
@@ -207,23 +197,25 @@ export default async function EmpresaPage({
               />
             </div>
           </div>
-          {/* Metas é só nível de empresa — sem abas de Tráfego/Clientes
-              (esses ficam no fluxo de Tráfego). Mantém o seletor de origem:
-              pago = realizado do tráfego; orgânico = realizado do comercial. */}
-          {empresa.tipo !== "diego" && (
-            <div
-              style={{
-                marginTop: 18,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                gap: 16,
-                flexWrap: "wrap",
-              }}
-            >
-              <ToggleOrigem origem={origem} />
+          {/* Linha de controles, equilibrando a tela: à esquerda o toggle
+              pago/orgânico (pago = realizado do tráfego; orgânico = do
+              comercial); à direita o seletor de período (mês/dia/intervalo).
+              Metas é só nível de empresa — sem abas de Tráfego/Clientes. */}
+          <div
+            style={{
+              marginTop: 18,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              {empresa.tipo !== "diego" && <ToggleOrigem origem={origem} />}
             </div>
-          )}
+            <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
+          </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 

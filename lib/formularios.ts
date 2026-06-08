@@ -1,13 +1,18 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { MESES, type Mes } from "./data"
+import { MESES, type EmpresaMeta, type Mes } from "./data"
 import {
   type DadosReais,
+  getSupabaseAdmin,
   supabaseConfigurado,
 } from "./supabase"
 import { gravarDadosReaisComLog } from "./dados-reais"
 import { parseNumeroForm } from "./parse-numero"
+import { listarEmpresas } from "./empresas-actions"
+import { getResumoMensalDaEmpresa } from "./sentinela"
+import { getMetasOverrideEmpresa } from "./metas-empresa"
+import { criarNotificacao } from "./notificacoes"
 
 export interface ResultadoFormulario {
   ok: boolean
@@ -119,10 +124,77 @@ export async function salvarFormularioManualAction(
     return { ok: false, erro: resultado.erro }
   }
 
+  // Notifica (dados_trafego) e checa meta batida. Resolve o nome de
+  // exibição pelo db slug enviado pelo form. Falhas aqui não derrubam o
+  // submit — criarNotificacao só loga.
+  const empresas = await listarEmpresas(true)
+  const emp = empresas.find((e) => e.db === empresa)
+  const nome = emp?.nome ?? empresa
+  await criarNotificacao({
+    tipo: "dados_trafego",
+    empresa: nome,
+    titulo: `Tráfego · ${nome}`,
+    mensagem: `Dados de tráfego de ${nome} foram enviados (${periodo.dataISO}).`,
+    payload: { empresa: nome, data: periodo.dataISO },
+  })
+  if (emp) {
+    await verificarMetaBatida(emp, periodo.mes, periodo.ano)
+  }
+
   // Invalida toda a árvore /dashboard — mesma estratégia do drawer
   // admin (cobre /dashboard, /dashboard/empresas, /dashboard/<slug>,
   // /dashboard/<slug>/trafego, etc.)
   revalidatePath("/dashboard", "layout")
 
   return { ok: true }
+}
+
+/**
+ * Se o faturamento realizado (pago) da empresa no mês atingiu a meta
+ * definida (override em metas_empresa), dispara a notificação meta_batida
+ * — uma única vez por (empresa, mes, ano). Sem meta definida → nada.
+ */
+async function verificarMetaBatida(
+  emp: EmpresaMeta,
+  mes: Mes,
+  ano: number
+): Promise<void> {
+  const resumo = await getResumoMensalDaEmpresa(emp.nome, mes, ano, "pago")
+  const realizado = resumo?.faturamento ?? 0
+  if (realizado <= 0) return
+
+  const overrides = await getMetasOverrideEmpresa(emp.db, ano, "pago")
+  const ov = overrides.get(mes)
+  if (!ov) return
+  const chaveFat =
+    emp.tipo === "hato"
+      ? "receita"
+      : emp.tipo === "diego"
+      ? "receita_hub"
+      : "faturamento"
+  const meta = Number((ov as Record<string, number>)[chaveFat] ?? 0)
+  if (meta <= 0 || realizado < meta) return
+
+  // Dedup: já notificou meta batida dessa empresa nesse mês/ano?
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return
+  const { data: existente } = await supabase
+    .from("notificacoes")
+    .select("id")
+    .eq("tipo", "meta_batida")
+    .eq("empresa", emp.nome)
+    .eq("payload->>mes", mes)
+    .eq("payload->>ano", String(ano))
+    .limit(1)
+  if (existente && existente.length > 0) return
+
+  await criarNotificacao({
+    tipo: "meta_batida",
+    empresa: emp.nome,
+    titulo: `🎯 Meta batida · ${emp.nome}`,
+    mensagem: `${emp.nome} atingiu a meta de faturamento de ${mes}/${ano} (R$ ${realizado.toLocaleString(
+      "pt-BR"
+    )}).`,
+    payload: { empresa: emp.nome, mes, ano, meta, realizado },
+  })
 }

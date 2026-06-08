@@ -62,7 +62,7 @@ export default async function FormularioComercialPublicoPage() {
         </p>
       </header>
 
-      <FormularioComercial empresas={empresas} publico />
+      <FormularioComercial empresas={empresas} />
 
       <p
         className="mt-8 text-center"

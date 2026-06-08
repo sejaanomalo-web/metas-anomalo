@@ -1,6 +1,7 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import FormConfig from "@/components/FormConfig"
 import AtivarNotificacoes from "@/components/AtivarNotificacoes"
+import PreferenciasNotificacoes from "@/components/PreferenciasNotificacoes"
 import GerenciadorUsuarios from "@/components/GerenciadorUsuarios"
 import GerenciadorFormularios from "@/components/GerenciadorFormularios"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
@@ -12,6 +13,7 @@ import {
 import { requererPermissao, temPermissao } from "@/lib/auth"
 import { listarUsuariosAction } from "@/lib/usuarios-actions"
 import { listarEmpresas } from "@/lib/empresas-actions"
+import { getPreferenciasNotificacao } from "@/lib/preferencias-notificacao"
 
 export default async function ConfiguracoesPage({
   searchParams,
@@ -23,14 +25,21 @@ export default async function ConfiguracoesPage({
 
   const mes = mesValido(searchParams?.mes)
 
-  const [mensagemDiario, mensagemSemanal, mensagemMensal, usuarios, empresas] =
-    await Promise.all([
-      montarResumoDiario(),
-      montarResumoSemanal(),
-      montarResumoMensal(),
-      podeGerenciarUsuarios ? listarUsuariosAction() : Promise.resolve([]),
-      listarEmpresas(true),
-    ])
+  const [
+    mensagemDiario,
+    mensagemSemanal,
+    mensagemMensal,
+    usuarios,
+    empresas,
+    preferencias,
+  ] = await Promise.all([
+    montarResumoDiario(),
+    montarResumoSemanal(),
+    montarResumoMensal(),
+    podeGerenciarUsuarios ? listarUsuariosAction() : Promise.resolve([]),
+    listarEmpresas(true),
+    getPreferenciasNotificacao(usuario.id),
+  ])
 
   return (
     <>
@@ -77,6 +86,8 @@ export default async function ConfiguracoesPage({
         <AtivarNotificacoes
           vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
         />
+
+        <PreferenciasNotificacoes inicial={preferencias} />
 
         {podeGerenciarUsuarios && (
           <GerenciadorUsuarios

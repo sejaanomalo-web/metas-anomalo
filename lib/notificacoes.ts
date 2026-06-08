@@ -1,7 +1,94 @@
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioIdSync } from "./auth"
 
-export type TipoNotificacao = "nova_venda" | "lembrete"
+export type TipoNotificacao =
+  | "nova_venda"
+  | "lembrete"
+  | "dados_comercial"
+  | "dados_trafego"
+  | "meta_batida"
+  | "dados_sentinela"
+
+// Papéis que podem receber notificações (filtrados depois por
+// ver_notificacoes + preferência do usuário).
+const PAPEIS_NOTIFICAVEIS = ["admin", "gestor_trafego", "comercial", "custom"]
+
+/**
+ * Cria uma notificação e faz fan-out para os usuários elegíveis:
+ * ativos, com papel em papelAlvo, com ver_notificacoes (admin bypassa) e
+ * com a PREFERÊNCIA do tipo ligada (ausência de preferência = ligado).
+ *
+ * O push é enviado automaticamente: existe um trigger em
+ * notificacoes_usuario (fn_dispatch_push_async) que chama /api/push/dispatch
+ * ao inserir cada linha. Server-only (usa service role).
+ */
+export async function criarNotificacao(opts: {
+  tipo: TipoNotificacao
+  empresa?: string | null
+  titulo: string
+  mensagem: string
+  payload?: Record<string, unknown> | null
+  papelAlvo?: string[]
+}): Promise<void> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return
+  const papelAlvo = opts.papelAlvo ?? PAPEIS_NOTIFICAVEIS
+
+  const { data: notif, error } = await supabase
+    .from("notificacoes")
+    .insert({
+      tipo: opts.tipo,
+      empresa: opts.empresa ?? null,
+      titulo: opts.titulo,
+      mensagem: opts.mensagem,
+      payload: opts.payload ?? null,
+      papel_alvo: papelAlvo,
+    })
+    .select("id")
+    .single()
+  if (error || !notif) {
+    console.error("[notificacoes] criar error", error?.message)
+    return
+  }
+
+  const { data: users, error: errUsers } = await supabase
+    .from("usuarios")
+    .select("id, papel, permissoes")
+    .eq("ativo", true)
+    .in("papel", papelAlvo)
+  if (errUsers || !users || users.length === 0) return
+
+  const elegiveis = users.filter(
+    (u) =>
+      u.papel === "admin" ||
+      (u.permissoes as Record<string, boolean> | null)?.ver_notificacoes ===
+        true
+  )
+  if (elegiveis.length === 0) return
+
+  // Filtra por preferência do tipo (default ligado se não houver linha).
+  const ids = elegiveis.map((u) => u.id as string)
+  const { data: prefs } = await supabase
+    .from("preferencias_notificacao")
+    .select(`usuario_id, ${opts.tipo}`)
+    .in("usuario_id", ids)
+  const desligados = new Set(
+    (prefs ?? [])
+      .filter((p) => (p as Record<string, unknown>)[opts.tipo] === false)
+      .map((p) => (p as { usuario_id: string }).usuario_id)
+  )
+  const destinatarios = elegiveis.filter((u) => !desligados.has(u.id as string))
+  if (destinatarios.length === 0) return
+
+  const linhas = destinatarios.map((u) => ({
+    notificacao_id: notif.id as string,
+    usuario_id: u.id as string,
+  }))
+  const { error: errFan } = await supabase
+    .from("notificacoes_usuario")
+    .insert(linhas)
+  if (errFan) console.error("[notificacoes] fan-out error", errFan.message)
+}
 
 export interface NotificacaoItem {
   // id da linha em notificacoes_usuario (usado pra marcar como lida)
