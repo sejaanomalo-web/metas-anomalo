@@ -12,10 +12,11 @@ import { getResumoComercialPorIntervalo } from "@/lib/relatorios-comerciais"
 export const dynamic = "force-dynamic"
 
 /**
- * Painel Comercial — enxuto. Um único funil de ATIVIDADE do período
- * (Mensagens enviadas → Retorno → Qualificados → Reuniões → Contratos →
- * Faturamento), vindo dos relatórios diários (relatorios_comerciais). Sem pipeline de
- * oportunidades (removido por ser redundante com a atividade).
+ * Painel Comercial — enxuto. Um único funil VISUAL de ATIVIDADE do período
+ * (Mensagens enviadas → Retorno → Qualificados → Agendamentos → Reuniões →
+ * Contratos → Faturamento), vindo dos relatórios diários
+ * (relatorios_comerciais). Sem pipeline de oportunidades (removido por ser
+ * redundante com a atividade).
  */
 export default async function ComercialPage({
   searchParams,
@@ -101,7 +102,7 @@ export default async function ComercialPage({
         <section>
           <SectionHeader
             titulo="Funil de atividade"
-            descricao="O que o time fez no período · mensagens → qualificação → reuniões → fechamento"
+            descricao="Da boca ao fundo · mensagens → qualificação → agendamentos → reuniões → contratos → faturamento"
           />
           <FunilAtividadeComercial resumo={resumo} />
         </section>

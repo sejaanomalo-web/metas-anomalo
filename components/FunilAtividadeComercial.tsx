@@ -1,15 +1,33 @@
+import { Fragment } from "react"
 import { formatBRL, formatNumero } from "@/lib/data"
 import type { ResumoComercial } from "@/lib/comercial-tipos"
 
 /**
- * Funil de ATIVIDADE comercial do período — o que o time fez, em uma
- * sequência clara: Mensagens enviadas → Retorno → Qualificados → Reuniões
- * → Contratos → Faturamento. Derivado dos relatórios diários
- * (relatorios_comerciais).
+ * Funil de ATIVIDADE comercial do período — representação VISUAL (barras que
+ * afunilam) da BOCA do funil (mensagens enviadas) até o FUNDO (contratos),
+ * com o faturamento gerado como resultado final. Sequência:
+ *   Mensagens → Retorno → Qualificados → Agendamentos → Reuniões → Contratos
+ * + Faturamento (R$, resultado dos contratos).
  *
- * Substitui a sobreposição antiga (KPIs soltos + funil de oportunidades),
- * que duplicava "reunião" e confundia. Aqui é um funil só.
+ * "Agendamentos" (reuniões agendadas) entra entre Qualificados e Reuniões
+ * (realizadas) — a conversão Agendamentos→Reuniões é o comparecimento.
+ *
+ * Largura de cada barra ∝ ao volume da etapa (linear, sobre o maior valor),
+ * dando a forma do funil. Mostra a conversão de cada passo. Mesmo design
+ * system das demais telas (.glass, accent ouro, gradientes dos cartões de
+ * tráfego). Dados de relatorios_comerciais.
  */
+
+type Etapa = {
+  label: string
+  valor: number
+  cor: string
+  sub?: string
+  destaque?: boolean
+}
+
+const MIN_PCT = 32 // piso da largura, pra label + número caberem nas etapas baixas
+
 export default function FunilAtividadeComercial({
   resumo,
 }: {
@@ -17,89 +35,209 @@ export default function FunilAtividadeComercial({
 }) {
   const semDados = resumo.registros === 0
 
-  const etapas: {
-    label: string
-    valor: string
-    sub: string
-    destaque?: boolean
-  }[] = [
+  const etapas: Etapa[] = [
     {
       label: "Mensagens enviadas",
-      valor: formatNumero(resumo.mensagens),
-      sub: "enviadas",
+      valor: resumo.mensagens,
+      cor: "#4062f0",
+      sub: "boca do funil",
     },
     {
       label: "Retorno",
-      valor: formatNumero(resumo.retorno_mensagens),
+      valor: resumo.retorno_mensagens,
+      cor: "#6366f1",
       sub: "responderam",
     },
     {
       label: "Qualificados",
-      valor: formatNumero(resumo.qualificados),
+      valor: resumo.qualificados,
+      cor: "#8b5cf6",
       sub: "qualificados",
     },
     {
+      label: "Agendamentos",
+      valor: resumo.reunioes_agendadas,
+      cor: "#a855f7",
+      sub: "reuniões agendadas",
+    },
+    {
       label: "Reuniões",
-      valor: formatNumero(resumo.reunioes_realizadas),
-      sub: `${formatNumero(resumo.reunioes_agendadas)} agend · ${formatNumero(
-        resumo.no_shows
-      )} no-show`,
+      valor: resumo.reunioes_realizadas,
+      cor: "#f97316",
+      sub: `${formatNumero(resumo.no_shows)} no-show`,
     },
     {
       label: "Contratos",
-      valor: formatNumero(resumo.contratos_fechados),
+      valor: resumo.contratos_fechados,
+      cor: "#34c759",
       sub: `${formatNumero(resumo.propostas_enviadas)} propostas`,
-      destaque: true,
-    },
-    {
-      label: "Faturamento",
-      valor: formatBRL(resumo.faturamento_gerado),
-      sub: "gerado",
       destaque: true,
     },
   ]
 
+  const denom = Math.max(...etapas.map((e) => e.valor), 1)
+
   return (
-    <div
-      className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
-      style={{ gap: 12 }}
-    >
-      {etapas.map((e) => (
+    <div style={{ maxWidth: 720, marginInline: "auto", width: "100%" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        {etapas.map((e, i) => {
+          const pct = Math.max((e.valor / denom) * 100, MIN_PCT)
+          const prev = i > 0 ? etapas[i - 1] : null
+          const conv =
+            prev && prev.valor > 0
+              ? Math.round((e.valor / prev.valor) * 100)
+              : null
+
+          return (
+            <Fragment key={e.label}>
+              {i > 0 && (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--text-4)",
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                  }}
+                >
+                  ↓ {conv === null ? "—" : `${conv}%`}
+                </div>
+              )}
+              <div
+                style={{
+                  width: semDados ? "100%" : `${pct}%`,
+                  minWidth: 240,
+                  borderRadius: 12,
+                  padding: "12px 18px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 14,
+                  minHeight: 56,
+                  background: semDados
+                    ? "var(--card-bg)"
+                    : `linear-gradient(135deg, ${e.cor}, ${escurecer(e.cor)})`,
+                  border: e.destaque
+                    ? "1px solid rgba(201,149,58,0.55)"
+                    : semDados
+                    ? "1px solid var(--card-border)"
+                    : "1px solid rgba(255,255,255,0.12)",
+                  boxShadow: semDados ? "none" : `0 0 18px ${e.cor}33`,
+                  transition: "width 0.3s ease",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <p
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      letterSpacing: "0.01em",
+                      color: semDados ? "var(--text-3)" : "#fff",
+                      textShadow: semDados ? "none" : "0 1px 2px rgba(0,0,0,0.25)",
+                    }}
+                  >
+                    {e.label}
+                  </p>
+                  {e.sub && (
+                    <p
+                      style={{
+                        fontSize: 10,
+                        marginTop: 2,
+                        color: semDados
+                          ? "var(--text-4)"
+                          : "rgba(255,255,255,0.78)",
+                      }}
+                    >
+                      {e.sub}
+                    </p>
+                  )}
+                </div>
+                <p
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    color: semDados ? "var(--text-4)" : "#fff",
+                    textShadow: semDados ? "none" : "0 1px 2px rgba(0,0,0,0.25)",
+                  }}
+                >
+                  {semDados ? "·" : formatNumero(e.valor)}
+                </p>
+              </div>
+            </Fragment>
+          )
+        })}
+
+        {/* Resultado: faturamento gerado pelos contratos (R$ — fora da taxa de
+            contagem do funil; é a receita do fundo do funil). */}
         <div
-          key={e.label}
-          className="glass"
           style={{
-            padding: "18px 16px",
-            borderColor: e.destaque ? "rgba(201,149,58,0.35)" : undefined,
+            fontSize: 11,
+            color: "var(--text-4)",
+            lineHeight: 1,
+            marginTop: 2,
           }}
         >
+          ↓ resultado
+        </div>
+        <div
+          className="glass"
+          style={{
+            width: "100%",
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            borderColor: "rgba(201,149,58,0.45)",
+            background: semDados
+              ? undefined
+              : "linear-gradient(135deg, rgba(201,149,58,0.18), rgba(201,149,58,0.05))",
+          }}
+        >
+          <div>
+            <p
+              style={{
+                fontSize: 10,
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                color: "var(--accent, #C9953A)",
+                fontWeight: 600,
+              }}
+            >
+              Faturamento gerado
+            </p>
+            <p style={{ fontSize: 11, color: "var(--text-4)", marginTop: 2 }}>
+              fundo do funil · receita dos contratos
+            </p>
+          </div>
           <p
             style={{
-              fontSize: 10,
-              letterSpacing: "1px",
-              textTransform: "uppercase",
-              color: "var(--accent, #C9953A)",
-              fontWeight: 600,
-            }}
-          >
-            {e.label}
-          </p>
-          <p
-            style={{
-              fontSize: e.label === "Faturamento" ? 22 : 30,
+              fontSize: 26,
               fontWeight: 700,
-              marginTop: 6,
               fontVariantNumeric: "tabular-nums",
               color: semDados ? "var(--text-4)" : "var(--text-1)",
             }}
           >
-            {semDados ? "·" : e.valor}
-          </p>
-          <p style={{ fontSize: 11, color: "var(--text-4)", marginTop: 2 }}>
-            {e.sub}
+            {semDados ? "·" : formatBRL(resumo.faturamento_gerado)}
           </p>
         </div>
-      ))}
+      </div>
     </div>
   )
+}
+
+/** Escurece uma cor hex (#rrggbb) pro gradiente do fundo da barra. */
+function escurecer(hex: string): string {
+  const n = parseInt(hex.slice(1), 16)
+  const r = Math.max(0, ((n >> 16) & 255) - 42)
+  const g = Math.max(0, ((n >> 8) & 255) - 42)
+  const b = Math.max(0, (n & 255) - 42)
+  return `rgb(${r}, ${g}, ${b})`
 }
