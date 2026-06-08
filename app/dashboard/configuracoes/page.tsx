@@ -4,6 +4,8 @@ import AtivarNotificacoes from "@/components/AtivarNotificacoes"
 import PreferenciasNotificacoes from "@/components/PreferenciasNotificacoes"
 import GerenciadorUsuarios from "@/components/GerenciadorUsuarios"
 import GerenciadorFormularios from "@/components/GerenciadorFormularios"
+import GerenciadorRelatoriosComerciais from "@/components/GerenciadorRelatoriosComerciais"
+import GerenciadorDadosDiarios from "@/components/GerenciadorDadosDiarios"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
 import {
   montarResumoDiario,
@@ -12,6 +14,7 @@ import {
 } from "@/lib/resumos"
 import { requererPermissao, temPermissao } from "@/lib/auth"
 import { listarUsuariosAction } from "@/lib/usuarios-actions"
+import { listarRelatoriosComerciaisAdmin } from "@/lib/relatorios-comerciais"
 import { listarEmpresas } from "@/lib/empresas-actions"
 import { getPreferenciasNotificacao } from "@/lib/preferencias-notificacao"
 
@@ -22,6 +25,7 @@ export default async function ConfiguracoesPage({
 }) {
   const usuario = await requererPermissao("configuracoes")
   const podeGerenciarUsuarios = temPermissao(usuario, "gerenciar_usuarios")
+  const ehAdmin = usuario.papel === "admin"
 
   const mes = mesValido(searchParams?.mes)
 
@@ -32,6 +36,7 @@ export default async function ConfiguracoesPage({
     usuarios,
     empresas,
     preferencias,
+    relatoriosComerciais,
   ] = await Promise.all([
     montarResumoDiario(),
     montarResumoSemanal(),
@@ -39,6 +44,7 @@ export default async function ConfiguracoesPage({
     podeGerenciarUsuarios ? listarUsuariosAction() : Promise.resolve([]),
     listarEmpresas(true),
     getPreferenciasNotificacao(usuario.id),
+    ehAdmin ? listarRelatoriosComerciaisAdmin() : Promise.resolve([]),
   ])
 
   return (
@@ -97,6 +103,16 @@ export default async function ConfiguracoesPage({
         )}
 
         <GerenciadorFormularios empresas={empresas} />
+
+        {ehAdmin && (
+          <>
+            <GerenciadorRelatoriosComerciais
+              registrosIniciais={relatoriosComerciais}
+              empresas={empresas}
+            />
+            <GerenciadorDadosDiarios empresas={empresas} />
+          </>
+        )}
 
         <FormConfig
           mensagemDiario={mensagemDiario}

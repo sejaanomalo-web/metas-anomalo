@@ -152,6 +152,12 @@ export async function criarUsuarioAction(
     if (error.code === "23505") {
       return { ok: false, erro: "E-mail já cadastrado." }
     }
+    if (error.code === "23514") {
+      return {
+        ok: false,
+        erro: "Papel inválido no banco — aplique a migration usuarios_papel_check.",
+      }
+    }
     console.error("[usuarios] criar error", error.message)
     return { ok: false, erro: error.message }
   }
@@ -212,6 +218,12 @@ export async function atualizarUsuarioAction(
     })
     .eq("id", id)
   if (error) {
+    if (error.code === "23514") {
+      return {
+        ok: false,
+        erro: "Papel inválido no banco — aplique a migration usuarios_papel_check.",
+      }
+    }
     console.error("[usuarios] atualizar error", error.message)
     return { ok: false, erro: error.message }
   }

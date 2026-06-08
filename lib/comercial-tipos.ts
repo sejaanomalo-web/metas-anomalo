@@ -13,6 +13,8 @@ export interface RelatorioComercial {
   data: string
   ligacoes: number
   mensagens: number
+  retorno_mensagens: number
+  qualificados: number
   conexoes_novas: number
   reunioes_agendadas: number
   reunioes_realizadas: number
@@ -26,7 +28,8 @@ export interface RelatorioComercial {
 export interface ResumoComercial {
   ligacoes: number
   mensagens: number
-  conexoes_novas: number
+  retorno_mensagens: number
+  qualificados: number
   reunioes_agendadas: number
   reunioes_realizadas: number
   no_shows: number

@@ -217,6 +217,21 @@ export async function requererPermissao(
 }
 
 /**
+ * Guard ESTRITO de admin (papel === 'admin'). Usar em ferramentas
+ * destrutivas (excluir/editar dados inseridos no sistema), onde a
+ * permissão 'configuracoes' seria ampla demais — um 'custom' poderia
+ * tê-la. Redireciona pra rota padrão se não for admin.
+ */
+export async function requererAdmin(): Promise<UsuarioSessao> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) redirect("/login")
+  if (usuario.papel !== "admin") {
+    redirect(rotaPadraoDoUsuario(usuario))
+  }
+  return usuario
+}
+
+/**
  * Retorna o usuário da sessão atual com os campos da tabela usuarios.
  * null se não autenticado / cookie inválido / usuário não existe ou foi
  * desativado. Inclui papel e permissoes pra checagem RBAC nas pages.

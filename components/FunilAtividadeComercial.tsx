@@ -3,8 +3,9 @@ import type { ResumoComercial } from "@/lib/comercial-tipos"
 
 /**
  * Funil de ATIVIDADE comercial do período — o que o time fez, em uma
- * sequência clara: Prospecção → Reuniões → Propostas → Contratos →
- * Faturamento. Tudo derivado dos relatórios diários (relatorios_comerciais).
+ * sequência clara: Mensagens enviadas → Retorno → Qualificados → Reuniões
+ * → Contratos → Faturamento. Derivado dos relatórios diários
+ * (relatorios_comerciais).
  *
  * Substitui a sobreposição antiga (KPIs soltos + funil de oportunidades),
  * que duplicava "reunião" e confundia. Aqui é um funil só.
@@ -15,8 +16,6 @@ export default function FunilAtividadeComercial({
   resumo: ResumoComercial
 }) {
   const semDados = resumo.registros === 0
-  const totalProspeccao =
-    resumo.ligacoes + resumo.mensagens + resumo.conexoes_novas
 
   const etapas: {
     label: string
@@ -25,28 +24,31 @@ export default function FunilAtividadeComercial({
     destaque?: boolean
   }[] = [
     {
-      label: "Prospecção",
-      valor: formatNumero(totalProspeccao),
-      sub: `${formatNumero(resumo.ligacoes)} lig · ${formatNumero(
-        resumo.mensagens
-      )} msg · ${formatNumero(resumo.conexoes_novas)} conex`,
+      label: "Mensagens enviadas",
+      valor: formatNumero(resumo.mensagens),
+      sub: "enviadas",
+    },
+    {
+      label: "Retorno",
+      valor: formatNumero(resumo.retorno_mensagens),
+      sub: "responderam",
+    },
+    {
+      label: "Qualificados",
+      valor: formatNumero(resumo.qualificados),
+      sub: "qualificados",
     },
     {
       label: "Reuniões",
       valor: formatNumero(resumo.reunioes_realizadas),
-      sub: `${formatNumero(resumo.reunioes_agendadas)} agendadas · ${formatNumero(
+      sub: `${formatNumero(resumo.reunioes_agendadas)} agend · ${formatNumero(
         resumo.no_shows
       )} no-show`,
     },
     {
-      label: "Propostas",
-      valor: formatNumero(resumo.propostas_enviadas),
-      sub: "enviadas",
-    },
-    {
       label: "Contratos",
       valor: formatNumero(resumo.contratos_fechados),
-      sub: "fechados",
+      sub: `${formatNumero(resumo.propostas_enviadas)} propostas`,
       destaque: true,
     },
     {
@@ -59,7 +61,7 @@ export default function FunilAtividadeComercial({
 
   return (
     <div
-      className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
+      className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
       style={{ gap: 12 }}
     >
       {etapas.map((e) => (

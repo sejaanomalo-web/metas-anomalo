@@ -145,9 +145,9 @@ export default function FormularioComercial({
 
           <Grupo titulo="Prospecção">
             <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 12 }}>
-              <NumCampo label="Ligações" name="ligacoes" />
-              <NumCampo label="Mensagens / e-mails" name="mensagens" />
-              <NumCampo label="Conexões novas" name="conexoes_novas" />
+              <NumCampo label="Mensagens enviadas" name="mensagens" />
+              <NumCampo label="Retorno de mensagens" name="retorno_mensagens" />
+              <NumCampo label="Qualificados" name="qualificados" />
             </div>
           </Grupo>
 

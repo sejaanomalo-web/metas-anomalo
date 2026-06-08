@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic"
 
 /**
  * Painel Comercial — enxuto. Um único funil de ATIVIDADE do período
- * (Prospecção → Reuniões → Propostas → Contratos → Faturamento), vindo
- * dos relatórios diários (relatorios_comerciais). Sem pipeline de
+ * (Mensagens enviadas → Retorno → Qualificados → Reuniões → Contratos →
+ * Faturamento), vindo dos relatórios diários (relatorios_comerciais). Sem pipeline de
  * oportunidades (removido por ser redundante com a atividade).
  */
 export default async function ComercialPage({
@@ -83,7 +83,7 @@ export default async function ComercialPage({
         <section>
           <SectionHeader
             titulo="Funil de atividade"
-            descricao="O que o time fez no período · prospecção → fechamento"
+            descricao="O que o time fez no período · mensagens → qualificação → reuniões → fechamento"
           />
           <FunilAtividadeComercial resumo={resumo} />
         </section>

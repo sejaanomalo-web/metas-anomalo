@@ -620,10 +620,13 @@ create table if not exists public.relatorios_comerciais (
   colaborador_id uuid,
   colaborador_nome text not null,
   data date not null,
-  -- Prospecção (outbound do dia)
+  -- Prospecção (outbound do dia) — funil novo: Mensagens enviadas ->
+  -- Retorno -> Qualificados -> Reuniões agendadas.
   ligacoes int not null default 0,
-  mensagens int not null default 0,
-  conexoes_novas int not null default 0,
+  mensagens int not null default 0,         -- rótulo UI: "Mensagens enviadas"
+  retorno_mensagens int not null default 0, -- respostas às mensagens
+  qualificados int not null default 0,      -- leads qualificados
+  conexoes_novas int not null default 0,    -- legado: fora do funil/UI (mantida)
   -- Reuniões / agendamentos
   reunioes_agendadas int not null default 0,
   reunioes_realizadas int not null default 0,

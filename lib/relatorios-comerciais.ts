@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
-import { getUsuarioAtual } from "./auth"
+import { getUsuarioAtual, requererAdmin } from "./auth"
 import { parseNumeroForm } from "./parse-numero"
 import { MESES, type Mes } from "./data"
 import { criarNotificacao } from "./notificacoes"
@@ -76,7 +76,8 @@ export async function salvarRelatorioComercialAction(
     data,
     ligacoes: intDoForm(formData.get("ligacoes")),
     mensagens: intDoForm(formData.get("mensagens")),
-    conexoes_novas: intDoForm(formData.get("conexoes_novas")),
+    retorno_mensagens: intDoForm(formData.get("retorno_mensagens")),
+    qualificados: intDoForm(formData.get("qualificados")),
     reunioes_agendadas: intDoForm(formData.get("reunioes_agendadas")),
     reunioes_realizadas: intDoForm(formData.get("reunioes_realizadas")),
     no_shows: intDoForm(formData.get("no_shows")),
@@ -139,7 +140,8 @@ export async function getResumoComercialPorIntervalo(
   const acc: ResumoComercial = {
     ligacoes: 0,
     mensagens: 0,
-    conexoes_novas: 0,
+    retorno_mensagens: 0,
+    qualificados: 0,
     reunioes_agendadas: 0,
     reunioes_realizadas: 0,
     no_shows: 0,
@@ -151,7 +153,8 @@ export async function getResumoComercialPorIntervalo(
   for (const l of linhas) {
     acc.ligacoes += l.ligacoes
     acc.mensagens += l.mensagens
-    acc.conexoes_novas += l.conexoes_novas
+    acc.retorno_mensagens += l.retorno_mensagens
+    acc.qualificados += l.qualificados
     acc.reunioes_agendadas += l.reunioes_agendadas
     acc.reunioes_realizadas += l.reunioes_realizadas
     acc.no_shows += l.no_shows
@@ -173,7 +176,7 @@ export async function getResumoComercialPorIntervalo(
 // reaproveita resumoComoDadosReais/CenarioReal/TabelaMeses sem mudanças.
 //
 // Mapeamento (confirmado com o usuário):
-//   leads        ← conexoes_novas   (topo do funil orgânico)
+//   leads        ← mensagens   (mensagens enviadas — topo do funil orgânico)
 //   reuniões     ← reunioes_realizadas
 //   contratos    ← contratos_fechados
 //   faturamento  ← faturamento_gerado
@@ -189,7 +192,7 @@ function comercialParaResumo(
   let contratos = 0
   let faturamento = 0
   for (const l of linhas) {
-    leads += l.conexoes_novas
+    leads += l.mensagens
     reunioes += l.reunioes_realizadas
     contratos += l.contratos_fechados
     faturamento += Number(l.faturamento_gerado ?? 0)
@@ -283,3 +286,108 @@ export async function getResumoComercialAnualDaEmpresa(
 // Pipeline de oportunidades removido — o painel Comercial agora é só o
 // funil de atividade (relatorios_comerciais). A tabela pipeline_comercial
 // permanece no banco, sem uso pela aplicação.
+
+// ============================================================
+// Admin (Configurações → Gerenciar dados): editar/excluir relatórios.
+// Gate ESTRITO por papel admin (requererAdmin). NÃO dispara notificação
+// (diferente do salvar do formulário — editar/excluir não é "envio").
+// ============================================================
+
+/** Todos os relatórios comerciais (admin), mais recentes primeiro. */
+export async function listarRelatoriosComerciaisAdmin(): Promise<
+  RelatorioComercial[]
+> {
+  await requererAdmin()
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("relatorios_comerciais")
+    .select("*")
+    .order("data", { ascending: false })
+    .limit(500)
+  if (error) {
+    console.error("[comercial] listar admin error", error.message)
+    return []
+  }
+  return (data ?? []) as RelatorioComercial[]
+}
+
+/** Exclusão definitiva por id. Exige confirmação textual "Excluir". */
+export async function excluirRelatorioComercialAction(
+  formData: FormData
+): Promise<ResultadoComercial> {
+  await requererAdmin()
+  const id = String(formData.get("id") ?? "").trim()
+  const confirmacao = String(formData.get("confirmacao") ?? "")
+  if (!id) return { ok: false, erro: "ID inválido." }
+  if (confirmacao !== "Excluir") {
+    return { ok: false, erro: 'Digite exatamente "Excluir" pra confirmar.' }
+  }
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+  const { error } = await supabase
+    .from("relatorios_comerciais")
+    .delete()
+    .eq("id", id)
+  if (error) {
+    console.error("[comercial] excluir error", error.message)
+    return { ok: false, erro: error.message }
+  }
+  revalidatePath("/dashboard", "layout")
+  return { ok: true }
+}
+
+/** Edição por id (admin). Update direto — não usa upsert, então não
+ *  colide com a chave (empresa,data) a menos que se troque empresa/data
+ *  para um par já existente (tratado como 23505). */
+export async function atualizarRelatorioComercialAction(
+  formData: FormData
+): Promise<ResultadoComercial> {
+  await requererAdmin()
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, erro: "ID inválido." }
+
+  const empresa = String(formData.get("empresa") ?? "").trim()
+  if (!empresa) return { ok: false, erro: "Selecione a empresa." }
+  const data = String(formData.get("data") ?? "").trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+    return { ok: false, erro: "Data inválida." }
+  }
+  const fatParse = parseNumeroForm(formData.get("faturamento_gerado"))
+  if (fatParse.erro) return { ok: false, erro: fatParse.erro }
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const { error } = await supabase
+    .from("relatorios_comerciais")
+    .update({
+      empresa,
+      data,
+      mensagens: intDoForm(formData.get("mensagens")),
+      retorno_mensagens: intDoForm(formData.get("retorno_mensagens")),
+      qualificados: intDoForm(formData.get("qualificados")),
+      reunioes_agendadas: intDoForm(formData.get("reunioes_agendadas")),
+      reunioes_realizadas: intDoForm(formData.get("reunioes_realizadas")),
+      no_shows: intDoForm(formData.get("no_shows")),
+      propostas_enviadas: intDoForm(formData.get("propostas_enviadas")),
+      contratos_fechados: intDoForm(formData.get("contratos_fechados")),
+      faturamento_gerado: fatParse.value ?? 0,
+      observacoes: (String(formData.get("observacoes") ?? "").trim() ||
+        null) as string | null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        erro: "Já existe relatório para essa empresa nessa data.",
+      }
+    }
+    console.error("[comercial] atualizar error", error.message)
+    return { ok: false, erro: error.message }
+  }
+  revalidatePath("/dashboard", "layout")
+  return { ok: true }
+}
