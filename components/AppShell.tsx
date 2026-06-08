@@ -63,10 +63,11 @@ const STORAGE_KEY = "anomalo-sidebar-expandido"
 const RAIL_COLLAPSED = 72
 const RAIL_EXPANDED = 240
 
-// Rotas que NÃO são empresa — usadas pra deduzir quando Empresas está ativo
+// Rotas que NÃO são empresa — usadas pra deduzir quando Metas está ativo
 // (qualquer rota /dashboard/<algo> que não seja uma dessas).
 const ROTAS_NAO_EMPRESA = new Set([
   "/dashboard",
+  "/dashboard/metas",
   "/dashboard/empresas",
   "/dashboard/trafego",
   "/dashboard/comercial",
@@ -76,7 +77,8 @@ const ROTAS_NAO_EMPRESA = new Set([
 ])
 
 function ehRotaEmpresa(pathname: string): boolean {
-  if (pathname === "/dashboard/empresas") return true
+  if (pathname === "/dashboard/metas" || pathname === "/dashboard/empresas")
+    return true
   if (!pathname.startsWith("/dashboard/")) return false
   const segmentos = pathname.split("/").filter(Boolean)
   // Primeiro segmento depois de /dashboard: se for um slug livre (não uma
@@ -208,10 +210,11 @@ function SidebarRail({
   const financeiroAtivo = pathname.startsWith("/dashboard/financeiro")
   const comercialAtivo =
     pathname === "/dashboard/comercial" || pathname.endsWith("/comercial")
-  // Empresas só ativa quando NÃO estamos em /trafego, /comercial nem
-  // /financeiro — evita destacar dois items ao mesmo tempo em rotas
-  // aninhadas.
-  const empresasAtivo =
+  // Metas (antigo Empresas) só ativa quando NÃO estamos em /trafego,
+  // /comercial nem /financeiro — evita destacar dois items ao mesmo
+  // tempo em rotas aninhadas. Cobre /dashboard/metas e o detalhe de
+  // empresa /dashboard/[empresa].
+  const metasAtivo =
     !trafegoAtivo &&
     !financeiroAtivo &&
     !comercialAtivo &&
@@ -263,10 +266,10 @@ function SidebarRail({
         {podeEmpresas && (
           <ItemMenu
             icon={<IconeEmpresas />}
-            rotulo="Empresas"
-            href="/dashboard/empresas"
+            rotulo="Metas"
+            href="/dashboard/metas"
             expandido={expandido}
-            ativo={empresasAtivo}
+            ativo={metasAtivo}
           />
         )}
         {podeTrafego && (

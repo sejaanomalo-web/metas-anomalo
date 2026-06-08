@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
-import TabsEmpresa from "@/components/TabsEmpresa"
+import TabsTrafego from "@/components/TabsTrafego"
 import TrafegoRealtime from "@/components/TrafegoRealtime"
 import PainelTrafego from "@/components/trafego/PainelTrafego"
 import TagStatusCampanha from "@/components/trafego/TagStatusCampanha"
@@ -117,7 +117,7 @@ export default async function ClienteTrafegoPage({
               flexWrap: "wrap",
             }}
           >
-            <TabsEmpresa slug={empresa.slug} mes={mes} ano={ano} />
+            <TabsTrafego slug={empresa.slug} mes={mes} ano={ano} />
             <BadgeStatusSentinela
               statusCor={stat.cor}
               rotulo={stat.rotulo}

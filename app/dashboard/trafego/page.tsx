@@ -118,22 +118,27 @@ export default async function TrafegoOverviewPage({
             <h1 style={{ fontSize: 36 }}>
               Visão geral de tráfego · {periodo.rotulo}
             </h1>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
-            >
-              <DrawerEmpresas
-                empresas={empresas}
-                empresasInativas={empresasInativas}
-                supabaseOk={supabaseOk}
-              />
-              <BotaoAtualizar />
-              <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
-            </div>
+            {/* Seletor de período sempre no topo à direita, como nas
+                demais páginas. */}
+            <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
+          </div>
+          {/* Ações específicas do tráfego (gerenciar empresas + atualizar)
+              ficam logo abaixo do título, fora da linha do seletor. */}
+          <div
+            style={{
+              marginTop: 14,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <DrawerEmpresas
+              empresas={empresas}
+              empresasInativas={empresasInativas}
+              supabaseOk={supabaseOk}
+            />
+            <BotaoAtualizar />
           </div>
           <p
             style={{
@@ -203,7 +208,7 @@ export default async function TrafegoOverviewPage({
                 }}
               >
                 Nenhuma empresa ativa no Hub. Cadastre uma empresa em{" "}
-                <code style={{ color: "var(--accent)" }}>/dashboard/empresas</code>{" "}
+                <code style={{ color: "var(--accent)" }}>/dashboard/metas</code>{" "}
                 pra começar.
               </p>
             </div>

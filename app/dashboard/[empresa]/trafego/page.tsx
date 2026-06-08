@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
-import TabsEmpresa from "@/components/TabsEmpresa"
+import TabsTrafego from "@/components/TabsTrafego"
 import TrafegoRealtime from "@/components/TrafegoRealtime"
 import PainelTrafego from "@/components/trafego/PainelTrafego"
 import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
@@ -103,7 +103,7 @@ export default async function TrafegoPage({
       >
         <div>
           <Link
-            href={`/dashboard/${empresa.slug}?mes=${mes}&ano=${ano}`}
+            href={`/dashboard/trafego?mes=${mes}&ano=${ano}`}
             style={{
               fontSize: 12,
               color: "var(--text-3)",
@@ -111,7 +111,7 @@ export default async function TrafegoPage({
             }}
             className="hover:text-[#C9953A] transition"
           >
-            ← {empresa.nome}
+            ← Tráfego
           </Link>
           <div
             style={{
@@ -147,7 +147,7 @@ export default async function TrafegoPage({
               flexWrap: "wrap",
             }}
           >
-            <TabsEmpresa slug={empresa.slug} mes={mes} ano={ano} />
+            <TabsTrafego slug={empresa.slug} mes={mes} ano={ano} />
             <BadgeStatusSentinela
               statusCor={stat.cor}
               rotulo={stat.rotulo}

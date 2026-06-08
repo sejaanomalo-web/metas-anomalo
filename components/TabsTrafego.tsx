@@ -4,71 +4,45 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 /**
- * Nav em forma de pílulas para alternar entre as abas do painel de uma
- * empresa específica:
+ * Navegação DENTRO do fluxo de Tráfego de uma empresa: alterna apenas
+ * entre "Tráfego pago" e "Tráfego por cliente". NÃO há aba "Visão geral"
+ * (Metas) — os fluxos de Tráfego e Metas são separados de propósito: o
+ * que se faz em Tráfego fica em Tráfego. Substitui o antigo TabsEmpresa
+ * (que cruzava para Metas) nas páginas de tráfego.
  *
- *   ┌──────────────┐ ┌──────────────────┐
- *   │ Visão Geral  │ │ ◆ Tráfego pago   │
- *   └──────────────┘ └──────────────────┘
- *
- * A aba ativa fica em ouro sólido (mesmo padrão do .btn-gold-filled);
- * a inativa fica em ghost/outline. Detecção da rota ativa via
- * usePathname (client component).
- *
- * A bolinha dourada pulsando na aba "Tráfego pago" sinaliza dado
- * "live" — atualizado pelo agente Sentinela. Mesma linguagem visual
- * do BadgeStatusSentinela, dá coerência ao painel.
+ * A bolinha dourada pulsando sinaliza dado "live" do agente Sentinela.
  */
-export default function TabsEmpresa({
+export default function TabsTrafego({
   slug,
   mes,
   ano,
-  origem,
 }: {
   slug: string
   mes: string
   ano: number
-  origem?: string
 }) {
   const pathname = usePathname()
   const qs = new URLSearchParams({ mes, ano: String(ano) })
-  if (origem && origem !== "pago") qs.set("origem", origem)
-  const visaoHref = `/dashboard/${slug}?${qs.toString()}`
   const trafegoHref = `/dashboard/${slug}/trafego?${qs.toString()}`
   const clientesHref = `/dashboard/${slug}/clientes?${qs.toString()}`
 
-  const naVisao = pathname === `/dashboard/${slug}`
   const noTrafego = pathname === `/dashboard/${slug}/trafego`
-  // "Tráfego por Cliente" ativa em qualquer rota /clientes (lista ou detalhe).
   const nosClientes = pathname.startsWith(`/dashboard/${slug}/clientes`)
 
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 10,
-        flexWrap: "wrap",
-      }}
-    >
-      <TabLink href={visaoHref} ativa={naVisao}>
-        Visão Geral
-      </TabLink>
-      <TabLink href={trafegoHref} ativa={noTrafego} destaque>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <TabLink href={trafegoHref} ativa={noTrafego}>
         <BolinhaLive ativa={noTrafego} />
         Tráfego pago
       </TabLink>
-      <TabLink href={clientesHref} ativa={nosClientes} destaque>
+      <TabLink href={clientesHref} ativa={nosClientes}>
         <BolinhaLive ativa={nosClientes} />
-        Tráfego por Cliente
+        Tráfego por cliente
       </TabLink>
     </div>
   )
 }
 
-/**
- * Dot pulsando em ouro. Na aba ATIVA (ouro sólido) muda pra preto pra
- * ficar legível sobre o background. Na inativa mantém o ouro vivo.
- */
 function BolinhaLive({ ativa }: { ativa: boolean }) {
   return (
     <span
@@ -92,18 +66,12 @@ function BolinhaLive({ ativa }: { ativa: boolean }) {
 function TabLink({
   href,
   ativa,
-  destaque,
   children,
 }: {
   href: string
   ativa: boolean
-  destaque?: boolean
   children: React.ReactNode
 }) {
-  // Visual:
-  //  - ativa (sempre): ouro sólido, texto preto, pequeno glow
-  //  - inativa + destaque (Tráfego): outline em ouro forte com glow sutil
-  //  - inativa normal: outline neutro em var(--surface-2)
   const style: React.CSSProperties = ativa
     ? {
         background: "var(--accent)",
@@ -111,17 +79,11 @@ function TabLink({
         border: "1px solid var(--accent)",
         boxShadow: "0 0 16px rgba(201,149,58,0.22)",
       }
-    : destaque
-    ? {
+    : {
         background: "rgba(201,149,58,0.08)",
         color: "var(--accent)",
         border: "1px solid rgba(201,149,58,0.45)",
         boxShadow: "0 0 12px rgba(201,149,58,0.10)",
-      }
-    : {
-        background: "transparent",
-        color: "var(--text-2)",
-        border: "1px solid rgba(255,255,255,0.10)",
       }
 
   return (
@@ -147,4 +109,3 @@ function TabLink({
     </Link>
   )
 }
-

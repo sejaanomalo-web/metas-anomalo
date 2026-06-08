@@ -19,8 +19,8 @@ const CHAVES: { chave: ChavePermissao; rotulo: string; descricao: string }[] = [
   },
   {
     chave: "dashboard_empresas",
-    rotulo: "Empresas",
-    descricao: "/dashboard/empresas (listagem completa)",
+    rotulo: "Metas",
+    descricao: "/dashboard/metas (metas das empresas do Hub)",
   },
   {
     chave: "dashboard_empresa_detalhe",

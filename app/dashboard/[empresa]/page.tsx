@@ -1,12 +1,10 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
-import TabsEmpresa from "@/components/TabsEmpresa"
 import CenarioReal from "@/components/CenarioReal"
 import DrawerEditarMeta from "@/components/DrawerEditarMeta"
 import GraficoFaturamento from "@/components/GraficoFaturamento"
 import TabelaMeses from "@/components/TabelaMeses"
-import DrawerDadosReais from "@/components/DrawerDadosReais"
 import ToggleOrigem from "@/components/ToggleOrigem"
 import BotaoAtualizar from "@/components/BotaoAtualizar"
 import { requererPermissao } from "@/lib/auth"
@@ -25,12 +23,16 @@ import {
   origemValida,
   subtituloDaEmpresa,
 } from "@/lib/data"
-import { supabaseConfigurado, type DadosReais } from "@/lib/supabase"
+import { type DadosReais } from "@/lib/supabase"
 import {
   getResumoAnualDaEmpresa,
   getResumoPorIntervaloDaEmpresa,
   resumoComoDadosReais,
 } from "@/lib/sentinela"
+import {
+  getResumoComercialDaEmpresaIntervalo,
+  getResumoComercialAnualDaEmpresa,
+} from "@/lib/relatorios-comerciais"
 import { parsePeriodo } from "@/lib/periodo"
 import { getDadosDiariosDoMesPorNome } from "@/lib/dados-diarios"
 import { getMetasOverrideEmpresa } from "@/lib/metas-empresa"
@@ -76,11 +78,24 @@ export default async function EmpresaPage({
   // recebem shape DadosReais compatível via resumoComoDadosReais.
   // Origem respeita o ?origem do searchParam (ToggleOrigem preserva a
   // flexibilidade pago/orgânico nessa view detalhada).
+  // Origem PAGO → realizado vem do tráfego (dados_diarios_log, mesma
+  // fonte do dashboard de Tráfego). Origem ORGÂNICO → realizado vem do
+  // COMERCIAL (relatorios_comerciais), mapeado para o mesmo formato.
+  // Assim o painel Metas compara meta vs realizado em ambas as origens.
+  const ehOrganico = origem === "organico"
   const [resumoMes, resumoAno, overrides, dadosDiarios] = await Promise.all([
-    getResumoPorIntervaloDaEmpresa(empresa.nome, periodo.de, periodo.ate, origem),
-    getResumoAnualDaEmpresa(empresa.nome, ano, origem),
+    ehOrganico
+      ? getResumoComercialDaEmpresaIntervalo(empresa.nome, periodo.de, periodo.ate)
+      : getResumoPorIntervaloDaEmpresa(empresa.nome, periodo.de, periodo.ate, origem),
+    ehOrganico
+      ? getResumoComercialAnualDaEmpresa(empresa.nome, ano)
+      : getResumoAnualDaEmpresa(empresa.nome, ano, origem),
     getMetasOverrideEmpresa(empresa.db, ano, origem),
-    getDadosDiariosDoMesPorNome(empresa.nome, mes, ano, origem),
+    // Timeline diária só existe pra pago (dados_diarios_log); no orgânico
+    // fica vazia (o comercial é agregado por dia via relatorios_comerciais).
+    ehOrganico
+      ? Promise.resolve([])
+      : getDadosDiariosDoMesPorNome(empresa.nome, mes, ano, origem),
   ])
   const real: DadosReais | null = resumoComoDadosReais(
     resumoMes,
@@ -105,7 +120,6 @@ export default async function EmpresaPage({
     return ov ? { ...linha, ...ov } : linha
   }) as typeof baseDados
   const mapaReais = new Map(todosReais.map((r) => [r.mes, r]))
-  const supabaseOk = supabaseConfigurado()
 
   const pontos = (dados as { mes: string }[]).map((linha) => {
     let meta = 0
@@ -137,7 +151,7 @@ export default async function EmpresaPage({
       >
         <div>
           <Link
-            href={`/dashboard/empresas?mes=${mes}&ano=${ano}`}
+            href={`/dashboard/metas?mes=${mes}&ano=${ano}`}
             style={{
               fontSize: 12,
               color: "var(--text-3)",
@@ -145,7 +159,7 @@ export default async function EmpresaPage({
             }}
             className="hover:text-[#C9953A] transition"
           >
-            ← Empresas
+            ← Metas
           </Link>
           <div
             style={{
@@ -192,35 +206,21 @@ export default async function EmpresaPage({
                 subtitulo={subtituloDaEmpresa(empresa)}
               />
             </div>
-            {empresa.tipo !== "diego" && (
-              <DrawerDadosReais
-                empresa={empresa.db}
-                mes={mes}
-                ano={ano}
-                origem={origem}
-                supabaseOk={supabaseOk}
-                tipoEmpresa={empresa.tipo}
-                existentes={real}
-              />
-            )}
           </div>
+          {/* Metas é só nível de empresa — sem abas de Tráfego/Clientes
+              (esses ficam no fluxo de Tráfego). Mantém o seletor de origem:
+              pago = realizado do tráfego; orgânico = realizado do comercial. */}
           {empresa.tipo !== "diego" && (
             <div
               style={{
                 marginTop: 18,
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
+                justifyContent: "flex-end",
                 gap: 16,
                 flexWrap: "wrap",
               }}
             >
-              <TabsEmpresa
-                slug={empresa.slug}
-                mes={mes}
-                ano={ano}
-                origem={origem}
-              />
               <ToggleOrigem origem={origem} />
             </div>
           )}

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
 import { parseNumeroForm } from "./parse-numero"
+import { MESES, type Mes } from "./data"
+import type { ResumoEmpresaMes } from "./sentinela"
 import {
   ETAPAS_FUNIL,
   type EtapaFunil,
@@ -12,6 +14,18 @@ import {
   type ResultadoComercial,
   type ResumoComercial,
 } from "./comercial-tipos"
+
+const MES_NUM_COMERCIAL: Record<Mes, number> = {
+  Abril: 4,
+  Maio: 5,
+  Junho: 6,
+  Julho: 7,
+  Agosto: 8,
+  Setembro: 9,
+  Outubro: 10,
+  Novembro: 11,
+  Dezembro: 12,
+}
 
 /**
  * Actions e queries do Comercial (server-only).
@@ -143,6 +157,114 @@ export async function getResumoComercialPorIntervalo(
     acc.registros += 1
   }
   return acc
+}
+
+// ============================================================
+// Realizado ORGÂNICO do painel Metas, vindo do comercial.
+//
+// O painel Metas compara meta vs realizado por origem. O realizado
+// orgânico de uma empresa é derivado de relatorios_comerciais (mesmos
+// dados que o time comercial preenche), agregados por empresa e
+// devolvidos no formato ResumoEmpresaMes — assim o detalhe de empresa
+// reaproveita resumoComoDadosReais/CenarioReal/TabelaMeses sem mudanças.
+//
+// Mapeamento (confirmado com o usuário):
+//   leads        ← conexoes_novas   (topo do funil orgânico)
+//   reuniões     ← reunioes_realizadas
+//   contratos    ← contratos_fechados
+//   faturamento  ← faturamento_gerado
+//   investimento = 0  (orgânico não tem verba de mídia)
+// ============================================================
+
+function comercialParaResumo(
+  empresa: string,
+  linhas: RelatorioComercial[]
+): ResumoEmpresaMes {
+  let leads = 0
+  let reunioes = 0
+  let contratos = 0
+  let faturamento = 0
+  for (const l of linhas) {
+    leads += l.conexoes_novas
+    reunioes += l.reunioes_realizadas
+    contratos += l.contratos_fechados
+    faturamento += Number(l.faturamento_gerado ?? 0)
+  }
+  return {
+    empresa,
+    investimento: 0,
+    leads,
+    reunioes,
+    contratos,
+    faturamento,
+    criativosEntregues: 0,
+    criativosUsados: null,
+    clientesAtivos: null,
+    cplReal: null,
+    cpaReal: null,
+    cpmReal: null,
+    impressoes: 0,
+    observacoes: null,
+    respostas: 0,
+    temSentinela: false,
+  }
+}
+
+async function linhasComerciaisDaEmpresa(
+  empresa: string,
+  de: string,
+  ate: string
+): Promise<RelatorioComercial[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("relatorios_comerciais")
+    .select("*")
+    .eq("empresa", empresa)
+    .gte("data", de)
+    .lte("data", ate)
+  if (error) {
+    console.error("[comercial] linhas da empresa error", error.message)
+    return []
+  }
+  return (data ?? []) as RelatorioComercial[]
+}
+
+/** Realizado comercial (orgânico) de UMA empresa num intervalo. null se
+ *  não houver nenhuma linha — deixa o "sem dados" explícito no painel. */
+export async function getResumoComercialDaEmpresaIntervalo(
+  empresa: string,
+  de: string,
+  ate: string
+): Promise<ResumoEmpresaMes | null> {
+  const linhas = await linhasComerciaisDaEmpresa(empresa, de, ate)
+  if (linhas.length === 0) return null
+  return comercialParaResumo(empresa, linhas)
+}
+
+/** Map<Mes, resumo> do ano para uma empresa — alimenta gráfico/tabela
+ *  anuais do detalhe de Metas no modo orgânico. */
+export async function getResumoComercialAnualDaEmpresa(
+  empresa: string,
+  ano: number
+): Promise<Map<Mes, ResumoEmpresaMes>> {
+  const linhas = await linhasComerciaisDaEmpresa(
+    empresa,
+    `${ano}-01-01`,
+    `${ano}-12-31`
+  )
+  const porMes = new Map<Mes, RelatorioComercial[]>()
+  for (const l of linhas) {
+    const m = parseInt(l.data.slice(5, 7), 10)
+    const mes = MESES.find((mm) => MES_NUM_COMERCIAL[mm] === m)
+    if (!mes) continue
+    const lista = porMes.get(mes)
+    if (lista) lista.push(l)
+    else porMes.set(mes, [l])
+  }
+  const out = new Map<Mes, ResumoEmpresaMes>()
+  for (const [mes, ls] of porMes) out.set(mes, comercialParaResumo(empresa, ls))
+  return out
 }
 
 // ============================================================

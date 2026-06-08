@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
-import TabsEmpresa from "@/components/TabsEmpresa"
+import TabsTrafego from "@/components/TabsTrafego"
 import TrafegoRealtime from "@/components/TrafegoRealtime"
 import CardClienteTrafego from "@/components/trafego/CardClienteTrafego"
 import GerenciadorClientes from "@/components/trafego/GerenciadorClientes"
@@ -71,11 +71,11 @@ export default async function ClientesPage({
       <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
         <div>
           <Link
-            href={`/dashboard/${empresa.slug}?mes=${mes}&ano=${ano}`}
+            href={`/dashboard/trafego?mes=${mes}&ano=${ano}`}
             style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500 }}
             className="hover:text-[#C9953A] transition"
           >
-            ← {empresa.nome}
+            ← Tráfego
           </Link>
           <div
             style={{
@@ -105,7 +105,7 @@ export default async function ClientesPage({
               flexWrap: "wrap",
             }}
           >
-            <TabsEmpresa slug={empresa.slug} mes={mes} ano={ano} />
+            <TabsTrafego slug={empresa.slug} mes={mes} ano={ano} />
             <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <BadgeStatusSentinela
                 statusCor={stat.cor}
