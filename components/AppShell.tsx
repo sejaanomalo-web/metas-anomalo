@@ -87,6 +87,20 @@ function ehRotaEmpresa(pathname: string): boolean {
   return !ROTAS_NAO_EMPRESA.has(rotaBase)
 }
 
+// Rotas do fluxo de TRÁFEGO — mantêm o item "Tráfego" ativo no rail:
+//   • /dashboard/trafego                     (overview)
+//   • /dashboard/[empresa]/trafego           (tráfego pago da empresa)
+//   • /dashboard/[empresa]/clientes[/...]    (tráfego POR CLIENTE)
+// Tráfego e Metas são fluxos separados: estar numa página de cliente NÃO
+// deve acender "Metas" só porque a URL começa com /dashboard/[empresa].
+function ehRotaTrafego(pathname: string): boolean {
+  if (pathname === "/dashboard/trafego") return true
+  const segmentos = pathname.split("/").filter(Boolean) // [dashboard, emp, sub]
+  if (segmentos[0] !== "dashboard" || segmentos.length < 3) return false
+  const sub = segmentos[2]
+  return sub === "trafego" || sub === "clientes"
+}
+
 export default function AppShell({
   children,
   usuarioAtual,
@@ -204,16 +218,15 @@ function SidebarRail({
   const width = expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
 
   const dashboardAtivo = pathname === "/dashboard"
-  const trafegoAtivo =
-    pathname === "/dashboard/trafego" ||
-    pathname.endsWith("/trafego")
+  const trafegoAtivo = ehRotaTrafego(pathname)
   const financeiroAtivo = pathname.startsWith("/dashboard/financeiro")
   const comercialAtivo =
     pathname === "/dashboard/comercial" || pathname.endsWith("/comercial")
-  // Metas (antigo Empresas) só ativa quando NÃO estamos em /trafego,
-  // /comercial nem /financeiro — evita destacar dois items ao mesmo
-  // tempo em rotas aninhadas. Cobre /dashboard/metas e o detalhe de
-  // empresa /dashboard/[empresa].
+  // Metas (antigo Empresas) só ativa quando NÃO estamos em tráfego,
+  // comercial nem financeiro — evita destacar dois items ao mesmo tempo
+  // em rotas aninhadas. Cobre /dashboard/metas e o detalhe de empresa
+  // /dashboard/[empresa] (pelado), mas NÃO as sub-rotas de tráfego da
+  // empresa (/trafego e /clientes), que ficam com "Tráfego".
   const metasAtivo =
     !trafegoAtivo &&
     !financeiroAtivo &&
