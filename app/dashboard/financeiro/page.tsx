@@ -360,15 +360,16 @@ export default async function FinanceiroOverviewPage({
           className="glass"
           style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12 }}
         >
-          <h3 style={{ fontSize: 16 }}>Próximos vencimentos</h3>
+          <h3 style={{ fontSize: 16 }}>Vencimentos em aberto</h3>
           {proximosPrevistos.length === 0 ? (
             <p style={{ color: "var(--muted-foreground)", fontSize: 13 }}>
-              Nenhum lançamento previsto.
+              Nenhum lançamento previsto em aberto.
             </p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {proximosPrevistos.map((l) => {
                 const cat = l.categoria_id ? catById.get(l.categoria_id) : null
+                const vencido = l.data < new Date().toISOString().slice(0, 10)
                 return (
                   <div
                     key={l.id}
@@ -400,6 +401,16 @@ export default async function FinanceiroOverviewPage({
                         }}
                       >
                         {formatDataBR(l.data)}
+                        {vencido && (
+                          <span
+                            style={{
+                              color: "var(--destructive)",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {" · vencido"}
+                          </span>
+                        )}
                         {cat && ` · ${cat.nome}`}
                       </p>
                     </div>

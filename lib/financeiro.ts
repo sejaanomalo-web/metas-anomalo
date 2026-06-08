@@ -393,19 +393,19 @@ export async function getFluxoCaixaAnual(ano: number): Promise<
 }
 
 /**
- * Próximos N lançamentos previstos (status=previsto), ordenados
- * por data. Usado no card "Próximos vencimentos" do overview.
+ * Lançamentos previstos EM ABERTO (status=previsto), ordenados por data
+ * ascendente — vencidos primeiro, depois os próximos. Inclui atrasados
+ * de propósito: como tudo nasce previsto, um recorrente não pago que
+ * venceu não pode sumir do radar. Usado no card "Vencimentos em aberto".
  */
-export async function getProximosPrevistos(limit = 5): Promise<LancamentoFinanceiro[]> {
+export async function getProximosPrevistos(limit = 6): Promise<LancamentoFinanceiro[]> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
-  const hoje = new Date().toISOString().slice(0, 10)
   const { data, error } = await supabase
     .from("lancamento_financeiro")
     .select("*")
     .is("deletado_em", null)
     .eq("status", "previsto")
-    .gte("data", hoje)
     .order("data", { ascending: true })
     .limit(limit)
   if (error) {

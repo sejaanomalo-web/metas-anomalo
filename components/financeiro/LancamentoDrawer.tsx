@@ -54,8 +54,10 @@ export default function LancamentoDrawer({
   const [erro, setErro] = useState<string | null>(null)
   const [sucesso, setSucesso] = useState<string | null>(null)
   const [tipo, setTipo] = useState<TipoLancamento>(lancamento?.tipo ?? "despesa")
+  // Default PREVISTO: o lançamento nasce previsto e só vira realizado
+  // quando o usuário marca como pago.
   const [status, setStatus] = useState<StatusLancamento>(
-    lancamento?.status ?? "realizado"
+    lancamento?.status ?? "previsto"
   )
   const [dataPagamento, setDataPagamento] = useState<string>(
     lancamento?.data_pagamento ?? ""
@@ -75,7 +77,6 @@ export default function LancamentoDrawer({
     editando && lancamento?.recorrente_id ? "recorrente" : "variavel"
   )
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>("mensal")
-  const [statusPadraoRec, setStatusPadraoRec] = useState<"previsto" | "realizado">("previsto")
 
   // Selects controlled — pra pré-selecionar primeira opção válida e
   // reagir a troca de tipo (categoria muda lista; resetamos seleção
@@ -138,7 +139,6 @@ export default function LancamentoDrawer({
     fd.set("tipo", tipo)
     fd.set("periodicidade", periodicidade)
     fd.set("ativo", "on")
-    fd.set("status_padrao", statusPadraoRec)
     const r = await salvarRecorrenteAction(fd)
     if (!r.ok) {
       setErro(r.erro ?? "Erro ao criar recorrente.")
@@ -387,25 +387,11 @@ export default function LancamentoDrawer({
                 </div>
               </div>
 
-              <div>
-                <Label>Status ao materializar</Label>
-                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                  {(["previsto", "realizado"] as const).map((s) => (
-                    <ToggleBtn
-                      key={s}
-                      ativo={statusPadraoRec === s}
-                      onClick={() => setStatusPadraoRec(s)}
-                      label={s === "realizado" ? "Realizado (pago)" : "Previsto (em aberto)"}
-                      flex
-                    />
-                  ))}
-                </div>
-                <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6, lineHeight: 1.4 }}>
-                  {statusPadraoRec === "realizado"
-                    ? "Lançamentos nascem como pagos · entram nos KPIs do mês imediatamente."
-                    : 'Lançamentos aparecem em "Próximos vencimentos" até serem marcados como pagos.'}
-                </p>
-              </div>
+              <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
+                Cada mês gera um lançamento <strong>previsto</strong> em
+                &quot;Próximos vencimentos&quot;. Ele só entra no caixa quando
+                você marcar como pago.
+              </p>
 
               {periodicidade === "mensal" && (
                 <Campo label="Dia do vencimento (1–31)" obrigatorio>

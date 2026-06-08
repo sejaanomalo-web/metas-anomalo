@@ -75,7 +75,10 @@ export async function criarLancamentoAction(
   const tipo = String(formData.get("tipo") ?? "")
   if (!tipoValido(tipo)) return { ok: false, erro: "Tipo inválido (receita/despesa)." }
 
-  const status = String(formData.get("status") ?? "realizado")
+  // Default PREVISTO: um lançamento nasce previsto e só vira realizado
+  // quando o usuário marca como pago (data de pagamento). Realizado
+  // continua disponível como escolha explícita (ex.: registrar algo já pago).
+  const status = String(formData.get("status") ?? "previsto")
   if (!statusValido(status)) return { ok: false, erro: "Status inválido." }
 
   const valorParsed = parseNumeroForm(formData.get("valor"))
@@ -440,9 +443,6 @@ export async function salvarRecorrenteAction(
   const conta_id = String(formData.get("conta_id") ?? "").trim() || null
   const observacoes = String(formData.get("observacoes") ?? "").trim() || null
   const ativo = formData.get("ativo") === "on"
-  const statusPadraoRaw = String(formData.get("status_padrao") ?? "previsto")
-  const status_padrao: "previsto" | "realizado" =
-    statusPadraoRaw === "realizado" ? "realizado" : "previsto"
 
   const payload = {
     nome,
@@ -456,7 +456,9 @@ export async function salvarRecorrenteAction(
     fim,
     ativo,
     observacoes,
-    status_padrao,
+    // Recorrente sempre materializa como previsto; mantém a coluna fixa
+    // por compatibilidade (status_padrao foi descontinuado na UI).
+    status_padrao: "previsto",
   }
 
   if (id) {
@@ -585,22 +587,19 @@ export async function materializarRecorrentesDoMes(
     const diaEfetivo = Math.min(rec.dia_vencimento, ultimoDia)
     const dataLanc = `${ano}-${String(mesNum).padStart(2, "0")}-${String(diaEfetivo).padStart(2, "0")}`
 
-    // status_padrao=realizado → também seta data_pagamento (regra
-    // da action: realizado exige data_pagamento). Usa a própria
-    // data do vencimento como aproximação — user pode editar depois.
-    const statusInsert = rec.status_padrao ?? "previsto"
-    const dataPagamentoInsert = statusInsert === "realizado" ? dataLanc : null
-
+    // Recorrente materializa SEMPRE como previsto (sem data_pagamento).
+    // Aparece em "Próximos vencimentos" e só vira realizado quando o
+    // usuário marca como pago. (status_padrao foi descontinuado.)
     const { error: errInsert } = await supabase.from("lancamento_financeiro").insert({
       data: dataLanc,
-      data_pagamento: dataPagamentoInsert,
+      data_pagamento: null,
       tipo: rec.tipo,
       valor: rec.valor,
       categoria_id: rec.categoria_id,
       conta_id: rec.conta_id,
       descricao: rec.nome,
       recorrente_id: rec.id,
-      status: statusInsert,
+      status: "previsto",
     })
 
     if (errInsert) {
