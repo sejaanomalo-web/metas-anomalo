@@ -566,4 +566,4 @@ export function ehUltimoDiaMes(hoje: Date = new Date()): boolean {
   return amanha.getDate() === 1
 }
 
-export { mesAtual, ANO_PADRAO }
+export { mesAtual, ANO_PADRAO, sanitizarParaWa }
