@@ -1,24 +1,22 @@
-import FormularioManual from "@/components/FormularioManual"
+import FormulariosSecoes from "@/components/FormulariosSecoes"
 import { listarEmpresas } from "@/lib/empresas-actions"
-import { requererPermissao } from "@/lib/auth"
+import { requererPermissao, temPermissao } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
 
 /**
- * Página admin de Formulários. Substitui o antigo /dashboard/preenchedores
- * (que gerenciava preenchedores com tokens individuais). Agora:
+ * Aba Formulários reformulada em duas SEÇÕES visuais:
+ *   • Comercial    → relatório diário do comercial + pipeline
+ *   • Tráfego Pago → preenchimento manual de dados reais por empresa
  *
- *   • Um único form inline com seletor de empresa + seletor de data
- *   • Botão "Copiar link público" gera a URL /formulario (sem token)
- *
- * O mesmo componente FormularioManual também é usado em /formulario
- * (público, fora do dashboard layout) — UI consistente nos dois mundos.
- *
- * Sem SeletorPeriodo aqui: o seletor de data dentro do form é a fonte
- * única — define em qual dia/mês/ano o registro entra no banco.
+ * O acesso à aba exige a permissão "formularios"; cada seção é gateada
+ * individualmente por formulario_comercial / formulario_trafego. O
+ * componente cliente FormulariosSecoes só renderiza as seções permitidas.
  */
 export default async function FormulariosPage() {
-  await requererPermissao("formularios")
+  const usuario = await requererPermissao("formularios")
+  const podeComercial = temPermissao(usuario, "formulario_comercial")
+  const podeTrafego = temPermissao(usuario, "formulario_trafego")
 
   const empresas = await listarEmpresas(true)
 
@@ -26,7 +24,7 @@ export default async function FormulariosPage() {
     <>
       <main
         className="mx-auto px-8 py-10 space-y-8"
-        style={{ maxWidth: 820 }}
+        style={{ maxWidth: 900 }}
       >
         <div>
           <p
@@ -39,7 +37,7 @@ export default async function FormulariosPage() {
           >
             Formulários
           </p>
-          <h1 style={{ marginTop: 6, fontSize: 36 }}>Preenchimento manual</h1>
+          <h1 style={{ marginTop: 6, fontSize: 36 }}>Preenchimento</h1>
           <p
             style={{
               fontSize: 14,
@@ -48,15 +46,31 @@ export default async function FormulariosPage() {
               lineHeight: 1.6,
             }}
           >
-            Insira reuniões, contratos e faturamento de qualquer empresa,
-            em qualquer dia. Investimento, leads e CPL ficam de fora ·
-            esses vêm do agente Sentinela. Use o link público pra
-            compartilhar com quem só vai preencher.
+            Selecione a seção e insira os dados. Comercial registra o
+            relatório diário e o pipeline; Tráfego Pago registra reuniões,
+            contratos e faturamento por empresa (investimento, leads e CPL
+            vêm do agente Sentinela).
           </p>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
-        <FormularioManual empresas={empresas} copiarLinkPublico />
+        {!podeComercial && !podeTrafego ? (
+          <div
+            className="glass"
+            style={{ padding: "28px", textAlign: "center" }}
+          >
+            <p style={{ fontSize: 14, color: "var(--text-2)" }}>
+              Você não tem acesso a nenhuma seção de formulário. Fale com um
+              administrador.
+            </p>
+          </div>
+        ) : (
+          <FormulariosSecoes
+            empresas={empresas}
+            podeComercial={podeComercial}
+            podeTrafego={podeTrafego}
+          />
+        )}
       </main>
 
       <footer

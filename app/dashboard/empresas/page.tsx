@@ -1,13 +1,10 @@
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import SectionHeader from "@/components/ui/SectionHeader"
 import CardEmpresa from "@/components/CardEmpresa"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
-import {
-  anoValido,
-  formatNumero,
-  mesValido,
-} from "@/lib/data"
-import { getResumoMensalPorEmpresa } from "@/lib/sentinela"
+import { formatNumero } from "@/lib/data"
+import { parsePeriodo } from "@/lib/periodo"
+import { getResumoPorIntervaloPorEmpresa } from "@/lib/sentinela"
 import {
   listarEmpresas,
   listarEmpresasInativas,
@@ -32,19 +29,26 @@ export const dynamic = "force-dynamic"
 export default async function EmpresasPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; ano?: string }
+  searchParams: {
+    mes?: string
+    ano?: string
+    de?: string
+    ate?: string
+    modo?: string
+  }
 }) {
   await requererPermissao("dashboard_empresas")
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
 
   const [resumo, empresas, empresasInativas, overridesMes] =
     await Promise.all([
-      // Fonte unificada do dashboard: dados_diarios_log agregado
-      // (lib/sentinela). Pago fixo aqui — orgânico fica no detalhe
-      // via ToggleOrigem em /dashboard/[empresa].
-      getResumoMensalPorEmpresa(mes, ano, "pago"),
+      // Fonte unificada do dashboard: dados_diarios_log agregado por
+      // intervalo (lib/sentinela). Pago fixo aqui — orgânico fica no
+      // detalhe via ToggleOrigem em /dashboard/[empresa].
+      getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
       listarEmpresas(true),
       listarEmpresasInativas(),
       getOverridesTodasEmpresasMes(mes, ano),
@@ -70,7 +74,7 @@ export default async function EmpresasPage({
             Empresas
           </p>
           <h1 style={{ marginTop: 6, fontSize: 36 }}>
-            Empresas do Hub · {mes} {ano}
+            Empresas do Hub · {periodo.rotulo}
           </h1>
           <div
             style={{
@@ -95,7 +99,7 @@ export default async function EmpresasPage({
                 Atualmente {mes} {ano}
               </span>
             </p>
-            <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+            <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
           </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>

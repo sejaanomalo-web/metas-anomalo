@@ -1,10 +1,11 @@
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import BotaoAtualizar from "@/components/BotaoAtualizar"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
-import { anoValido, formatNumero, mesValido } from "@/lib/data"
+import { formatNumero } from "@/lib/data"
+import { parsePeriodo } from "@/lib/periodo"
 import {
-  getResumoMensalPorEmpresa,
+  getResumoPorIntervaloPorEmpresa,
   getUltimoLogSentinela,
   statusSentinela,
 } from "@/lib/sentinela"
@@ -39,15 +40,22 @@ export const dynamic = "force-dynamic"
 export default async function TrafegoOverviewPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; ano?: string }
+  searchParams: {
+    mes?: string
+    ano?: string
+    de?: string
+    ate?: string
+    modo?: string
+  }
 }) {
   await requererPermissao("dashboard_trafego")
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
 
   const [resumo, empresas, empresasInativas, ultimoLog] = await Promise.all([
-    getResumoMensalPorEmpresa(mes, ano, "pago"),
+    getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
     listarEmpresas(true),
     listarEmpresasInativas(),
     getUltimoLogSentinela(),
@@ -64,17 +72,20 @@ export default async function TrafegoOverviewPage({
   let somaInv = 0
   let somaLeads = 0
   let somaImpressoes = 0
+  let somaFat = 0
+  let empresasGerenciadas = 0
   for (const empresa of empresasTrafego) {
     const r = resumo.get(empresa.nome)
     if (!r) continue
     somaInv += r.investimento
     somaLeads += r.leads
     somaImpressoes += r.impressoes
+    somaFat += r.faturamento
+    if (r.investimento > 0) empresasGerenciadas += 1
   }
   const cplMedio = somaLeads > 0 ? somaInv / somaLeads : null
-  // CPM ponderado: total_invest / total_impr * 1000. Enquanto Sentinela
-  // não popular impressoes_real, somaImpressoes=0 → cpmMedio=null → "—".
-  const cpmMedio = somaImpressoes > 0 ? (somaInv / somaImpressoes) * 1000 : null
+  // ROI total do hub: (faturamento - investimento) / investimento.
+  const roiTotal = somaInv > 0 ? (somaFat - somaInv) / somaInv : null
 
   return (
     <>
@@ -104,7 +115,9 @@ export default async function TrafegoOverviewPage({
               flexWrap: "wrap",
             }}
           >
-            <h1 style={{ fontSize: 36 }}>Visão geral de tráfego</h1>
+            <h1 style={{ fontSize: 36 }}>
+              Visão geral de tráfego · {periodo.rotulo}
+            </h1>
             <div
               style={{
                 display: "flex",
@@ -119,7 +132,7 @@ export default async function TrafegoOverviewPage({
                 supabaseOk={supabaseOk}
               />
               <BotaoAtualizar />
-              <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+              <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
             </div>
           </div>
           <p
@@ -153,14 +166,18 @@ export default async function TrafegoOverviewPage({
           }}
         >
           <KpiMini label="Investimento total" valor={fmtBRL(somaInv)} />
+          <KpiMini
+            label="ROI total do hub"
+            valor={roiTotal != null ? `${(roiTotal * 100).toFixed(0)}%` : "·"}
+          />
+          <KpiMini
+            label="Empresas gerenciadas"
+            valor={formatNumero(empresasGerenciadas)}
+          />
           <KpiMini label="Leads totais" valor={formatNumero(somaLeads)} />
           <KpiMini
             label="CPL médio"
             valor={cplMedio ? fmtBRL(cplMedio) : "·"}
-          />
-          <KpiMini
-            label="CPM médio"
-            valor={cpmMedio ? fmtBRL(cpmMedio) : "·"}
           />
         </section>
 

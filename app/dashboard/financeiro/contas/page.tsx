@@ -1,4 +1,4 @@
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import ListaContas from "@/components/financeiro/ListaContas"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { mesValido, anoValido } from "@/lib/data"
@@ -41,7 +41,7 @@ export default async function ContasPage({
           }}
         >
           <h1 style={{ fontSize: 36 }}>Contas</h1>
-          <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+          <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
         </div>
         <p style={{ fontSize: 14, color: "var(--text-3)", marginTop: 10 }}>
           Banco, caixa, cartões e investimentos. Saldo atual = inicial + receitas

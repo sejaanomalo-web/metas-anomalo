@@ -69,6 +69,8 @@ const ROTAS_NAO_EMPRESA = new Set([
   "/dashboard",
   "/dashboard/empresas",
   "/dashboard/trafego",
+  "/dashboard/comercial",
+  "/dashboard/financeiro",
   "/dashboard/formularios",
   "/dashboard/configuracoes",
 ])
@@ -204,10 +206,16 @@ function SidebarRail({
     pathname === "/dashboard/trafego" ||
     pathname.endsWith("/trafego")
   const financeiroAtivo = pathname.startsWith("/dashboard/financeiro")
-  // Empresas só ativa quando NÃO estamos em /trafego nem /financeiro —
-  // evita destacar dois items ao mesmo tempo em rotas aninhadas.
+  const comercialAtivo =
+    pathname === "/dashboard/comercial" || pathname.endsWith("/comercial")
+  // Empresas só ativa quando NÃO estamos em /trafego, /comercial nem
+  // /financeiro — evita destacar dois items ao mesmo tempo em rotas
+  // aninhadas.
   const empresasAtivo =
-    !trafegoAtivo && !financeiroAtivo && ehRotaEmpresa(pathname)
+    !trafegoAtivo &&
+    !financeiroAtivo &&
+    !comercialAtivo &&
+    ehRotaEmpresa(pathname)
   const formulariosAtivo = pathname === "/dashboard/formularios"
   const configAtivo = pathname === "/dashboard/configuracoes"
 
@@ -216,6 +224,7 @@ function SidebarRail({
   const podeDashboard = temPermissao(usuarioAtual, "dashboard_principal")
   const podeEmpresas = temPermissao(usuarioAtual, "dashboard_empresas")
   const podeTrafego = temPermissao(usuarioAtual, "dashboard_trafego")
+  const podeComercial = temPermissao(usuarioAtual, "dashboard_comercial")
   const podeFinanceiro = temPermissao(usuarioAtual, "dashboard_financeiro")
   const podeFormularios = temPermissao(usuarioAtual, "formularios")
   const podeConfig = temPermissao(usuarioAtual, "configuracoes")
@@ -269,6 +278,15 @@ function SidebarRail({
             href="/dashboard/trafego"
             expandido={expandido}
             ativo={trafegoAtivo}
+          />
+        )}
+        {podeComercial && (
+          <ItemMenu
+            icon={<IconeComercial />}
+            rotulo="Comercial"
+            href="/dashboard/comercial"
+            expandido={expandido}
+            ativo={comercialAtivo}
           />
         )}
         {podeFinanceiro && (
@@ -590,6 +608,25 @@ function IconeFinanceiro() {
       <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
       <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
       <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+    </svg>
+  )
+}
+
+function IconeComercial() {
+  // Funil — semântico do processo comercial (etapas do funil de vendas).
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 4h18l-7 8v6l-4 2v-8L3 4Z" />
     </svg>
   )
 }

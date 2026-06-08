@@ -1,4 +1,4 @@
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import FormConfig from "@/components/FormConfig"
 import AtivarNotificacoes from "@/components/AtivarNotificacoes"
 import GerenciadorUsuarios from "@/components/GerenciadorUsuarios"
@@ -57,7 +57,7 @@ export default async function ConfiguracoesPage({
             }}
           >
             <h1 style={{ fontSize: 36 }}>Configurações</h1>
-            <SeletorPeriodo mesAtual={mes} anoAtual={ANO_PADRAO} />
+            <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ANO_PADRAO} />
           </div>
           <p
             style={{

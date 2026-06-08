@@ -568,6 +568,72 @@ export async function getResumoMensalDaEmpresa(
   return agregarLinhas(empresaNome, linhas)
 }
 
+/**
+ * Variantes por INTERVALO de datas (YYYY-MM-DD, ambos inclusivos). Usadas
+ * quando o seletor de período global está em modo 'dia' ou 'intervalo'.
+ * Espelham getResumoMensalPorEmpresa/getResumoMensalDaEmpresa, mas o range
+ * vem pronto em vez de derivado de (mes, ano). Reutilizam agregarLinhas.
+ */
+export async function getResumoPorIntervaloPorEmpresa(
+  inicio: string,
+  fim: string,
+  origem: OrigemDadosReais = "pago"
+): Promise<Map<string, ResumoEmpresaMes>> {
+  const supabase = getSupabase()
+  if (!supabase) return new Map()
+  const { data, error } = await supabase
+    .from("dados_diarios_log")
+    .select(COLUNAS_AGREGAR)
+    .eq("origem", origem)
+    .gte("data", inicio)
+    .lte("data", fim)
+  if (error) {
+    console.error(
+      "[sentinela] getResumoPorIntervaloPorEmpresa error",
+      error.message
+    )
+    return new Map()
+  }
+  const porEmpresa = new Map<string, LinhaAgregavel[]>()
+  for (const l of (data ?? []) as LinhaAgregavel[]) {
+    const lista = porEmpresa.get(l.empresa)
+    if (lista) lista.push(l)
+    else porEmpresa.set(l.empresa, [l])
+  }
+  const resultado = new Map<string, ResumoEmpresaMes>()
+  for (const [empresa, linhas] of porEmpresa) {
+    resultado.set(empresa, agregarLinhas(empresa, linhas))
+  }
+  return resultado
+}
+
+export async function getResumoPorIntervaloDaEmpresa(
+  empresaNome: string,
+  inicio: string,
+  fim: string,
+  origem: OrigemDadosReais = "pago"
+): Promise<ResumoEmpresaMes | null> {
+  const supabase = getSupabase()
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from("dados_diarios_log")
+    .select(COLUNAS_AGREGAR)
+    .eq("empresa", empresaNome)
+    .eq("origem", origem)
+    .gte("data", inicio)
+    .lte("data", fim)
+  if (error) {
+    console.error(
+      "[sentinela] getResumoPorIntervaloDaEmpresa error",
+      error.message
+    )
+    return null
+  }
+  const linhas = (data ?? []) as LinhaAgregavel[]
+  if (linhas.length === 0) return null
+  return agregarLinhas(empresaNome, linhas)
+}
+
 /** Map<Mes, resumo> dos 9 meses (Abril..Dezembro) do ano pra uma empresa.
  *  Substitui o array DadosReais[] que getDadosReais devolvia. */
 export async function getResumoAnualDaEmpresa(

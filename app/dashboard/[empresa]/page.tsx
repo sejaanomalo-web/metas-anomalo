@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import TabsEmpresa from "@/components/TabsEmpresa"
 import CenarioReal from "@/components/CenarioReal"
 import DrawerEditarMeta from "@/components/DrawerEditarMeta"
@@ -28,9 +28,10 @@ import {
 import { supabaseConfigurado, type DadosReais } from "@/lib/supabase"
 import {
   getResumoAnualDaEmpresa,
-  getResumoMensalDaEmpresa,
+  getResumoPorIntervaloDaEmpresa,
   resumoComoDadosReais,
 } from "@/lib/sentinela"
+import { parsePeriodo } from "@/lib/periodo"
 import { getDadosDiariosDoMesPorNome } from "@/lib/dados-diarios"
 import { getMetasOverrideEmpresa } from "@/lib/metas-empresa"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
@@ -44,7 +45,14 @@ export default async function EmpresaPage({
   searchParams,
 }: {
   params: { empresa: string }
-  searchParams: { mes?: string; ano?: string; origem?: string }
+  searchParams: {
+    mes?: string
+    ano?: string
+    origem?: string
+    de?: string
+    ate?: string
+    modo?: string
+  }
 }) {
   await requererPermissao("dashboard_empresa_detalhe")
 
@@ -53,8 +61,9 @@ export default async function EmpresaPage({
     notFound()
   }
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
   const origem = origemValida(searchParams?.origem)
   const temProjecao = anoTemProjecao(ano)
 
@@ -68,7 +77,7 @@ export default async function EmpresaPage({
   // Origem respeita o ?origem do searchParam (ToggleOrigem preserva a
   // flexibilidade pago/orgânico nessa view detalhada).
   const [resumoMes, resumoAno, overrides, dadosDiarios] = await Promise.all([
-    getResumoMensalDaEmpresa(empresa.nome, mes, ano, origem),
+    getResumoPorIntervaloDaEmpresa(empresa.nome, periodo.de, periodo.ate, origem),
     getResumoAnualDaEmpresa(empresa.nome, ano, origem),
     getMetasOverrideEmpresa(empresa.db, ano, origem),
     getDadosDiariosDoMesPorNome(empresa.nome, mes, ano, origem),
@@ -158,7 +167,7 @@ export default async function EmpresaPage({
               }}
             >
               <BotaoAtualizar />
-              <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+              <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
             </div>
           </div>
           <div

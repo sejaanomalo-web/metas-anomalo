@@ -1,5 +1,5 @@
 import Link from "next/link"
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import TabelaLancamentos from "@/components/financeiro/TabelaLancamentos"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { mesValido, anoValido } from "@/lib/data"
@@ -63,7 +63,7 @@ export default async function FinanceiroLancamentosPage({
           }}
         >
           <h1 style={{ fontSize: 36 }}>Lançamentos de {mes}</h1>
-          <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+          <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
         </div>
         <div className="gold-divider" style={{ marginTop: 18 }} />
       </div>

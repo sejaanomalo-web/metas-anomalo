@@ -1,13 +1,13 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import TabsEmpresa from "@/components/TabsEmpresa"
 import TrafegoRealtime from "@/components/TrafegoRealtime"
 import PainelTrafego from "@/components/trafego/PainelTrafego"
 import TagStatusCampanha from "@/components/trafego/TagStatusCampanha"
 import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
 import { requererPermissao } from "@/lib/auth"
-import { MES_NUM, anoValido, diasNoMes, mesValido } from "@/lib/data"
+import { parsePeriodo } from "@/lib/periodo"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
   getUltimoLogSentinela,
@@ -38,7 +38,13 @@ export default async function ClienteTrafegoPage({
   searchParams,
 }: {
   params: { empresa: string; cliente: string }
-  searchParams: { mes?: string; ano?: string }
+  searchParams: {
+    mes?: string
+    ano?: string
+    de?: string
+    ate?: string
+    modo?: string
+  }
 }) {
   await requererPermissao("dashboard_trafego")
 
@@ -48,13 +54,11 @@ export default async function ClienteTrafegoPage({
   const cliente = await getClientePorSlug(empresa.nome, params.cliente)
   if (!cliente) notFound()
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
-
-  const mesNum = String(MES_NUM[mes]).padStart(2, "0")
-  const ultimoDia = String(diasNoMes(mes, ano)).padStart(2, "0")
-  const inicio = `${ano}-${mesNum}-01`
-  const fim = `${ano}-${mesNum}-${ultimoDia}`
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
+  const inicio = periodo.de
+  const fim = periodo.ate
 
   const [dias, linhas, ultimoLog] = await Promise.all([
     getDiasSentinelaDoCliente(cliente, inicio, fim),
@@ -96,7 +100,7 @@ export default async function ClienteTrafegoPage({
               <h1 style={{ fontSize: 36 }}>{nomeExibido}</h1>
               <TagStatusCampanha status={cliente.status_campanhas} />
             </div>
-            <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+            <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
           </div>
           <p style={{ fontSize: 14, color: "var(--text-3)", marginTop: 10 }}>
             Cliente de {empresa.nome} · filtro{" "}

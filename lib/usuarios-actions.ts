@@ -54,7 +54,11 @@ const CHAVES: ChavePermissao[] = [
   "dashboard_empresas",
   "dashboard_empresa_detalhe",
   "dashboard_trafego",
+  "dashboard_comercial",
+  "dashboard_financeiro",
   "formularios",
+  "formulario_comercial",
+  "formulario_trafego",
   "configuracoes",
   "gerenciar_usuarios",
   "ver_notificacoes",
@@ -104,7 +108,11 @@ export async function criarUsuarioAction(
   const nome = String(formData.get("nome") ?? "").trim()
   const papelRaw = String(formData.get("papel") ?? "custom")
   const papel: PapelUsuario =
-    papelRaw === "admin" || papelRaw === "gestor_trafego" ? papelRaw : "custom"
+    papelRaw === "admin" ||
+    papelRaw === "gestor_trafego" ||
+    papelRaw === "comercial"
+      ? (papelRaw as PapelUsuario)
+      : "custom"
   const senhaInput = String(formData.get("senha") ?? "").trim()
 
   if (!emailValido(email)) {
@@ -166,7 +174,11 @@ export async function atualizarUsuarioAction(
   const nome = String(formData.get("nome") ?? "").trim()
   const papelRaw = String(formData.get("papel") ?? "custom")
   const papel: PapelUsuario =
-    papelRaw === "admin" || papelRaw === "gestor_trafego" ? papelRaw : "custom"
+    papelRaw === "admin" ||
+    papelRaw === "gestor_trafego" ||
+    papelRaw === "comercial"
+      ? (papelRaw as PapelUsuario)
+      : "custom"
 
   if (!id || !nome) {
     return { ok: false, erro: "Dados inválidos." }

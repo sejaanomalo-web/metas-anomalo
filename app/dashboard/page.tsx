@@ -1,21 +1,21 @@
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import KPICard from "@/components/ui/KPICard"
 import GraficoHub from "@/components/GraficoHub"
 import {
   MESES,
   type Mes,
   type Ano,
-  anoValido,
   anoTemProjecao,
   formatBRL,
   formatNumero,
   getResumoGrupo,
-  mesValido,
   metaAcumuladaAteHoje,
 } from "@/lib/data"
+import { parsePeriodo } from "@/lib/periodo"
 import {
   getFaturamentoMensalHubFromLogs,
   getResumoMensalPorEmpresa,
+  getResumoPorIntervaloPorEmpresa,
   type ResumoEmpresaMes,
 } from "@/lib/sentinela"
 import { listarEmpresas } from "@/lib/empresas-actions"
@@ -138,14 +138,25 @@ function somarFaturamento(
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; ano?: string }
+  searchParams: {
+    mes?: string
+    ano?: string
+    de?: string
+    ate?: string
+    modo?: string
+  }
 }) {
   // RBAC: exige dashboard_principal. Sem auth → /login; sem permissão
   // → rota padrão do usuário (gestor cai em /dashboard/trafego, por ex).
   await requererPermissao("dashboard_principal")
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+  // Período global unificado (mês/dia/intervalo). mes/ano = mês
+  // representativo, usado para as METAS (mensais). O REALIZADO é lido
+  // pelo intervalo periodo.de..periodo.ate, então slicing por dia/range
+  // muda os números.
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
   const temProjecao = anoTemProjecao(ano)
   const mesPrev = mesAnterior(mes)
 
@@ -165,7 +176,7 @@ export default async function DashboardPage({
     overridesMes,
     faturamentoMensal,
   ] = await Promise.all([
-    getResumoMensalPorEmpresa(mes, ano, "pago"),
+    getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
     mesPrev
       ? getResumoMensalPorEmpresa(mesPrev, ano, "pago")
       : Promise.resolve(new Map<string, ResumoEmpresaMes>()),
@@ -301,7 +312,7 @@ export default async function DashboardPage({
             Visão geral
           </p>
           <h1 style={{ marginTop: 6, fontSize: 36 }}>
-            Anômalo Hub · {mes} {ano}
+            Anômalo Hub · {periodo.rotulo}
           </h1>
           <div
             style={{
@@ -329,7 +340,7 @@ export default async function DashboardPage({
                 ? ""
                 : " · planejamento futuro, sem projeção definida"}
             </p>
-            <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+            <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
           </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>

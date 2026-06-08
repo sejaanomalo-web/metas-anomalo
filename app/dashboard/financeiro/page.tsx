@@ -1,17 +1,18 @@
 import Link from "next/link"
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import KPICard from "@/components/ui/KPICard"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import GraficoFluxoCaixa from "@/components/financeiro/GraficoFluxoCaixa"
-import { mesValido, anoValido, formatBRL, formatNumero } from "@/lib/data"
+import { formatBRL, formatNumero } from "@/lib/data"
+import { parsePeriodo } from "@/lib/periodo"
 import {
-  getResumoFinanceiroMes,
+  getResumoFinanceiroPeriodo,
   getFluxoCaixaAnual,
   getSaldoTotal,
   getSaldoPorConta,
   getProximosPrevistos,
   listarCategorias,
-  getConferenciaSentinela,
+  getConferenciaSentinelaPeriodo,
 } from "@/lib/financeiro"
 import { requererPermissao } from "@/lib/auth"
 
@@ -86,22 +87,29 @@ function formatDataBR(iso: string): string {
 export default async function FinanceiroOverviewPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; ano?: string }
+  searchParams: {
+    mes?: string
+    ano?: string
+    de?: string
+    ate?: string
+    modo?: string
+  }
 }) {
   await requererPermissao("dashboard_financeiro")
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
 
   const [resumo, fluxo, saldoTotal, saldoPorConta, proximosPrevistos, categorias, conferencia] =
     await Promise.all([
-      getResumoFinanceiroMes(mes, ano),
+      getResumoFinanceiroPeriodo(periodo.de, periodo.ate, mes, ano),
       getFluxoCaixaAnual(ano),
       getSaldoTotal(),
       getSaldoPorConta(),
       getProximosPrevistos(5),
       listarCategorias(undefined, false),
-      getConferenciaSentinela(mes, ano),
+      getConferenciaSentinelaPeriodo(periodo.de, periodo.ate),
     ])
 
   const conferenciaProblemas = conferencia.filter(
@@ -139,8 +147,8 @@ export default async function FinanceiroOverviewPage({
             flexWrap: "wrap",
           }}
         >
-          <h1 style={{ fontSize: 36 }}>Caixa · {mes} {ano}</h1>
-          <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+          <h1 style={{ fontSize: 36 }}>Caixa · {periodo.rotulo}</h1>
+          <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
         </div>
         <p style={{ fontSize: 14, color: "var(--muted-foreground)", marginTop: 10 }}>
           Receitas, despesas, recorrentes e fluxo de caixa da Anômalo Hub.

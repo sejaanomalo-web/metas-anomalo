@@ -1,4 +1,4 @@
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import BotoesExportarRelatorio from "@/components/financeiro/BotoesExportarRelatorio"
 import { mesValido, anoValido, formatBRL, formatNumero, MESES, type Mes } from "@/lib/data"
@@ -63,7 +63,7 @@ export default async function RelatoriosPage({
           }}
         >
           <h1 style={{ fontSize: 36 }}>DRE e projeção · {mes} {ano}</h1>
-          <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+          <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
         </div>
         <div className="gold-divider" style={{ marginTop: 18 }} />
       </div>

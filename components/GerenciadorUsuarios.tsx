@@ -33,6 +33,11 @@ const CHAVES: { chave: ChavePermissao; rotulo: string; descricao: string }[] = [
     descricao: "/dashboard/trafego + /dashboard/[empresa]/trafego",
   },
   {
+    chave: "dashboard_comercial",
+    rotulo: "Comercial",
+    descricao: "/dashboard/comercial (funil + relatórios do comercial)",
+  },
+  {
     chave: "dashboard_financeiro",
     rotulo: "Financeiro",
     descricao: "/dashboard/financeiro (caixa, lançamentos, recorrentes)",
@@ -40,7 +45,17 @@ const CHAVES: { chave: ChavePermissao; rotulo: string; descricao: string }[] = [
   {
     chave: "formularios",
     rotulo: "Formulários",
-    descricao: "/dashboard/formularios (preenchimento manual)",
+    descricao: "/dashboard/formularios (acesso à aba)",
+  },
+  {
+    chave: "formulario_comercial",
+    rotulo: "Form · Comercial",
+    descricao: "Seção Comercial do formulário (relatório diário)",
+  },
+  {
+    chave: "formulario_trafego",
+    rotulo: "Form · Tráfego",
+    descricao: "Seção Tráfego Pago do formulário (dados reais)",
   },
   {
     chave: "configuracoes",
@@ -227,6 +242,7 @@ export default function GerenciadorUsuarios({
 function rotuloPapel(papel: PapelUsuario): string {
   if (papel === "admin") return "Admin"
   if (papel === "gestor_trafego") return "Gestor de tráfego"
+  if (papel === "comercial") return "Comercial"
   return "Personalizado"
 }
 
@@ -495,6 +511,7 @@ function FormUsuario({
     // Aplica preset se trocar pra um papel não-custom
     if (novo === "admin") setPermissoes(PRESET_ADMIN)
     else if (novo === "gestor_trafego") setPermissoes(PRESET_GESTOR)
+    else if (novo === "comercial") setPermissoes(PRESET_COMERCIAL)
     // custom: mantém o estado atual (admin pode customizar a partir do
     // último preset visto)
   }
@@ -596,7 +613,9 @@ function FormUsuario({
 
       <Campo label="Papel">
         <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-          {(["admin", "gestor_trafego", "custom"] as PapelUsuario[]).map(
+          {(
+            ["admin", "gestor_trafego", "comercial", "custom"] as PapelUsuario[]
+          ).map(
             (p) => (
               <button
                 key={p}
@@ -626,6 +645,8 @@ function FormUsuario({
                   ? "Admin"
                   : p === "gestor_trafego"
                   ? "Gestor de tráfego"
+                  : p === "comercial"
+                  ? "Comercial"
                   : "Personalizado"}
               </button>
             )
@@ -809,8 +830,11 @@ const PRESET_ADMIN: Permissoes = {
   dashboard_empresas: true,
   dashboard_empresa_detalhe: true,
   dashboard_trafego: true,
+  dashboard_comercial: true,
   dashboard_financeiro: true,
   formularios: true,
+  formulario_comercial: true,
+  formulario_trafego: true,
   configuracoes: true,
   gerenciar_usuarios: true,
   ver_notificacoes: true,
@@ -821,8 +845,26 @@ const PRESET_GESTOR: Permissoes = {
   dashboard_empresas: false,
   dashboard_empresa_detalhe: false,
   dashboard_trafego: true,
+  dashboard_comercial: false,
   dashboard_financeiro: false,
-  formularios: false,
+  formularios: true,
+  formulario_comercial: false,
+  formulario_trafego: true,
+  configuracoes: false,
+  gerenciar_usuarios: false,
+  ver_notificacoes: true,
+}
+
+const PRESET_COMERCIAL: Permissoes = {
+  dashboard_principal: false,
+  dashboard_empresas: false,
+  dashboard_empresa_detalhe: false,
+  dashboard_trafego: false,
+  dashboard_comercial: true,
+  dashboard_financeiro: false,
+  formularios: true,
+  formulario_comercial: true,
+  formulario_trafego: false,
   configuracoes: false,
   gerenciar_usuarios: false,
   ver_notificacoes: true,

@@ -1,4 +1,4 @@
-import SeletorPeriodo from "@/components/SeletorPeriodo"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import ListaRecorrentes from "@/components/financeiro/ListaRecorrentes"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { mesValido, anoValido } from "@/lib/data"
@@ -44,7 +44,7 @@ export default async function RecorrentesPage({
           }}
         >
           <h1 style={{ fontSize: 36 }}>Pagamentos recorrentes</h1>
-          <SeletorPeriodo mesAtual={mes} anoAtual={ano} />
+          <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
         </div>
         <p style={{ fontSize: 14, color: "var(--text-3)", marginTop: 10 }}>
           Templates que geram lançamentos automaticamente (aluguel, plataformas, salários).

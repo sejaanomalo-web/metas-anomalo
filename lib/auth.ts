@@ -74,15 +74,22 @@ export function getUsuarioIdSync(): string | null {
 // RBAC: papéis e permissões
 // ============================================================
 
-export type PapelUsuario = "admin" | "gestor_trafego" | "custom"
+export type PapelUsuario =
+  | "admin"
+  | "gestor_trafego"
+  | "comercial"
+  | "custom"
 
 export type ChavePermissao =
   | "dashboard_principal"
   | "dashboard_empresas"
   | "dashboard_empresa_detalhe"
   | "dashboard_trafego"
+  | "dashboard_comercial"
   | "dashboard_financeiro"
   | "formularios"
+  | "formulario_comercial"
+  | "formulario_trafego"
   | "configuracoes"
   | "gerenciar_usuarios"
   | "ver_notificacoes"
@@ -98,8 +105,11 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     dashboard_empresas: true,
     dashboard_empresa_detalhe: true,
     dashboard_trafego: true,
+    dashboard_comercial: true,
     dashboard_financeiro: true,
     formularios: true,
+    formulario_comercial: true,
+    formulario_trafego: true,
     configuracoes: true,
     gerenciar_usuarios: true,
     ver_notificacoes: true,
@@ -109,8 +119,25 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     dashboard_empresas: false,
     dashboard_empresa_detalhe: false,
     dashboard_trafego: true,
+    dashboard_comercial: false,
     dashboard_financeiro: false,
-    formularios: false,
+    formularios: true,
+    formulario_comercial: false,
+    formulario_trafego: true,
+    configuracoes: false,
+    gerenciar_usuarios: false,
+    ver_notificacoes: true,
+  },
+  comercial: {
+    dashboard_principal: false,
+    dashboard_empresas: false,
+    dashboard_empresa_detalhe: false,
+    dashboard_trafego: false,
+    dashboard_comercial: true,
+    dashboard_financeiro: false,
+    formularios: true,
+    formulario_comercial: true,
+    formulario_trafego: false,
     configuracoes: false,
     gerenciar_usuarios: false,
     ver_notificacoes: true,
@@ -120,8 +147,11 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     dashboard_empresas: false,
     dashboard_empresa_detalhe: false,
     dashboard_trafego: false,
+    dashboard_comercial: false,
     dashboard_financeiro: false,
     formularios: false,
+    formulario_comercial: false,
+    formulario_trafego: false,
     configuracoes: false,
     gerenciar_usuarios: false,
     ver_notificacoes: false,
@@ -159,6 +189,7 @@ export function temPermissao(
 export function rotaPadraoDoUsuario(usuario: UsuarioSessao): string {
   if (temPermissao(usuario, "dashboard_principal")) return "/dashboard"
   if (temPermissao(usuario, "dashboard_trafego")) return "/dashboard/trafego"
+  if (temPermissao(usuario, "dashboard_comercial")) return "/dashboard/comercial"
   if (temPermissao(usuario, "dashboard_financeiro")) return "/dashboard/financeiro"
   if (temPermissao(usuario, "dashboard_empresas")) return "/dashboard/empresas"
   if (temPermissao(usuario, "formularios")) return "/dashboard/formularios"

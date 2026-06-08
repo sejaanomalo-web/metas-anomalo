@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from "./supabase"
 import { MESES, type Mes } from "./data"
-import { getResumoMensalPorEmpresa } from "./sentinela"
+import { getResumoPorIntervaloPorEmpresa } from "./sentinela"
 
 // ============================================================
 // Tipos
@@ -247,6 +247,21 @@ export async function getResumoFinanceiroMes(
   mes: Mes,
   ano: number
 ): Promise<ResumoFinanceiroMes> {
+  const { inicio, fim } = rangeDoMesISO(mes, ano)
+  return getResumoFinanceiroPeriodo(inicio, fim, mes, ano)
+}
+
+/**
+ * Igual a getResumoFinanceiroMes, mas para um INTERVALO arbitrário de
+ * datas (YYYY-MM-DD, inclusivos). Usado quando o seletor de período
+ * global está em modo dia/intervalo. mes/ano são só rótulos do retorno.
+ */
+export async function getResumoFinanceiroPeriodo(
+  inicio: string,
+  fim: string,
+  mes: Mes,
+  ano: number
+): Promise<ResumoFinanceiroMes> {
   const supabase = getSupabaseAdmin()
   const base: ResumoFinanceiroMes = {
     mes,
@@ -259,7 +274,6 @@ export async function getResumoFinanceiroMes(
     despesas_previstas: 0,
   }
   if (!supabase) return base
-  const { inicio, fim } = rangeDoMesISO(mes, ano)
   const { data, error } = await supabase
     .from("lancamento_financeiro")
     .select("tipo, valor, status")
@@ -267,7 +281,7 @@ export async function getResumoFinanceiroMes(
     .gte("data", inicio)
     .lte("data", fim)
   if (error) {
-    console.error("[financeiro] getResumoFinanceiroMes error", error.message)
+    console.error("[financeiro] getResumoFinanceiroPeriodo error", error.message)
     return base
   }
   for (const r of (data ?? []) as {
@@ -529,12 +543,20 @@ export async function getConferenciaSentinela(
   mes: Mes,
   ano: number
 ): Promise<ConferenciaSentinela[]> {
+  const { inicio, fim } = rangeDoMesISO(mes, ano)
+  return getConferenciaSentinelaPeriodo(inicio, fim)
+}
+
+/** Variante por intervalo de getConferenciaSentinela. */
+export async function getConferenciaSentinelaPeriodo(
+  inicio: string,
+  fim: string
+): Promise<ConferenciaSentinela[]> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
 
-  const resumoMes = await getResumoMensalPorEmpresa(mes, ano, "pago")
+  const resumoMes = await getResumoPorIntervaloPorEmpresa(inicio, fim, "pago")
 
-  const { inicio, fim } = rangeDoMesISO(mes, ano)
   const { data: receitas } = await supabase
     .from("lancamento_financeiro")
     .select("empresa_cliente, valor")
