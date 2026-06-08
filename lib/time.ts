@@ -21,7 +21,18 @@ export interface MembroTime {
   email: string
 }
 
-/** Usuários ativos de um papel (id, nome, email), ordenados por nome. */
+/**
+ * Usuários ativos que exercem a FUNÇÃO correspondente ao papel pedido
+ * (id, nome, email), ordenados por nome.
+ *
+ * Não basta o papel exato: quem é `custom` (personalizado) e recebeu a
+ * função de formulário também conta — assim Felipe/Guilherme (custom com
+ * formulario_comercial/trafego) aparecem no seletor de responsável e na aba
+ * Time, conforme as funções marcadas. Mapeamento papel → permissão:
+ *   comercial      → formulario_comercial
+ *   gestor_trafego → formulario_trafego
+ * Admins ficam de fora (são donos, não membros de time/responsáveis).
+ */
 export async function listarTimePorPapel(
   papel: PapelUsuario
 ): Promise<MembroTime[]> {
@@ -29,15 +40,37 @@ export async function listarTimePorPapel(
   if (!supabase) return []
   const { data, error } = await supabase
     .from("usuarios")
-    .select("id, nome, email")
-    .eq("papel", papel)
+    .select("id, nome, email, papel, permissoes")
     .eq("ativo", true)
     .order("nome")
   if (error) {
     console.error("[time] listar por papel error", error.message)
     return []
   }
-  return (data ?? []) as MembroTime[]
+
+  const permForm =
+    papel === "comercial"
+      ? "formulario_comercial"
+      : papel === "gestor_trafego"
+      ? "formulario_trafego"
+      : null
+
+  type LinhaUsuario = {
+    id: string
+    nome: string
+    email: string
+    papel: string
+    permissoes: Record<string, boolean> | null
+  }
+
+  return ((data ?? []) as LinhaUsuario[])
+    .filter((u) => {
+      if (u.papel === "admin") return false
+      if (u.papel === papel) return true // papel canônico (ex.: comercial)
+      // custom/personalizado com a função de formulário correspondente
+      return permForm ? u.permissoes?.[permForm] === true : false
+    })
+    .map((u) => ({ id: u.id, nome: u.nome, email: u.email }))
 }
 
 function resumoComercialVazio(): ResumoComercial {
