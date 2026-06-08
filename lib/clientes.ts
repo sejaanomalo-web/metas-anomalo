@@ -217,7 +217,7 @@ export async function getLinhasDoMesCliente(
     const { data, error } = await supabase
       .from("dados_diarios_log")
       .select(
-        "data, investimento_real, leads_real, cpl_real, reunioes_real, contratos_real, faturamento_real, preenchedor_nome, created_at"
+        "data, investimento_real, leads_real, cpl_real, reunioes_real, contratos_real, faturamento_real, impressoes_real, cliques_real, alcance_real, conversas_real, cpm_real, preenchedor_nome, created_at"
       )
       .eq("empresa", cliente.empresa_origem_nome)
       .eq("origem", "pago")
@@ -234,7 +234,9 @@ export async function getLinhasDoMesCliente(
   if (cliente.campaign_filter) {
     const { data, error } = await supabase
       .from("dados_diarios_cliente")
-      .select("data, investimento_real, leads_real, cpl_real, created_at")
+      .select(
+        "data, investimento_real, leads_real, cpl_real, impressoes_real, cliques_real, alcance_real, conversas_real, cpm_real, faturamento_real, reunioes_real, contratos_real, created_at"
+      )
       .eq("empresa_nome", cliente.empresa_nome)
       .eq("cliente_nome", cliente.nome)
       .eq("origem", "pago")
@@ -250,9 +252,14 @@ export async function getLinhasDoMesCliente(
       investimento_real: d.investimento_real as number | null,
       leads_real: d.leads_real as number | null,
       cpl_real: d.cpl_real as number | null,
-      reunioes_real: null,
-      contratos_real: null,
-      faturamento_real: null,
+      reunioes_real: (d.reunioes_real ?? null) as number | null,
+      contratos_real: (d.contratos_real ?? null) as number | null,
+      faturamento_real: (d.faturamento_real ?? null) as number | null,
+      impressoes_real: (d.impressoes_real ?? null) as number | null,
+      cliques_real: (d.cliques_real ?? null) as number | null,
+      alcance_real: (d.alcance_real ?? null) as number | null,
+      conversas_real: (d.conversas_real ?? null) as number | null,
+      cpm_real: (d.cpm_real ?? null) as number | null,
       preenchedor_nome: "Sentinela Anomalo",
       created_at: d.created_at as string,
     })) as LinhaDoMes[]

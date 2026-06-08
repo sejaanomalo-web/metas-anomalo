@@ -252,7 +252,7 @@ export async function getLinhasDoMes(
   const { data, error } = await supabase
     .from("dados_diarios_log")
     .select(
-      "data, investimento_real, leads_real, cpl_real, reunioes_real, contratos_real, faturamento_real, preenchedor_nome, created_at"
+      "data, investimento_real, leads_real, cpl_real, reunioes_real, contratos_real, faturamento_real, impressoes_real, cliques_real, alcance_real, conversas_real, cpm_real, preenchedor_nome, created_at"
     )
     .eq("empresa", empresaNome)
     .eq("origem", "pago")
@@ -274,8 +274,165 @@ export interface LinhaDoMes {
   reunioes_real: number | null
   contratos_real: number | null
   faturamento_real: number | null
+  // Métricas de anúncio do Meta (via Sentinela). Nulas até o agente popular.
+  impressoes_real?: number | null
+  cliques_real?: number | null
+  alcance_real?: number | null
+  conversas_real?: number | null
+  cpm_real?: number | null
+  // Categoria/destino por campanha (preenchido quando a linha vem de
+  // dados_diarios_campanha; nas linhas agregadas fica indefinido).
+  categoria?: string | null
+  destino?: string | null
   preenchedor_nome: string | null
   created_at: string
+}
+
+/**
+ * Resumo RICO de tráfego (empresa ou cliente) montado a partir das linhas
+ * diárias — alimenta o painel novo (herói + cartões). Soma cumulativos e
+ * recalcula derivadas (CPL, CPC, CPM, CTR, frequência, custo/conversa,
+ * lucro, ROI) dos totais. Tudo 0/null quando ainda não há dado.
+ */
+export interface ResumoTrafego {
+  investimento: number
+  leads: number
+  conversas: number
+  cliques: number
+  alcance: number
+  impressoes: number
+  reunioes: number // agendamentos
+  contratos: number // vendas (qtd)
+  faturamento: number
+  lucro: number
+  roi: number | null
+  cpl: number | null
+  cpc: number | null
+  cpm: number | null
+  ctr: number | null // 0..1
+  frequencia: number | null
+  custoPorConversa: number | null
+  dias: number
+  diasParciais: number
+}
+
+export function resumirTrafego(linhas: LinhaDoMes[]): ResumoTrafego {
+  const hojeISO = getHojeISO()
+  let investimento = 0,
+    leads = 0,
+    conversas = 0,
+    cliques = 0,
+    alcance = 0,
+    impressoes = 0,
+    reunioes = 0,
+    contratos = 0,
+    faturamento = 0
+  const diasSet = new Set<string>()
+  let diasParciais = 0
+  for (const l of linhas) {
+    investimento += Number(l.investimento_real ?? 0)
+    leads += Number(l.leads_real ?? 0)
+    conversas += Number(l.conversas_real ?? 0)
+    cliques += Number(l.cliques_real ?? 0)
+    alcance += Number(l.alcance_real ?? 0)
+    impressoes += Number(l.impressoes_real ?? 0)
+    reunioes += Number(l.reunioes_real ?? 0)
+    contratos += Number(l.contratos_real ?? 0)
+    faturamento += Number(l.faturamento_real ?? 0)
+    diasSet.add(l.data)
+    if (l.preenchedor_nome === SENTINELA_NOME && l.data === hojeISO) {
+      diasParciais += 1
+    }
+  }
+  return {
+    investimento,
+    leads,
+    conversas,
+    cliques,
+    alcance,
+    impressoes,
+    reunioes,
+    contratos,
+    faturamento,
+    lucro: faturamento - investimento,
+    roi: investimento > 0 ? (faturamento - investimento) / investimento : null,
+    cpl: leads > 0 ? investimento / leads : null,
+    cpc: cliques > 0 ? investimento / cliques : null,
+    cpm: impressoes > 0 ? (investimento / impressoes) * 1000 : null,
+    ctr: impressoes > 0 ? cliques / impressoes : null,
+    frequencia: alcance > 0 ? impressoes / alcance : null,
+    custoPorConversa: conversas > 0 ? investimento / conversas : null,
+    dias: diasSet.size,
+    diasParciais,
+  }
+}
+
+function getHojeISO(): string {
+  const agora = new Date()
+  const utcMs = agora.getTime() + agora.getTimezoneOffset() * 60_000
+  return new Date(utcMs - 3 * 60 * 60_000).toISOString().slice(0, 10)
+}
+
+/** Primeiro dia (YYYY-MM-DD) do mês 5 meses antes de `ateISO` — janela de
+ *  6 meses (incluindo o mês de `ate`) para os gráficos do painel. */
+export function inicioJanela6Meses(ateISO: string): string {
+  const d = new Date(`${ateISO}T00:00:00Z`)
+  const s = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 5, 1))
+  return s.toISOString().slice(0, 10)
+}
+
+/** Ponto mensal para os gráficos do painel de tráfego. */
+export interface SerieMesTrafego {
+  mes: string // rótulo curto (ex.: "Abr")
+  investimento: number
+  conversas: number
+  faturamento: number
+  agendamentos: number
+}
+
+const ROTULO_MES_CURTO: Record<number, string> = {
+  1: "Jan",
+  2: "Fev",
+  3: "Mar",
+  4: "Abr",
+  5: "Mai",
+  6: "Jun",
+  7: "Jul",
+  8: "Ago",
+  9: "Set",
+  10: "Out",
+  11: "Nov",
+  12: "Dez",
+}
+
+/**
+ * Agrupa linhas diárias por MÊS (YYYY-MM) somando os campos dos gráficos.
+ * Retorna ordenado por mês ascendente. Reusa as mesmas linhas
+ * (getLinhasDoMes/getLinhasDoMesCliente) buscadas numa janela de meses.
+ */
+export function serieMensalDeLinhas(linhas: LinhaDoMes[]): SerieMesTrafego[] {
+  const porMes = new Map<string, SerieMesTrafego>()
+  for (const l of linhas) {
+    const ym = l.data.slice(0, 7) // YYYY-MM
+    const mesNum = parseInt(l.data.slice(5, 7), 10)
+    const atual =
+      porMes.get(ym) ??
+      ({
+        mes: ROTULO_MES_CURTO[mesNum] ?? ym,
+        investimento: 0,
+        conversas: 0,
+        faturamento: 0,
+        agendamentos: 0,
+      } satisfies SerieMesTrafego)
+    atual.investimento += Number(l.investimento_real ?? 0)
+    atual.conversas += Number(l.conversas_real ?? 0)
+    atual.faturamento += Number(l.faturamento_real ?? 0)
+    atual.agendamentos += Number(l.reunioes_real ?? 0)
+    porMes.set(ym, atual)
+  }
+  return Array.from(porMes.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([, v]) => v)
 }
 
 /** Último log de execução do Sentinela (qualquer empresa).
@@ -386,6 +543,18 @@ export interface ResumoEmpresaMes {
   observacoes: string | null
   respostas: number
   temSentinela: boolean
+  // Métricas de anúncio do Meta (via Sentinela). Cumulativos somados;
+  // derivadas recalculadas dos totais. Nulas/0 até o agente popular.
+  cliques: number
+  alcance: number
+  conversas: number
+  frequencia: number | null // impressoes / alcance
+  ctr: number | null // cliques / impressoes (0..1)
+  cpc: number | null // investimento / cliques
+  custoPorConversa: number | null // investimento / conversas
+  // Métricas de negócio derivadas.
+  lucro: number // faturamento - investimento
+  roi: number | null // (faturamento - investimento) / investimento
 }
 
 /** Range YYYY-MM-DD do mês/ano selecionado (lte fim para incluir o último dia). */
@@ -431,10 +600,13 @@ interface LinhaAgregavel {
   // agente passar a coletar.
   impressoes_real: number | null
   cpm_real: number | null
+  cliques_real: number | null
+  alcance_real: number | null
+  conversas_real: number | null
 }
 
 const COLUNAS_AGREGAR =
-  "empresa, data, investimento_real, leads_real, reunioes_real, contratos_real, faturamento_real, criativos_entregues, criativos_usados, clientes_ativos, observacoes, respostas, preenchedor_nome, impressoes_real, cpm_real"
+  "empresa, data, investimento_real, leads_real, reunioes_real, contratos_real, faturamento_real, criativos_entregues, criativos_usados, clientes_ativos, observacoes, respostas, preenchedor_nome, impressoes_real, cpm_real, cliques_real, alcance_real, conversas_real"
 
 /** Agrega uma lista de linhas (mesma empresa, mesmo mês) num resumo. */
 function agregarLinhas(
@@ -449,6 +621,9 @@ function agregarLinhas(
   let criativosEntregues = 0
   let respostas = 0
   let impressoes = 0
+  let cliques = 0
+  let alcance = 0
+  let conversas = 0
   let criativosUsados: number | null = null
   let clientesAtivos: number | null = null
   let observacoes: string | null = null
@@ -467,6 +642,9 @@ function agregarLinhas(
     criativosEntregues += Number(l.criativos_entregues ?? 0)
     respostas += Number(l.respostas ?? 0)
     impressoes += Number(l.impressoes_real ?? 0)
+    cliques += Number(l.cliques_real ?? 0)
+    alcance += Number(l.alcance_real ?? 0)
+    conversas += Number(l.conversas_real ?? 0)
 
     if (criativosUsados === null && l.criativos_usados != null) {
       criativosUsados = l.criativos_usados
@@ -506,6 +684,15 @@ function agregarLinhas(
     observacoes,
     respostas,
     temSentinela,
+    cliques,
+    alcance,
+    conversas,
+    frequencia: alcance > 0 ? impressoes / alcance : null,
+    ctr: impressoes > 0 ? cliques / impressoes : null,
+    cpc: cliques > 0 ? investimento / cliques : null,
+    custoPorConversa: conversas > 0 ? investimento / conversas : null,
+    lucro: faturamento - investimento,
+    roi: investimento > 0 ? (faturamento - investimento) / investimento : null,
   }
 }
 

@@ -11,13 +11,14 @@ import { parsePeriodo } from "@/lib/periodo"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
   getUltimoLogSentinela,
+  inicioJanela6Meses,
   proximaExecucao,
-  resumirMesSentinela,
+  resumirTrafego,
+  serieMensalDeLinhas,
   statusSentinela,
 } from "@/lib/sentinela"
 import {
   getClientePorSlug,
-  getDiasSentinelaDoCliente,
   getLinhasDoMesCliente,
   clienteDisplayName,
 } from "@/lib/clientes"
@@ -60,12 +61,13 @@ export default async function ClienteTrafegoPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [dias, linhas, ultimoLog] = await Promise.all([
-    getDiasSentinelaDoCliente(cliente, inicio, fim),
+  const [linhas, linhas6m, ultimoLog] = await Promise.all([
     getLinhasDoMesCliente(cliente, inicio, fim),
+    getLinhasDoMesCliente(cliente, inicioJanela6Meses(fim), fim),
     getUltimoLogSentinela(),
   ])
-  const resumo = resumirMesSentinela(dias)
+  const resumo = resumirTrafego(linhas)
+  const serie = serieMensalDeLinhas(linhas6m)
   const nomeExibido = clienteDisplayName(cliente)
   const stat = statusSentinela(ultimoLog)
   const prox = proximaExecucao()
@@ -147,7 +149,7 @@ export default async function ClienteTrafegoPage({
           </div>
         )}
 
-        <PainelTrafego resumo={resumo} anomalias={[]} linhas={linhas} cplMeta={empresa.cpl} />
+        <PainelTrafego resumo={resumo} anomalias={[]} linhas={linhas} serie={serie} />
       </main>
     </>
   )

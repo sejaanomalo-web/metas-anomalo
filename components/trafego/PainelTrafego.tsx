@@ -1,80 +1,41 @@
-import KPICard from "@/components/ui/KPICard"
 import { formatBRL, formatNumero } from "@/lib/data"
+import MetricasTrafego from "@/components/trafego/MetricasTrafego"
+import GraficosTrafego from "@/components/trafego/GraficosTrafego"
 import {
   SENTINELA_NOME,
   type AnomaliaSentinela,
   type LinhaDoMes,
-  type ResumoMesSentinela,
+  type ResumoTrafego,
+  type SerieMesTrafego,
 } from "@/lib/sentinela"
 
 /**
- * Miolo do dashboard de tráfego — 4 KPIs + alertas + histórico diário.
- * Compartilhado entre o painel de uma EMPRESA (/dashboard/[empresa]/trafego)
- * e o de um CLIENTE (/dashboard/[empresa]/clientes/[cliente]).
+ * Miolo do dashboard de tráfego — bloco-herói + cartões de métrica +
+ * alertas + histórico diário (com coluna Categoria). Compartilhado entre
+ * o painel de uma EMPRESA (/dashboard/[empresa]/trafego) e o de um
+ * CLIENTE (/dashboard/[empresa]/clientes/[cliente]).
  *
- * Recebe os dados já carregados (resumo, anomalias, linhas) — não faz
- * fetch. O header (tabs, badge, banners) fica na página, que difere
- * entre empresa e cliente.
+ * Recebe os dados já carregados (resumo rico, anomalias, linhas) — não
+ * faz fetch. O header (tabs, badge, banners) fica na página.
  */
 export default function PainelTrafego({
   resumo,
   anomalias,
   linhas,
-  cplMeta,
+  serie,
 }: {
-  resumo: ResumoMesSentinela
+  resumo: ResumoTrafego
   anomalias: AnomaliaSentinela[]
   linhas: LinhaDoMes[]
-  cplMeta?: number | null
+  serie: SerieMesTrafego[]
 }) {
   return (
-    <>
-      {/* KPIs do mês */}
-      <section className="grid grid-cols-2 sm:grid-cols-4" style={{ gap: 16 }}>
-        <KPICard
-          label="Investimento no mês"
-          valor={formatBRL(resumo.investimento)}
-          icon={<IconeMegafone />}
-          iconStatus="gold"
-          destaque
-          semDados={resumo.investimento === 0}
-          semDadosTexto="Aguardando dados"
-        />
-        <KPICard
-          label="Resultados"
-          valor={formatNumero(resumo.leads)}
-          icon={<IconeLeads />}
-          iconStatus={resumo.leads > 0 ? "success" : "neutral"}
-          semDados={resumo.leads === 0}
-          semDadosTexto="Aguardando dados"
-          delta={{
-            texto: "leads / mensagens iniciadas / conversões",
-            status: "neutral",
-          }}
-        />
-        <KPICard
-          label="CPL médio"
-          valor={resumo.cpl !== null ? formatBRL(resumo.cpl) : "·"}
-          icon={<IconeAlvo />}
-          iconStatus={resumo.cpl !== null ? "success" : "neutral"}
-          semDados={resumo.cpl === null}
-          semDadosTexto="Sem leads ainda"
-          meta={cplMeta && cplMeta > 0 ? formatBRL(cplMeta) : undefined}
-        />
-        <KPICard
-          label="Dias com dados"
-          valor={formatNumero(resumo.dias)}
-          icon={<IconeCalendario />}
-          iconStatus="neutral"
-          semDados={resumo.dias === 0}
-          semDadosTexto="Sem dados no mês"
-          delta={
-            resumo.diasParciais > 0
-              ? { texto: `${resumo.diasParciais} parcial`, status: "warning" }
-              : undefined
-          }
-        />
-      </section>
+    <div className="space-y-8">
+      {/* Herói + cartões de métrica (modelo aprovado) */}
+      <MetricasTrafego resumo={resumo} />
+
+      {/* Gráficos: Evolução Mensal + Comparativo Mensal */}
+      <GraficosTrafego serie={serie} />
 
       {/* Alertas / anomalias */}
       {anomalias.length > 0 && (
@@ -127,6 +88,7 @@ export default function PainelTrafego({
                   {[
                     "Dia",
                     "Fonte",
+                    "Categoria",
                     "Investimento",
                     "Resultados",
                     "CPL",
@@ -161,7 +123,7 @@ export default function PainelTrafego({
           </div>
         )}
       </section>
-    </>
+    </div>
   )
 }
 
@@ -272,6 +234,26 @@ function LinhaTabela({ linha }: { linha: LinhaDoMes }) {
         )}
       </td>
       <td style={celulaStyle}>
+        {linha.categoria ? (
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--accent)",
+              background: "rgba(201,149,58,0.10)",
+              padding: "3px 8px",
+              borderRadius: 999,
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {linha.categoria}
+            {linha.destino ? ` · ${linha.destino}` : ""}
+          </span>
+        ) : (
+          <span style={{ color: "var(--text-4)", fontSize: 11 }}>—</span>
+        )}
+      </td>
+      <td style={celulaStyle}>
         {linha.investimento_real !== null ? formatBRL(Number(linha.investimento_real)) : "·"}
       </td>
       <td style={celulaStyle}>
@@ -311,45 +293,3 @@ const colunaFixaEstilo: React.CSSProperties = {
   boxShadow: "2px 0 8px rgba(0,0,0,0.25)",
 }
 
-/* ============ Ícones ============ */
-
-function IconeMegafone() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-    </svg>
-  )
-}
-
-function IconeAlvo() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2" />
-    </svg>
-  )
-}
-
-function IconeLeads() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 11l-3-3 3-3" />
-    </svg>
-  )
-}
-
-function IconeCalendario() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  )
-}

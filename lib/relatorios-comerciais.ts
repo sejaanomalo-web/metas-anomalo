@@ -211,6 +211,15 @@ function comercialParaResumo(
     observacoes: null,
     respostas: 0,
     temSentinela: false,
+    cliques: 0,
+    alcance: 0,
+    conversas: 0,
+    frequencia: null,
+    ctr: null,
+    cpc: null,
+    custoPorConversa: null,
+    lucro: faturamento,
+    roi: null,
   }
 }
 

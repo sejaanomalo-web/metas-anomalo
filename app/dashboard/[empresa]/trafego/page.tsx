@@ -11,11 +11,12 @@ import { parsePeriodo } from "@/lib/periodo"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
   getEmpresasTrackeadas,
-  getDiasSentinelaDaEmpresa,
   getLinhasDoMes,
   getUltimoLogSentinela,
+  inicioJanela6Meses,
   proximaExecucao,
-  resumirMesSentinela,
+  resumirTrafego,
+  serieMensalDeLinhas,
   statusSentinela,
   type AnomaliaSentinela,
 } from "@/lib/sentinela"
@@ -64,15 +65,15 @@ export default async function TrafegoPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [diasSentinela, linhas, ultimoLog, empresasTrackeadas] =
-    await Promise.all([
-      getDiasSentinelaDaEmpresa(empresa.nome, inicio, fim),
-      getLinhasDoMes(empresa.nome, inicio, fim),
-      getUltimoLogSentinela(),
-      getEmpresasTrackeadas(),
-    ])
+  const [linhas, linhas6m, ultimoLog, empresasTrackeadas] = await Promise.all([
+    getLinhasDoMes(empresa.nome, inicio, fim),
+    getLinhasDoMes(empresa.nome, inicioJanela6Meses(fim), fim),
+    getUltimoLogSentinela(),
+    getEmpresasTrackeadas(),
+  ])
 
-  const resumo = resumirMesSentinela(diasSentinela)
+  const resumo = resumirTrafego(linhas)
+  const serie = serieMensalDeLinhas(linhas6m)
   const trackeada = empresasTrackeadas.includes(empresa.nome)
   const stat = statusSentinela(ultimoLog)
   const prox = proximaExecucao()
@@ -221,12 +222,12 @@ export default async function TrafegoPage({
           </div>
         )}
 
-        {/* Miolo compartilhado: KPIs + alertas + histórico */}
+        {/* Miolo compartilhado: herói + cartões + alertas + histórico */}
         <PainelTrafego
           resumo={resumo}
           anomalias={anomaliasEmpresa}
           linhas={linhas}
-          cplMeta={empresa.cpl}
+          serie={serie}
         />
       </main>
     </>
