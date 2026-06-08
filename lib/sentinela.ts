@@ -381,6 +381,55 @@ export function inicioJanela6Meses(ateISO: string): string {
   return s.toISOString().slice(0, 10)
 }
 
+export interface CategoriaDestino {
+  categoria: string | null
+  destino: string | null
+}
+
+/**
+ * Categorias/destinos por DIA (de dados_diarios_campanha) para a coluna
+ * "Categoria" do histórico. Chaveado por data (YYYY-MM-DD); valores únicos
+ * por dia. Vazio enquanto o agente não tiver gravado campanhas. Usa
+ * service role (dados_diarios_campanha é RLS sem policy).
+ */
+export async function getCategoriasPorDia(
+  empresaNome: string,
+  inicio: string,
+  fim: string,
+  clienteNome?: string | null
+): Promise<Record<string, CategoriaDestino[]>> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return {}
+  let q = supabase
+    .from("dados_diarios_campanha")
+    .select("data, categoria, destino")
+    .eq("empresa_nome", empresaNome)
+    .eq("origem", "pago")
+    .gte("data", inicio)
+    .lte("data", fim)
+  if (clienteNome) q = q.eq("cliente_nome", clienteNome)
+  const { data, error } = await q
+  if (error) {
+    console.error("[sentinela] getCategoriasPorDia error", error.message)
+    return {}
+  }
+  const out: Record<string, CategoriaDestino[]> = {}
+  const visto = new Set<string>()
+  for (const r of (data ?? []) as {
+    data: string
+    categoria: string | null
+    destino: string | null
+  }[]) {
+    if (!r.categoria && !r.destino) continue
+    const chave = `${r.data}|${r.categoria ?? ""}|${r.destino ?? ""}`
+    if (visto.has(chave)) continue
+    visto.add(chave)
+    if (!out[r.data]) out[r.data] = []
+    out[r.data].push({ categoria: r.categoria, destino: r.destino })
+  }
+  return out
+}
+
 /** Ponto mensal para os gráficos do painel de tráfego. */
 export interface SerieMesTrafego {
   mes: string // rótulo curto (ex.: "Abr")

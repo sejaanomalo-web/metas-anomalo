@@ -4,6 +4,7 @@ import GraficosTrafego from "@/components/trafego/GraficosTrafego"
 import {
   SENTINELA_NOME,
   type AnomaliaSentinela,
+  type CategoriaDestino,
   type LinhaDoMes,
   type ResumoTrafego,
   type SerieMesTrafego,
@@ -23,11 +24,13 @@ export default function PainelTrafego({
   anomalias,
   linhas,
   serie,
+  categoriasPorDia = {},
 }: {
   resumo: ResumoTrafego
   anomalias: AnomaliaSentinela[]
   linhas: LinhaDoMes[]
   serie: SerieMesTrafego[]
+  categoriasPorDia?: Record<string, CategoriaDestino[]>
 }) {
   return (
     <div className="space-y-8">
@@ -116,7 +119,11 @@ export default function PainelTrafego({
               </thead>
               <tbody>
                 {linhas.map((l) => (
-                  <LinhaTabela key={l.data + l.preenchedor_nome} linha={l} />
+                  <LinhaTabela
+                    key={l.data + l.preenchedor_nome}
+                    linha={l}
+                    cats={categoriasPorDia[l.data]}
+                  />
                 ))}
               </tbody>
             </table>
@@ -182,7 +189,13 @@ export function CartaoAnomalia({ anomalia }: { anomalia: AnomaliaSentinela }) {
   )
 }
 
-function LinhaTabela({ linha }: { linha: LinhaDoMes }) {
+function LinhaTabela({
+  linha,
+  cats,
+}: {
+  linha: LinhaDoMes
+  cats?: CategoriaDestino[]
+}) {
   const hojeISO = new Date().toISOString().slice(0, 10)
   const ehSentinela = linha.preenchedor_nome === SENTINELA_NOME
   const ehHoje = linha.data === hojeISO
@@ -234,20 +247,25 @@ function LinhaTabela({ linha }: { linha: LinhaDoMes }) {
         )}
       </td>
       <td style={celulaStyle}>
-        {linha.categoria ? (
-          <span
-            style={{
-              fontSize: 11,
-              color: "var(--accent)",
-              background: "rgba(201,149,58,0.10)",
-              padding: "3px 8px",
-              borderRadius: 999,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {linha.categoria}
-            {linha.destino ? ` · ${linha.destino}` : ""}
+        {cats && cats.length > 0 ? (
+          <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
+            {cats.map((c, i) => (
+              <span
+                key={`${c.categoria ?? ""}-${c.destino ?? ""}-${i}`}
+                style={{
+                  fontSize: 11,
+                  color: "var(--accent)",
+                  background: "rgba(201,149,58,0.10)",
+                  padding: "3px 8px",
+                  borderRadius: 999,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {c.categoria ?? "—"}
+                {c.destino ? ` · ${c.destino}` : ""}
+              </span>
+            ))}
           </span>
         ) : (
           <span style={{ color: "var(--text-4)", fontSize: 11 }}>—</span>

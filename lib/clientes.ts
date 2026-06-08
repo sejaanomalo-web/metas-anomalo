@@ -1,6 +1,8 @@
 import { getSupabaseAdmin } from "./supabase"
 import {
+  type CategoriaDestino,
   type DiaSentinela,
+  getCategoriasPorDia,
   type LinhaDoMes,
   resumirMesSentinela,
   type ResumoMesSentinela,
@@ -266,6 +268,23 @@ export async function getLinhasDoMesCliente(
   }
 
   return []
+}
+
+/** Categorias/destinos por dia do CLIENTE (de dados_diarios_campanha).
+ *  Modo origem → consulta por empresa_origem_nome; modo regex → por
+ *  (empresa_nome, cliente_nome). Vazio nos demais casos. */
+export async function getCategoriasPorDiaCliente(
+  cliente: ClienteTrafego,
+  inicio: string,
+  fim: string
+): Promise<Record<string, CategoriaDestino[]>> {
+  if (cliente.empresa_origem_nome) {
+    return getCategoriasPorDia(cliente.empresa_origem_nome, inicio, fim)
+  }
+  if (cliente.campaign_filter) {
+    return getCategoriasPorDia(cliente.empresa_nome, inicio, fim, cliente.nome)
+  }
+  return {}
 }
 
 // ============================================================

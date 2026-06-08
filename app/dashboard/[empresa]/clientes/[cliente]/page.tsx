@@ -18,6 +18,7 @@ import {
   statusSentinela,
 } from "@/lib/sentinela"
 import {
+  getCategoriasPorDiaCliente,
   getClientePorSlug,
   getLinhasDoMesCliente,
   clienteDisplayName,
@@ -61,9 +62,10 @@ export default async function ClienteTrafegoPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [linhas, linhas6m, ultimoLog] = await Promise.all([
+  const [linhas, linhas6m, categoriasPorDia, ultimoLog] = await Promise.all([
     getLinhasDoMesCliente(cliente, inicio, fim),
     getLinhasDoMesCliente(cliente, inicioJanela6Meses(fim), fim),
+    getCategoriasPorDiaCliente(cliente, inicio, fim),
     getUltimoLogSentinela(),
   ])
   const resumo = resumirTrafego(linhas)
@@ -149,7 +151,13 @@ export default async function ClienteTrafegoPage({
           </div>
         )}
 
-        <PainelTrafego resumo={resumo} anomalias={[]} linhas={linhas} serie={serie} />
+        <PainelTrafego
+          resumo={resumo}
+          anomalias={[]}
+          linhas={linhas}
+          serie={serie}
+          categoriasPorDia={categoriasPorDia}
+        />
       </main>
     </>
   )

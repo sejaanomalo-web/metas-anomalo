@@ -10,6 +10,7 @@ import { subtituloDaEmpresa } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
+  getCategoriasPorDia,
   getEmpresasTrackeadas,
   getLinhasDoMes,
   getUltimoLogSentinela,
@@ -65,12 +66,14 @@ export default async function TrafegoPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [linhas, linhas6m, ultimoLog, empresasTrackeadas] = await Promise.all([
-    getLinhasDoMes(empresa.nome, inicio, fim),
-    getLinhasDoMes(empresa.nome, inicioJanela6Meses(fim), fim),
-    getUltimoLogSentinela(),
-    getEmpresasTrackeadas(),
-  ])
+  const [linhas, linhas6m, categoriasPorDia, ultimoLog, empresasTrackeadas] =
+    await Promise.all([
+      getLinhasDoMes(empresa.nome, inicio, fim),
+      getLinhasDoMes(empresa.nome, inicioJanela6Meses(fim), fim),
+      getCategoriasPorDia(empresa.nome, inicio, fim),
+      getUltimoLogSentinela(),
+      getEmpresasTrackeadas(),
+    ])
 
   const resumo = resumirTrafego(linhas)
   const serie = serieMensalDeLinhas(linhas6m)
@@ -228,6 +231,7 @@ export default async function TrafegoPage({
           anomalias={anomaliasEmpresa}
           linhas={linhas}
           serie={serie}
+          categoriasPorDia={categoriasPorDia}
         />
       </main>
     </>
