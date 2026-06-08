@@ -41,8 +41,13 @@ function intDoForm(v: FormDataEntryValue | null): number {
 export async function salvarRelatorioComercialAction(
   formData: FormData
 ): Promise<ResultadoComercial> {
+  // Funciona com OU sem login: na versão pública (link compartilhado) não
+  // há sessão — registramos como "Formulário público". Logado, guarda
+  // quem preencheu (informativo; a chave do upsert é empresa+data).
   const usuario = await getUsuarioAtual()
-  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+
+  const empresa = String(formData.get("empresa") ?? "").trim()
+  if (!empresa) return { ok: false, erro: "Selecione a empresa." }
 
   const data = String(formData.get("data") ?? "").trim()
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) {
@@ -56,8 +61,9 @@ export async function salvarRelatorioComercialAction(
   if (!supabase) return { ok: false, erro: "Supabase indisponível." }
 
   const payload = {
-    colaborador_id: usuario.id,
-    colaborador_nome: usuario.nome,
+    empresa,
+    colaborador_id: usuario?.id ?? null,
+    colaborador_nome: usuario?.nome ?? "Formulário público",
     data,
     ligacoes: intDoForm(formData.get("ligacoes")),
     mensagens: intDoForm(formData.get("mensagens")),
@@ -76,7 +82,7 @@ export async function salvarRelatorioComercialAction(
 
   const { error } = await supabase
     .from("relatorios_comerciais")
-    .upsert(payload, { onConflict: "colaborador_id,data" })
+    .upsert(payload, { onConflict: "empresa,data" })
   if (error) {
     console.error("[comercial] salvar relatorio error", error.message)
     return { ok: false, erro: error.message }

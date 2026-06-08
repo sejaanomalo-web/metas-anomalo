@@ -27,6 +27,7 @@ export const ROTULO_ETAPA: Record<EtapaFunil, string> = {
 
 export interface RelatorioComercial {
   id: string
+  empresa: string
   colaborador_id: string | null
   colaborador_nome: string
   data: string

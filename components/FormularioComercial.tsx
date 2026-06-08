@@ -22,17 +22,27 @@ type Feedback =
   | null
 
 /**
- * Seção COMERCIAL do formulário. Dois blocos:
- *   1. Relatório diário — atividade da pessoa logada no dia (prospecção,
- *      reuniões, propostas/fechamentos). Upsert por (colaborador, data).
- *   2. Pipeline — cadastra/atualiza uma oportunidade do funil (modelo
- *      híbrido: liga a empresa existente OU prospect novo).
+ * Seção/formulário COMERCIAL. Reusado em três contextos:
+ *   • Configurações (admin)  → copiarLinkPublico (mostra "Copiar link")
+ *   • /formulario-comercial  → publico (sem chrome, sem bloco de pipeline)
+ *
+ * Dois blocos:
+ *   1. Relatório diário — escolhe EMPRESA + data + métricas do dia
+ *      (prospecção, reuniões, propostas/fechamentos). Upsert por
+ *      (empresa, data) — funciona com ou sem login.
+ *   2. Pipeline — cadastra/atualiza oportunidade. Só em contexto logado
+ *      (escondido na versão pública, que não tem sessão).
  */
 export default function FormularioComercial({
   empresas,
+  copiarLinkPublico,
+  publico,
 }: {
   empresas: EmpresaMeta[]
+  copiarLinkPublico?: boolean
+  publico?: boolean
 }) {
+  const [empresa, setEmpresa] = useState(empresas[0]?.nome ?? "")
   const [data, setData] = useState(hojeBRT())
   const [feedback, setFeedback] = useState<Feedback>(null)
   const [feedbackPipe, setFeedbackPipe] = useState<Feedback>(null)
@@ -44,7 +54,7 @@ export default function FormularioComercial({
     const r = await salvarRelatorioComercialAction(formData)
     setFeedback(
       r.ok
-        ? { tipo: "sucesso", mensagem: "Relatório do dia salvo." }
+        ? { tipo: "sucesso", mensagem: `${empresa} · relatório do dia salvo.` }
         : { tipo: "erro", mensagem: r.erro ?? "Erro." }
     )
   }
@@ -59,15 +69,91 @@ export default function FormularioComercial({
     )
   }
 
+  async function copiar() {
+    if (typeof window === "undefined") return
+    const url = `${window.location.origin}/formulario-comercial`
+    try {
+      await navigator.clipboard.writeText(url)
+      setFeedback({ tipo: "sucesso", mensagem: "Link público copiado." })
+      setTimeout(() => setFeedback(null), 2400)
+    } catch {
+      setFeedback({
+        tipo: "erro",
+        mensagem: "Não consegui copiar · copie manualmente: " + url,
+      })
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Bloco 1 — Relatório diário */}
       <div className="glass" style={{ padding: 28 }}>
-        <Titulo texto="Relatório diário · comercial" />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 22,
+          }}
+        >
+          <p
+            style={{
+              fontSize: 11,
+              letterSpacing: "1.5px",
+              color: "var(--text-3)",
+              textTransform: "uppercase",
+              fontWeight: 500,
+            }}
+          >
+            Relatório diário · comercial
+          </p>
+          {copiarLinkPublico && (
+            <button
+              type="button"
+              onClick={copiar}
+              className="hover:text-[#C9953A] hover:border-[#C9953A55] transition no-ds"
+              style={{
+                padding: "8px 14px",
+                fontSize: 11,
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,0.55)",
+                border: "0.5px solid rgba(255,255,255,0.15)",
+                borderRadius: 6,
+                background: "transparent",
+                fontWeight: 500,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Copiar link público
+            </button>
+          )}
+        </div>
+
         <form
           action={(fd) => startTransition(() => onSubmit(fd))}
           className="space-y-4"
         >
+          <Campo label="Empresa">
+            <select
+              name="empresa"
+              value={empresa}
+              onChange={(e) => setEmpresa(e.target.value)}
+              required
+              className="glass-input"
+              style={inputEstilo}
+            >
+              {empresas.map((e) => (
+                <option key={e.slug} value={e.nome}>
+                  {e.nome}
+                </option>
+              ))}
+            </select>
+          </Campo>
+
           <Campo label="Data">
             <input
               type="date"
@@ -126,94 +212,97 @@ export default function FormularioComercial({
           <BotaoLinha
             pending={pending}
             feedback={feedback}
+            disabled={!empresa}
             rotulo="Salvar relatório do dia"
           />
         </form>
       </div>
 
-      {/* Bloco 2 — Pipeline */}
-      <div className="glass" style={{ padding: 28 }}>
-        <Titulo texto="Oportunidade · pipeline" />
-        <form
-          action={(fd) => startPipe(() => onSubmitPipe(fd))}
-          className="space-y-4"
-        >
-          <Campo label="Nome da empresa / prospect">
-            <input
-              type="text"
-              name="nome"
-              required
-              className="glass-input"
-              style={inputEstilo}
-              placeholder="Ex.: Loja XPTO"
-            />
-          </Campo>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12 }}>
-            <Campo label="Etapa do funil">
-              <select name="etapa" className="glass-input" style={inputEstilo}>
-                {ETAPAS_FUNIL.map((e) => (
-                  <option key={e} value={e}>
-                    {ROTULO_ETAPA[e]}
-                  </option>
-                ))}
-              </select>
-            </Campo>
-            <Campo label="Valor estimado (R$)">
+      {/* Bloco 2 — Pipeline (só em contexto logado) */}
+      {!publico && (
+        <div className="glass" style={{ padding: 28 }}>
+          <Titulo texto="Oportunidade · pipeline" />
+          <form
+            action={(fd) => startPipe(() => onSubmitPipe(fd))}
+            className="space-y-4"
+          >
+            <Campo label="Nome da empresa / prospect">
               <input
                 type="text"
-                name="valor_estimado"
-                inputMode="decimal"
+                name="nome"
+                required
                 className="glass-input"
                 style={inputEstilo}
-                placeholder="0,00"
+                placeholder="Ex.: Loja XPTO"
               />
             </Campo>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12 }}>
-            <Campo label="Empresa do hub (opcional)">
-              <select
-                name="empresa_config_slug"
+            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12 }}>
+              <Campo label="Etapa do funil">
+                <select name="etapa" className="glass-input" style={inputEstilo}>
+                  {ETAPAS_FUNIL.map((e) => (
+                    <option key={e} value={e}>
+                      {ROTULO_ETAPA[e]}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+              <Campo label="Valor estimado (R$)">
+                <input
+                  type="text"
+                  name="valor_estimado"
+                  inputMode="decimal"
+                  className="glass-input"
+                  style={inputEstilo}
+                  placeholder="0,00"
+                />
+              </Campo>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12 }}>
+              <Campo label="Empresa do hub (opcional)">
+                <select
+                  name="empresa_config_slug"
+                  className="glass-input"
+                  style={inputEstilo}
+                >
+                  <option value="">— prospect novo —</option>
+                  {empresas.map((e) => (
+                    <option key={e.slug} value={e.slug}>
+                      {e.nome}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+              <Campo label="Origem do contato (opcional)">
+                <input
+                  type="text"
+                  name="origem_contato"
+                  className="glass-input"
+                  style={inputEstilo}
+                  placeholder="inbound / outbound / indicação"
+                />
+              </Campo>
+            </div>
+
+            <Campo label="Observações (opcional)">
+              <textarea
+                name="observacoes"
+                rows={2}
                 className="glass-input"
-                style={inputEstilo}
-              >
-                <option value="">— prospect novo —</option>
-                {empresas.map((e) => (
-                  <option key={e.slug} value={e.slug}>
-                    {e.nome}
-                  </option>
-                ))}
-              </select>
-            </Campo>
-            <Campo label="Origem do contato (opcional)">
-              <input
-                type="text"
-                name="origem_contato"
-                className="glass-input"
-                style={inputEstilo}
-                placeholder="inbound / outbound / indicação"
+                style={{ ...inputEstilo, resize: "vertical", minHeight: 56 }}
+                placeholder="Notas da negociação…"
               />
             </Campo>
-          </div>
 
-          <Campo label="Observações (opcional)">
-            <textarea
-              name="observacoes"
-              rows={2}
-              className="glass-input"
-              style={{ ...inputEstilo, resize: "vertical", minHeight: 56 }}
-              placeholder="Notas da negociação…"
+            <BotaoLinha
+              pending={pendingPipe}
+              feedback={feedbackPipe}
+              rotulo="Salvar oportunidade"
             />
-          </Campo>
-
-          <BotaoLinha
-            pending={pendingPipe}
-            feedback={feedbackPipe}
-            rotulo="Salvar oportunidade"
-          />
-        </form>
-      </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
@@ -289,10 +378,12 @@ function BotaoLinha({
   pending,
   feedback,
   rotulo,
+  disabled,
 }: {
   pending: boolean
   feedback: Feedback
   rotulo: string
+  disabled?: boolean
 }) {
   return (
     <div
@@ -306,9 +397,9 @@ function BotaoLinha({
     >
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || disabled}
         className="btn-gold-filled uppercase"
-        style={{ opacity: pending ? 0.6 : 1 }}
+        style={{ opacity: pending || disabled ? 0.6 : 1 }}
       >
         {pending ? "Salvando…" : rotulo}
       </button>

@@ -2,6 +2,7 @@ import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import FormConfig from "@/components/FormConfig"
 import AtivarNotificacoes from "@/components/AtivarNotificacoes"
 import GerenciadorUsuarios from "@/components/GerenciadorUsuarios"
+import GerenciadorFormularios from "@/components/GerenciadorFormularios"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
 import {
   montarResumoDiario,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/resumos"
 import { requererPermissao, temPermissao } from "@/lib/auth"
 import { listarUsuariosAction } from "@/lib/usuarios-actions"
+import { listarEmpresas } from "@/lib/empresas-actions"
 
 export default async function ConfiguracoesPage({
   searchParams,
@@ -21,12 +23,13 @@ export default async function ConfiguracoesPage({
 
   const mes = mesValido(searchParams?.mes)
 
-  const [mensagemDiario, mensagemSemanal, mensagemMensal, usuarios] =
+  const [mensagemDiario, mensagemSemanal, mensagemMensal, usuarios, empresas] =
     await Promise.all([
       montarResumoDiario(),
       montarResumoSemanal(),
       montarResumoMensal(),
       podeGerenciarUsuarios ? listarUsuariosAction() : Promise.resolve([]),
+      listarEmpresas(true),
     ])
 
   return (
@@ -81,6 +84,8 @@ export default async function ConfiguracoesPage({
             meuUsuarioId={usuario.id}
           />
         )}
+
+        <GerenciadorFormularios empresas={empresas} />
 
         <FormConfig
           mensagemDiario={mensagemDiario}

@@ -611,8 +611,12 @@ create policy dados_diarios_log_all
 create extension if not exists "pgcrypto";
 
 -- Relatório diário comercial ------------------------------------------------
+-- Por EMPRESA + dia (formulário público compartilhado onde o time escolhe a
+-- empresa). colaborador_* é informativo ("Formulário público" quando sem
+-- login). Upsert por (empresa, data).
 create table if not exists public.relatorios_comerciais (
   id uuid primary key default gen_random_uuid(),
+  empresa text not null,
   colaborador_id uuid,
   colaborador_nome text not null,
   data date not null,
@@ -631,13 +635,13 @@ create table if not exists public.relatorios_comerciais (
   observacoes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (colaborador_id, data)
+  unique (empresa, data)
 );
 
 create index if not exists relatorios_comerciais_data_idx
   on public.relatorios_comerciais (data);
-create index if not exists relatorios_comerciais_colab_data_idx
-  on public.relatorios_comerciais (colaborador_id, data);
+create index if not exists relatorios_comerciais_empresa_data_idx
+  on public.relatorios_comerciais (empresa, data);
 
 -- Pipeline comercial por etapa ----------------------------------------------
 create table if not exists public.pipeline_comercial (
