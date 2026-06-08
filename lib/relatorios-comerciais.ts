@@ -55,6 +55,11 @@ export async function salvarRelatorioComercialAction(
   // quem preencheu (informativo; a chave do upsert é empresa+data).
   const usuario = await getUsuarioAtual()
 
+  // Responsável: vem do seletor do form (atribuição por pessoa) com
+  // fallback pra sessão / "Formulário público".
+  const respId = String(formData.get("colaborador_id") ?? "").trim()
+  const respNome = String(formData.get("colaborador_nome") ?? "").trim()
+
   const empresa = String(formData.get("empresa") ?? "").trim()
   if (!empresa) return { ok: false, erro: "Selecione a empresa." }
 
@@ -71,8 +76,8 @@ export async function salvarRelatorioComercialAction(
 
   const payload = {
     empresa,
-    colaborador_id: usuario?.id ?? null,
-    colaborador_nome: usuario?.nome ?? "Formulário público",
+    colaborador_id: respId || usuario?.id || null,
+    colaborador_nome: respNome || usuario?.nome || "Formulário público",
     data,
     ligacoes: intDoForm(formData.get("ligacoes")),
     mensagens: intDoForm(formData.get("mensagens")),

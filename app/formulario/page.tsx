@@ -1,6 +1,7 @@
 import Image from "next/image"
 import FormularioManual from "@/components/FormularioManual"
 import { listarEmpresas } from "@/lib/empresas-actions"
+import { listarTimePorPapel } from "@/lib/time"
 import logo from "@/public/logo-capa-app.png"
 
 export const dynamic = "force-dynamic"
@@ -15,7 +16,10 @@ export const dynamic = "force-dynamic"
  * já tá no link).
  */
 export default async function FormularioPublicoPage() {
-  const empresas = await listarEmpresas(true)
+  const [empresas, responsaveis] = await Promise.all([
+    listarEmpresas(true),
+    listarTimePorPapel("gestor_trafego"),
+  ])
 
   return (
     <main
@@ -65,7 +69,7 @@ export default async function FormularioPublicoPage() {
         </p>
       </header>
 
-      <FormularioManual empresas={empresas} />
+      <FormularioManual empresas={empresas} responsaveis={responsaveis} />
 
       <p
         className="mt-8 text-center"

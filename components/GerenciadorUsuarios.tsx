@@ -850,7 +850,7 @@ const PRESET_GESTOR: Permissoes = {
   formularios: true,
   formulario_comercial: false,
   formulario_trafego: true,
-  configuracoes: false,
+  configuracoes: true,
   gerenciar_usuarios: false,
   ver_notificacoes: true,
 }
@@ -865,7 +865,7 @@ const PRESET_COMERCIAL: Permissoes = {
   formularios: true,
   formulario_comercial: true,
   formulario_trafego: false,
-  configuracoes: false,
+  configuracoes: true,
   gerenciar_usuarios: false,
   ver_notificacoes: true,
 }

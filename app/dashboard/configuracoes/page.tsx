@@ -3,7 +3,9 @@ import FormConfig from "@/components/FormConfig"
 import AtivarNotificacoes from "@/components/AtivarNotificacoes"
 import PreferenciasNotificacoes from "@/components/PreferenciasNotificacoes"
 import GerenciadorUsuarios from "@/components/GerenciadorUsuarios"
-import GerenciadorFormularios from "@/components/GerenciadorFormularios"
+import GerenciadorFormularios, {
+  type FormId,
+} from "@/components/GerenciadorFormularios"
 import GerenciadorRelatoriosComerciais from "@/components/GerenciadorRelatoriosComerciais"
 import GerenciadorDadosDiarios from "@/components/GerenciadorDadosDiarios"
 import { ANO_PADRAO, mesValido } from "@/lib/data"
@@ -16,7 +18,11 @@ import { requererPermissao, temPermissao } from "@/lib/auth"
 import { listarUsuariosAction } from "@/lib/usuarios-actions"
 import { listarRelatoriosComerciaisAdmin } from "@/lib/relatorios-comerciais"
 import { listarEmpresas } from "@/lib/empresas-actions"
-import { getPreferenciasNotificacao } from "@/lib/preferencias-notificacao"
+import {
+  getPreferenciasNotificacao,
+  type PreferenciasNotificacao,
+} from "@/lib/preferencias-notificacao"
+import { listarTimePorPapel } from "@/lib/time"
 
 export default async function ConfiguracoesPage({
   searchParams,
@@ -26,6 +32,29 @@ export default async function ConfiguracoesPage({
   const usuario = await requererPermissao("configuracoes")
   const podeGerenciarUsuarios = temPermissao(usuario, "gerenciar_usuarios")
   const ehAdmin = usuario.papel === "admin"
+
+  // Escopo por papel: quais toggles de notificação e quais formulários
+  // cada acesso enxerga em Configurações.
+  const chavesNotif: (keyof PreferenciasNotificacao)[] = [
+    "meta_batida",
+    "lembrete",
+  ]
+  if (
+    temPermissao(usuario, "dashboard_trafego") ||
+    temPermissao(usuario, "formulario_trafego")
+  ) {
+    chavesNotif.push("dados_trafego", "dados_sentinela")
+  }
+  if (
+    temPermissao(usuario, "dashboard_comercial") ||
+    temPermissao(usuario, "formulario_comercial")
+  ) {
+    chavesNotif.push("dados_comercial", "nova_venda")
+  }
+  const formsPermitidos: FormId[] = []
+  if (temPermissao(usuario, "formulario_trafego")) formsPermitidos.push("trafego")
+  if (temPermissao(usuario, "formulario_comercial"))
+    formsPermitidos.push("comercial")
 
   const mes = mesValido(searchParams?.mes)
 
@@ -37,14 +66,18 @@ export default async function ConfiguracoesPage({
     empresas,
     preferencias,
     relatoriosComerciais,
+    responsaveisTrafego,
+    responsaveisComercial,
   ] = await Promise.all([
-    montarResumoDiario(),
-    montarResumoSemanal(),
-    montarResumoMensal(),
+    ehAdmin ? montarResumoDiario() : Promise.resolve(""),
+    ehAdmin ? montarResumoSemanal() : Promise.resolve(""),
+    ehAdmin ? montarResumoMensal() : Promise.resolve(""),
     podeGerenciarUsuarios ? listarUsuariosAction() : Promise.resolve([]),
     listarEmpresas(true),
     getPreferenciasNotificacao(usuario.id),
     ehAdmin ? listarRelatoriosComerciaisAdmin() : Promise.resolve([]),
+    listarTimePorPapel("gestor_trafego"),
+    listarTimePorPapel("comercial"),
   ])
 
   return (
@@ -84,7 +117,9 @@ export default async function ConfiguracoesPage({
               marginTop: 10,
             }}
           >
-            Resumos para enviar no WhatsApp · clique em copiar e cole no chat
+            {ehAdmin
+              ? "Resumos para enviar no WhatsApp · clique em copiar e cole no chat"
+              : "Suas notificações e formulários"}
           </p>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
@@ -93,7 +128,10 @@ export default async function ConfiguracoesPage({
           vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
         />
 
-        <PreferenciasNotificacoes inicial={preferencias} />
+        <PreferenciasNotificacoes
+          inicial={preferencias}
+          chavesPermitidas={chavesNotif}
+        />
 
         {podeGerenciarUsuarios && (
           <GerenciadorUsuarios
@@ -102,7 +140,14 @@ export default async function ConfiguracoesPage({
           />
         )}
 
-        <GerenciadorFormularios empresas={empresas} />
+        {formsPermitidos.length > 0 && (
+          <GerenciadorFormularios
+            empresas={empresas}
+            formsPermitidos={formsPermitidos}
+            responsaveisTrafego={responsaveisTrafego}
+            responsaveisComercial={responsaveisComercial}
+          />
+        )}
 
         {ehAdmin && (
           <>
@@ -114,11 +159,13 @@ export default async function ConfiguracoesPage({
           </>
         )}
 
-        <FormConfig
-          mensagemDiario={mensagemDiario}
-          mensagemSemanal={mensagemSemanal}
-          mensagemMensal={mensagemMensal}
-        />
+        {ehAdmin && (
+          <FormConfig
+            mensagemDiario={mensagemDiario}
+            mensagemSemanal={mensagemSemanal}
+            mensagemMensal={mensagemMensal}
+          />
+        )}
       </main>
 
       <footer

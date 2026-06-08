@@ -1,6 +1,7 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import SectionHeader from "@/components/ui/SectionHeader"
 import FunilAtividadeComercial from "@/components/FunilAtividadeComercial"
+import AbasArea from "@/components/AbasArea"
 import { requererPermissao } from "@/lib/auth"
 import { formatBRL, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
@@ -31,6 +32,7 @@ export default async function ComercialPage({
 
   const periodo = parsePeriodo(searchParams)
   const resumo = await getResumoComercialPorIntervalo(periodo.de, periodo.ate)
+  const qs = `?mes=${periodo.mes}&ano=${periodo.ano}`
 
   return (
     <>
@@ -76,6 +78,22 @@ export default async function ComercialPage({
                   resumo.contratos_fechados === 1 ? "contrato" : "contratos"
                 } · ${formatBRL(resumo.faturamento_gerado)} gerado`}
           </p>
+          <div style={{ marginTop: 18 }}>
+            <AbasArea
+              itens={[
+                {
+                  label: "Funil",
+                  href: `/dashboard/comercial${qs}`,
+                  ativo: true,
+                },
+                {
+                  label: "Time",
+                  href: `/dashboard/comercial/time${qs}`,
+                  ativo: false,
+                },
+              ]}
+            />
+          </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 

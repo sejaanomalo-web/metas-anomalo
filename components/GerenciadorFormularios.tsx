@@ -5,7 +5,7 @@ import type { EmpresaMeta } from "@/lib/data"
 import FormularioComercial from "./FormularioComercial"
 import FormularioManual from "./FormularioManual"
 
-type FormId = "trafego" | "comercial"
+export type FormId = "trafego" | "comercial"
 
 interface FormDef {
   id: FormId
@@ -40,9 +40,18 @@ const FORMS: FormDef[] = [
  */
 export default function GerenciadorFormularios({
   empresas,
+  formsPermitidos,
+  responsaveisTrafego,
+  responsaveisComercial,
 }: {
   empresas: EmpresaMeta[]
+  formsPermitidos?: FormId[]
+  responsaveisTrafego?: { id: string; nome: string }[]
+  responsaveisComercial?: { id: string; nome: string }[]
 }) {
+  const formsVisiveis = formsPermitidos
+    ? FORMS.filter((f) => formsPermitidos.includes(f.id))
+    : FORMS
   const [aberto, setAberto] = useState<FormId | null>(null)
   const [copiado, setCopiado] = useState<FormId | null>(null)
 
@@ -82,7 +91,7 @@ export default function GerenciadorFormularios({
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {FORMS.map((form) => {
+        {formsVisiveis.map((form) => {
           const expandido = aberto === form.id
           return (
             <div
@@ -190,9 +199,15 @@ export default function GerenciadorFormularios({
                 >
                   <div style={{ marginTop: 16 }}>
                     {form.id === "trafego" ? (
-                      <FormularioManual empresas={empresas} />
+                      <FormularioManual
+                        empresas={empresas}
+                        responsaveis={responsaveisTrafego}
+                      />
                     ) : (
-                      <FormularioComercial empresas={empresas} />
+                      <FormularioComercial
+                        empresas={empresas}
+                        responsaveis={responsaveisComercial}
+                      />
                     )}
                   </div>
                 </div>

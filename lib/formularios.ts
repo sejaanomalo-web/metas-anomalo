@@ -115,9 +115,14 @@ export async function salvarFormularioManualAction(
     updated_at: new Date().toISOString(),
   }
 
+  // Responsável do seletor (atribuição por pessoa) com fallback público.
+  const respId = String(formData.get("preenchedor_id") ?? "").trim() || null
+  const respNome =
+    String(formData.get("preenchedor_nome") ?? "").trim() ||
+    "Formulário público"
   const resultado = await gravarDadosReaisComLog(
     payload,
-    { id: null, nome: "Formulário público" },
+    { id: respId, nome: respNome },
     { dataISO: periodo.dataISO }
   )
   if (!resultado.ok) {

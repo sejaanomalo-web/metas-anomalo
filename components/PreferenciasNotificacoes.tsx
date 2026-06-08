@@ -48,8 +48,10 @@ const ITENS: { chave: Tipo; rotulo: string; descricao: string }[] = [
  */
 export default function PreferenciasNotificacoes({
   inicial,
+  chavesPermitidas,
 }: {
   inicial: PreferenciasNotificacao
+  chavesPermitidas?: Tipo[]
 }) {
   const [estado, setEstado] = useState<PreferenciasNotificacao>(inicial)
   const [pending, startTransition] = useTransition()
@@ -71,6 +73,15 @@ export default function PreferenciasNotificacoes({
       setErro(r.erro ?? "Erro ao salvar.")
     }
   }
+
+  // Escopo por papel: só renderiza os toggles permitidos. Os ocultos têm
+  // o valor atual preservado via hidden input (senão o submit zeraria).
+  const itensVisiveis = chavesPermitidas
+    ? ITENS.filter((i) => chavesPermitidas.includes(i.chave))
+    : ITENS
+  const chavesOcultas = ITENS.filter((i) => !itensVisiveis.includes(i)).map(
+    (i) => i.chave
+  )
 
   return (
     <section className="glass" style={{ padding: "24px 26px" }}>
@@ -94,7 +105,12 @@ export default function PreferenciasNotificacoes({
         action={(fd) => startTransition(() => onSubmit(fd))}
         style={{ display: "flex", flexDirection: "column", gap: 6 }}
       >
-        {ITENS.map(({ chave, rotulo, descricao }) => (
+        {chavesOcultas.map((c) =>
+          estado[c] ? (
+            <input key={c} type="hidden" name={`pref_${c}`} value="on" />
+          ) : null
+        )}
+        {itensVisiveis.map(({ chave, rotulo, descricao }) => (
           <label
             key={chave}
             style={{

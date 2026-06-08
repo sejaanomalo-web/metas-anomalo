@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import {
   excluirNotificacaoAction,
   getNotificacoesDaSessaoAction,
+  limparTodasNotificacoesAction,
   marcarComoLidaAction,
   marcarTodasComoLidasAction,
 } from "@/lib/notificacoes-actions"
@@ -122,6 +123,14 @@ export default function SinoNotificacoes({
     })
   }
 
+  function limparTodas() {
+    setItens([])
+    setCount(0)
+    startTransition(() => {
+      limparTodasNotificacoesAction()
+    })
+  }
+
   return (
     <>
       <button
@@ -158,6 +167,7 @@ export default function SinoNotificacoes({
           onMarcarLida={marcarLida}
           onExcluir={excluir}
           onMarcarTodas={marcarTodas}
+          onLimparTodas={limparTodas}
           temNaoLidas={count > 0}
         />
       )}
@@ -201,6 +211,7 @@ function PainelNotificacoes({
   onMarcarLida,
   onExcluir,
   onMarcarTodas,
+  onLimparTodas,
   temNaoLidas,
 }: {
   itens: NotificacaoItem[]
@@ -208,6 +219,7 @@ function PainelNotificacoes({
   onMarcarLida: (id: string) => void
   onExcluir: (id: string) => void
   onMarcarTodas: () => void
+  onLimparTodas: () => void
   temNaoLidas: boolean
 }) {
   // ESC fecha + bloqueia scroll do body enquanto aberto
@@ -312,6 +324,29 @@ function PainelNotificacoes({
                 }}
               >
                 Marcar todas
+              </button>
+            )}
+            {itens.length > 0 && (
+              <button
+                type="button"
+                onClick={onLimparTodas}
+                title="Limpar todas (excluir)"
+                className="no-ds hover:text-[#e24b4a]"
+                style={{
+                  padding: "8px 12px",
+                  fontSize: 10,
+                  letterSpacing: "0.8px",
+                  textTransform: "uppercase",
+                  color: "var(--text-3)",
+                  background: "transparent",
+                  border: "0.5px solid rgba(226,75,74,0.30)",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontWeight: 500,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Limpar todas
               </button>
             )}
             <button

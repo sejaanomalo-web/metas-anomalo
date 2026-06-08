@@ -27,12 +27,17 @@ type Feedback =
 export default function FormularioComercial({
   empresas,
   copiarLinkPublico,
+  responsaveis,
 }: {
   empresas: EmpresaMeta[]
   copiarLinkPublico?: boolean
+  responsaveis?: { id: string; nome: string }[]
 }) {
   const [empresa, setEmpresa] = useState(empresas[0]?.nome ?? "")
   const [data, setData] = useState(hojeBRT())
+  const [responsavelId, setResponsavelId] = useState(
+    responsaveis?.[0]?.id ?? ""
+  )
   const [feedback, setFeedback] = useState<Feedback>(null)
   const [pending, startTransition] = useTransition()
 
@@ -114,6 +119,31 @@ export default function FormularioComercial({
           action={(fd) => startTransition(() => onSubmit(fd))}
           className="space-y-4"
         >
+          {responsaveis && responsaveis.length > 0 && (
+            <Campo label="Responsável (quem está reportando)">
+              <select
+                value={responsavelId}
+                onChange={(e) => setResponsavelId(e.target.value)}
+                className="glass-input"
+                style={inputEstilo}
+              >
+                {responsaveis.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.nome}
+                  </option>
+                ))}
+              </select>
+              <input type="hidden" name="colaborador_id" value={responsavelId} />
+              <input
+                type="hidden"
+                name="colaborador_nome"
+                value={
+                  responsaveis.find((r) => r.id === responsavelId)?.nome ?? ""
+                }
+              />
+            </Campo>
+          )}
+
           <Campo label="Empresa">
             <select
               name="empresa"

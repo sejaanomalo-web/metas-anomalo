@@ -1,6 +1,7 @@
 import Image from "next/image"
 import FormularioComercial from "@/components/FormularioComercial"
 import { listarEmpresas } from "@/lib/empresas-actions"
+import { listarTimePorPapel } from "@/lib/time"
 import logo from "@/public/logo-capa-app.png"
 
 export const dynamic = "force-dynamic"
@@ -12,7 +13,10 @@ export const dynamic = "force-dynamic"
  * bloco de pipeline (que precisa de sessão) e sem o botão de copiar link.
  */
 export default async function FormularioComercialPublicoPage() {
-  const empresas = await listarEmpresas(true)
+  const [empresas, responsaveis] = await Promise.all([
+    listarEmpresas(true),
+    listarTimePorPapel("comercial"),
+  ])
 
   return (
     <main
@@ -62,7 +66,7 @@ export default async function FormularioComercialPublicoPage() {
         </p>
       </header>
 
-      <FormularioComercial empresas={empresas} />
+      <FormularioComercial empresas={empresas} responsaveis={responsaveis} />
 
       <p
         className="mt-8 text-center"

@@ -41,6 +41,26 @@ export async function marcarTodasComoLidasAction() {
 }
 
 /**
+ * Limpa (exclui) TODAS as notificações do usuário logado de
+ * notificacoes_usuario. As linhas globais em `notificacoes` permanecem
+ * (valem pra outros usuários no fan-out).
+ */
+export async function limparTodasNotificacoesAction() {
+  const usuarioId = getUsuarioIdSync()
+  if (!usuarioId) return
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return
+  const { error } = await supabase
+    .from("notificacoes_usuario")
+    .delete()
+    .eq("usuario_id", usuarioId)
+  if (error) {
+    console.error("[notificacoes] limpar todas error", error.message)
+  }
+  revalidatePath("/dashboard", "layout")
+}
+
+/**
  * Exclui PERMANENTEMENTE uma linha de notificacoes_usuario do usuário
  * logado. A notificação original em `notificacoes` permanece (pode
  * ainda valer pra outros usuários no fan-out).
