@@ -3,6 +3,10 @@
     {
       "path": "/api/financeiro/materializar",
       "schedule": "0 6 1 * *"
+    },
+    {
+      "path": "/api/wa/diario",
+      "schedule": "0 0 * * *"
     }
   ]
 }
