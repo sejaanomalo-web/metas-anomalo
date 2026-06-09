@@ -64,7 +64,7 @@ export default function GraficosTrafego({
         />
       </Card>
 
-      <Card titulo="Comparativo Mensal" sub="Agendamentos e faturamento por mês">
+      <Card titulo="Comparativo Mensal" sub="Realizados e faturamento por mês">
         {vazio ? (
           <Vazio />
         ) : (
@@ -75,7 +75,7 @@ export default function GraficosTrafego({
                 <XAxis dataKey="mes" stroke="rgba(255,255,255,0.3)" tickLine={false} axisLine={false} style={{ fontSize: 10 }} />
                 <YAxis stroke="rgba(255,255,255,0.3)" tickLine={false} axisLine={false} style={{ fontSize: 10 }} tickFormatter={fmtK} />
                 <Tooltip content={<TooltipBarra />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
-                <Bar dataKey="agendamentos" name="Agendamentos" fill={COR_AGENDAMENTOS} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="agendamentos" name="Realizados" fill={COR_AGENDAMENTOS} radius={[3, 3, 0, 0]} isAnimationActive={false} />
                 <Bar dataKey="faturamento" name="Faturamento" fill={COR_FATURAMENTO} radius={[3, 3, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
@@ -83,7 +83,7 @@ export default function GraficosTrafego({
         )}
         <Legenda
           itens={[
-            { cor: COR_AGENDAMENTOS, label: "Agendamentos" },
+            { cor: COR_AGENDAMENTOS, label: "Realizados" },
             { cor: COR_FATURAMENTO, label: "Faturamento" },
           ]}
         />
@@ -169,7 +169,7 @@ function TooltipBarra({ active, payload }: TP) {
   if (!p) return null
   return (
     <CaixaTooltip mes={p.mes}>
-      <Linha cor={COR_AGENDAMENTOS} label="Agendamentos" valor={formatNumero(p.agendamentos)} />
+      <Linha cor={COR_AGENDAMENTOS} label="Realizados" valor={formatNumero(p.agendamentos)} />
       <Linha cor={COR_FATURAMENTO} label="Faturamento" valor={formatBRL(p.faturamento)} />
     </CaixaTooltip>
   )

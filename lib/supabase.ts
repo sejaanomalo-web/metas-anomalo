@@ -20,6 +20,7 @@ export interface DadosReais {
   origem?: OrigemDados
   investimento_real: number | null
   leads_real: number | null
+  reunioes_agendadas_real?: number | null
   reunioes_real: number | null
   contratos_real: number | null
   faturamento_real: number | null
@@ -44,6 +45,7 @@ export interface DadosDiariosLog {
   preenchedor_nome: string | null
   investimento_real: number | null
   leads_real: number | null
+  reunioes_agendadas_real: number | null
   reunioes_real: number | null
   contratos_real: number | null
   faturamento_real: number | null

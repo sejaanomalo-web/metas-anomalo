@@ -90,7 +90,7 @@ export default function MetricasTrafego({
         >
           <HeroSub label="Lucro" valor={formatBRL(resumo.lucro)} verde />
           <HeroSub label="Vendas" valor={formatNumero(resumo.contratos)} />
-          <HeroSub label="Agendamentos" valor={formatNumero(resumo.reunioes)} />
+          <HeroSub label="Realizados" valor={formatNumero(resumo.reunioes)} />
           <HeroSub label="Faturamento" valor={formatBRL(resumo.faturamento)} />
         </div>
         <div style={{ marginTop: 14 }}>

@@ -203,6 +203,18 @@ export default function FormularioManual({
           />
         </Campo>
 
+        <Campo label={`${rotuloReunioes} agendadas`}>
+          <input
+            type="number"
+            name="reunioes_agendadas_real"
+            min="0"
+            inputMode="numeric"
+            className="glass-input"
+            style={inputEstilo}
+            placeholder="0"
+          />
+        </Campo>
+
         <Campo label={`${rotuloReunioes} realizadas`}>
           <input
             type="number"

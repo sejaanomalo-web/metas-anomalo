@@ -23,6 +23,7 @@ export interface DadoDiarioRow {
   preenchedor_nome: string | null
   investimento_real: number | null
   leads_real: number | null
+  reunioes_agendadas_real: number | null
   reunioes_real: number | null
   contratos_real: number | null
   faturamento_real: number | null
@@ -43,7 +44,7 @@ function intOuNull(v: FormDataEntryValue | null): number | null {
 }
 
 const COLUNAS =
-  "id, empresa, data, origem, preenchedor_nome, investimento_real, leads_real, reunioes_real, contratos_real, faturamento_real, observacoes"
+  "id, empresa, data, origem, preenchedor_nome, investimento_real, leads_real, reunioes_agendadas_real, reunioes_real, contratos_real, faturamento_real, observacoes"
 
 /** Lista entradas filtradas por intervalo (obrigatório, pra não varrer a
  *  tabela inteira) e empresa (opcional). */
@@ -123,6 +124,9 @@ export async function atualizarDadoDiarioAction(
     .update({
       investimento_real: invParse.value,
       leads_real: intOuNull(formData.get("leads_real")),
+      reunioes_agendadas_real: intOuNull(
+        formData.get("reunioes_agendadas_real")
+      ),
       reunioes_real: intOuNull(formData.get("reunioes_real")),
       contratos_real: intOuNull(formData.get("contratos_real")),
       faturamento_real: fatParse.value,

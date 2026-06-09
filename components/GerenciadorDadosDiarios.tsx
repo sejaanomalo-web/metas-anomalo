@@ -313,7 +313,8 @@ function FormEdicao({
           <input type="text" name="investimento_real" inputMode="decimal" defaultValue={valorTexto(l.investimento_real)} className="glass-input" style={inputEstilo} />
         </Campo>
         <NumNull label="Leads" name="leads_real" valor={l.leads_real} />
-        <NumNull label="Reuniões" name="reunioes_real" valor={l.reunioes_real} />
+        <NumNull label="Agendadas" name="reunioes_agendadas_real" valor={l.reunioes_agendadas_real ?? null} />
+        <NumNull label="Realizadas" name="reunioes_real" valor={l.reunioes_real} />
         <NumNull label="Contratos" name="contratos_real" valor={l.contratos_real} />
         <Campo label="Faturamento (R$)">
           <input type="text" name="faturamento_real" inputMode="decimal" defaultValue={valorTexto(l.faturamento_real)} className="glass-input" style={inputEstilo} />

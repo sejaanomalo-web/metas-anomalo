@@ -252,7 +252,7 @@ export async function getLinhasDoMes(
   const { data, error } = await supabase
     .from("dados_diarios_log")
     .select(
-      "data, investimento_real, leads_real, cpl_real, reunioes_real, contratos_real, faturamento_real, impressoes_real, cliques_real, alcance_real, conversas_real, cpm_real, preenchedor_nome, created_at"
+      "data, investimento_real, leads_real, cpl_real, reunioes_agendadas_real, reunioes_real, contratos_real, faturamento_real, impressoes_real, cliques_real, alcance_real, conversas_real, cpm_real, preenchedor_nome, created_at"
     )
     .eq("empresa", empresaNome)
     .eq("origem", "pago")
@@ -271,6 +271,7 @@ export interface LinhaDoMes {
   investimento_real: number | null
   leads_real: number | null
   cpl_real: number | null
+  reunioes_agendadas_real?: number | null
   reunioes_real: number | null
   contratos_real: number | null
   faturamento_real: number | null
@@ -301,7 +302,8 @@ export interface ResumoTrafego {
   cliques: number
   alcance: number
   impressoes: number
-  reunioes: number // agendamentos
+  reunioesAgendadas: number // agendamentos
+  reunioes: number // realizadas
   contratos: number // vendas (qtd)
   faturamento: number
   lucro: number
@@ -324,6 +326,7 @@ export function resumirTrafego(linhas: LinhaDoMes[]): ResumoTrafego {
     cliques = 0,
     alcance = 0,
     impressoes = 0,
+    reunioesAgendadas = 0,
     reunioes = 0,
     contratos = 0,
     faturamento = 0
@@ -336,6 +339,7 @@ export function resumirTrafego(linhas: LinhaDoMes[]): ResumoTrafego {
     cliques += Number(l.cliques_real ?? 0)
     alcance += Number(l.alcance_real ?? 0)
     impressoes += Number(l.impressoes_real ?? 0)
+    reunioesAgendadas += Number(l.reunioes_agendadas_real ?? 0)
     reunioes += Number(l.reunioes_real ?? 0)
     contratos += Number(l.contratos_real ?? 0)
     faturamento += Number(l.faturamento_real ?? 0)
@@ -351,6 +355,7 @@ export function resumirTrafego(linhas: LinhaDoMes[]): ResumoTrafego {
     cliques,
     alcance,
     impressoes,
+    reunioesAgendadas,
     reunioes,
     contratos,
     faturamento,

@@ -16,6 +16,7 @@ create table if not exists public.dados_reais (
   ano int not null default 2026,
   investimento_real numeric,
   leads_real int,
+  reunioes_agendadas_real int,
   reunioes_real int,
   contratos_real int,
   faturamento_real numeric,
@@ -460,6 +461,7 @@ create table if not exists public.dados_diarios_log (
   -- valores novos enviados
   investimento_real numeric,
   leads_real int,
+  reunioes_agendadas_real int,
   reunioes_real int,
   contratos_real int,
   faturamento_real numeric,

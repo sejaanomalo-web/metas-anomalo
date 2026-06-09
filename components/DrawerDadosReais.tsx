@@ -196,7 +196,13 @@ export default function DrawerDadosReais({
                 />
               )}
               <Campo
-                label={rotuloReunioes}
+                label={`${rotuloReunioes} agendadas`}
+                name="reunioes_agendadas_real"
+                tipo="number"
+                defaultValue={existentes?.reunioes_agendadas_real ?? ""}
+              />
+              <Campo
+                label={`${rotuloReunioes} realizadas`}
                 name="reunioes_real"
                 tipo="number"
                 defaultValue={existentes?.reunioes_real ?? ""}

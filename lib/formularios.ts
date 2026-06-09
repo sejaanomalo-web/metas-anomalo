@@ -105,6 +105,9 @@ export async function salvarFormularioManualAction(
     origem: "pago",
     investimento_real: null,
     leads_real: null,
+    reunioes_agendadas_real: parseInt0(
+      formData.get("reunioes_agendadas_real")
+    ),
     reunioes_real: parseInt0(formData.get("reunioes_real")),
     contratos_real: parseInt0(formData.get("contratos_real")),
     faturamento_real: fatParsed.value,

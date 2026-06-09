@@ -126,7 +126,7 @@ export async function gravarDadosReaisComLog(
   const { data: logExistenteRow } = await supabase
     .from("dados_diarios_log")
     .select(
-      "id, preenchedor_id, preenchedor_nome, reunioes_real, contratos_real, faturamento_real, criativos_entregues, clientes_ativos, observacoes, criativos_usados, criativos_detalhe, respostas, publicos_prospectados"
+      "id, preenchedor_id, preenchedor_nome, reunioes_agendadas_real, reunioes_real, contratos_real, faturamento_real, criativos_entregues, clientes_ativos, observacoes, criativos_usados, criativos_detalhe, respostas, publicos_prospectados"
     )
     .eq("empresa", empresaNome)
     .eq("data", dataISO)
@@ -136,6 +136,7 @@ export async function gravarDadosReaisComLog(
     id: string
     preenchedor_id: string | null
     preenchedor_nome: string | null
+    reunioes_agendadas_real: number | null
     reunioes_real: number | null
     contratos_real: number | null
     faturamento_real: number | null
@@ -154,6 +155,7 @@ export async function gravarDadosReaisComLog(
   const camposManuais = {
     preenchedor_id: identidade.id,
     preenchedor_nome: identidade.nome,
+    reunioes_agendadas_real: payload.reunioes_agendadas_real ?? null,
     reunioes_real: payload.reunioes_real,
     contratos_real: payload.contratos_real,
     faturamento_real: payload.faturamento_real,
@@ -227,6 +229,7 @@ export async function gravarDadosReaisComLog(
         .update({
           preenchedor_id: logExistente.preenchedor_id,
           preenchedor_nome: logExistente.preenchedor_nome,
+          reunioes_agendadas_real: logExistente.reunioes_agendadas_real,
           reunioes_real: logExistente.reunioes_real,
           contratos_real: logExistente.contratos_real,
           faturamento_real: logExistente.faturamento_real,
@@ -404,6 +407,9 @@ export async function salvarDadosReaisAction(
   }
 
   const leads_real = parseInt0(formData.get("leads_real"))
+  const reunioes_agendadas_real = parseInt0(
+    formData.get("reunioes_agendadas_real")
+  )
   const reunioes_real = parseInt0(formData.get("reunioes_real"))
   const contratos_real = parseInt0(formData.get("contratos_real"))
   const fatParsed = parseNumeroForm(formData.get("faturamento_real"))
@@ -440,6 +446,7 @@ export async function salvarDadosReaisAction(
     origem,
     investimento_real,
     leads_real,
+    reunioes_agendadas_real,
     reunioes_real,
     contratos_real,
     faturamento_real,

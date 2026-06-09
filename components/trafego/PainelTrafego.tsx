@@ -1,5 +1,6 @@
 import { formatBRL, formatNumero } from "@/lib/data"
 import MetricasTrafego from "@/components/trafego/MetricasTrafego"
+import FunilConversaoTrafego from "@/components/trafego/FunilConversaoTrafego"
 import GraficosTrafego from "@/components/trafego/GraficosTrafego"
 import {
   SENTINELA_NOME,
@@ -36,6 +37,9 @@ export default function PainelTrafego({
     <div className="space-y-8">
       {/* Herói + cartões de métrica (modelo aprovado) */}
       <MetricasTrafego resumo={resumo} />
+
+      {/* Funil de conversão: do anúncio à venda */}
+      <FunilConversaoTrafego resumo={resumo} />
 
       {/* Gráficos: Evolução Mensal + Comparativo Mensal */}
       <GraficosTrafego serie={serie} />
