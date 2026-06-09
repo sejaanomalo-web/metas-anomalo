@@ -1,11 +1,15 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import SectionHeader from "@/components/ui/SectionHeader"
 import FunilAtividadeComercial from "@/components/FunilAtividadeComercial"
+import ClientesComercial from "@/components/comercial/ClientesComercial"
 import AbasArea from "@/components/AbasArea"
 import { requererPermissao } from "@/lib/auth"
 import { formatBRL, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
-import { getResumoComercialPorIntervalo } from "@/lib/relatorios-comerciais"
+import {
+  getResumoComercialPorEmpresa,
+  getResumoComercialPorIntervalo,
+} from "@/lib/relatorios-comerciais"
 
 // Página dinâmica: SSR sem Data Cache — o seletor de período global
 // precisa sempre recalcular a partir dos dados frescos.
@@ -32,7 +36,10 @@ export default async function ComercialPage({
   await requererPermissao("dashboard_comercial")
 
   const periodo = parsePeriodo(searchParams)
-  const resumo = await getResumoComercialPorIntervalo(periodo.de, periodo.ate)
+  const [resumo, porCliente] = await Promise.all([
+    getResumoComercialPorIntervalo(periodo.de, periodo.ate),
+    getResumoComercialPorEmpresa(periodo.de, periodo.ate),
+  ])
   const qs = `?mes=${periodo.mes}&ano=${periodo.ano}`
 
   return (
@@ -105,6 +112,19 @@ export default async function ComercialPage({
             descricao="Da boca ao fundo · mensagens → qualificação → agendamentos → reuniões → contratos → faturamento"
           />
           <FunilAtividadeComercial resumo={resumo} />
+        </section>
+
+        {/* Por cliente — de quais clientes foram as prospecções */}
+        <section>
+          <SectionHeader
+            titulo="Por cliente"
+            descricao="De quais clientes foram as prospecções · clique num cliente pra ver o funil dele"
+          />
+          <ClientesComercial
+            clientes={porCliente}
+            titulo=""
+            vazioMsg="Sem prospecções no período."
+          />
         </section>
       </main>
 

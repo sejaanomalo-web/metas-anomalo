@@ -11,6 +11,7 @@ import {
   type RelatorioComercial,
   type ResultadoComercial,
   type ResumoComercial,
+  type ResumoComercialCliente,
 } from "./comercial-tipos"
 
 const MES_NUM_COMERCIAL: Record<Mes, number> = {
@@ -42,6 +43,11 @@ function intDoForm(v: FormDataEntryValue | null): number {
   const n = parseInt(String(v).trim(), 10)
   return Number.isFinite(n) && n >= 0 ? n : 0
 }
+
+// Atribuição "sem responsável" (form público sem seleção). colaborador_id não
+// tem FK — UUID fixo mantém a chave (empresa, colaborador_id, data)
+// determinística pro upsert idempotente.
+const PUBLICO_COMERCIAL_ID = "00000000-0000-0000-0000-0000000000c0"
 
 // ============================================================
 // Relatório diário
@@ -76,7 +82,7 @@ export async function salvarRelatorioComercialAction(
 
   const payload = {
     empresa,
-    colaborador_id: respId || usuario?.id || null,
+    colaborador_id: respId || usuario?.id || PUBLICO_COMERCIAL_ID,
     colaborador_nome: respNome || usuario?.nome || "Formulário público",
     data,
     ligacoes: intDoForm(formData.get("ligacoes")),
@@ -97,7 +103,7 @@ export async function salvarRelatorioComercialAction(
 
   const { error } = await supabase
     .from("relatorios_comerciais")
-    .upsert(payload, { onConflict: "empresa,data" })
+    .upsert(payload, { onConflict: "empresa,colaborador_id,data" })
   if (error) {
     console.error("[comercial] salvar relatorio error", error.message)
     return { ok: false, erro: error.message }
@@ -136,13 +142,8 @@ export async function listarRelatoriosComerciais(
   return (data ?? []) as RelatorioComercial[]
 }
 
-/** Soma os relatórios diários do intervalo num único resumo. */
-export async function getResumoComercialPorIntervalo(
-  inicio: string,
-  fim: string
-): Promise<ResumoComercial> {
-  const linhas = await listarRelatoriosComerciais(inicio, fim)
-  const acc: ResumoComercial = {
+function resumoComercialVazio(): ResumoComercial {
+  return {
     ligacoes: 0,
     mensagens: 0,
     retorno_mensagens: 0,
@@ -155,20 +156,84 @@ export async function getResumoComercialPorIntervalo(
     faturamento_gerado: 0,
     registros: 0,
   }
-  for (const l of linhas) {
-    acc.ligacoes += l.ligacoes
-    acc.mensagens += l.mensagens
-    acc.retorno_mensagens += l.retorno_mensagens
-    acc.qualificados += l.qualificados
-    acc.reunioes_agendadas += l.reunioes_agendadas
-    acc.reunioes_realizadas += l.reunioes_realizadas
-    acc.no_shows += l.no_shows
-    acc.propostas_enviadas += l.propostas_enviadas
-    acc.contratos_fechados += l.contratos_fechados
-    acc.faturamento_gerado += Number(l.faturamento_gerado ?? 0)
-    acc.registros += 1
-  }
+}
+
+function acumularComercial(acc: ResumoComercial, l: RelatorioComercial): void {
+  acc.ligacoes += l.ligacoes
+  acc.mensagens += l.mensagens
+  acc.retorno_mensagens += l.retorno_mensagens
+  acc.qualificados += l.qualificados
+  acc.reunioes_agendadas += l.reunioes_agendadas
+  acc.reunioes_realizadas += l.reunioes_realizadas
+  acc.no_shows += l.no_shows
+  acc.propostas_enviadas += l.propostas_enviadas
+  acc.contratos_fechados += l.contratos_fechados
+  acc.faturamento_gerado += Number(l.faturamento_gerado ?? 0)
+  acc.registros += 1
+}
+
+function somarComercial(linhas: RelatorioComercial[]): ResumoComercial {
+  const acc = resumoComercialVazio()
+  for (const l of linhas) acumularComercial(acc, l)
   return acc
+}
+
+/** Agrupa relatórios por cliente (empresa), ordenado por faturamento/contratos. */
+function agruparPorEmpresa(
+  linhas: RelatorioComercial[]
+): ResumoComercialCliente[] {
+  const mapa = new Map<string, ResumoComercial>()
+  for (const l of linhas) {
+    let r = mapa.get(l.empresa)
+    if (!r) {
+      r = resumoComercialVazio()
+      mapa.set(l.empresa, r)
+    }
+    acumularComercial(r, l)
+  }
+  return Array.from(mapa, ([empresa, resumo]) => ({ empresa, resumo })).sort(
+    (a, b) =>
+      b.resumo.faturamento_gerado - a.resumo.faturamento_gerado ||
+      b.resumo.contratos_fechados - a.resumo.contratos_fechados ||
+      b.resumo.mensagens - a.resumo.mensagens
+  )
+}
+
+/** Soma os relatórios diários do intervalo num único resumo. */
+export async function getResumoComercialPorIntervalo(
+  inicio: string,
+  fim: string
+): Promise<ResumoComercial> {
+  return somarComercial(await listarRelatoriosComerciais(inicio, fim))
+}
+
+/** Quebra por cliente (empresa) do período — base do "Funil por cliente". */
+export async function getResumoComercialPorEmpresa(
+  inicio: string,
+  fim: string
+): Promise<ResumoComercialCliente[]> {
+  return agruparPorEmpresa(await listarRelatoriosComerciais(inicio, fim))
+}
+
+/** Quebra por cliente das prospecções de UMA pessoa no período. */
+export async function getResumoComercialPorEmpresaDoColaborador(
+  colaboradorId: string,
+  inicio: string,
+  fim: string
+): Promise<ResumoComercialCliente[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("relatorios_comerciais")
+    .select("*")
+    .eq("colaborador_id", colaboradorId)
+    .gte("data", inicio)
+    .lte("data", fim)
+  if (error) {
+    console.error("[comercial] por empresa do colaborador error", error.message)
+    return []
+  }
+  return agruparPorEmpresa((data ?? []) as RelatorioComercial[])
 }
 
 // ============================================================
@@ -387,7 +452,7 @@ export async function atualizarRelatorioComercialAction(
     if (error.code === "23505") {
       return {
         ok: false,
-        erro: "Já existe relatório para essa empresa nessa data.",
+        erro: "Já existe relatório dessa pessoa pra essa empresa nessa data.",
       }
     }
     console.error("[comercial] atualizar error", error.message)

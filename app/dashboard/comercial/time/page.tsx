@@ -7,6 +7,7 @@ import {
   getResumoComercialColaborador,
   listarTimePorPapel,
 } from "@/lib/time"
+import { getResumoComercialPorEmpresaDoColaborador } from "@/lib/relatorios-comerciais"
 
 export const dynamic = "force-dynamic"
 
@@ -30,14 +31,13 @@ export default async function TimeComercialPage({
   const periodo = parsePeriodo(searchParams)
   const time = await listarTimePorPapel("comercial")
   const membros = await Promise.all(
-    time.map(async (m) => ({
-      ...m,
-      resumo: await getResumoComercialColaborador(
-        m.id,
-        periodo.de,
-        periodo.ate
-      ),
-    }))
+    time.map(async (m) => {
+      const [resumo, porCliente] = await Promise.all([
+        getResumoComercialColaborador(m.id, periodo.de, periodo.ate),
+        getResumoComercialPorEmpresaDoColaborador(m.id, periodo.de, periodo.ate),
+      ])
+      return { ...m, resumo, porCliente }
+    })
   )
   const qs = `?mes=${periodo.mes}&ano=${periodo.ano}`
 

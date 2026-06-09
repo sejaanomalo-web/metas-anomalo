@@ -39,6 +39,12 @@ export interface ResumoComercial {
   registros: number
 }
 
+/** Resumo comercial agregado de UM cliente (empresa) no período. */
+export interface ResumoComercialCliente {
+  empresa: string
+  resumo: ResumoComercial
+}
+
 export interface ResultadoComercial {
   ok: boolean
   erro?: string
