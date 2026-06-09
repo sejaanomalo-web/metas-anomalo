@@ -52,8 +52,10 @@
 set -euo pipefail
 
 FUNCTIONS_URL="${SENTINELA_URL:-https://cawwccbuejmvfemgdhvl.supabase.co/functions/v1/sentinela}"
-MES="2026-05"
-DIAS=31
+# Mês e nº de dias sobrescrevíveis por env. Ex. junho:
+#   MES=2026-06 DIAS=30 SENTINELA_SECRET=... bash scripts/backfill-sentinela-maio.sh
+MES="${MES:-2026-05}"
+DIAS="${DIAS:-31}"
 
 : "${SENTINELA_SECRET:?Defina SENTINELA_SECRET (o mesmo do cron) antes de rodar}"
 
