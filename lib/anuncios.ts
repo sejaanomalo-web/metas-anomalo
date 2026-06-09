@@ -222,3 +222,251 @@ export async function getCampanhasRankingCliente(
   }
   return []
 }
+
+// =====================================================================
+// Fase 2b/2c — Conjuntos (adset) e Anúncios (ad)
+// =====================================================================
+
+export interface ConjuntoRanking {
+  adsetId: string
+  nome: string
+  status: StatusEntidade
+  investimento: number
+  alcance: number
+  impressoes: number
+  cliques: number
+  conversas: number
+  leads: number
+  compras: number | null
+  carrinho: number | null
+  ctr: number | null
+  cpc: number | null
+}
+
+export interface AnuncioRanking {
+  adId: string
+  nome: string
+  status: StatusEntidade
+  investimento: number
+  alcance: number
+  impressoes: number
+  frequencia: number | null
+  cpm: number | null
+  cliques: number
+  todosCliques: number
+  conversas: number
+  leads: number
+  compras: number | null
+  carrinho: number | null
+  checkout: number | null
+  view: number | null
+  ctr: number | null
+  cpc: number | null
+}
+
+interface LinhaAdset {
+  adset_id: string | null
+  adset_nome: string | null
+  status: string | null
+  investimento_real: number | null
+  alcance_real: number | null
+  impressoes_real: number | null
+  cliques_real: number | null
+  conversas_real: number | null
+  leads_real: number | null
+  compras_real: number | null
+  carrinho_real: number | null
+}
+
+/** Conjuntos (adsets) de UMA campanha no período, agregados por adset_id. */
+export async function getConjuntosDaCampanha(
+  empresaNome: string,
+  campanhaId: string,
+  inicio: string,
+  fim: string
+): Promise<ConjuntoRanking[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("dados_diarios_adset")
+    .select(
+      "adset_id, adset_nome, status, investimento_real, alcance_real, impressoes_real, cliques_real, conversas_real, leads_real, compras_real, carrinho_real"
+    )
+    .eq("empresa_nome", empresaNome)
+    .eq("campanha_id", campanhaId)
+    .eq("origem", "pago")
+    .gte("data", inicio)
+    .lte("data", fim)
+  if (error) {
+    console.error("[anuncios] getConjuntosDaCampanha error", error.message)
+    return []
+  }
+  const mapa = new Map<string, ConjuntoRanking>()
+  for (const l of (data ?? []) as LinhaAdset[]) {
+    const id = l.adset_id
+    if (!id) continue
+    const acc =
+      mapa.get(id) ??
+      ({
+        adsetId: id,
+        nome: l.adset_nome ?? "Conjunto sem nome",
+        status: null,
+        investimento: 0,
+        alcance: 0,
+        impressoes: 0,
+        cliques: 0,
+        conversas: 0,
+        leads: 0,
+        compras: null,
+        carrinho: null,
+        ctr: null,
+        cpc: null,
+      } satisfies ConjuntoRanking)
+    acc.investimento += Number(l.investimento_real ?? 0)
+    acc.alcance += Number(l.alcance_real ?? 0)
+    acc.impressoes += Number(l.impressoes_real ?? 0)
+    acc.cliques += Number(l.cliques_real ?? 0)
+    acc.conversas += Number(l.conversas_real ?? 0)
+    acc.leads += Number(l.leads_real ?? 0)
+    acc.compras = somaNul(acc.compras, l.compras_real)
+    acc.carrinho = somaNul(acc.carrinho, l.carrinho_real)
+    if (!acc.status && l.status) acc.status = l.status as StatusEntidade
+    if (acc.nome === "Conjunto sem nome" && l.adset_nome) acc.nome = l.adset_nome
+    mapa.set(id, acc)
+  }
+  return Array.from(mapa.values())
+    .map((c) => {
+      c.ctr = c.impressoes > 0 ? c.cliques / c.impressoes : null
+      c.cpc = c.cliques > 0 ? c.investimento / c.cliques : null
+      return c
+    })
+    .sort((a, b) => b.investimento - a.investimento)
+}
+
+interface LinhaAd {
+  ad_id: string | null
+  ad_nome: string | null
+  status: string | null
+  investimento_real: number | null
+  alcance_real: number | null
+  impressoes_real: number | null
+  cliques_real: number | null
+  todos_cliques_real: number | null
+  conversas_real: number | null
+  leads_real: number | null
+  compras_real: number | null
+  carrinho_real: number | null
+  checkout_real: number | null
+  view_real: number | null
+}
+
+/** Anúncios (ads) de UM conjunto no período, agregados por ad_id. */
+export async function getAnunciosDoConjunto(
+  empresaNome: string,
+  adsetId: string,
+  inicio: string,
+  fim: string
+): Promise<AnuncioRanking[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("dados_diarios_ad")
+    .select(
+      "ad_id, ad_nome, status, investimento_real, alcance_real, impressoes_real, cliques_real, todos_cliques_real, conversas_real, leads_real, compras_real, carrinho_real, checkout_real, view_real"
+    )
+    .eq("empresa_nome", empresaNome)
+    .eq("adset_id", adsetId)
+    .eq("origem", "pago")
+    .gte("data", inicio)
+    .lte("data", fim)
+  if (error) {
+    console.error("[anuncios] getAnunciosDoConjunto error", error.message)
+    return []
+  }
+  const mapa = new Map<string, AnuncioRanking>()
+  for (const l of (data ?? []) as LinhaAd[]) {
+    const id = l.ad_id
+    if (!id) continue
+    const acc =
+      mapa.get(id) ??
+      ({
+        adId: id,
+        nome: l.ad_nome ?? "Anúncio sem nome",
+        status: null,
+        investimento: 0,
+        alcance: 0,
+        impressoes: 0,
+        frequencia: null,
+        cpm: null,
+        cliques: 0,
+        todosCliques: 0,
+        conversas: 0,
+        leads: 0,
+        compras: null,
+        carrinho: null,
+        checkout: null,
+        view: null,
+        ctr: null,
+        cpc: null,
+      } satisfies AnuncioRanking)
+    acc.investimento += Number(l.investimento_real ?? 0)
+    acc.alcance += Number(l.alcance_real ?? 0)
+    acc.impressoes += Number(l.impressoes_real ?? 0)
+    acc.cliques += Number(l.cliques_real ?? 0)
+    acc.todosCliques += Number(l.todos_cliques_real ?? 0)
+    acc.conversas += Number(l.conversas_real ?? 0)
+    acc.leads += Number(l.leads_real ?? 0)
+    acc.compras = somaNul(acc.compras, l.compras_real)
+    acc.carrinho = somaNul(acc.carrinho, l.carrinho_real)
+    acc.checkout = somaNul(acc.checkout, l.checkout_real)
+    acc.view = somaNul(acc.view, l.view_real)
+    if (!acc.status && l.status) acc.status = l.status as StatusEntidade
+    if (acc.nome === "Anúncio sem nome" && l.ad_nome) acc.nome = l.ad_nome
+    mapa.set(id, acc)
+  }
+  return Array.from(mapa.values())
+    .map((a) => {
+      a.ctr = a.impressoes > 0 ? a.cliques / a.impressoes : null
+      a.cpc = a.cliques > 0 ? a.investimento / a.cliques : null
+      a.cpm = a.impressoes > 0 ? (a.investimento / a.impressoes) * 1000 : null
+      a.frequencia = a.alcance > 0 ? a.impressoes / a.alcance : null
+      return a
+    })
+    .sort((a, b) => b.investimento - a.investimento)
+}
+
+/** Nome da campanha (pro breadcrumb), de dados_diarios_campanha. */
+export async function getNomeCampanha(
+  empresaNome: string,
+  campanhaId: string
+): Promise<string | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data } = await supabase
+    .from("dados_diarios_campanha")
+    .select("campanha_nome")
+    .eq("empresa_nome", empresaNome)
+    .eq("campanha_id", campanhaId)
+    .not("campanha_nome", "is", null)
+    .limit(1)
+    .maybeSingle()
+  return (data?.campanha_nome as string | undefined) ?? null
+}
+
+/** Nome do conjunto (pro breadcrumb), de dados_diarios_adset. */
+export async function getNomeConjunto(
+  empresaNome: string,
+  adsetId: string
+): Promise<string | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data } = await supabase
+    .from("dados_diarios_adset")
+    .select("adset_nome")
+    .eq("empresa_nome", empresaNome)
+    .eq("adset_id", adsetId)
+    .not("adset_nome", "is", null)
+    .limit(1)
+    .maybeSingle()
+  return (data?.adset_nome as string | undefined) ?? null
+}

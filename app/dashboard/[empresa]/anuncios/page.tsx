@@ -101,7 +101,11 @@ export default async function AnunciosPage({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {campanhas.map((c) => (
-          <CardCampanhaNivel key={c.campanhaId} c={c} />
+          <CardCampanhaNivel
+            key={c.campanhaId}
+            c={c}
+            href={`/dashboard/${empresa.slug}/anuncios/${c.campanhaId}?mes=${periodo.mes}&ano=${periodo.ano}`}
+          />
         ))}
       </div>
     </main>
