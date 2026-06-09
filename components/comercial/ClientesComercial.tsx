@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { formatBRL, formatNumero } from "@/lib/data"
 import FunilAtividadeComercial from "@/components/FunilAtividadeComercial"
 import type { ResumoComercialCliente } from "@/lib/comercial-tipos"
 
@@ -91,25 +90,6 @@ function LinhaCliente({ cliente }: { cliente: ResumoComercialCliente }) {
           {cliente.empresa}
         </span>
         <span
-          className="hide-sm"
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 12,
-            color: "var(--text-3)",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "2px 14px",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          <Stat label="Msg" valor={formatNumero(r.mensagens)} />
-          <Stat label="Qualif" valor={formatNumero(r.qualificados)} />
-          <Stat label="Reuniões" valor={formatNumero(r.reunioes_realizadas)} />
-          <Stat label="Contratos" valor={formatNumero(r.contratos_fechados)} cor="#34c759" />
-          <Stat label="Fat." valor={formatBRL(r.faturamento_gerado)} cor="var(--accent)" />
-        </span>
-        <span
           style={{
             flexShrink: 0,
             fontSize: 11,
@@ -119,7 +99,10 @@ function LinhaCliente({ cliente }: { cliente: ResumoComercialCliente }) {
         >
           {convFinal === null ? "" : `${convFinal}% msg→contrato`}
         </span>
-        <span aria-hidden="true" style={{ flexShrink: 0, fontSize: 12, color: "var(--text-4)" }}>
+        <span
+          aria-hidden="true"
+          style={{ marginLeft: "auto", flexShrink: 0, fontSize: 12, color: "var(--text-4)" }}
+        >
           {aberto ? "▲" : "▼"}
         </span>
       </button>
@@ -131,13 +114,5 @@ function LinhaCliente({ cliente }: { cliente: ResumoComercialCliente }) {
         </div>
       )}
     </div>
-  )
-}
-
-function Stat({ label, valor, cor }: { label: string; valor: string; cor?: string }) {
-  return (
-    <span>
-      {label}: <strong style={{ color: cor ?? "var(--text-2)", fontWeight: 700 }}>{valor}</strong>
-    </span>
   )
 }
