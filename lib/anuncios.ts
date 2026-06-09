@@ -49,16 +49,22 @@ interface LinhaCampanha {
   campanha_nome: string | null
   categoria: string | null
   destino: string | null
+  status: string | null
+  objetivo: string | null
   investimento_real: number | null
   leads_real: number | null
   conversas_real: number | null
   cliques_real: number | null
   impressoes_real: number | null
   alcance_real: number | null
+  compras_real: number | null
+  carrinho_real: number | null
+  checkout_real: number | null
+  view_real: number | null
 }
 
 const COLUNAS =
-  "campanha_id, campanha_nome, categoria, destino, investimento_real, leads_real, conversas_real, cliques_real, impressoes_real, alcance_real"
+  "campanha_id, campanha_nome, categoria, destino, status, objetivo, investimento_real, leads_real, conversas_real, cliques_real, impressoes_real, alcance_real, compras_real, carrinho_real, checkout_real, view_real"
 
 /**
  * @param filtroRegex p/ cliente em modo regex — filtra `campanha_nome`
@@ -129,6 +135,12 @@ export async function getCampanhasRanking(
     acc.cliques += Number(l.cliques_real ?? 0)
     acc.conversas += Number(l.conversas_real ?? 0)
     acc.leads += Number(l.leads_real ?? 0)
+    acc.compras = somaNul(acc.compras, l.compras_real)
+    acc.carrinho = somaNul(acc.carrinho, l.carrinho_real)
+    acc.checkout = somaNul(acc.checkout, l.checkout_real)
+    acc.view = somaNul(acc.view, l.view_real)
+    if (!acc.objetivo && l.objetivo) acc.objetivo = l.objetivo
+    if (!acc.status && l.status) acc.status = l.status as StatusEntidade
     if (!acc.categoria && l.categoria) acc.categoria = l.categoria
     if (!acc.destino && l.destino) acc.destino = l.destino
     mapa.set(id, acc)
@@ -137,6 +149,16 @@ export async function getCampanhasRanking(
   return Array.from(mapa.values())
     .map(finalizar)
     .sort((a, b) => b.resultados - a.resultados)
+}
+
+/** Soma mantendo null enquanto TODOS os valores forem null — o campo segue
+ *  "—" até o Sentinela v2 popular (e o backfill re-puxar maio/junho). */
+function somaNul(
+  acc: number | null,
+  v: number | null | undefined
+): number | null {
+  if (v == null) return acc
+  return (acc ?? 0) + Number(v)
 }
 
 function finalizar(c: CampanhaRanking): CampanhaRanking {
