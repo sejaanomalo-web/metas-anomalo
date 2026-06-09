@@ -40,7 +40,49 @@ export default function TimeComercial({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4" style={{ gap: 16 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div>
+        {/* Mobile: seletor de pessoa; a lista de botoes abaixo aparece so no desktop. */}
+        <div className="lg:hidden" style={{ position: "relative" }}>
+          <select
+            aria-label="Pessoa do time"
+            value={sel?.id ?? ""}
+            onChange={(e) => setSelId(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "12px 38px 12px 14px",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "var(--text-1)",
+              backgroundColor: "var(--card-bg)",
+              border: "1px solid var(--card-border)",
+              borderRadius: 12,
+              appearance: "none",
+              WebkitAppearance: "none",
+              cursor: "pointer",
+            }}
+          >
+            {membros.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nome}
+              </option>
+            ))}
+          </select>
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              right: 14,
+              top: "50%",
+              transform: "translateY(-50%)",
+              pointerEvents: "none",
+              fontSize: 11,
+              color: "var(--text-4)",
+            }}
+          >
+            ▼
+          </span>
+        </div>
+        <div className="hidden lg:flex" style={{ flexDirection: "column", gap: 8 }}>
         {membros.map((m) => {
           const ativo = m.id === sel?.id
           return (
@@ -67,6 +109,7 @@ export default function TimeComercial({
             </button>
           )
         })}
+        </div>
       </div>
 
       <div className="lg:col-span-3">{sel && <Detalhe membro={sel} />}</div>
