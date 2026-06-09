@@ -12,10 +12,12 @@ import type { ResumoComercial } from "@/lib/comercial-tipos"
  * "Agendamentos" (reuniões agendadas) entra entre Qualificados e Reuniões
  * (realizadas) — a conversão Agendamentos→Reuniões é o comparecimento.
  *
- * Largura de cada barra ∝ ao volume da etapa (linear, sobre o maior valor),
- * dando a forma do funil. Mostra a conversão de cada passo. Mesmo design
- * system das demais telas (.glass, accent ouro, gradientes dos cartões de
- * tráfego). Dados de relatorios_comerciais.
+ * Largura de cada barra proporcional ao volume da etapa: a razão valor/maior
+ * é mapeada pra faixa [LARG_MIN, 100]%, dando a forma do funil — topo mais
+ * largo, estreitando até o fundo; etapa em zero fica no tamanho-padrão
+ * (LARG_MIN). Mostra a conversão de cada passo. Mesmo design system das demais
+ * telas (.glass, accent ouro, gradientes dos cartões de tráfego). Dados de
+ * relatorios_comerciais.
  */
 
 type Etapa = {
@@ -26,7 +28,7 @@ type Etapa = {
   destaque?: boolean
 }
 
-const MIN_PCT = 32 // piso da largura, pra label + número caberem nas etapas baixas
+const LARG_MIN = 34 // largura-base (%) das etapas em zero e piso do afunilamento
 
 export default function FunilAtividadeComercial({
   resumo,
@@ -88,7 +90,10 @@ export default function FunilAtividadeComercial({
         }}
       >
         {etapas.map((e, i) => {
-          const pct = Math.max((e.valor / denom) * 100, MIN_PCT)
+          // Largura proporcional: razão valor/maior mapeada pra [LARG_MIN, 100]%.
+          // valor 0 -> LARG_MIN (tamanho-padrão); a maior etapa -> 100%.
+          const ratio = e.valor / denom
+          const pct = LARG_MIN + ratio * (100 - LARG_MIN)
           const prev = i > 0 ? etapas[i - 1] : null
           const conv =
             prev && prev.valor > 0
@@ -112,7 +117,7 @@ export default function FunilAtividadeComercial({
               <div
                 style={{
                   width: semDados ? "100%" : `${pct}%`,
-                  minWidth: 240,
+                  minWidth: 200,
                   borderRadius: 12,
                   padding: "12px 18px",
                   display: "flex",
