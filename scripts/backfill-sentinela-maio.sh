@@ -33,6 +33,20 @@
 #     anomalias. O badge "última execução" aponta pro último backfill até o
 #     cron normal de hoje à noite rodar e normalizar.
 #   • Só clientes ATIVOS em tokens_meta são re-puxados.
+#
+# LIMPEZA DOS LOGS DE BACKFILL (opcional — rode no SQL editor do Supabase).
+# logs_sentinela.id é bigint sequencial, então apague só o que for MAIOR que o
+# id de antes do backfill — nunca pega execução real:
+#   1) ANTES do backfill:
+#        select max(id) as id_antes from logs_sentinela;          -- anote (ex.: 98)
+#   2) rode o backfill (este script)
+#   3) PREVIEW (troque 98 pelo seu id_antes; confira que são ~31 linhas):
+#        select id, data_execucao, status, total_contas_processadas
+#        from logs_sentinela where id > 98 order by id;
+#   4) APAGAR:
+#        delete from logs_sentinela where id > 98;
+#      (se o cron noturno já tiver rodado, limite o topo:
+#        delete from logs_sentinela where id > 98 and id <= <maior_id_do_backfill>;)
 # =============================================================================
 
 set -euo pipefail
