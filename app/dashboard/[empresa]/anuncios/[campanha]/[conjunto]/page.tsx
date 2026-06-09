@@ -12,6 +12,7 @@ import {
   getAnunciosDoConjunto,
   getNomeCampanha,
   getNomeConjunto,
+  qsPeriodo,
 } from "@/lib/anuncios"
 
 export const dynamic = "force-dynamic"
@@ -35,7 +36,7 @@ export default async function AnunciosDoConjuntoPage({
   if (!empresa) notFound()
 
   const periodo = parsePeriodo(searchParams)
-  const qs = `mes=${periodo.mes}&ano=${periodo.ano}`
+  const qs = qsPeriodo(periodo)
   const [anuncios, nomeCampanha, nomeConjunto, trackeadas] = await Promise.all([
     getAnunciosDoConjunto(empresa.nome, params.conjunto, periodo.de, periodo.ate),
     getNomeCampanha(empresa.nome, params.campanha),

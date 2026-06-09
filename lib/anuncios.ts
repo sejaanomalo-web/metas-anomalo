@@ -453,6 +453,31 @@ export async function getNomeCampanha(
   return (data?.campanha_nome as string | undefined) ?? null
 }
 
+/** Querystring que PRESERVA o período atual (mês OU dia/intervalo) nos links
+ *  do drill-down — senão os modos dia/intervalo cairiam pro mês cheio ao
+ *  navegar entre níveis. */
+export function qsPeriodo(p: {
+  modo: string
+  de: string
+  ate: string
+  mes: string
+  ano: number
+}): string {
+  const u = new URLSearchParams()
+  if (p.modo === "dia") {
+    u.set("modo", "dia")
+    u.set("de", p.de)
+  } else if (p.modo === "intervalo") {
+    u.set("modo", "intervalo")
+    u.set("de", p.de)
+    u.set("ate", p.ate)
+  } else {
+    u.set("mes", p.mes)
+    u.set("ano", String(p.ano))
+  }
+  return u.toString()
+}
+
 /** Nome do conjunto (pro breadcrumb), de dados_diarios_adset. */
 export async function getNomeConjunto(
   empresaNome: string,

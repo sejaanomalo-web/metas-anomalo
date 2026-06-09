@@ -8,7 +8,7 @@ import { requererPermissao } from "@/lib/auth"
 import { parsePeriodo } from "@/lib/periodo"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import { getEmpresasTrackeadas } from "@/lib/sentinela"
-import { getConjuntosDaCampanha, getNomeCampanha } from "@/lib/anuncios"
+import { getConjuntosDaCampanha, getNomeCampanha, qsPeriodo } from "@/lib/anuncios"
 
 export const dynamic = "force-dynamic"
 
@@ -31,7 +31,7 @@ export default async function ConjuntosPage({
   if (!empresa) notFound()
 
   const periodo = parsePeriodo(searchParams)
-  const qs = `mes=${periodo.mes}&ano=${periodo.ano}`
+  const qs = qsPeriodo(periodo)
   const [conjuntos, nomeCampanha, trackeadas] = await Promise.all([
     getConjuntosDaCampanha(empresa.nome, params.campanha, periodo.de, periodo.ate),
     getNomeCampanha(empresa.nome, params.campanha),

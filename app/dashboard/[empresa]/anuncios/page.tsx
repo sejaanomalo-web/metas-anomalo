@@ -8,7 +8,7 @@ import { requererPermissao } from "@/lib/auth"
 import { parsePeriodo } from "@/lib/periodo"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import { getEmpresasTrackeadas } from "@/lib/sentinela"
-import { getCampanhasRanking } from "@/lib/anuncios"
+import { getCampanhasRanking, qsPeriodo } from "@/lib/anuncios"
 
 export const dynamic = "force-dynamic"
 
@@ -104,7 +104,7 @@ export default async function AnunciosPage({
           <CardCampanhaNivel
             key={c.campanhaId}
             c={c}
-            href={`/dashboard/${empresa.slug}/anuncios/${c.campanhaId}?mes=${periodo.mes}&ano=${periodo.ano}`}
+            href={`/dashboard/${empresa.slug}/anuncios/${c.campanhaId}?${qsPeriodo(periodo)}`}
           />
         ))}
       </div>
