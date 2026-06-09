@@ -1,4 +1,5 @@
 import { formatBRL, formatNumero } from "@/lib/data"
+import { COR_MAP } from "@/lib/design-tokens"
 import type { ResumoTrafego } from "@/lib/sentinela"
 
 /**
@@ -216,13 +217,6 @@ function HeroSub({
     </div>
   )
 }
-
-const COR_MAP = {
-  green: { bg: "linear-gradient(135deg,#34c759,#2aa148)", glow: "rgba(52,199,89,0.35)" },
-  blue: { bg: "linear-gradient(135deg,#4062f0,#3550d8)", glow: "rgba(64,98,240,0.35)" },
-  purple: { bg: "linear-gradient(135deg,#a855f7,#8b3ee0)", glow: "rgba(168,85,247,0.35)" },
-  orange: { bg: "linear-gradient(135deg,#f97316,#e05f10)", glow: "rgba(249,115,22,0.35)" },
-} as const
 
 function Cartao({
   cor,

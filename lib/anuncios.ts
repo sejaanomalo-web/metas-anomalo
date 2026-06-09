@@ -1,0 +1,200 @@
+import { getSupabaseAdmin } from "./supabase"
+import type { ClienteTrafego } from "./clientes"
+
+/**
+ * Camada de leitura do RANKING DE CAMPANHAS + nível Campanhas do Gerenciador
+ * de Anúncios. Lê de `dados_diarios_campanha` (nível campanha, escrito pelo
+ * Sentinela). Agrega as linhas-dia da mesma `campanha_id` no período e deriva
+ * CTR/CPC/CPM dos TOTAIS (mesma lógica de `resumirTrafego`).
+ *
+ * FASE 1: usa só as colunas que já existem hoje. Status (Ativa/Pausada),
+ * objetivo e o breakdown de conversões (compras/carrinho/checkout/view) ficam
+ * null — a UI mostra "—" até a Fase 2 (Sentinela v2 persistir esses campos).
+ *
+ * ATENÇÃO: `alcance` NÃO é aditivo entre dias (o Meta deduplica pessoas únicas
+ * só dentro de um range). Somar `alcance_real` diário é APROXIMAÇÃO — ok pro
+ * ranking, mas frequência/qualquer custo-por-alcance herdam esse viés.
+ */
+
+export type OrdenacaoRanking = "resultados" | "gasto" | "alcance" | "cliques"
+export type TipoResultado = "leads" | "conversas" | "compras"
+export type StatusEntidade = "ACTIVE" | "PAUSED" | "ARCHIVED" | null
+
+export interface CampanhaRanking {
+  campanhaId: string
+  nome: string
+  categoria: string | null
+  destino: string | null
+  objetivo: string | null // Fase 2
+  status: StatusEntidade // Fase 2
+  investimento: number
+  alcance: number
+  impressoes: number
+  cliques: number
+  conversas: number
+  leads: number
+  compras: number | null // Fase 2
+  carrinho: number | null // Fase 2
+  checkout: number | null // Fase 2
+  view: number | null // Fase 2
+  ctr: number | null // derivado
+  cpc: number | null // derivado
+  cpm: number | null // derivado
+  resultados: number // conversão principal pelo objetivo/categoria
+  tipoResultado: TipoResultado
+}
+
+interface LinhaCampanha {
+  campanha_id: string
+  campanha_nome: string | null
+  categoria: string | null
+  destino: string | null
+  investimento_real: number | null
+  leads_real: number | null
+  conversas_real: number | null
+  cliques_real: number | null
+  impressoes_real: number | null
+  alcance_real: number | null
+}
+
+const COLUNAS =
+  "campanha_id, campanha_nome, categoria, destino, investimento_real, leads_real, conversas_real, cliques_real, impressoes_real, alcance_real"
+
+/**
+ * @param filtroRegex p/ cliente em modo regex — filtra `campanha_nome`
+ *  (cliente_nome é sempre null em dados_diarios_campanha hoje).
+ */
+export async function getCampanhasRanking(
+  empresaNome: string,
+  inicio: string,
+  fim: string,
+  filtroRegex?: string | null
+): Promise<CampanhaRanking[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("dados_diarios_campanha")
+    .select(COLUNAS)
+    .eq("empresa_nome", empresaNome)
+    .eq("origem", "pago")
+    .gte("data", inicio)
+    .lte("data", fim)
+  if (error) {
+    console.error("[anuncios] getCampanhasRanking error", error.message)
+    return []
+  }
+
+  let linhas = (data ?? []) as LinhaCampanha[]
+  if (filtroRegex) {
+    try {
+      const re = new RegExp(filtroRegex, "i")
+      linhas = linhas.filter((l) => re.test(l.campanha_nome ?? ""))
+    } catch {
+      /* regex inválido → não filtra */
+    }
+  }
+
+  const mapa = new Map<string, CampanhaRanking>()
+  for (const l of linhas) {
+    const acc =
+      mapa.get(l.campanha_id) ??
+      ({
+        campanhaId: l.campanha_id,
+        nome: l.campanha_nome ?? "Campanha sem nome",
+        categoria: l.categoria ?? null,
+        destino: l.destino ?? null,
+        objetivo: null,
+        status: null,
+        investimento: 0,
+        alcance: 0,
+        impressoes: 0,
+        cliques: 0,
+        conversas: 0,
+        leads: 0,
+        compras: null,
+        carrinho: null,
+        checkout: null,
+        view: null,
+        ctr: null,
+        cpc: null,
+        cpm: null,
+        resultados: 0,
+        tipoResultado: "leads",
+      } satisfies CampanhaRanking)
+    acc.investimento += Number(l.investimento_real ?? 0)
+    acc.alcance += Number(l.alcance_real ?? 0)
+    acc.impressoes += Number(l.impressoes_real ?? 0)
+    acc.cliques += Number(l.cliques_real ?? 0)
+    acc.conversas += Number(l.conversas_real ?? 0)
+    acc.leads += Number(l.leads_real ?? 0)
+    if (!acc.categoria && l.categoria) acc.categoria = l.categoria
+    if (!acc.destino && l.destino) acc.destino = l.destino
+    mapa.set(l.campanha_id, acc)
+  }
+
+  return Array.from(mapa.values())
+    .map(finalizar)
+    .sort((a, b) => b.resultados - a.resultados)
+}
+
+function finalizar(c: CampanhaRanking): CampanhaRanking {
+  c.ctr = c.impressoes > 0 ? c.cliques / c.impressoes : null
+  c.cpc = c.cliques > 0 ? c.investimento / c.cliques : null
+  c.cpm = c.impressoes > 0 ? (c.investimento / c.impressoes) * 1000 : null
+  const r = resolverResultado(c)
+  c.resultados = r.valor
+  c.tipoResultado = r.tipo
+  return c
+}
+
+/** "Resultados" = conversão principal pelo OBJETIVO; na Fase 1 (objetivo null)
+ *  cai pra CATEGORIA já derivada pelo Sentinela. */
+function resolverResultado(c: CampanhaRanking): {
+  valor: number
+  tipo: TipoResultado
+} {
+  const o = (c.objetivo ?? "").toUpperCase()
+  if (o.includes("LEAD")) return { valor: c.leads, tipo: "leads" }
+  if (
+    o.includes("SALE") ||
+    o.includes("CONVERSION") ||
+    o.includes("PURCHASE") ||
+    o.includes("OUTCOME_SALES")
+  )
+    return { valor: c.compras ?? 0, tipo: "compras" }
+  if (o.includes("MESSAG") || o.includes("ENGAG") || o.includes("CONVERSATION"))
+    return { valor: c.conversas, tipo: "conversas" }
+  // Fallback Fase 1 pela categoria (Sentinela já deriva remarketing/vendas/leads).
+  if (c.categoria === "vendas")
+    return c.compras != null
+      ? { valor: c.compras, tipo: "compras" }
+      : { valor: c.leads, tipo: "leads" }
+  if (c.categoria === "remarketing")
+    return c.compras != null
+      ? { valor: c.compras, tipo: "compras" }
+      : { valor: c.conversas, tipo: "conversas" }
+  return c.leads >= c.conversas
+    ? { valor: c.leads, tipo: "leads" }
+    : { valor: c.conversas, tipo: "conversas" }
+}
+
+/** Ranking de um CLIENTE: modo origem lê pela empresa de origem; modo regex
+ *  lê pela empresa do cliente e filtra `campanha_nome` pelo `campaign_filter`. */
+export async function getCampanhasRankingCliente(
+  cliente: ClienteTrafego,
+  inicio: string,
+  fim: string
+): Promise<CampanhaRanking[]> {
+  if (cliente.empresa_origem_nome) {
+    return getCampanhasRanking(cliente.empresa_origem_nome, inicio, fim)
+  }
+  if (cliente.campaign_filter) {
+    return getCampanhasRanking(
+      cliente.empresa_nome,
+      inicio,
+      fim,
+      cliente.campaign_filter
+    )
+  }
+  return []
+}

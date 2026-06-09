@@ -21,6 +21,7 @@ import {
   statusSentinela,
   type AnomaliaSentinela,
 } from "@/lib/sentinela"
+import { getCampanhasRanking } from "@/lib/anuncios"
 
 // Página dinâmica: força SSR sem Data Cache (mesmo motivo das outras
 // pages do dashboard). Resolve o bug de "desconfiguração" ao alternar
@@ -66,14 +67,21 @@ export default async function TrafegoPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [linhas, linhas6m, categoriasPorDia, ultimoLog, empresasTrackeadas] =
-    await Promise.all([
-      getLinhasDoMes(empresa.nome, inicio, fim),
-      getLinhasDoMes(empresa.nome, inicioJanela6Meses(fim), fim),
-      getCategoriasPorDia(empresa.nome, inicio, fim),
-      getUltimoLogSentinela(),
-      getEmpresasTrackeadas(),
-    ])
+  const [
+    linhas,
+    linhas6m,
+    categoriasPorDia,
+    ultimoLog,
+    empresasTrackeadas,
+    campanhas,
+  ] = await Promise.all([
+    getLinhasDoMes(empresa.nome, inicio, fim),
+    getLinhasDoMes(empresa.nome, inicioJanela6Meses(fim), fim),
+    getCategoriasPorDia(empresa.nome, inicio, fim),
+    getUltimoLogSentinela(),
+    getEmpresasTrackeadas(),
+    getCampanhasRanking(empresa.nome, inicio, fim),
+  ])
 
   const resumo = resumirTrafego(linhas)
   const serie = serieMensalDeLinhas(linhas6m)
@@ -232,6 +240,10 @@ export default async function TrafegoPage({
           linhas={linhas}
           serie={serie}
           categoriasPorDia={categoriasPorDia}
+          campanhas={campanhas}
+          empresaSlug={empresa.slug}
+          mes={mes}
+          ano={ano}
         />
       </main>
     </>

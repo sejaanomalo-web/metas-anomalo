@@ -25,9 +25,11 @@ export default function TabsTrafego({
   const qs = new URLSearchParams({ mes, ano: String(ano) })
   const trafegoHref = `/dashboard/${slug}/trafego?${qs.toString()}`
   const clientesHref = `/dashboard/${slug}/clientes?${qs.toString()}`
+  const anunciosHref = `/dashboard/${slug}/anuncios?${qs.toString()}`
 
   const noTrafego = pathname === `/dashboard/${slug}/trafego`
   const nosClientes = pathname.startsWith(`/dashboard/${slug}/clientes`)
+  const nosAnuncios = pathname.startsWith(`/dashboard/${slug}/anuncios`)
 
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -38,6 +40,10 @@ export default function TabsTrafego({
       <TabLink href={clientesHref} ativa={nosClientes}>
         <BolinhaLive ativa={nosClientes} />
         Tráfego por cliente
+      </TabLink>
+      <TabLink href={anunciosHref} ativa={nosAnuncios}>
+        <BolinhaLive ativa={nosAnuncios} />
+        Anúncios
       </TabLink>
     </div>
   )
