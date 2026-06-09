@@ -45,7 +45,7 @@ export interface CampanhaRanking {
 }
 
 interface LinhaCampanha {
-  campanha_id: string
+  campanha_id: string | null
   campanha_nome: string | null
   categoria: string | null
   destino: string | null
@@ -96,10 +96,12 @@ export async function getCampanhasRanking(
 
   const mapa = new Map<string, CampanhaRanking>()
   for (const l of linhas) {
+    const id = l.campanha_id
+    if (!id) continue // linha sem campanha_id (coluna nullable) — ignora
     const acc =
-      mapa.get(l.campanha_id) ??
+      mapa.get(id) ??
       ({
-        campanhaId: l.campanha_id,
+        campanhaId: id,
         nome: l.campanha_nome ?? "Campanha sem nome",
         categoria: l.categoria ?? null,
         destino: l.destino ?? null,
@@ -129,7 +131,7 @@ export async function getCampanhasRanking(
     acc.leads += Number(l.leads_real ?? 0)
     if (!acc.categoria && l.categoria) acc.categoria = l.categoria
     if (!acc.destino && l.destino) acc.destino = l.destino
-    mapa.set(l.campanha_id, acc)
+    mapa.set(id, acc)
   }
 
   return Array.from(mapa.values())
