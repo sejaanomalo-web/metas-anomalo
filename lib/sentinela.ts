@@ -98,7 +98,11 @@ export function formatarMomentoBRT(
   return `${dataAlvo} ${horaAlvo}`
 }
 
-/** Próxima execução do Sentinela em hora BRT (cron 09:00 e 15:00).
+/** Horários (BRT) em que o cron do Sentinela roda, em ordem. Espelha os
+ *  jobs pg_cron (sentinela_9h/15h/20h). Manter sincronizado com o banco. */
+const HORARIOS_SENTINELA_BRT = [9, 15, 20] as const
+
+/** Próxima execução do Sentinela em hora BRT (cron 09:00, 15:00 e 20:00).
  *  Devolve hora/minuto pra cálculos, label curto ("15:00 BRT") e
  *  labelCompleto com data ("hoje 15:00 BRT" / "amanhã 09:00 BRT"). */
 export function proximaExecucao(agora: Date = new Date()): {
@@ -112,13 +116,15 @@ export function proximaExecucao(agora: Date = new Date()): {
   const utcMs = agora.getTime() + agora.getTimezoneOffset() * 60_000
   const brt = new Date(utcMs - 3 * 60 * 60_000)
   const h = brt.getHours()
-  // antes das 09 → próxima é hoje 09; entre 09 e 15 → hoje 15; depois → amanhã 09.
-  const proximaHora = h < 9 ? 9 : h < 15 ? 15 : 9
+  // Próximo horário ainda hoje; se todos já passaram, é o 1º de amanhã.
+  const aindaHoje = HORARIOS_SENTINELA_BRT.find((hh) => h < hh)
+  const proximaHora = aindaHoje ?? HORARIOS_SENTINELA_BRT[0]
+  const ehAmanha = aindaHoje === undefined
   // Constrói data/hora exata da próxima execução, em BRT, e volta pra
   // ISO UTC (somando o offset BRT de -3h → -(-3) = +3h pra ir pra UTC).
   const proxBrt = new Date(brt)
   proxBrt.setHours(proximaHora, 0, 0, 0)
-  if (h >= 15) proxBrt.setDate(proxBrt.getDate() + 1)
+  if (ehAmanha) proxBrt.setDate(proxBrt.getDate() + 1)
   const proxIso = new Date(proxBrt.getTime() + 3 * 60 * 60_000).toISOString()
   return {
     hora: proximaHora,
