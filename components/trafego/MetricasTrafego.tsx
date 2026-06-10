@@ -94,14 +94,6 @@ export default function MetricasTrafego({
           <HeroSub label="Realizados" valor={formatNumero(resumo.reunioes)} />
           <HeroSub label="Faturamento" valor={formatBRL(resumo.faturamento)} />
         </div>
-        <div style={{ marginTop: 14 }}>
-          <span style={{ fontSize: 11, opacity: 0.8, letterSpacing: "0.06em" }}>
-            ROI{" "}
-          </span>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>
-            ↗ {resumo.roi === null ? "0%" : `${(resumo.roi * 100).toFixed(0)}%`}
-          </span>
-        </div>
       </section>
 
       {/* Grade de cartões */}
@@ -153,14 +145,10 @@ export default function MetricasTrafego({
         />
         <Cartao
           cor="green"
-          icone={<IconeChat />}
-          titulo="Custo por conversa"
-          valor={
-            resumo.custoPorConversa === null
-              ? formatBRL(0)
-              : formatBRL(resumo.custoPorConversa)
-          }
-          sub="Por mensagem"
+          icone={<IconeAlvo />}
+          titulo="Custo por resultado"
+          valor={resumo.cpl === null ? formatBRL(0) : formatBRL(resumo.cpl)}
+          sub="por resultado"
         />
         <Cartao
           cor="purple"

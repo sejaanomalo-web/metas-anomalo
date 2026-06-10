@@ -105,7 +105,12 @@ export default async function ClientesPage({
               flexWrap: "wrap",
             }}
           >
-            <TabsTrafego slug={empresa.slug} mes={mes} ano={ano} />
+            <TabsTrafego
+              slug={empresa.slug}
+              mes={mes}
+              ano={ano}
+              temClientes={clientes.length > 0}
+            />
             <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <BadgeStatusSentinela
                 statusCor={stat.cor}

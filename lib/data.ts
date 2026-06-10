@@ -716,10 +716,15 @@ export function corStatusMeta(
 }
 
 export function formatBRL(valor: number): string {
+  // Mostra centavos quando o valor tem fração (ex.: custo de R$ 0,23 do
+  // gerenciador NÃO pode virar R$ 0). Valores redondos seguem sem ",00"
+  // pra não poluir faturamento/metas. Assim o número exato do Meta aparece.
+  const temFracao = !Number.isInteger(valor)
   return valor.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: temFracao ? 2 : 0,
+    maximumFractionDigits: 2,
   })
 }
 

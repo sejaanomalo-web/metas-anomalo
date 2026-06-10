@@ -9,6 +9,7 @@ import { requererPermissao } from "@/lib/auth"
 import { subtituloDaEmpresa } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
+import { empresaTemClientesTrafego } from "@/lib/clientes"
 import {
   getCategoriasPorDia,
   getEmpresasTrackeadas,
@@ -72,12 +73,14 @@ export default async function TrafegoPage({
     categoriasPorDia,
     ultimoLog,
     empresasTrackeadas,
+    temClientes,
   ] = await Promise.all([
     getLinhasDoMes(empresa.nome, inicio, fim),
     getLinhasDoMes(empresa.nome, inicioJanela6Meses(fim), fim),
     getCategoriasPorDia(empresa.nome, inicio, fim),
     getUltimoLogSentinela(),
     getEmpresasTrackeadas(),
+    empresaTemClientesTrafego(empresa.nome),
   ])
 
   const resumo = resumirTrafego(linhas)
@@ -156,7 +159,12 @@ export default async function TrafegoPage({
               flexWrap: "wrap",
             }}
           >
-            <TabsTrafego slug={empresa.slug} mes={mes} ano={ano} />
+            <TabsTrafego
+              slug={empresa.slug}
+              mes={mes}
+              ano={ano}
+              temClientes={temClientes}
+            />
             <BadgeStatusSentinela
               statusCor={stat.cor}
               rotulo={stat.rotulo}

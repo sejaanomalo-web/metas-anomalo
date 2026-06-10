@@ -73,21 +73,15 @@ export default async function TrafegoOverviewPage({
   // Totais agregados pro hero (KPI consolidado).
   let somaInv = 0
   let somaLeads = 0
-  let somaImpressoes = 0
-  let somaFat = 0
   let empresasGerenciadas = 0
   for (const empresa of empresasTrafego) {
     const r = resumo.get(empresa.nome)
     if (!r) continue
     somaInv += r.investimento
     somaLeads += r.leads
-    somaImpressoes += r.impressoes
-    somaFat += r.faturamento
     if (r.investimento > 0) empresasGerenciadas += 1
   }
   const cplMedio = somaLeads > 0 ? somaInv / somaLeads : null
-  // ROI total do hub: (faturamento - investimento) / investimento.
-  const roiTotal = somaInv > 0 ? (somaFat - somaInv) / somaInv : null
 
   return (
     <>
@@ -177,21 +171,13 @@ export default async function TrafegoOverviewPage({
           </div>
         </div>
 
-        {/* KPIs consolidados */}
+        {/* KPIs consolidados — 2 por linha no mobile, 4 no desktop. ROI
+            removido (não é a métrica de destaque do hub). */}
         <section
-          className="glass"
-          style={{
-            padding: "20px 24px",
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 24,
-          }}
+          className="glass grid grid-cols-2 lg:grid-cols-4"
+          style={{ padding: "20px 24px", gap: 16 }}
         >
           <KpiMini label="Investimento total" valor={fmtBRL(somaInv)} />
-          <KpiMini
-            label="ROI total do hub"
-            valor={roiTotal != null ? `${(roiTotal * 100).toFixed(0)}%` : "·"}
-          />
           <KpiMini
             label="Empresas gerenciadas"
             valor={formatNumero(empresasGerenciadas)}

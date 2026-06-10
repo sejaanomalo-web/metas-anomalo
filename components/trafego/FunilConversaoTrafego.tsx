@@ -72,10 +72,8 @@ export default function FunilConversaoTrafego({
               style={{ display: "flex", alignItems: "center", gap: 16 }}
             >
               <span
+                className="funil-rotulo"
                 style={{
-                  width: 112,
-                  flexShrink: 0,
-                  textAlign: "right",
                   fontSize: 13,
                   fontWeight: 600,
                   color: "var(--text-3)",
