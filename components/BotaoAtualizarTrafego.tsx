@@ -1,85 +1,20 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { dispararSentinelaDia } from "@/lib/sentinela-trigger"
-
-/** Data em BRT (UTC-3, sem DST) no formato YYYY-MM-DD, com offset de dias. */
-function diaBRT(offset = 0): string {
-  const agora = new Date()
-  const utcMs = agora.getTime() + agora.getTimezoneOffset() * 60_000
-  const brt = new Date(utcMs - 3 * 60 * 60_000 + offset * 24 * 60 * 60_000)
-  return brt.toISOString().slice(0, 10)
-}
-
-type Estado =
-  | { fase: "idle" }
-  | { fase: "rodando"; pct: number; dia: string }
-  | { fase: "ok"; resumo: string }
-  | { fase: "erro"; msg: string }
+import { useSentinelaRefresh } from "@/components/SentinelaRefreshProvider"
 
 /**
  * Botão "Atualizar dados" do dashboard de Tráfego (visão geral).
  *
- * Diferente do BotaoAtualizar genérico (que só faz router.refresh), este
- * DISPARA uma nova execução do agente Sentinela — re-puxando o Meta para
- * TODAS as empresas ativas — em hoje e ontem (os dias que mais mudam),
- * com spinner e porcentagem real de progresso. Ao terminar, recarrega o
- * dashboard inteiro (router.refresh) para refletir os dados novos.
+ * Dispara uma nova execução do agente Sentinela — re-puxando o Meta para
+ * TODAS as empresas ativas (hoje + ontem). O processo vive no
+ * SentinelaRefreshProvider (layout do dashboard), então CONTINUA rodando
+ * em segundo plano mesmo que o usuário mude de aba; um indicador flutuante
+ * mostra o progresso em qualquer tela. Este botão só reflete e dispara o
+ * estado global compartilhado.
  */
 export default function BotaoAtualizarTrafego() {
-  const router = useRouter()
-  const [estado, setEstado] = useState<Estado>({ fase: "idle" })
+  const { estado, rodando, iniciar } = useSentinelaRefresh()
 
-  async function atualizar() {
-    if (estado.fase === "rodando") return
-    // Hoje + ontem cobrem os dias voláteis; uma chamada por dia processa
-    // TODAS as empresas ativas. Sequencial → progresso real por etapa.
-    const dias = [diaBRT(0), diaBRT(-1)]
-    const total = dias.length
-    let falhas = 0
-    let ultimoErro = ""
-    let contas = 0
-
-    setEstado({ fase: "rodando", pct: 2, dia: dias[0] })
-    for (let i = 0; i < total; i++) {
-      const dia = dias[i]
-      setEstado({
-        fase: "rodando",
-        pct: Math.max(2, Math.round((i / total) * 100)),
-        dia,
-      })
-      const r = await dispararSentinelaDia(dia)
-      if (!r.ok) {
-        falhas++
-        ultimoErro = r.erro ?? "Falha."
-      } else if (typeof r.contasProcessadas === "number") {
-        contas = Math.max(contas, r.contasProcessadas)
-      }
-      setEstado({
-        fase: "rodando",
-        pct: Math.round(((i + 1) / total) * 100),
-        dia,
-      })
-    }
-
-    if (falhas === total) {
-      setEstado({ fase: "erro", msg: ultimoErro })
-      setTimeout(() => setEstado({ fase: "idle" }), 5000)
-      return
-    }
-
-    // Recarrega os Server Components do dashboard com os dados novos.
-    router.refresh()
-    const resumo = contas > 0 ? `${contas} empresas` : "concluído"
-    setEstado({
-      fase: "ok",
-      resumo: falhas > 0 ? `Parcial · ${resumo}` : resumo,
-    })
-    setTimeout(() => setEstado({ fase: "idle" }), 2600)
-  }
-
-  const rodando = estado.fase === "rodando"
   const ok = estado.fase === "ok"
   const erro = estado.fase === "erro"
 
@@ -94,12 +29,21 @@ export default function BotaoAtualizarTrafego() {
     ? "rgba(226,75,74,0.45)"
     : "rgba(255,255,255,0.15)"
 
+  const rotulo =
+    estado.fase === "rodando"
+      ? `Atualizando… ${estado.pct}%`
+      : estado.fase === "ok"
+      ? `Atualizado ✓ ${estado.resumo}`
+      : estado.fase === "erro"
+      ? estado.msg
+      : "Atualizar dados"
+
   return (
     <button
       type="button"
-      onClick={atualizar}
+      onClick={iniciar}
       disabled={rodando}
-      title="Dispara o Sentinela e re-puxa o Meta de todas as empresas (hoje e ontem)"
+      title="Dispara o Sentinela e re-puxa o Meta de todas as empresas (hoje e ontem). Continua rodando em segundo plano se você trocar de aba."
       className="hover:text-[#C9953A] hover:border-[#C9953A55] transition no-ds"
       style={{
         display: "inline-flex",
@@ -120,13 +64,7 @@ export default function BotaoAtualizarTrafego() {
       }}
     >
       {rodando && <Spinner />}
-      {rodando
-        ? `Atualizando… ${estado.pct}%`
-        : ok
-        ? `Atualizado ✓ ${estado.resumo}`
-        : erro
-        ? estado.msg
-        : "Atualizar dados"}
+      {rotulo}
     </button>
   )
 }
