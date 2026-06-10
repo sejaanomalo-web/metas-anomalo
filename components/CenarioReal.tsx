@@ -13,6 +13,7 @@ interface MetaComparavel {
   investimento?: number
   leads?: number
   respostas?: number
+  agendamentos?: number
   reunioes?: number
   contratos?: number
   faturamento?: number
@@ -22,6 +23,7 @@ type ChaveReal =
   | "investimento_real"
   | "leads_real"
   | "respostas"
+  | "reunioes_agendadas_real"
   | "reunioes_real"
   | "contratos_real"
   | "faturamento_real"
@@ -45,14 +47,21 @@ const LINHAS: LinhaMetricaReal[] = [
   },
   { rotulo: "Leads", chave: "leads_real", metaKey: "leads", tipo: "numero" },
   {
-    rotulo: "Respostas",
+    rotulo: "Retorno",
     chave: "respostas",
     metaKey: "respostas",
     tipo: "numero",
     apenasOrganico: true,
   },
   {
-    rotulo: "Reuniões",
+    rotulo: "Agendamentos",
+    chave: "reunioes_agendadas_real",
+    metaKey: "agendamentos",
+    tipo: "numero",
+    apenasOrganico: true,
+  },
+  {
+    rotulo: "Reunião realizada",
     chave: "reunioes_real",
     metaKey: "reunioes",
     tipo: "numero",

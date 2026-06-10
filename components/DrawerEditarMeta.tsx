@@ -60,12 +60,12 @@ function camposPorTipo(
       { chave: "faturamento", rotulo: "Faturamento (R$)", tipo: "brl" },
     ]
     if (ehOrganico) {
-      // Leads vem antes de Respostas no orgânico (a métrica de captação
+      // Leads vem antes de Retorno no orgânico (a métrica de captação
       // tem prioridade visual sobre a métrica de engajamento).
       const [primeiro, ...resto] = base
       return [
         primeiro,
-        { chave: "respostas", rotulo: "Respostas", tipo: "numero" },
+        { chave: "respostas", rotulo: "Retorno", tipo: "numero" },
         ...resto,
       ]
     }
@@ -89,7 +89,7 @@ function camposPorTipo(
   // leads-reunioes-contratos (default)
   const base: Campo[] = [
     { chave: "leads", rotulo: "Leads", tipo: "numero" },
-    { chave: "reunioes", rotulo: "Reuniões", tipo: "numero" },
+    { chave: "reunioes", rotulo: "Reunião realizada", tipo: "numero" },
     { chave: "contratos", rotulo: "Contratos", tipo: "numero" },
     { chave: "clientes", rotulo: "Clientes ativos", tipo: "numero" },
     { chave: "churn", rotulo: "Churn", tipo: "numero" },
@@ -97,12 +97,14 @@ function camposPorTipo(
     { chave: "faturamento", rotulo: "Faturamento (R$)", tipo: "brl" },
   ]
   if (ehOrganico) {
-    // Leads vem antes de Respostas no orgânico — a métrica de captação
-    // tem prioridade visual sobre a métrica de engajamento.
+    // Orgânico: Leads → Retorno → Agendamentos → Reunião realizada → ...
+    // (segue a ordem do funil comercial). `respostas` é o nome interno do
+    // "Retorno"; `agendamentos` vira meta de reuniões agendadas.
     const [primeiro, ...resto] = base
     return [
       primeiro,
-      { chave: "respostas", rotulo: "Respostas", tipo: "numero" },
+      { chave: "respostas", rotulo: "Retorno", tipo: "numero" },
+      { chave: "agendamentos", rotulo: "Agendamentos", tipo: "numero" },
       ...resto,
     ]
   }

@@ -48,6 +48,16 @@ export default function DrawerDadosReais({
       ? "Vendas influenciador reais"
       : "Reuniões reais"
 
+  // Tipo padrão (funil comercial): usa "Agendamentos" e "Reunião realizada"
+  // — alinhado ao Metas. aton/hato mantêm o sufixo agendadas/realizadas.
+  const ehTipoPadrao = tipoEmpresa !== "aton" && tipoEmpresa !== "hato"
+  const labelAgendadas = ehTipoPadrao
+    ? "Agendamentos"
+    : `${rotuloReunioes} agendadas`
+  const labelRealizadas = ehTipoPadrao
+    ? "Reunião realizada"
+    : `${rotuloReunioes} realizadas`
+
   const rotuloContratos =
     tipoEmpresa === "aton" || tipoEmpresa === "hato"
       ? "Vendas reais"
@@ -189,20 +199,20 @@ export default function DrawerDadosReais({
               />
               {!ehPago && (
                 <Campo
-                  label="Respostas"
+                  label="Retorno"
                   name="respostas"
                   tipo="number"
                   defaultValue={existentes?.respostas ?? ""}
                 />
               )}
               <Campo
-                label={`${rotuloReunioes} agendadas`}
+                label={labelAgendadas}
                 name="reunioes_agendadas_real"
                 tipo="number"
                 defaultValue={existentes?.reunioes_agendadas_real ?? ""}
               />
               <Campo
-                label={`${rotuloReunioes} realizadas`}
+                label={labelRealizadas}
                 name="reunioes_real"
                 tipo="number"
                 defaultValue={existentes?.reunioes_real ?? ""}

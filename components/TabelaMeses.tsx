@@ -26,9 +26,9 @@ const STICKY_BG = "#0b0b0b"
 // Colunas que só fazem sentido quando origem = pago. No modo orgânico
 // elas somem da tabela.
 const COLUNAS_APENAS_PAGO = new Set(["verba", "criativos"])
-// Colunas que só fazem sentido quando origem = organico (ex: respostas
-// são lançadas pelo SDR). No pago elas somem da tabela.
-const COLUNAS_APENAS_ORGANICO = new Set(["respostas"])
+// Colunas que só fazem sentido quando origem = organico (Retorno e
+// Agendamentos vêm do funil comercial orgânico). No pago elas somem.
+const COLUNAS_APENAS_ORGANICO = new Set(["respostas", "agendamentos"])
 
 // Mapeia chave da coluna de meta para o campo equivalente em dados_reais.
 // Colunas sem equivalente ficam vazias no modo Cenário.
@@ -36,6 +36,7 @@ const CHAVE_TO_REAL: Record<string, keyof DadosReais> = {
   verba: "investimento_real",
   leads: "leads_real",
   respostas: "respostas",
+  agendamentos: "reunioes_agendadas_real",
   reunioes: "reunioes_real",
   orcamentos: "reunioes_real",
   contratos: "contratos_real",

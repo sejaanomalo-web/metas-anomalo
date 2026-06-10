@@ -126,7 +126,7 @@ export default async function FinanceiroOverviewPage({
   return (
     <main className="mx-auto px-8 py-10 space-y-10" style={{ maxWidth: 1280 }}>
       {/* Hero */}
-      <div>
+      <div className="hero-banner">
         <p
           style={{
             fontSize: 12,
@@ -153,7 +153,6 @@ export default async function FinanceiroOverviewPage({
         <p style={{ fontSize: 14, color: "var(--muted-foreground)", marginTop: 10 }}>
           Receitas, despesas, recorrentes e fluxo de caixa da Anômalo Hub.
         </p>
-        <div className="gold-divider" style={{ marginTop: 18 }} />
       </div>
 
       <FinanceiroNav mes={mes} ano={ano} />

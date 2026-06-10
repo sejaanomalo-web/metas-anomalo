@@ -23,7 +23,6 @@ import {
   getLinhasDoMesCliente,
   clienteDisplayName,
 } from "@/lib/clientes"
-import { getCampanhasRankingCliente } from "@/lib/anuncios"
 
 export const dynamic = "force-dynamic"
 
@@ -63,13 +62,12 @@ export default async function ClienteTrafegoPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [linhas, linhas6m, categoriasPorDia, ultimoLog, campanhas] =
+  const [linhas, linhas6m, categoriasPorDia, ultimoLog] =
     await Promise.all([
       getLinhasDoMesCliente(cliente, inicio, fim),
       getLinhasDoMesCliente(cliente, inicioJanela6Meses(fim), fim),
       getCategoriasPorDiaCliente(cliente, inicio, fim),
       getUltimoLogSentinela(),
-      getCampanhasRankingCliente(cliente, inicio, fim),
     ])
   const resumo = resumirTrafego(linhas)
   const serie = serieMensalDeLinhas(linhas6m)
@@ -160,10 +158,6 @@ export default async function ClienteTrafegoPage({
           linhas={linhas}
           serie={serie}
           categoriasPorDia={categoriasPorDia}
-          campanhas={campanhas}
-          empresaSlug={empresa.slug}
-          mes={mes}
-          ano={ano}
         />
       </main>
     </>

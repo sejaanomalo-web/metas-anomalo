@@ -300,7 +300,7 @@ export default async function DashboardPage({
         style={{ maxWidth: 1280 }}
       >
         {/* Hero */}
-        <div>
+        <div className="hero-banner">
           <p
             style={{
               fontSize: 12,
@@ -342,7 +342,6 @@ export default async function DashboardPage({
             </p>
             <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
           </div>
-          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         {/* Faixa principal:

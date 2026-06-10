@@ -1,9 +1,7 @@
 import { formatBRL, formatNumero } from "@/lib/data"
 import MetricasTrafego from "@/components/trafego/MetricasTrafego"
 import FunilConversaoTrafego from "@/components/trafego/FunilConversaoTrafego"
-import RankingCampanhas from "@/components/trafego/RankingCampanhas"
 import GraficosTrafego from "@/components/trafego/GraficosTrafego"
-import type { CampanhaRanking } from "@/lib/anuncios"
 import {
   SENTINELA_NOME,
   type AnomaliaSentinela,
@@ -28,20 +26,12 @@ export default function PainelTrafego({
   linhas,
   serie,
   categoriasPorDia = {},
-  campanhas = [],
-  empresaSlug,
-  mes,
-  ano,
 }: {
   resumo: ResumoTrafego
   anomalias: AnomaliaSentinela[]
   linhas: LinhaDoMes[]
   serie: SerieMesTrafego[]
   categoriasPorDia?: Record<string, CategoriaDestino[]>
-  campanhas?: CampanhaRanking[]
-  empresaSlug?: string
-  mes?: string
-  ano?: number
 }) {
   return (
     <div className="space-y-8">
@@ -53,16 +43,6 @@ export default function PainelTrafego({
 
       {/* Gráficos: Evolução Mensal + Comparativo Mensal */}
       <GraficosTrafego serie={serie} />
-
-      {/* Ranking de campanhas (acima dos Alertas) */}
-      {campanhas.length > 0 && empresaSlug && (
-        <RankingCampanhas
-          campanhas={campanhas}
-          empresaSlug={empresaSlug}
-          mes={mes ?? ""}
-          ano={ano ?? 0}
-        />
-      )}
 
       {/* Alertas / anomalias */}
       {anomalias.length > 0 && (

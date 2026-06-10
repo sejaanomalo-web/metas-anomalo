@@ -220,7 +220,7 @@ export default async function EmpresaPage({
         className="mx-auto px-8 py-10 space-y-8"
         style={{ maxWidth: 1280 }}
       >
-        <div>
+        <div className="hero-banner">
           <Link
             href={`/dashboard/metas?mes=${mes}&ano=${ano}`}
             style={{
@@ -287,7 +287,6 @@ export default async function EmpresaPage({
             </div>
             <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
           </div>
-          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         {empresa.tipo !== "diego" && (
@@ -420,11 +419,16 @@ function extrairMetaComparavel(
   mes: Mes
 ) {
   if (tipo === "leads-reunioes-contratos") {
-    const l = (dados as LinhaPadrao[]).find((x) => x.mes === mes)
+    const l = (dados as LinhaPadrao[]).find((x) => x.mes === mes) as
+      | (LinhaPadrao & { respostas?: number; agendamentos?: number })
+      | undefined
     return l
       ? {
           investimento: l.verba,
           leads: l.leads,
+          // Metas orgânicas (override): Retorno e Agendamentos.
+          respostas: l.respostas,
+          agendamentos: l.agendamentos,
           reunioes: l.reunioes,
           contratos: l.contratos,
           faturamento: l.faturamento,
@@ -432,11 +436,14 @@ function extrairMetaComparavel(
       : {}
   }
   if (tipo === "aton") {
-    const l = (dados as LinhaAton[]).find((x) => x.mes === mes)
+    const l = (dados as LinhaAton[]).find((x) => x.mes === mes) as
+      | (LinhaAton & { respostas?: number })
+      | undefined
     return l
       ? {
           investimento: l.verba,
           leads: l.leads,
+          respostas: l.respostas,
           reunioes: l.orcamentos,
           contratos: l.vendas,
           faturamento: l.faturamento,
@@ -469,8 +476,9 @@ function construirTabela(
         { chave: "verba", titulo: "Investimento", tipo: "brl" as const },
         { chave: "criativos", titulo: "Criativos" },
         { chave: "leads", titulo: "Leads" },
-        { chave: "respostas", titulo: "Respostas" },
-        { chave: "reunioes", titulo: "Reuniões" },
+        { chave: "respostas", titulo: "Retorno" },
+        { chave: "agendamentos", titulo: "Agendamentos" },
+        { chave: "reunioes", titulo: "Reunião realizada" },
         { chave: "contratos", titulo: "Contratos" },
         { chave: "churn", titulo: "Churn" },
         { chave: "ticket", titulo: "Ticket", tipo: "brl" as const },
@@ -487,7 +495,7 @@ function construirTabela(
         { chave: "verba", titulo: "Investimento", tipo: "brl" as const },
         { chave: "criativos", titulo: "Criativos" },
         { chave: "leads", titulo: "Leads" },
-        { chave: "respostas", titulo: "Respostas" },
+        { chave: "respostas", titulo: "Retorno" },
         { chave: "orcamentos", titulo: "Orçamentos" },
         { chave: "vendas", titulo: "Vendas" },
         { chave: "ticket", titulo: "Ticket", tipo: "brl" as const },
@@ -504,7 +512,7 @@ function construirTabela(
         { chave: "verba", titulo: "Investimento", tipo: "brl" as const },
         { chave: "criativos", titulo: "Criativos" },
         { chave: "influenciadores", titulo: "Influ." },
-        { chave: "respostas", titulo: "Respostas" },
+        { chave: "respostas", titulo: "Retorno" },
         { chave: "vendas_influenciador", titulo: "Vendas Influ." },
         { chave: "vendas_direto", titulo: "Vendas Direto" },
         { chave: "total_vendas", titulo: "Total Vendas" },
