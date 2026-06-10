@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import AppShell from "@/components/AppShell"
+import SentinelaRefreshProvider from "@/components/SentinelaRefreshProvider"
 import { getUsuarioAtual, temPermissao } from "@/lib/auth"
 import { getNotificacoesDaSessao } from "@/lib/notificacoes"
 
@@ -39,7 +40,10 @@ export default async function DashboardLayout({
       notificacoesIniciais={notificacoesIniciais}
       mostrarSino={podeVerSino}
     >
-      {children}
+      {/* Provider do "Atualizar dados" do Tráfego: vive aqui (não desmonta
+          ao trocar de aba), então a atualização do Sentinela segue rodando
+          em segundo plano com indicador flutuante em qualquer aba. */}
+      <SentinelaRefreshProvider>{children}</SentinelaRefreshProvider>
     </AppShell>
   )
 }
