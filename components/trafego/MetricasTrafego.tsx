@@ -94,14 +94,6 @@ export default function MetricasTrafego({
           <HeroSub label="Realizados" valor={formatNumero(resumo.reunioes)} />
           <HeroSub label="Faturamento" valor={formatBRL(resumo.faturamento)} />
         </div>
-        <div style={{ marginTop: 14 }}>
-          <span style={{ fontSize: 11, opacity: 0.8, letterSpacing: "0.06em" }}>
-            ROI{" "}
-          </span>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>
-            ↗ {resumo.roi === null ? "0%" : `${(resumo.roi * 100).toFixed(0)}%`}
-          </span>
-        </div>
       </section>
 
       {/* Grade de cartões */}
@@ -138,13 +130,6 @@ export default function MetricasTrafego({
           sub={`${resumo.frequencia === null ? "0.0" : resumo.frequencia.toFixed(1)}x por pessoa`}
         />
         <Cartao
-          cor="orange"
-          icone={<IconeOlho />}
-          titulo="Vezes que apareceu"
-          valor={formatNumero(resumo.impressoes)}
-          sub="Impressões"
-        />
-        <Cartao
           cor="blue"
           icone={<IconeAlvo />}
           titulo="Custo por clique"
@@ -153,14 +138,10 @@ export default function MetricasTrafego({
         />
         <Cartao
           cor="green"
-          icone={<IconeChat />}
-          titulo="Custo por conversa"
-          valor={
-            resumo.custoPorConversa === null
-              ? formatBRL(0)
-              : formatBRL(resumo.custoPorConversa)
-          }
-          sub="Por mensagem"
+          icone={<IconeAlvo />}
+          titulo="Custo por resultado"
+          valor={resumo.cpl === null ? formatBRL(0) : formatBRL(resumo.cpl)}
+          sub="por resultado"
         />
         <Cartao
           cor="purple"
@@ -287,11 +268,6 @@ function IconeCursor() {
 function IconePessoas() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-  )
-}
-function IconeOlho() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
   )
 }
 function IconeAlvo() {

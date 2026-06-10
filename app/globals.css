@@ -432,8 +432,8 @@ table {
     0 0 0 1px rgba(201, 149, 58, 0.03),
     0 2px 24px rgba(201, 149, 58, 0.04),
     0 1px 0 rgba(255, 255, 255, 0.02) inset;
-  transition: background-color 0.2s ease, border-color 0.2s ease,
-    box-shadow 0.25s ease;
+  transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.25s ease;
 }
 
 .glass-hover:hover {
@@ -443,6 +443,65 @@ table {
     0 0 0 1px rgba(201, 149, 58, 0.10),
     0 4px 36px rgba(201, 149, 58, 0.10),
     0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+/* ============ Microinterações de hover (premium, sutil) ============
+ *
+ * "Cada efeito coerente com o lugar":
+ *   • Qualquer card (.glass) → brilho dourado discreto ao passar o mouse.
+ *   • Cards clicáveis (.glass-hover, ex.: empresas) → leve elevação.
+ *   • Botões/links (.no-ds) → micro-elevação.
+ *   • Inputs → borda dourada. Linhas de tabela → realce.
+ * Tudo só em dispositivos com mouse (hover: hover) e respeitando
+ * prefers-reduced-motion (acessibilidade) — nada que atrapalhe o uso.
+ */
+@media (hover: hover) {
+  .glass:hover {
+    border-color: rgba(201, 149, 58, 0.2);
+    box-shadow:
+      0 0 0 1px rgba(201, 149, 58, 0.05) inset,
+      0 8px 26px rgba(0, 0, 0, 0.3),
+      0 0 20px rgba(201, 149, 58, 0.07);
+  }
+  .glass-input:hover {
+    border-color: rgba(201, 149, 58, 0.4);
+  }
+  table tbody tr {
+    transition: background-color 0.15s ease;
+  }
+  table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .glass-hover:hover {
+    transform: translateY(-3px);
+  }
+  .no-ds {
+    transition: transform 0.15s ease, filter 0.15s ease, color 0.15s ease,
+      border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .no-ds:hover {
+    transform: translateY(-1px);
+  }
+  .no-ds:active {
+    transform: translateY(0);
+  }
+}
+
+/* Rótulos do Funil de conversão: alinhados à direita no desktop; no mobile
+ * encostam à esquerda da tela (e as barras seguem o mesmo alinhamento). */
+.funil-rotulo {
+  width: 112px;
+  flex-shrink: 0;
+  text-align: right;
+}
+@media (max-width: 640px) {
+  .funil-rotulo {
+    width: 92px;
+    text-align: left;
+  }
 }
 
 .glass-header {

@@ -16,10 +16,14 @@ export default function TabsTrafego({
   slug,
   mes,
   ano,
+  temClientes = true,
 }: {
   slug: string
   mes: string
   ano: number
+  /** Empresas sem clientes de tráfego (ex.: Diego Knebel) não mostram a aba
+   *  "Tráfego por cliente" — não faz sentido. Default true (retrocompat). */
+  temClientes?: boolean
 }) {
   const pathname = usePathname()
   const qs = new URLSearchParams({ mes, ano: String(ano) })
@@ -35,10 +39,12 @@ export default function TabsTrafego({
         <BolinhaLive ativa={noTrafego} />
         Tráfego pago
       </TabLink>
-      <TabLink href={clientesHref} ativa={nosClientes}>
-        <BolinhaLive ativa={nosClientes} />
-        Tráfego por cliente
-      </TabLink>
+      {temClientes && (
+        <TabLink href={clientesHref} ativa={nosClientes}>
+          <BolinhaLive ativa={nosClientes} />
+          Tráfego por cliente
+        </TabLink>
+      )}
     </div>
   )
 }

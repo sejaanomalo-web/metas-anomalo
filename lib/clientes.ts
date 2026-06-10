@@ -131,6 +131,26 @@ export async function getEmpresasComClientesTrafego(): Promise<string[]> {
   )
 }
 
+/** True se a empresa tem ao menos 1 cliente de tráfego ativo. Usado pra
+ *  esconder a aba "Tráfego por cliente" de empresas que nunca têm clientes
+ *  (ex.: Diego Knebel) — onde a aba não faz sentido. */
+export async function empresaTemClientesTrafego(
+  empresaNome: string
+): Promise<boolean> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return false
+  const { count, error } = await supabase
+    .from("cliente_trafego")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_nome", empresaNome)
+    .eq("ativo", true)
+  if (error) {
+    console.error("[clientes] empresaTemClientesTrafego error", error.message)
+    return false
+  }
+  return (count ?? 0) > 0
+}
+
 // ============================================================
 // Leituras de métricas (multi-modo)
 // ============================================================

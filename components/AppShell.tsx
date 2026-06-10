@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import logo from "@/public/logo-capa-app.png"
 import { sairAction } from "@/app/login/actions"
 import SinoNotificacoes from "./SinoNotificacoes"
@@ -397,6 +397,11 @@ function ItemLogo({
   )
 }
 
+// Parâmetros do período global que devem ser PRESERVADOS ao navegar entre
+// abas — assim o filtro de data escolhido (Mês/Dia/Intervalo) se mantém até
+// o usuário trocá-lo de novo, em vez de resetar a cada clique no menu.
+const PARAMS_PERIODO = ["modo", "de", "ate", "mes", "ano"] as const
+
 function ItemMenu({
   icon,
   rotulo,
@@ -414,6 +419,17 @@ function ItemMenu({
   ativo: boolean
   onClick?: () => void
 }) {
+  const searchParams = useSearchParams()
+  let hrefFinal = href
+  if (href) {
+    const qs = new URLSearchParams()
+    for (const k of PARAMS_PERIODO) {
+      const v = searchParams.get(k)
+      if (v) qs.set(k, v)
+    }
+    const s = qs.toString()
+    if (s) hrefFinal = `${href}?${s}`
+  }
   const conteudo = (
     <>
       {ativo && (
@@ -488,7 +504,7 @@ function ItemMenu({
   if (href) {
     return (
       <Link
-        href={href}
+        href={hrefFinal ?? href}
         title={!expandido ? rotulo : undefined}
         style={baseStyle}
         className="hover:bg-[var(--surface-2)] no-ds"

@@ -43,6 +43,12 @@ function pad(n: number): string {
   return String(n).padStart(2, "0")
 }
 
+/** Data de HOJE no fuso do DISPOSITIVO do usuário (YYYY-MM-DD). */
+function hojeLocalISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 function rangeDoMes(mes: Mes, ano: Ano): { de: string; ate: string } {
   const m = MES_NUM[mes]
   const ultimo = new Date(ano, m, 0).getDate()
@@ -95,8 +101,10 @@ export default function SeletorPeriodoGlobal({
       params.set("mes", mesAtual)
       params.set("ano", String(anoAtual))
     } else if (novo === "dia") {
+      // Ao escolher "Dia", vai direto pro dia de HOJE do dispositivo do
+      // usuário (não pro 1º dia do mês selecionado).
       params.delete("ate")
-      params.set("de", de)
+      params.set("de", hojeLocalISO())
     } else {
       params.set("de", de)
       params.set("ate", ate)

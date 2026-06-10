@@ -122,7 +122,12 @@ export default async function ClienteTrafegoPage({
               flexWrap: "wrap",
             }}
           >
-            <TabsTrafego slug={empresa.slug} mes={mes} ano={ano} />
+            <TabsTrafego
+              slug={empresa.slug}
+              mes={mes}
+              ano={ano}
+              temClientes
+            />
             <BadgeStatusSentinela
               statusCor={stat.cor}
               rotulo={stat.rotulo}
