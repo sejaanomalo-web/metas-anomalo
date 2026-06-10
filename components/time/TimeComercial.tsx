@@ -5,6 +5,7 @@ import { formatBRL, formatNumero } from "@/lib/data"
 import FunilAtividadeComercial from "@/components/FunilAtividadeComercial"
 import ClientesComercial from "@/components/comercial/ClientesComercial"
 import type {
+  ObservacaoComercial,
   ResumoComercial,
   ResumoComercialCliente,
 } from "@/lib/comercial-tipos"
@@ -15,20 +16,76 @@ export interface MembroComercial {
   email: string
   resumo: ResumoComercial
   porCliente: ResumoComercialCliente[]
+  observacoes: ObservacaoComercial[]
+}
+
+function resumoVazio(): ResumoComercial {
+  return {
+    ligacoes: 0,
+    mensagens: 0,
+    retorno_mensagens: 0,
+    qualificados: 0,
+    reunioes_agendadas: 0,
+    reunioes_realizadas: 0,
+    no_shows: 0,
+    propostas_enviadas: 0,
+    contratos_fechados: 0,
+    faturamento_gerado: 0,
+    registros: 0,
+  }
+}
+
+/** Soma vários ResumoComercial num só (multi-seleção de pessoas). */
+function somarResumos(resumos: ResumoComercial[]): ResumoComercial {
+  const acc = resumoVazio()
+  for (const r of resumos) {
+    acc.ligacoes += r.ligacoes
+    acc.mensagens += r.mensagens
+    acc.retorno_mensagens += r.retorno_mensagens
+    acc.qualificados += r.qualificados
+    acc.reunioes_agendadas += r.reunioes_agendadas
+    acc.reunioes_realizadas += r.reunioes_realizadas
+    acc.no_shows += r.no_shows
+    acc.propostas_enviadas += r.propostas_enviadas
+    acc.contratos_fechados += r.contratos_fechados
+    acc.faturamento_gerado += r.faturamento_gerado
+    acc.registros += r.registros
+  }
+  return acc
+}
+
+/** Funde as quebras por-cliente de várias pessoas, somando por empresa. */
+function mergePorCliente(
+  listas: ResumoComercialCliente[][]
+): ResumoComercialCliente[] {
+  const mapa = new Map<string, ResumoComercial>()
+  for (const lista of listas) {
+    for (const c of lista) {
+      const atual = mapa.get(c.empresa)
+      mapa.set(c.empresa, atual ? somarResumos([atual, c.resumo]) : c.resumo)
+    }
+  }
+  return Array.from(mapa, ([empresa, resumo]) => ({ empresa, resumo })).sort(
+    (a, b) =>
+      b.resumo.faturamento_gerado - a.resumo.faturamento_gerado ||
+      b.resumo.contratos_fechados - a.resumo.contratos_fechados ||
+      b.resumo.mensagens - a.resumo.mensagens
+  )
 }
 
 /**
- * Time comercial — lista os usuários com papel comercial e, ao selecionar
- * uma pessoa, mostra o FUNIL dela (mesmo componente do funil principal, com
- * cores + % de cada etapa) e a quebra de quais clientes ela prospectou.
+ * Time comercial — lista os usuários com papel comercial. Permite ver UMA
+ * pessoa (clique no nome) ou VÁRIAS (checkbox / botão "Todos"): o funil, os
+ * KPIs, a quebra por cliente e as observações mostram a SOMA dos selecionados.
  */
 export default function TimeComercial({
   membros,
 }: {
   membros: MembroComercial[]
 }) {
-  const [selId, setSelId] = useState(membros[0]?.id ?? "")
-  const sel = membros.find((m) => m.id === selId) ?? membros[0] ?? null
+  const [selIds, setSelIds] = useState<string[]>(
+    membros[0] ? [membros[0].id] : []
+  )
 
   if (membros.length === 0) {
     return (
@@ -38,90 +95,173 @@ export default function TimeComercial({
     )
   }
 
+  function toggle(id: string) {
+    setSelIds((prev) => {
+      if (prev.includes(id)) {
+        if (prev.length === 1) return prev // mantém ao menos uma pessoa
+        return prev.filter((x) => x !== id)
+      }
+      return [...prev, id]
+    })
+  }
+  const solo = (id: string) => setSelIds([id])
+  const todos = () => setSelIds(membros.map((m) => m.id))
+
+  const ativos = membros.filter((m) => selIds.includes(m.id))
+  const resumo = somarResumos(ativos.map((m) => m.resumo))
+  const porCliente = mergePorCliente(ativos.map((m) => m.porCliente))
+  const observacoes = ativos
+    .flatMap((m) => m.observacoes)
+    .sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0))
+  const multi = ativos.length > 1
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4" style={{ gap: 16 }}>
       <div>
-        {/* Mobile: seletor de pessoa; a lista de botoes abaixo aparece so no desktop. */}
-        <div className="lg:hidden" style={{ position: "relative" }}>
-          <select
-            aria-label="Pessoa do time"
-            value={sel?.id ?? ""}
-            onChange={(e) => setSelId(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "12px 38px 12px 14px",
-              fontSize: 14,
-              fontWeight: 600,
-              color: "var(--text-1)",
-              backgroundColor: "var(--card-bg)",
-              border: "1px solid var(--card-border)",
-              borderRadius: 12,
-              appearance: "none",
-              WebkitAppearance: "none",
-              cursor: "pointer",
-            }}
-          >
-            {membros.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.nome}
-              </option>
-            ))}
-          </select>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            marginBottom: 10,
+          }}
+        >
           <span
-            aria-hidden="true"
+            style={{ fontSize: 11, color: "var(--text-4)", fontWeight: 500 }}
+          >
+            {ativos.length} de {membros.length} selecionada
+            {ativos.length === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={todos}
+            className="no-ds"
             style={{
-              position: "absolute",
-              right: 14,
-              top: "50%",
-              transform: "translateY(-50%)",
-              pointerEvents: "none",
               fontSize: 11,
-              color: "var(--text-4)",
+              fontWeight: 600,
+              color: "var(--accent)",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
             }}
           >
-            ▼
-          </span>
+            Todos
+          </button>
         </div>
-        <div className="hidden lg:flex" style={{ flexDirection: "column", gap: 8 }}>
-        {membros.map((m) => {
-          const ativo = m.id === sel?.id
-          return (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setSelId(m.id)}
-              className="glass no-ds"
-              style={{
-                padding: "14px 16px",
-                textAlign: "left",
-                cursor: "pointer",
-                borderColor: ativo ? "rgba(201,149,58,0.5)" : undefined,
-                background: ativo ? "rgba(201,149,58,0.08)" : undefined,
-              }}
-            >
-              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>
-                {m.nome}
-              </p>
-              <p style={{ fontSize: 11, color: "var(--text-4)", marginTop: 2 }}>
-                {formatNumero(m.resumo.contratos_fechados)} contratos ·{" "}
-                {formatBRL(m.resumo.faturamento_gerado)}
-              </p>
-            </button>
-          )
-        })}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {membros.map((m) => {
+            const checked = selIds.includes(m.id)
+            return (
+              <div
+                key={m.id}
+                className="glass no-ds"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 14px",
+                  borderColor: checked ? "rgba(201,149,58,0.5)" : undefined,
+                  background: checked ? "rgba(201,149,58,0.08)" : undefined,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(m.id)}
+                  aria-label={`Somar ${m.nome}`}
+                  style={{
+                    width: 16,
+                    height: 16,
+                    accentColor: "#C9953A",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => solo(m.id)}
+                  title="Ver só esta pessoa"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    textAlign: "left",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "inherit",
+                    padding: 0,
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "var(--text-1)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {m.nome}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-4)",
+                      marginTop: 2,
+                    }}
+                  >
+                    {formatNumero(m.resumo.contratos_fechados)} contratos ·{" "}
+                    {formatBRL(m.resumo.faturamento_gerado)}
+                  </p>
+                </button>
+              </div>
+            )
+          })}
         </div>
       </div>
 
-      <div className="lg:col-span-3">{sel && <Detalhe membro={sel} />}</div>
+      <div className="lg:col-span-3">
+        <Detalhe
+          ativos={ativos}
+          multi={multi}
+          resumo={resumo}
+          porCliente={porCliente}
+          observacoes={observacoes}
+        />
+      </div>
     </div>
   )
 }
 
-function Detalhe({ membro }: { membro: MembroComercial }) {
-  const r = membro.resumo
+function Detalhe({
+  ativos,
+  multi,
+  resumo: r,
+  porCliente,
+  observacoes,
+}: {
+  ativos: MembroComercial[]
+  multi: boolean
+  resumo: ResumoComercial
+  porCliente: ResumoComercialCliente[]
+  observacoes: ObservacaoComercial[]
+}) {
   const ticket =
     r.contratos_fechados > 0 ? r.faturamento_gerado / r.contratos_fechados : null
   const convFinal = r.mensagens > 0 ? r.contratos_fechados / r.mensagens : null
+  const titulo = multi
+    ? `${ativos.length} pessoas selecionadas`
+    : ativos[0]?.nome ?? ""
+  const diasTxt = `${r.registros} ${
+    r.registros === 1 ? "dia reportado" : "dias reportados"
+  }`
+  const sub = multi
+    ? `Soma do time selecionado · ${diasTxt}`
+    : `${ativos[0]?.email ?? ""} · ${diasTxt}`
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -135,17 +275,16 @@ function Detalhe({ membro }: { membro: MembroComercial }) {
             fontWeight: 500,
           }}
         >
-          {membro.nome}
+          {titulo}
         </p>
         <p style={{ fontSize: 12, color: "var(--text-4)", marginTop: 2 }}>
-          {membro.email} · {r.registros}{" "}
-          {r.registros === 1 ? "dia reportado" : "dias reportados"}
+          {sub}
         </p>
 
         {r.registros === 0 && (
           <p style={{ fontSize: 12, color: "var(--warning)", marginTop: 10 }}>
-            Sem registros no período — o relatório comercial dessa pessoa ainda
-            não foi preenchido.
+            Sem registros no período — o relatório comercial ainda não foi
+            preenchido.
           </p>
         )}
 
@@ -162,7 +301,10 @@ function Detalhe({ membro }: { membro: MembroComercial }) {
             flexWrap: "wrap",
           }}
         >
-          <Mini label="Ticket médio" valor={ticket != null ? formatBRL(ticket) : "·"} />
+          <Mini
+            label="Ticket médio"
+            valor={ticket != null ? formatBRL(ticket) : "·"}
+          />
           <Mini
             label="Conv. msg→contrato"
             valor={convFinal != null ? `${(convFinal * 100).toFixed(0)}%` : "·"}
@@ -173,13 +315,135 @@ function Detalhe({ membro }: { membro: MembroComercial }) {
 
       <div className="glass" style={{ padding: 24 }}>
         <ClientesComercial
-          clientes={membro.porCliente}
-          titulo="Clientes prospectados por essa pessoa"
-          vazioMsg="Sem prospecções atribuídas a essa pessoa no período."
+          clientes={porCliente}
+          titulo={
+            multi
+              ? "Clientes prospectados pelas pessoas selecionadas"
+              : "Clientes prospectados por essa pessoa"
+          }
+          vazioMsg="Sem prospecções atribuídas no período."
         />
+      </div>
+
+      <div className="glass" style={{ padding: 24 }}>
+        <Observacoes itens={observacoes} multi={multi} />
       </div>
     </div>
   )
+}
+
+/** Anotações do processo: data + empresa + origem + texto (e quem escreveu,
+ *  quando há mais de uma pessoa selecionada). Filtra pelo período global. */
+function Observacoes({
+  itens,
+  multi,
+}: {
+  itens: ObservacaoComercial[]
+  multi: boolean
+}) {
+  return (
+    <div>
+      <p
+        style={{
+          fontSize: 11,
+          letterSpacing: "1.5px",
+          color: "var(--text-3)",
+          textTransform: "uppercase",
+          fontWeight: 500,
+          marginBottom: 14,
+        }}
+      >
+        Observações
+      </p>
+      {itens.length === 0 ? (
+        <p style={{ fontSize: 13, color: "var(--text-4)", fontStyle: "italic" }}>
+          Sem observações no período.
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {itens.map((o, i) => (
+            <div
+              key={`${o.data}-${o.empresa}-${i}`}
+              style={{
+                padding: "12px 14px",
+                borderRadius: 10,
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginBottom: 6,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "var(--text-2)",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {fmtData(o.data)}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-3)" }}>
+                  {o.empresa}
+                </span>
+                <BadgeOrigem origem={o.origem} />
+                {multi && (
+                  <span style={{ fontSize: 11, color: "var(--text-4)" }}>
+                    · {o.colaborador_nome}
+                  </span>
+                )}
+              </div>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "var(--text-1)",
+                  lineHeight: 1.5,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {o.texto}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BadgeOrigem({ origem }: { origem: "pago" | "organico" }) {
+  const pago = origem === "pago"
+  return (
+    <span
+      style={{
+        fontSize: 9,
+        letterSpacing: "0.5px",
+        textTransform: "uppercase",
+        fontWeight: 700,
+        padding: "2px 7px",
+        borderRadius: 999,
+        color: pago ? "#C9953A" : "var(--text-3)",
+        background: pago ? "rgba(201,149,58,0.12)" : "rgba(255,255,255,0.05)",
+        border: `1px solid ${
+          pago ? "rgba(201,149,58,0.4)" : "rgba(255,255,255,0.1)"
+        }`,
+      }}
+    >
+      {pago ? "Anúncios" : "Orgânico"}
+    </span>
+  )
+}
+
+/** "YYYY-MM-DD" -> "DD/MM". */
+function fmtData(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 }
 
 function Mini({ label, valor }: { label: string; valor: string }) {

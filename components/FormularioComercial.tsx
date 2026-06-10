@@ -38,6 +38,8 @@ export default function FormularioComercial({
   const [responsavelId, setResponsavelId] = useState(
     responsaveis?.[0]?.id ?? ""
   )
+  // Origem do lead: 'organico' (prospecção fria) ou 'pago' (rótulo "Anúncios").
+  const [origem, setOrigem] = useState<"organico" | "pago">("organico")
   const [feedback, setFeedback] = useState<Feedback>(null)
   const [pending, startTransition] = useTransition()
 
@@ -161,6 +163,21 @@ export default function FormularioComercial({
             </select>
           </Campo>
 
+          <Campo label="Origem">
+            <select
+              name="origem"
+              value={origem}
+              onChange={(e) =>
+                setOrigem(e.target.value as "organico" | "pago")
+              }
+              className="glass-input"
+              style={inputEstilo}
+            >
+              <option value="organico">Orgânico</option>
+              <option value="pago">Anúncios</option>
+            </select>
+          </Campo>
+
           <Campo label="Data">
             <input
               type="date"
@@ -175,7 +192,12 @@ export default function FormularioComercial({
 
           <Grupo titulo="Prospecção">
             <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 12 }}>
-              <NumCampo label="Mensagens enviadas" name="mensagens" />
+              <NumCampo
+                label={
+                  origem === "pago" ? "Mensagens recebidas" : "Mensagens enviadas"
+                }
+                name="mensagens"
+              />
               <NumCampo label="Retorno de mensagens" name="retorno_mensagens" />
               <NumCampo label="Qualificados" name="qualificados" />
             </div>

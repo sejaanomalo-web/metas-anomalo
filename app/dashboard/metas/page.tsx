@@ -10,6 +10,7 @@ import {
   listarEmpresasInativas,
 } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
+import { getRealizadoComercialPagoPorEmpresa } from "@/lib/relatorios-comerciais"
 import { supabaseConfigurado } from "@/lib/supabase"
 import { requererPermissao } from "@/lib/auth"
 
@@ -44,11 +45,13 @@ export default async function MetasPage({
   const mes = periodo.mes
   const ano = periodo.ano
 
-  const [resumo, empresas, empresasInativas, overridesMes] =
+  const [resumo, comercialPago, empresas, empresasInativas, overridesMes] =
     await Promise.all([
       // Realizado PAGO por empresa (mesma fonte do dashboard de Tráfego).
       // O orgânico aparece no detalhe da empresa via ToggleOrigem.
       getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
+      // Conversões do comercial 'Anúncios' — sobrepõem o faturamento pago.
+      getRealizadoComercialPagoPorEmpresa(periodo.de, periodo.ate),
       listarEmpresas(true),
       listarEmpresasInativas(),
       getOverridesTodasEmpresasMes(mes, ano),
@@ -149,8 +152,15 @@ export default async function MetasPage({
               // Lookup pelo NOME (case-sensitive, com acentos) — chave
               // que o agente Sentinela usa em dados_diarios_log.empresa.
               const r = resumo.get(empresa.nome)
+              // "Comercial vira a conversão": faturamento pago vem do comercial
+              // 'Anúncios' quando existe; senão, do tráfego.
+              const comPago = comercialPago.get(empresa.nome)
               const faturamentoReal =
-                r && r.faturamento > 0 ? r.faturamento : null
+                comPago && comPago.faturamento > 0
+                  ? comPago.faturamento
+                  : r && r.faturamento > 0
+                  ? r.faturamento
+                  : null
               const investimentoReal =
                 r && r.investimento > 0 ? r.investimento : null
               return (

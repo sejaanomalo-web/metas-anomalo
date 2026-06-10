@@ -28,6 +28,7 @@ import {
   getResumoAnualDaEmpresa,
   getResumoPorIntervaloDaEmpresa,
   resumoComoDadosReais,
+  type ResumoEmpresaMes,
 } from "@/lib/sentinela"
 import {
   getResumoComercialDaEmpresaIntervalo,
@@ -37,6 +38,48 @@ import { parsePeriodo } from "@/lib/periodo"
 import { getDadosDiariosDoMesPorNome } from "@/lib/dados-diarios"
 import { getMetasOverrideEmpresa } from "@/lib/metas-empresa"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
+
+/** Pago "comercial vira a conversão": mantém investimento/leads do tráfego e
+ *  sobrepõe reuniões/contratos/faturamento do comercial 'Anúncios'. Sem comercial
+ *  pago → mantém o tráfego; sem tráfego → só as conversões do comercial. */
+function mesclarConversaoComercial(
+  trafego: ResumoEmpresaMes | null,
+  comercial: ResumoEmpresaMes | null
+): ResumoEmpresaMes | null {
+  if (!comercial) return trafego
+  if (!trafego) {
+    return { ...comercial, leads: 0, lucro: comercial.faturamento, roi: null }
+  }
+  const faturamento = comercial.faturamento
+  return {
+    ...trafego,
+    reunioes: comercial.reunioes,
+    contratos: comercial.contratos,
+    faturamento,
+    lucro: faturamento - trafego.investimento,
+    roi:
+      trafego.investimento > 0
+        ? (faturamento - trafego.investimento) / trafego.investimento
+        : null,
+  }
+}
+
+/** Mesmo merge, mês a mês, pro gráfico/tabela anuais. */
+function mesclarConversaoComercialAnual(
+  trafego: Map<Mes, ResumoEmpresaMes>,
+  comercial: Map<Mes, ResumoEmpresaMes>
+): Map<Mes, ResumoEmpresaMes> {
+  const out = new Map<Mes, ResumoEmpresaMes>()
+  const meses = new Set<Mes>([...trafego.keys(), ...comercial.keys()])
+  for (const mes of meses) {
+    const merged = mesclarConversaoComercial(
+      trafego.get(mes) ?? null,
+      comercial.get(mes) ?? null
+    )
+    if (merged) out.set(mes, merged)
+  }
+  return out
+}
 
 // Página dinâmica: força SSR sem Data Cache. Igual /dashboard e
 // /dashboard/empresas — evita resposta stale ao trocar mês/origem.
@@ -83,13 +126,7 @@ export default async function EmpresaPage({
   // COMERCIAL (relatorios_comerciais), mapeado para o mesmo formato.
   // Assim o painel Metas compara meta vs realizado em ambas as origens.
   const ehOrganico = origem === "organico"
-  const [resumoMes, resumoAno, overrides, dadosDiarios] = await Promise.all([
-    ehOrganico
-      ? getResumoComercialDaEmpresaIntervalo(empresa.nome, periodo.de, periodo.ate)
-      : getResumoPorIntervaloDaEmpresa(empresa.nome, periodo.de, periodo.ate, origem),
-    ehOrganico
-      ? getResumoComercialAnualDaEmpresa(empresa.nome, ano)
-      : getResumoAnualDaEmpresa(empresa.nome, ano, origem),
+  const [overrides, dadosDiarios] = await Promise.all([
     getMetasOverrideEmpresa(empresa.db, ano, origem),
     // Timeline diária só existe pra pago (dados_diarios_log); no orgânico
     // fica vazia (o comercial é agregado por dia via relatorios_comerciais).
@@ -97,6 +134,40 @@ export default async function EmpresaPage({
       ? Promise.resolve([])
       : getDadosDiariosDoMesPorNome(empresa.nome, mes, ano, origem),
   ])
+
+  // Realizado por origem:
+  //  • Orgânico → 100% do comercial (origem=organico).
+  //  • Pago → investimento/leads do tráfego + reuniões/contratos/faturamento
+  //    do comercial 'Anúncios' ("comercial vira a conversão").
+  let resumoMes: ResumoEmpresaMes | null
+  let resumoAno: Map<Mes, ResumoEmpresaMes>
+  if (ehOrganico) {
+    const [m, a] = await Promise.all([
+      getResumoComercialDaEmpresaIntervalo(
+        empresa.nome,
+        periodo.de,
+        periodo.ate,
+        "organico"
+      ),
+      getResumoComercialAnualDaEmpresa(empresa.nome, ano, "organico"),
+    ])
+    resumoMes = m
+    resumoAno = a
+  } else {
+    const [trafMes, trafAno, comMes, comAno] = await Promise.all([
+      getResumoPorIntervaloDaEmpresa(empresa.nome, periodo.de, periodo.ate, "pago"),
+      getResumoAnualDaEmpresa(empresa.nome, ano, "pago"),
+      getResumoComercialDaEmpresaIntervalo(
+        empresa.nome,
+        periodo.de,
+        periodo.ate,
+        "pago"
+      ),
+      getResumoComercialAnualDaEmpresa(empresa.nome, ano, "pago"),
+    ])
+    resumoMes = mesclarConversaoComercial(trafMes, comMes)
+    resumoAno = mesclarConversaoComercialAnual(trafAno, comAno)
+  }
   const real: DadosReais | null = resumoComoDadosReais(
     resumoMes,
     mes,

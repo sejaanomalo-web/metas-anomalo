@@ -8,6 +8,8 @@ import { MESES, type Mes } from "./data"
 import { criarNotificacao } from "./notificacoes"
 import type { ResumoEmpresaMes } from "./sentinela"
 import {
+  type ObservacaoComercial,
+  type OrigemComercial,
   type RelatorioComercial,
   type ResultadoComercial,
   type ResumoComercial,
@@ -85,6 +87,11 @@ export async function salvarRelatorioComercialAction(
     colaborador_id: respId || usuario?.id || PUBLICO_COMERCIAL_ID,
     colaborador_nome: respNome || usuario?.nome || "Formulário público",
     data,
+    // Origem do lead: 'pago' (rótulo "Anúncios") ou 'organico'. Default
+    // organico (o comercial é prospecção por natureza; só vira pago no opt-in).
+    origem: (String(formData.get("origem") ?? "") === "pago"
+      ? "pago"
+      : "organico") as OrigemComercial,
     ligacoes: intDoForm(formData.get("ligacoes")),
     mensagens: intDoForm(formData.get("mensagens")),
     retorno_mensagens: intDoForm(formData.get("retorno_mensagens")),
@@ -103,7 +110,7 @@ export async function salvarRelatorioComercialAction(
 
   const { error } = await supabase
     .from("relatorios_comerciais")
-    .upsert(payload, { onConflict: "empresa,colaborador_id,data" })
+    .upsert(payload, { onConflict: "empresa,colaborador_id,data,origem" })
   if (error) {
     console.error("[comercial] salvar relatorio error", error.message)
     return { ok: false, erro: error.message }
@@ -236,6 +243,38 @@ export async function getResumoComercialPorEmpresaDoColaborador(
   return agruparPorEmpresa((data ?? []) as RelatorioComercial[])
 }
 
+/** Anotações (observações) de UMA pessoa no período, mais recentes primeiro.
+ *  Combinada (pago + orgânico) — é a trilha de notas da pessoa no processo. */
+export async function getObservacoesComerciaisDoColaborador(
+  colaboradorId: string,
+  inicio: string,
+  fim: string
+): Promise<ObservacaoComercial[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("relatorios_comerciais")
+    .select("data, empresa, colaborador_nome, origem, observacoes")
+    .eq("colaborador_id", colaboradorId)
+    .gte("data", inicio)
+    .lte("data", fim)
+    .not("observacoes", "is", null)
+    .order("data", { ascending: false })
+  if (error) {
+    console.error("[comercial] observacoes do colaborador error", error.message)
+    return []
+  }
+  return ((data ?? []) as RelatorioComercial[])
+    .filter((l) => (l.observacoes ?? "").trim().length > 0)
+    .map((l) => ({
+      data: l.data,
+      empresa: l.empresa,
+      colaborador_nome: l.colaborador_nome,
+      origem: l.origem,
+      texto: (l.observacoes ?? "").trim(),
+    }))
+}
+
 // ============================================================
 // Realizado ORGÂNICO do painel Metas, vindo do comercial.
 //
@@ -299,7 +338,8 @@ function comercialParaResumo(
 async function linhasComerciaisDaEmpresa(
   empresa: string,
   de: string,
-  ate: string
+  ate: string,
+  origem: OrigemComercial = "organico"
 ): Promise<RelatorioComercial[]> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
@@ -307,6 +347,7 @@ async function linhasComerciaisDaEmpresa(
     .from("relatorios_comerciais")
     .select("*")
     .eq("empresa", empresa)
+    .eq("origem", origem)
     .gte("data", de)
     .lte("data", ate)
   if (error) {
@@ -321,9 +362,10 @@ async function linhasComerciaisDaEmpresa(
 export async function getResumoComercialDaEmpresaIntervalo(
   empresa: string,
   de: string,
-  ate: string
+  ate: string,
+  origem: OrigemComercial = "organico"
 ): Promise<ResumoEmpresaMes | null> {
-  const linhas = await linhasComerciaisDaEmpresa(empresa, de, ate)
+  const linhas = await linhasComerciaisDaEmpresa(empresa, de, ate, origem)
   if (linhas.length === 0) return null
   return comercialParaResumo(empresa, linhas)
 }
@@ -332,12 +374,14 @@ export async function getResumoComercialDaEmpresaIntervalo(
  *  anuais do detalhe de Metas no modo orgânico. */
 export async function getResumoComercialAnualDaEmpresa(
   empresa: string,
-  ano: number
+  ano: number,
+  origem: OrigemComercial = "organico"
 ): Promise<Map<Mes, ResumoEmpresaMes>> {
   const linhas = await linhasComerciaisDaEmpresa(
     empresa,
     `${ano}-01-01`,
-    `${ano}-12-31`
+    `${ano}-12-31`,
+    origem
   )
   const porMes = new Map<Mes, RelatorioComercial[]>()
   for (const l of linhas) {
@@ -350,6 +394,39 @@ export async function getResumoComercialAnualDaEmpresa(
   }
   const out = new Map<Mes, ResumoEmpresaMes>()
   for (const [mes, ls] of porMes) out.set(mes, comercialParaResumo(empresa, ls))
+  return out
+}
+
+/** Realizado comercial PAGO ("Anúncios") por empresa no período — usado pra
+ *  sobrepor as conversões (reuniões/contratos/faturamento) no realizado PAGO
+ *  do painel Metas ("comercial vira a conversão"). Map por NOME da empresa. */
+export async function getRealizadoComercialPagoPorEmpresa(
+  de: string,
+  ate: string
+): Promise<Map<string, { reunioes: number; contratos: number; faturamento: number }>> {
+  const out = new Map<
+    string,
+    { reunioes: number; contratos: number; faturamento: number }
+  >()
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return out
+  const { data, error } = await supabase
+    .from("relatorios_comerciais")
+    .select("empresa, reunioes_realizadas, contratos_fechados, faturamento_gerado")
+    .eq("origem", "pago")
+    .gte("data", de)
+    .lte("data", ate)
+  if (error) {
+    console.error("[comercial] realizado pago por empresa error", error.message)
+    return out
+  }
+  for (const l of (data ?? []) as RelatorioComercial[]) {
+    const cur = out.get(l.empresa) ?? { reunioes: 0, contratos: 0, faturamento: 0 }
+    cur.reunioes += l.reunioes_realizadas
+    cur.contratos += l.contratos_fechados
+    cur.faturamento += Number(l.faturamento_gerado ?? 0)
+    out.set(l.empresa, cur)
+  }
   return out
 }
 
