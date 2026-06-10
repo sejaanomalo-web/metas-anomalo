@@ -595,7 +595,12 @@ export interface ResumoEmpresaMes {
   cpmReal: number | null
   impressoes: number
   observacoes: string | null
+  // "Retorno" no orgânico (retorno_mensagens do comercial). Mantém o nome
+  // interno `respostas` por compatibilidade; a UI exibe "Retorno".
   respostas: number
+  // Agendamentos (reuniões agendadas) — orgânico vem do comercial
+  // (reunioes_agendadas). Exibido no Metas antes de "Reunião realizada".
+  agendamentos: number
   temSentinela: boolean
   // Métricas de anúncio do Meta (via Sentinela). Cumulativos somados;
   // derivadas recalculadas dos totais. Nulas/0 até o agente popular.
@@ -737,6 +742,8 @@ function agregarLinhas(
     impressoes,
     observacoes,
     respostas,
+    // Pago não usa agendamentos no Metas (coluna é apenas-orgânico); fica 0.
+    agendamentos: 0,
     temSentinela,
     cliques,
     alcance,
@@ -989,6 +996,7 @@ export function resumoComoDadosReais(
     cpa_real: r.cpaReal,
     observacoes: r.observacoes,
     respostas: zeroOuNum(r.respostas),
+    reunioes_agendadas_real: zeroOuNum(r.agendamentos),
     // Não agregamos jsonb — views detalhadas (timeline) leem
     // diretamente de dados_diarios_log via getDadosDiariosDoMes*.
     criativos_detalhe: [],

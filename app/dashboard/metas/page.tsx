@@ -65,7 +65,7 @@ export default async function MetasPage({
         style={{ maxWidth: 1280 }}
       >
         {/* Hero */}
-        <div>
+        <div className="hero-banner">
           <p
             style={{
               fontSize: 12,
@@ -102,7 +102,6 @@ export default async function MetasPage({
             </p>
             <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
           </div>
-          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         {/* Cards de empresas */}

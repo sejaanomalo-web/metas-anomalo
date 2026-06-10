@@ -86,7 +86,7 @@ export default async function ConfiguracoesPage({
         className="mx-auto px-8 py-10 space-y-8"
         style={{ maxWidth: 1280 }}
       >
-        <div>
+        <div className="hero-banner">
           <p
             style={{
               fontSize: 12,
@@ -121,7 +121,6 @@ export default async function ConfiguracoesPage({
               ? "Resumos para enviar no WhatsApp · clique em copiar e cole no chat"
               : "Suas notificações e formulários"}
           </p>
-          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         <AtivarNotificacoes

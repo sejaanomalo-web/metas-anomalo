@@ -133,6 +133,7 @@ export async function salvarMetaEmpresaAction(
     "criativos",
     "criativos_semana",
     "respostas",
+    "agendamentos",
     "leads",
     "reunioes",
     "orcamentos",

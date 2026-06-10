@@ -1,5 +1,5 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
-import BotaoAtualizar from "@/components/BotaoAtualizar"
+import BotaoAtualizarTrafego from "@/components/BotaoAtualizarTrafego"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
 import AbasArea from "@/components/AbasArea"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
@@ -96,7 +96,7 @@ export default async function TrafegoOverviewPage({
         style={{ maxWidth: 1280 }}
       >
         {/* Hero */}
-        <div>
+        <div className="hero-banner">
           <p
             style={{
               fontSize: 12,
@@ -140,7 +140,7 @@ export default async function TrafegoOverviewPage({
               empresasInativas={empresasInativas}
               supabaseOk={supabaseOk}
             />
-            <BotaoAtualizar />
+            <BotaoAtualizarTrafego />
           </div>
           <p
             style={{
@@ -175,7 +175,6 @@ export default async function TrafegoOverviewPage({
               ]}
             />
           </div>
-          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         {/* KPIs consolidados */}

@@ -49,7 +49,7 @@ export default async function ComercialPage({
         style={{ maxWidth: 1280 }}
       >
         {/* Hero */}
-        <div>
+        <div className="hero-banner">
           <p
             style={{
               fontSize: 12,
@@ -102,7 +102,6 @@ export default async function ComercialPage({
               ]}
             />
           </div>
-          <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
 
         {/* Funil de atividade */}

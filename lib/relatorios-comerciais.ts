@@ -32,8 +32,13 @@ const MES_NUM_COMERCIAL: Record<Mes, number> = {
  * Actions e queries do Comercial (server-only).
  *
  *   • relatorios_comerciais — trilha DIÁRIA por colaborador (atividade da
- *     pessoa: prospecção, reuniões, propostas/fechamentos). Upsert por
- *     (colaborador_id, data).
+ *     pessoa: prospecção, reuniões, propostas/fechamentos). APPEND-ONLY:
+ *     cada envio do formulário vira um NOVO registro. Os resumos e o funil
+ *     somam todos os registros do período (somarComercial / acumularComercial),
+ *     então reenviar para a mesma empresa/origem/data ACUMULA em cima do que
+ *     já existe — nada é sobrescrito. Só o admin remove registros individuais
+ *     (Configurações → relatórios comerciais). Garante que dados nunca se
+ *     percam por reenvio.
  *
  * "use server" → este arquivo só pode exportar async functions. As
  * interfaces vivem em ./comercial-tipos. Padrão do projeto: retorno
@@ -47,8 +52,9 @@ function intDoForm(v: FormDataEntryValue | null): number {
 }
 
 // Atribuição "sem responsável" (form público sem seleção). colaborador_id não
-// tem FK — UUID fixo mantém a chave (empresa, colaborador_id, data)
-// determinística pro upsert idempotente.
+// tem FK — UUID fixo identifica os envios sem responsável selecionado. Como a
+// gravação é append-only (insert), não há mais chave de upsert: cada envio é
+// um registro próprio.
 const PUBLICO_COMERCIAL_ID = "00000000-0000-0000-0000-0000000000c0"
 
 // ============================================================
@@ -60,7 +66,7 @@ export async function salvarRelatorioComercialAction(
 ): Promise<ResultadoComercial> {
   // Funciona com OU sem login: na versão pública (link compartilhado) não
   // há sessão — registramos como "Formulário público". Logado, guarda
-  // quem preencheu (informativo; a chave do upsert é empresa+data).
+  // quem preencheu (informativo; cada envio é um registro append-only).
   const usuario = await getUsuarioAtual()
 
   // Responsável: vem do seletor do form (atribuição por pessoa) com
@@ -108,9 +114,13 @@ export async function salvarRelatorioComercialAction(
     updated_at: new Date().toISOString(),
   }
 
+  // APPEND-ONLY: insert (nunca upsert). Reenviar o formulário para a mesma
+  // empresa/origem/data cria um novo registro; o funil e os resumos somam
+  // todos os registros, então o valor ACUMULA em vez de sobrescrever. Nada é
+  // perdido por reenvio — só o admin exclui registros nas Configurações.
   const { error } = await supabase
     .from("relatorios_comerciais")
-    .upsert(payload, { onConflict: "empresa,colaborador_id,data,origem" })
+    .insert(payload)
   if (error) {
     console.error("[comercial] salvar relatorio error", error.message)
     return { ok: false, erro: error.message }
@@ -297,11 +307,17 @@ function comercialParaResumo(
   linhas: RelatorioComercial[]
 ): ResumoEmpresaMes {
   let leads = 0
+  let retorno = 0
+  let agendamentos = 0
   let reunioes = 0
   let contratos = 0
   let faturamento = 0
   for (const l of linhas) {
     leads += l.mensagens
+    // "Retorno" no Metas (orgânico) = retorno_mensagens do funil comercial.
+    retorno += l.retorno_mensagens
+    // Agendamentos = reuniões agendadas do funil comercial.
+    agendamentos += l.reunioes_agendadas
     reunioes += l.reunioes_realizadas
     contratos += l.contratos_fechados
     faturamento += Number(l.faturamento_gerado ?? 0)
@@ -321,7 +337,9 @@ function comercialParaResumo(
     cpmReal: null,
     impressoes: 0,
     observacoes: null,
-    respostas: 0,
+    // `respostas` é o nome interno do "Retorno" (ver ResumoEmpresaMes).
+    respostas: retorno,
+    agendamentos,
     temSentinela: false,
     cliques: 0,
     alcance: 0,
