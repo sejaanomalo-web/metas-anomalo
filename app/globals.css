@@ -475,7 +475,11 @@ table {
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .glass-hover:hover {
+  /* Elevação ao passar o mouse em QUALQUER bloco (.glass) — hero, cartões
+   * de métrica, funil, tabelas, cards de empresa. O :not(:has(.glass:hover))
+   * faz só o card sob o cursor subir (o card mais interno), evitando que um
+   * card aninhado e seu pai se movam juntos (efeito dobrado). */
+  .glass:hover:not(:has(.glass:hover)) {
     transform: translateY(-3px);
   }
   .no-ds {
