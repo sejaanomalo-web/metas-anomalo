@@ -3,9 +3,12 @@ import type { ResumoTrafego } from "@/lib/sentinela"
 
 /**
  * Funil de CONVERSÃO do tráfego — do anúncio (Alcance) à venda. Barras
- * horizontais cuja largura ∝ ao volume da etapa (sobre o maior valor, que é
- * o Alcance), no estilo aprovado: rótulo à esquerda · chip colorido com o
- * número · trilho escuro. Vai entre os cartões de métrica e os gráficos.
+ * horizontais cuja largura cresce com o volume da etapa, formando degraus do
+ * topo ao fundo. Como o tráfego cai ordens de magnitude (Alcance >> Vendas),
+ * a largura usa escala LOGARÍTMICA: a linear achataria tudo num degrau só.
+ * Etapa em zero fica na largura-base (LARG_MIN). Estilo aprovado: rótulo à
+ * esquerda · chip colorido com o número · trilho escuro. Vai entre os cartões
+ * de métrica e os gráficos.
  *
  * Etapas (cada dashboard mostra os próprios números, mesmo ResumoTrafego do
  * painel):
@@ -19,7 +22,8 @@ import type { ResumoTrafego } from "@/lib/sentinela"
 
 type Etapa = { label: string; valor: number; cor: string }
 
-const MIN_CHIP_PX = 96 // chip mínimo pra o número caber mesmo em etapas zeradas
+const MIN_CHIP_PX = 96 // piso em px: número legível mesmo em telas estreitas
+const LARG_MIN = 22 // largura-base (%) do chip: etapa em zero e piso do afunilamento
 
 export default function FunilConversaoTrafego({
   resumo,
@@ -58,7 +62,10 @@ export default function FunilConversaoTrafego({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {etapas.map((e) => {
-          const pct = (e.valor / maxV) * 100
+          // Largura do chip por escala log (degraus mesmo com Alcance >> Vendas);
+          // valor 0 -> LARG_MIN (largura-base); a maior etapa -> 100%.
+          const ratio = Math.log(e.valor + 1) / Math.log(maxV + 1)
+          const pct = LARG_MIN + ratio * (100 - LARG_MIN)
           return (
             <div
               key={e.label}
