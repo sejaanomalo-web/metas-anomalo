@@ -270,7 +270,7 @@ export const empresas: EmpresaMeta[] = [
   {
     slug: "aton",
     db: "aton",
-    nome: "Aton Estofados",
+    nome: "Tato Estofados",
     tipo: "aton",
     cpl: 15,
     conversaoLeadOrcamento: 0.25,

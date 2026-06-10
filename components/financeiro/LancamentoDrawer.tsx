@@ -459,7 +459,7 @@ export default function LancamentoDrawer({
                 frequencia === "recorrente"
                   ? "Ex: Aluguel · Vercel Pro · Salário Bruno"
                   : tipo === "receita"
-                  ? "Ex: Mensalidade Aton Estofados"
+                  ? "Ex: Mensalidade Tato Estofados"
                   : "Ex: Aluguel escritório"
               }
               defaultValue={lancamento?.descricao ?? ""}

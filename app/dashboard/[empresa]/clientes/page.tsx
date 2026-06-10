@@ -24,7 +24,7 @@ import {
 export const dynamic = "force-dynamic"
 
 /**
- * Lista de clientes de uma empresa-agência (F2 Sports, Aton, etc).
+ * Lista de clientes de uma empresa-agência (F2 Sports, etc).
  * Cada cliente = subconjunto de campanhas do ad_account da empresa,
  * isolado por campaign_filter. Mostra mini-cards com resumo do mês +
  * tag de status (ativo/desativado/sem conexão), atualizado pelo

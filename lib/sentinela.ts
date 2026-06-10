@@ -26,7 +26,7 @@ export const SENTINELA_NOME = "Sentinela Anomalo"
  */
 const EMPRESAS_TRACKEADAS_FALLBACK = [
   "Anômalo Hub",
-  "Aton Estofados",
+  "Tato Estofados",
   "Diego Knebel",
   "F2 Sports",
   "IBB",

@@ -413,7 +413,7 @@ where not exists (select 1 from public.empresas_config where slug = 'hato');
 
 insert into public.empresas_config
   (slug, db, nome, tipo, subtitulo, cpl, conversao_lead_orcamento, conversao_orcamento_venda, ordem)
-select 'aton', 'aton', 'Aton Estofados',
+select 'aton', 'aton', 'Tato Estofados',
   'aton',
   'Estofados sob medida',
   15, 0.25, 0.5, 5

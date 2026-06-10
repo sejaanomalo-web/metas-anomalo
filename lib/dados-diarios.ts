@@ -128,7 +128,7 @@ function diferencaPublicos(
  * Igual a getDadosDiariosDoMes, mas filtra empresa pelo NOME de exibição
  * (case-sensitive, com acentos) em vez do db slug. Usado pelo dashboard
  * porque o agente Sentinela grava em dados_diarios_log com
- * empresa = empresas_config.nome ("Aton Estofados", "Mãe Divina Yoga"),
+ * empresa = empresas_config.nome ("Tato Estofados", "Mãe Divina Yoga"),
  * enquanto outros consumidores legados (preencher/[token], resumos)
  * filtram pelo db slug ("aton", "mae_divina_yoga"). As duas convivem.
  */
