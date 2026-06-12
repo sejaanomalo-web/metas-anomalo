@@ -8,29 +8,24 @@ const DURACAO_SESSAO_SEG = 60 * 60 * 12 // 12h
 
 // Segredo pra assinar cookie de sessão (HMAC-SHA256). Não confundir com
 // SENHA_ACESSO, que era a senha única antiga — agora a senha vive em
-// public.usuarios.senha_hash. O fallback existe pra ambiente local sem
-// .env; em produção (Vercel) deve estar setado.
+// public.usuarios.senha_hash.
 //
-// SEGURANÇA: se SESSION_SECRET faltar em produção, o cookie passa a ser
-// assinado com um valor público (presente no código), o que permitiria
-// forjar sessões. Logamos um alerta alto nesse caso — sem derrubar um
-// deploy já no ar — pra que a env seja corrigida na Vercel. Não muda
-// comportamento: continua assinando/validando como antes.
-let avisouSessionSecret = false
+// SEGURANÇA (fail-closed): SESSION_SECRET é OBRIGATÓRIO em produção. Sem ele,
+// o cookie seria assinado com um valor público (presente no código), o que
+// permitiria forjar sessões de qualquer usuário (inclusive admin). Por isso,
+// em produção, a ausência do segredo lança erro em vez de cair num fallback
+// inseguro. O fallback continua existindo APENAS para dev local (sem .env),
+// onde não há risco. Já configurado na Vercel.
 function getSessionSecret(): string {
-  // Usa o segredo do ambiente EXATAMENTE como antes quando ele existe —
-  // sem checar tamanho, pra não invalidar sessões já assinadas. Só quando
-  // ausente cai no fallback (e, em produção, loga alerta alto pra correção).
   const secret = process.env.SESSION_SECRET
   if (secret) return secret
-  if (process.env.NODE_ENV === "production" && !avisouSessionSecret) {
-    avisouSessionSecret = true
-    console.error(
-      "[auth] SESSION_SECRET ausente em produção — usando fallback INSEGURO " +
-        "(presente no código-fonte). Defina SESSION_SECRET (>=32 chars " +
-        "aleatórios) nas variáveis de ambiente da Vercel imediatamente."
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "[auth] SESSION_SECRET não configurado em produção. Defina a variável " +
+        "de ambiente (>=32 chars aleatórios) na Vercel."
     )
   }
+  // Apenas dev local sem .env — nunca alcançável em produção.
   return "anomalo-session-secret-fallback-v1"
 }
 
