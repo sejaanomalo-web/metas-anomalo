@@ -450,15 +450,17 @@ export default function DrawerEditarMeta({
                           style={inputMetaEstilo}
                         />
                       ) : (
-                        // percent: decimal com 1 casa (ex.: 12,5%). Mantém
-                        // input numérico nativo — valor pequeno, sem máscara.
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
+                        // percent: decimal com 1 casa (ex.: 12,5%). Usa a mesma
+                        // máscara de decimal do sistema (sem R$), limitando a
+                        // até 999,9 — sem permitir letras/sinais/excesso.
+                        <CampoMoeda
+                          name={c.chave}
+                          casas={1}
+                          prefixoReais={false}
+                          maxDigitos={4}
                           value={valorAtual}
-                          onChange={(e) =>
-                            setValores({ ...valores, [c.chave]: e.target.value })
+                          onValorChange={(mv) =>
+                            setValores({ ...valores, [c.chave]: mv })
                           }
                           placeholder="·"
                           className="glass-input"

@@ -341,6 +341,7 @@ function DrawerCliente({
               type="text"
               name="campaign_filter"
               required
+              maxLength={200}
               placeholder="Ex: \\[F2\\]\\[Loja XYZ\\]"
               defaultValue={cliente?.campaign_filter ?? ""}
               className="glass-input"
