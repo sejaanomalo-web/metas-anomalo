@@ -66,11 +66,20 @@ export async function enviarPushParaUsuario(
       } catch (err: unknown) {
         const status = (err as { statusCode?: number }).statusCode ?? 0
         if (status === 404 || status === 410) {
-          // Subscription morta — marca inativa pra parar de tentar
-          await supabase
-            .from("push_subscriptions")
-            .update({ ativo: false })
-            .eq("id", s.id as string)
+          // Subscription morta — marca inativa pra parar de tentar. Em
+          // try próprio: uma falha aqui não pode rejeitar o Promise.all e
+          // derrubar os envios das outras subscriptions.
+          try {
+            await supabase
+              .from("push_subscriptions")
+              .update({ ativo: false })
+              .eq("id", s.id as string)
+          } catch (e) {
+            console.error(
+              "[push] falha ao desativar subscription morta",
+              e instanceof Error ? e.message : String(e)
+            )
+          }
         }
         falhas += 1
         console.error(

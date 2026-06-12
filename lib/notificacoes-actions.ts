@@ -2,12 +2,15 @@
 
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
-import { getUsuarioIdSync } from "./auth"
+import { getUsuarioAtual } from "./auth"
 import { getNotificacoesDaSessao, type NotificacaoItem } from "./notificacoes"
 
 export async function marcarComoLidaAction(formData: FormData) {
-  const usuarioId = getUsuarioIdSync()
-  if (!usuarioId) return
+  // Valida sessão + usuário ativo (getUsuarioAtual bate no DB e checa
+  // `ativo`), em vez de só conferir a assinatura do cookie.
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return
+  const usuarioId = usuario.id
   const id = String(formData.get("id") ?? "").trim()
   if (!id) return
   const supabase = getSupabaseAdmin()
@@ -25,8 +28,9 @@ export async function marcarComoLidaAction(formData: FormData) {
 }
 
 export async function marcarTodasComoLidasAction() {
-  const usuarioId = getUsuarioIdSync()
-  if (!usuarioId) return
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return
+  const usuarioId = usuario.id
   const supabase = getSupabaseAdmin()
   if (!supabase) return
   const { error } = await supabase
@@ -46,8 +50,9 @@ export async function marcarTodasComoLidasAction() {
  * (valem pra outros usuários no fan-out).
  */
 export async function limparTodasNotificacoesAction() {
-  const usuarioId = getUsuarioIdSync()
-  if (!usuarioId) return
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return
+  const usuarioId = usuario.id
   const supabase = getSupabaseAdmin()
   if (!supabase) return
   const { error } = await supabase
@@ -66,8 +71,9 @@ export async function limparTodasNotificacoesAction() {
  * ainda valer pra outros usuários no fan-out).
  */
 export async function excluirNotificacaoAction(formData: FormData) {
-  const usuarioId = getUsuarioIdSync()
-  if (!usuarioId) return
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return
+  const usuarioId = usuario.id
   const id = String(formData.get("id") ?? "").trim()
   if (!id) return
   const supabase = getSupabaseAdmin()

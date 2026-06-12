@@ -18,6 +18,7 @@ import {
   origemValida,
 } from "./data"
 import { parseNumeroForm } from "./parse-numero"
+import { requererPermissao } from "./auth"
 
 export interface DadosReaisPorOrigem {
   pago: DadosReais | null
@@ -390,6 +391,10 @@ export interface ResultadoSalvar {
 export async function salvarDadosReaisAction(
   formData: FormData
 ): Promise<ResultadoSalvar> {
+  // Mesma barreira da página que hospeda o DrawerDadosReais
+  // (/dashboard/[empresa], guard dashboard_empresa_detalhe). Sem isto, a
+  // action seria um endpoint POST chamável sem sessão.
+  await requererPermissao("dashboard_empresa_detalhe")
   if (!supabaseConfigurado()) {
     return {
       ok: false,

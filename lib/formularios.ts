@@ -91,6 +91,16 @@ export async function salvarFormularioManualAction(
     }
   }
 
+  // Action é PÚBLICA (/formulario sem auth): não confiamos no slug enviado.
+  // Valida que a empresa existe e está ativa ANTES de qualquer escrita. O
+  // form só lista empresas ativas, então um submit legítimo sempre passa;
+  // só rejeita slug forjado/inativo. A lista é reaproveitada abaixo.
+  const empresas = await listarEmpresas(true)
+  const emp = empresas.find((e) => e.db === empresa)
+  if (!emp) {
+    return { ok: false, erro: "Empresa inválida ou inativa." }
+  }
+
   const fatParsed = parseNumeroForm(formData.get("faturamento_real"))
   if (fatParsed.erro) {
     return { ok: false, erro: `Faturamento: ${fatParsed.erro}` }
@@ -132,12 +142,10 @@ export async function salvarFormularioManualAction(
     return { ok: false, erro: resultado.erro }
   }
 
-  // Notifica (dados_trafego) e checa meta batida. Resolve o nome de
-  // exibição pelo db slug enviado pelo form. Falhas aqui não derrubam o
-  // submit — criarNotificacao só loga.
-  const empresas = await listarEmpresas(true)
-  const emp = empresas.find((e) => e.db === empresa)
-  const nome = emp?.nome ?? empresa
+  // Notifica (dados_trafego) e checa meta batida. Reusa `emp` já
+  // validado acima. Falhas aqui não derrubam o submit — criarNotificacao
+  // só loga.
+  const nome = emp.nome
   await criarNotificacao({
     tipo: "dados_trafego",
     empresa: nome,

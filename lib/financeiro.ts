@@ -312,15 +312,21 @@ export async function getResumoFinanceiroPeriodo(
 export async function getSaldoPorConta(): Promise<SaldoConta[]> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
-  const contas = await listarContas(false) // inclui inativas pra mostrar saldo histórico
+
+  // As duas leituras são independentes — roda em paralelo (mesmo resultado,
+  // uma ida-e-volta a menos). inclui contas inativas pra saldo histórico.
+  const [contas, movRes] = await Promise.all([
+    listarContas(false),
+    supabase
+      .from("lancamento_financeiro")
+      .select("conta_id, tipo, valor, data_pagamento")
+      .is("deletado_em", null)
+      .eq("status", "realizado")
+      .not("data_pagamento", "is", null),
+  ])
   if (contas.length === 0) return []
 
-  const { data, error } = await supabase
-    .from("lancamento_financeiro")
-    .select("conta_id, tipo, valor, data_pagamento")
-    .is("deletado_em", null)
-    .eq("status", "realizado")
-    .not("data_pagamento", "is", null)
+  const { data, error } = movRes
   if (error) {
     console.error("[financeiro] getSaldoPorConta error", error.message)
     return contas.map((c) => ({ conta: c, saldo_atual: Number(c.saldo_inicial) }))

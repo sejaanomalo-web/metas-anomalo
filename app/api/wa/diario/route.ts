@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { headers } from "next/headers"
 import { getSupabaseAdmin } from "@/lib/supabase"
+import { bearerValido } from "@/lib/cron-auth"
 import { enviarTemplate } from "@/lib/whatsapp"
 import {
   montarRelatorioTrafego,
@@ -78,10 +79,9 @@ async function montarSeguro(
 }
 
 async function executar() {
-  // 1) Auth: mesmo padrao do materializar (Bearer CRON_SECRET).
+  // 1) Auth: mesmo padrao do materializar (Bearer CRON_SECRET, timing-safe).
   const authHeader = headers().get("authorization")
-  const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!bearerValido(authHeader, process.env.CRON_SECRET)) {
     return NextResponse.json({ erro: "nao_autorizado" }, { status: 401 })
   }
 
