@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { requererPermissao } from "./auth"
 import {
   type ConfigResumos,
   type Contato,
@@ -20,6 +21,10 @@ function sanitizarNumero(raw: string): string {
 export async function salvarConfigAction(
   formData: FormData
 ): Promise<ResultadoConfig> {
+  // Mesma barreira da página que hospeda o formulário (/dashboard/
+  // configuracoes). Sem isto, a action é um endpoint POST chamável sem
+  // sessão. requererPermissao redireciona se não autorizado.
+  await requererPermissao("configuracoes")
   const cru = formData.getAll("contato") as string[]
   const contatos: Contato[] = []
   for (let i = 0; i < cru.length; i++) {

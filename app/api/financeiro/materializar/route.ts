@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { headers } from "next/headers"
 import { getUsuarioAtual, temPermissao } from "@/lib/auth"
+import { bearerValido } from "@/lib/cron-auth"
 import { materializarRecorrentesDoMes } from "@/lib/financeiro-actions"
 import { mesValido, anoValido, mesAtual, anoAtual } from "@/lib/data"
 
@@ -29,9 +30,7 @@ export async function POST(req: Request) {
 
   // Auth: cron secret OU sessão admin/permissão.
   const authHeader = headers().get("authorization")
-  const cronSecret = process.env.CRON_SECRET
-  const isCronRequest =
-    cronSecret && authHeader === `Bearer ${cronSecret}`
+  const isCronRequest = bearerValido(authHeader, process.env.CRON_SECRET)
 
   if (!isCronRequest) {
     const usuario = await getUsuarioAtual()

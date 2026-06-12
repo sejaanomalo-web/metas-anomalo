@@ -10,8 +10,28 @@ const DURACAO_SESSAO_SEG = 60 * 60 * 12 // 12h
 // SENHA_ACESSO, que era a senha única antiga — agora a senha vive em
 // public.usuarios.senha_hash. O fallback existe pra ambiente local sem
 // .env; em produção (Vercel) deve estar setado.
+//
+// SEGURANÇA: se SESSION_SECRET faltar em produção, o cookie passa a ser
+// assinado com um valor público (presente no código), o que permitiria
+// forjar sessões. Logamos um alerta alto nesse caso — sem derrubar um
+// deploy já no ar — pra que a env seja corrigida na Vercel. Não muda
+// comportamento: continua assinando/validando como antes.
+let avisouSessionSecret = false
 function getSessionSecret(): string {
-  return process.env.SESSION_SECRET ?? "anomalo-session-secret-fallback-v1"
+  // Usa o segredo do ambiente EXATAMENTE como antes quando ele existe —
+  // sem checar tamanho, pra não invalidar sessões já assinadas. Só quando
+  // ausente cai no fallback (e, em produção, loga alerta alto pra correção).
+  const secret = process.env.SESSION_SECRET
+  if (secret) return secret
+  if (process.env.NODE_ENV === "production" && !avisouSessionSecret) {
+    avisouSessionSecret = true
+    console.error(
+      "[auth] SESSION_SECRET ausente em produção — usando fallback INSEGURO " +
+        "(presente no código-fonte). Defina SESSION_SECRET (>=32 chars " +
+        "aleatórios) nas variáveis de ambiente da Vercel imediatamente."
+    )
+  }
+  return "anomalo-session-secret-fallback-v1"
 }
 
 function assinarUsuarioId(usuarioId: string): string {
@@ -247,12 +267,31 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
     .eq("id", usuarioId)
     .maybeSingle()
   if (!data || !data.ativo) return null
+  // Fail-CLOSED: papel/permissoes ausentes ou inválidos caem no MENOR
+  // privilégio (custom = tudo false), nunca em admin. Hoje todos os
+  // usuários têm esses campos preenchidos, então isto não muda nada — só
+  // evita escalonamento de privilégio se uma linha vier corrompida/legada.
+  const PAPEIS_VALIDOS: readonly PapelUsuario[] = [
+    "admin",
+    "gestor_trafego",
+    "comercial",
+    "custom",
+  ]
+  const papel: PapelUsuario = PAPEIS_VALIDOS.includes(
+    data.papel as PapelUsuario
+  )
+    ? (data.papel as PapelUsuario)
+    : "custom"
+  const permissoes: Permissoes =
+    data.permissoes && typeof data.permissoes === "object"
+      ? (data.permissoes as Permissoes)
+      : PRESETS_PERMISSOES.custom
   return {
     id: data.id as string,
     email: data.email as string,
     nome: data.nome as string,
-    papel: (data.papel ?? "admin") as PapelUsuario,
-    permissoes: (data.permissoes ?? PRESETS_PERMISSOES.admin) as Permissoes,
+    papel,
+    permissoes,
   }
 }
 

@@ -69,7 +69,12 @@ export default async function FormularioPublicoPage() {
         </p>
       </header>
 
-      <FormularioManual empresas={empresas} responsaveis={responsaveis} />
+      {/* Página pública: passa só id+nome (o componente não usa e-mail).
+          Evita serializar e-mails do time no HTML acessível sem login. */}
+      <FormularioManual
+        empresas={empresas}
+        responsaveis={responsaveis.map((r) => ({ id: r.id, nome: r.nome }))}
+      />
 
       <p
         className="mt-8 text-center"

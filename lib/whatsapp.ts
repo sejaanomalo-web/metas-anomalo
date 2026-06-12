@@ -70,6 +70,10 @@ export async function enviarTemplate(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      // Timeout defensivo: a Cloud API responde em ~1-2s. 15s evita que um
+      // envio travado segure a função serverless até o limite. Estouro cai
+      // no catch abaixo (já tratado como falha de rede deste envio).
+      signal: AbortSignal.timeout(15_000),
     })
 
     // A Meta responde JSON tanto no sucesso quanto no erro.
