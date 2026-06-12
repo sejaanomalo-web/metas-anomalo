@@ -8,6 +8,8 @@ import {
   materializarMesAction,
 } from "@/lib/financeiro-actions"
 import { mesValido } from "@/lib/data"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
+import CampoMoeda from "@/components/inputs/CampoMoeda"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
@@ -153,10 +155,10 @@ export default function RecorrenteDrawer({
           </Campo>
 
           <Campo label="Valor (R$)" obrigatorio>
-            <input
-              type="text" name="valor" required inputMode="decimal"
-              placeholder="Ex: 1.234,56"
-              defaultValue={recorrente ? String(recorrente.valor).replace(".", ",") : ""}
+            <CampoMoeda
+              name="valor" required
+              placeholder="R$ 1.234,56"
+              defaultValue={recorrente?.valor ?? null}
               className="glass-input" style={{ width: "100%" }}
             />
           </Campo>
@@ -194,8 +196,8 @@ export default function RecorrenteDrawer({
 
           {periodicidade === "mensal" && (
             <Campo label="Dia do vencimento (1-31)" obrigatorio>
-              <input
-                type="number" name="dia_vencimento" min={1} max={31} required
+              <CampoInteiro
+                name="dia_vencimento" maxDigitos={2} valorMax={31} required
                 defaultValue={recorrente?.dia_vencimento ?? 5}
                 className="glass-input" style={{ width: 100 }}
               />

@@ -579,6 +579,7 @@ function FormUsuario({
           defaultValue={usuarioEditando?.email}
           disabled={editando}
           required
+          maxLength={120}
           autoComplete="off"
           className="glass-input"
           style={inputEstilo}
@@ -592,6 +593,7 @@ function FormUsuario({
           name="nome"
           defaultValue={usuarioEditando?.nome}
           required
+          maxLength={80}
           className="glass-input"
           style={inputEstilo}
         />
@@ -603,6 +605,7 @@ function FormUsuario({
             type="text"
             name="senha"
             minLength={8}
+            maxLength={128}
             autoComplete="new-password"
             className="glass-input"
             style={inputEstilo}

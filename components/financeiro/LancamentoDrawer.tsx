@@ -18,6 +18,8 @@ import type {
   StatusLancamento,
   TipoLancamento,
 } from "@/lib/financeiro"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
+import CampoMoeda from "@/components/inputs/CampoMoeda"
 
 interface Empresa {
   nome: string
@@ -395,11 +397,10 @@ export default function LancamentoDrawer({
 
               {periodicidade === "mensal" && (
                 <Campo label="Dia do vencimento (1–31)" obrigatorio>
-                  <input
-                    type="number"
+                  <CampoInteiro
                     name="dia_vencimento"
-                    min={1}
-                    max={31}
+                    maxDigitos={2}
+                    valorMax={31}
                     required
                     defaultValue={5}
                     className="glass-input"
@@ -432,15 +433,11 @@ export default function LancamentoDrawer({
 
           {/* === CAMPOS COMUNS === */}
           <Campo label="Valor (R$)" obrigatorio>
-            <input
-              type="text"
+            <CampoMoeda
               name="valor"
               required
-              inputMode="decimal"
-              placeholder="Ex: 1.234,56"
-              defaultValue={
-                lancamento ? String(lancamento.valor).replace(".", ",") : ""
-              }
+              placeholder="R$ 1.234,56"
+              defaultValue={lancamento?.valor ?? null}
               className="glass-input"
               style={{ width: "100%" }}
             />

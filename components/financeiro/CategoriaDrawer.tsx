@@ -7,6 +7,7 @@ import {
   excluirCategoriaAction,
 } from "@/lib/financeiro-actions"
 import type { CategoriaFinanceira, TipoLancamento } from "@/lib/financeiro"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
 
 interface Props {
   aberto: boolean
@@ -136,8 +137,8 @@ export default function CategoriaDrawer({ aberto, fechar, categoria }: Props) {
           </Campo>
 
           <Campo label="Ordem">
-            <input
-              type="number" name="ordem" min={0} max={9999}
+            <CampoInteiro
+              name="ordem" maxDigitos={4} valorMax={9999}
               defaultValue={categoria?.ordem ?? 0}
               className="glass-input" style={{ width: 100 }}
             />

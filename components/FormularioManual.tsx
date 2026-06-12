@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from "react"
 import type { EmpresaMeta } from "@/lib/data"
 import { salvarFormularioManualAction } from "@/lib/formularios"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
+import CampoMoeda from "@/components/inputs/CampoMoeda"
 
 interface Props {
   empresas: EmpresaMeta[]
@@ -204,11 +206,9 @@ export default function FormularioManual({
         </Campo>
 
         <Campo label={`${rotuloReunioes} agendadas`}>
-          <input
-            type="number"
+          <CampoInteiro
             name="reunioes_agendadas_real"
-            min="0"
-            inputMode="numeric"
+            maxDigitos={6}
             className="glass-input"
             style={inputEstilo}
             placeholder="0"
@@ -216,11 +216,9 @@ export default function FormularioManual({
         </Campo>
 
         <Campo label={`${rotuloReunioes} realizadas`}>
-          <input
-            type="number"
+          <CampoInteiro
             name="reunioes_real"
-            min="0"
-            inputMode="numeric"
+            maxDigitos={6}
             className="glass-input"
             style={inputEstilo}
             placeholder="0"
@@ -228,11 +226,9 @@ export default function FormularioManual({
         </Campo>
 
         <Campo label={`${rotuloContratos} fechados`}>
-          <input
-            type="number"
+          <CampoInteiro
             name="contratos_real"
-            min="0"
-            inputMode="numeric"
+            maxDigitos={6}
             className="glass-input"
             style={inputEstilo}
             placeholder="0"
@@ -240,22 +236,18 @@ export default function FormularioManual({
         </Campo>
 
         <Campo label="Faturamento (R$)">
-          <input
-            type="text"
+          <CampoMoeda
             name="faturamento_real"
-            inputMode="decimal"
             className="glass-input"
             style={inputEstilo}
-            placeholder="0,00"
+            placeholder="R$ 0,00"
           />
         </Campo>
 
         <Campo label="Clientes ativos (estoque atual)">
-          <input
-            type="number"
+          <CampoInteiro
             name="clientes_ativos"
-            min="0"
-            inputMode="numeric"
+            maxDigitos={6}
             className="glass-input"
             style={inputEstilo}
             placeholder="·"
@@ -266,6 +258,7 @@ export default function FormularioManual({
           <textarea
             name="observacoes"
             rows={3}
+            maxLength={500}
             className="glass-input"
             style={{
               ...inputEstilo,

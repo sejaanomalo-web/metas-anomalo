@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { salvarDadosReaisAction } from "@/lib/dados-reais"
 import type { DadosReais } from "@/lib/supabase"
 import { ORIGEM_PADRAO, type Ano, type EmpresaDb, type Mes, type OrigemDadosReais } from "@/lib/data"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
+import CampoMoeda from "@/components/inputs/CampoMoeda"
 
 interface Props {
   empresa: EmpresaDb
@@ -254,6 +256,7 @@ export default function DrawerDadosReais({
                 <textarea
                   name="observacoes"
                   rows={3}
+                  maxLength={500}
                   defaultValue={existentes?.observacoes ?? ""}
                   className="glass-input"
                   style={{
@@ -311,16 +314,26 @@ export default function DrawerDadosReais({
 function Campo({
   label,
   name,
-  tipo,
   step,
   defaultValue,
 }: {
   label: string
   name: string
-  tipo: "number" | "text"
+  /** Mantido por compat dos call-sites; a máscara é escolhida por `step`. */
+  tipo?: "number" | "text"
   step?: string
   defaultValue?: string | number | null
 }) {
+  // Campos com step (investimento/faturamento) são moeda; o resto é
+  // contagem inteira. Máscara aplicada ao digitar, com limite de dígitos.
+  const ehMoeda = step !== undefined
+  const estilo: React.CSSProperties = {
+    marginTop: 8,
+    width: "100%",
+    padding: "10px 14px",
+    fontSize: 13,
+    fontWeight: 400,
+  }
   return (
     <label className="block">
       <span
@@ -334,21 +347,24 @@ function Campo({
       >
         {label}
       </span>
-      <input
-        type={tipo}
-        name={name}
-        step={step}
-        defaultValue={defaultValue === null ? "" : defaultValue}
-        className="glass-input"
-        style={{
-          marginTop: 8,
-          width: "100%",
-          padding: "10px 14px",
-          fontSize: 13,
-          fontWeight: 400,
-        }}
-        placeholder="·"
-      />
+      {ehMoeda ? (
+        <CampoMoeda
+          name={name}
+          defaultValue={defaultValue ?? null}
+          className="glass-input"
+          style={estilo}
+          placeholder="R$ 0,00"
+        />
+      ) : (
+        <CampoInteiro
+          name={name}
+          defaultValue={defaultValue ?? null}
+          maxDigitos={7}
+          className="glass-input"
+          style={estilo}
+          placeholder="·"
+        />
+      )}
     </label>
   )
 }

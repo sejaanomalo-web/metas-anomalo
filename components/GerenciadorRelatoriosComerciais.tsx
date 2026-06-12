@@ -4,6 +4,8 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { formatBRL, formatNumero, type EmpresaMeta } from "@/lib/data"
 import type { RelatorioComercial } from "@/lib/comercial-tipos"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
+import CampoMoeda from "@/components/inputs/CampoMoeda"
 import {
   atualizarRelatorioComercialAction,
   excluirRelatorioComercialAction,
@@ -303,11 +305,9 @@ function FormEdicao({
         <Num label="Propostas enviadas" name="propostas_enviadas" valor={r.propostas_enviadas} />
         <Num label="Contratos fechados" name="contratos_fechados" valor={r.contratos_fechados} />
         <Campo label="Faturamento (R$)">
-          <input
-            type="text"
+          <CampoMoeda
             name="faturamento_gerado"
-            inputMode="decimal"
-            defaultValue={String(r.faturamento_gerado ?? 0)}
+            defaultValue={r.faturamento_gerado ?? null}
             className="glass-input"
             style={inputEstilo}
           />
@@ -318,6 +318,7 @@ function FormEdicao({
         <textarea
           name="observacoes"
           rows={2}
+          maxLength={500}
           defaultValue={r.observacoes ?? ""}
           className="glass-input"
           style={{ ...inputEstilo, resize: "vertical" }}
@@ -343,11 +344,9 @@ function FormEdicao({
 function Num({ label, name, valor }: { label: string; name: string; valor: number }) {
   return (
     <Campo label={label}>
-      <input
-        type="number"
+      <CampoInteiro
         name={name}
-        min="0"
-        inputMode="numeric"
+        maxDigitos={7}
         defaultValue={valor}
         className="glass-input"
         style={inputEstilo}
