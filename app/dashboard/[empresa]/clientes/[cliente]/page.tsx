@@ -6,7 +6,10 @@ import TrafegoRealtime from "@/components/TrafegoRealtime"
 import PainelTrafego from "@/components/trafego/PainelTrafego"
 import TagStatusCampanha from "@/components/trafego/TagStatusCampanha"
 import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
+import BotaoLinkVendas from "@/components/trafego/BotaoLinkVendas"
+import VendasInformadas from "@/components/trafego/VendasInformadas"
 import { requererPermissao } from "@/lib/auth"
+import { listarVendasDoCliente } from "@/lib/vendas-cliente"
 import { parsePeriodo } from "@/lib/periodo"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
@@ -48,7 +51,7 @@ export default async function ClienteTrafegoPage({
     modo?: string
   }
 }) {
-  await requererPermissao("dashboard_trafego")
+  const usuario = await requererPermissao("dashboard_trafego")
 
   const empresa = await getEmpresaAsync(params.empresa)
   if (!empresa) notFound()
@@ -62,12 +65,13 @@ export default async function ClienteTrafegoPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [linhas, linhas6m, categoriasPorDia, ultimoLog] =
+  const [linhas, linhas6m, categoriasPorDia, ultimoLog, vendas] =
     await Promise.all([
       getLinhasDoMesCliente(cliente, inicio, fim),
       getLinhasDoMesCliente(cliente, inicioJanela6Meses(fim), fim),
       getCategoriasPorDiaCliente(cliente, inicio, fim),
       getUltimoLogSentinela(),
+      listarVendasDoCliente(cliente.id, inicio, fim),
     ])
   const resumo = resumirTrafego(linhas)
   const serie = serieMensalDeLinhas(linhas6m)
@@ -128,12 +132,22 @@ export default async function ClienteTrafegoPage({
               ano={ano}
               temClientes
             />
-            <BadgeStatusSentinela
-              statusCor={stat.cor}
-              rotulo={stat.rotulo}
-              ultimaExecucao={ultimoLog?.data_execucao ?? null}
-              proximaLabelCompleto={prox.labelCompleto}
-            />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <BotaoLinkVendas token={cliente.vendas_form_token} />
+              <BadgeStatusSentinela
+                statusCor={stat.cor}
+                rotulo={stat.rotulo}
+                ultimaExecucao={ultimoLog?.data_execucao ?? null}
+                proximaLabelCompleto={prox.labelCompleto}
+              />
+            </div>
           </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />
         </div>
@@ -163,6 +177,11 @@ export default async function ClienteTrafegoPage({
           linhas={linhas}
           serie={serie}
           categoriasPorDia={categoriasPorDia}
+        />
+
+        <VendasInformadas
+          vendas={vendas}
+          ehAdmin={usuario.papel === "admin"}
         />
       </main>
     </>
