@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
 import { clienteDisplayName, type ClienteTrafego } from "./clientes"
-import { getClientePorVendasToken, type VendaCliente } from "./vendas-cliente"
+import {
+  getClientePorVendasToken,
+  listarVendasDoCliente,
+  type VendaCliente,
+} from "./vendas-cliente"
 import { criarNotificacao } from "./notificacoes"
 import { parseNumeroForm } from "./parse-numero"
 
@@ -31,6 +35,15 @@ function hojeBRT(): string {
 function formatarDataBR(iso: string): string {
   const [a, m, d] = iso.split("-")
   return `${d}/${m}/${a}`
+}
+
+/** Valida uma data ISO vinda do form (YYYY-MM-DD, não-futura, não muito
+ *  antiga). Retorna a mensagem de erro, ou null se válida. */
+function erroData(dataISO: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataISO)) return "Data inválida."
+  if (dataISO > hojeBRT()) return "A data não pode estar no futuro."
+  if (dataISO < "2025-01-01") return "Data muito antiga — confira o ano."
+  return null
 }
 
 type ClienteAdmin = NonNullable<ReturnType<typeof getSupabaseAdmin>>
@@ -211,16 +224,8 @@ export async function registrarVendaClienteAction(
   }
 
   const dataISO = String(formData.get("data") ?? "").trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataISO)) {
-    return { ok: false, erro: "Data inválida." }
-  }
-  const hoje = hojeBRT()
-  if (dataISO > hoje) {
-    return { ok: false, erro: "A data não pode estar no futuro." }
-  }
-  if (dataISO < "2025-01-01") {
-    return { ok: false, erro: "Data muito antiga — confira o ano." }
-  }
+  const erroDt = erroData(dataISO)
+  if (erroDt) return { ok: false, erro: erroDt }
 
   const qtdRaw = String(formData.get("quantidade") ?? "").trim()
   const quantidade = qtdRaw === "" ? NaN : parseInt(qtdRaw, 10)
@@ -365,4 +370,153 @@ export async function excluirVendaClienteAction(
 
   revalidatePath("/dashboard", "layout")
   return { ok: true }
+}
+
+/**
+ * Edição de um evento (correção de lançamento errado) — SÓ admin.
+ * A edição é modelada como "remover o valor antigo do dia antigo" + "somar o
+ * novo no dia novo": no mesmo dia vira um único delta; com mudança de data,
+ * subtrai do dia antigo e soma no novo. Se algo falha no meio, desfaz o que
+ * já aplicou (no snapshot e no evento) — nunca deixa metade aplicado.
+ */
+export async function editarVendaClienteAction(
+  formData: FormData
+): Promise<ResultadoVenda> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario || usuario.papel !== "admin") {
+    return { ok: false, erro: "Apenas admins podem editar registros." }
+  }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, erro: "Registro inválido." }
+
+  const dataISO = String(formData.get("data") ?? "").trim()
+  const erroDt = erroData(dataISO)
+  if (erroDt) return { ok: false, erro: erroDt }
+
+  const qtdRaw = String(formData.get("quantidade") ?? "").trim()
+  const quantidade = qtdRaw === "" ? NaN : parseInt(qtdRaw, 10)
+  if (!Number.isFinite(quantidade) || quantidade < 0) {
+    return { ok: false, erro: "Informe a quantidade de vendas." }
+  }
+  if (quantidade > MAX_QUANTIDADE) {
+    return { ok: false, erro: `Quantidade máxima: ${MAX_QUANTIDADE}.` }
+  }
+
+  const valorParsed = parseNumeroForm(formData.get("valor"))
+  if (valorParsed.erro) return { ok: false, erro: `Valor: ${valorParsed.erro}` }
+  const valor = valorParsed.value ?? 0
+  if (valor < 0 || valor > MAX_VALOR) {
+    return { ok: false, erro: "Valor fora do intervalo aceito." }
+  }
+
+  const observacoes =
+    String(formData.get("observacoes") ?? "")
+      .trim()
+      .slice(0, MAX_OBSERVACOES) || null
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  // Estado atual do evento (pra calcular o delta do snapshot).
+  const { data: eventoRow, error: erroSel } = await supabase
+    .from("vendas_cliente")
+    .select("id, cliente_id, data, quantidade, valor, registrado_por")
+    .eq("id", id)
+    .maybeSingle()
+  if (erroSel || !eventoRow) {
+    return { ok: false, erro: "Registro não encontrado." }
+  }
+  const oldData = String(eventoRow.data)
+  const oldQ = Number(eventoRow.quantidade ?? 0)
+  const oldV = Number(eventoRow.valor ?? 0)
+  // Preserva a procedência original (ex.: "formulario_cliente") e só troca o
+  // sufixo de edição — não perde quem lançou nem cresce a cada edição.
+  const origemRegistro = String(
+    eventoRow.registrado_por ?? "formulario_cliente"
+  ).split(" · editado")[0]
+
+  // Cliente (pra rotear o snapshot: modo origem vs regex). Todo evento foi
+  // criado contra um cliente válido; se a leitura falhar ou o cliente não
+  // existir, ABORTA antes de tocar o evento — nunca atualiza o evento sem
+  // ajustar o snapshot (mesmo invariante de registrar/excluir).
+  const { data: clienteRow, error: erroCli } = await supabase
+    .from("cliente_trafego")
+    .select("id, empresa_nome, nome, empresa_origem_nome, campaign_filter")
+    .eq("id", eventoRow.cliente_id)
+    .maybeSingle()
+  if (erroCli) return { ok: false, erro: "Falha ao carregar o cliente." }
+  if (!clienteRow) return { ok: false, erro: "Cliente não encontrado." }
+  const cliente = clienteRow as ClienteTrafego
+
+  // Operações no snapshot. Mesmo dia → um único delta; dia diferente →
+  // tira o antigo do dia antigo e põe o novo no dia novo.
+  const ops =
+    oldData === dataISO
+      ? [{ data: dataISO, dq: quantidade - oldQ, dv: valor - oldV }]
+      : [
+          { data: oldData, dq: -oldQ, dv: -oldV },
+          { data: dataISO, dq: quantidade, dv: valor },
+        ]
+
+  const aplicadas: typeof ops = []
+  // Desfaz as ops já aplicadas (delta negado, ordem reversa). NOTA: não
+  // restaura fielmente se clampSoma travou em 0 numa op — o que só ocorre sob
+  // divergência pré-existente entre snapshot e eventos (que clampSoma loga).
+  async function reverter() {
+    for (const ap of [...aplicadas].reverse()) {
+      await somarNoSnapshotDia(cliente, ap.data, -ap.dq, -ap.dv)
+    }
+  }
+
+  for (const op of ops) {
+    const r = await somarNoSnapshotDia(cliente, op.data, op.dq, op.dv)
+    if (!r.ok) {
+      await reverter()
+      return { ok: false, erro: "Não consegui ajustar o total do dia." }
+    }
+    aplicadas.push(op)
+  }
+
+  // Atualiza o evento. Falhou → desfaz o ajuste do snapshot (consistência).
+  const { error: erroUpd } = await supabase
+    .from("vendas_cliente")
+    .update({
+      data: dataISO,
+      quantidade,
+      valor,
+      observacoes,
+      registrado_por: `${origemRegistro} · editado por ${usuario.nome} em ${hojeBRT()}`,
+    })
+    .eq("id", id)
+  if (erroUpd) {
+    await reverter()
+    return { ok: false, erro: erroUpd.message }
+  }
+
+  revalidatePath("/dashboard", "layout")
+  return { ok: true }
+}
+
+/**
+ * Busca eventos de um cliente num intervalo — alimenta o gerenciador (lápis
+ * no header). Pesquisa TODO o histórico (independe do filtro de período da
+ * página). SÓ admin (a UI é admin-only).
+ */
+export async function buscarVendasClienteAction(
+  formData: FormData
+): Promise<VendaCliente[]> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario || usuario.papel !== "admin") return []
+  const clienteId = String(formData.get("clienteId") ?? "").trim()
+  const inicio = String(formData.get("inicio") ?? "").trim()
+  const fim = String(formData.get("fim") ?? "").trim()
+  if (!clienteId) return []
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(inicio) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(fim)
+  ) {
+    return []
+  }
+  return listarVendasDoCliente(clienteId, inicio, fim)
 }
