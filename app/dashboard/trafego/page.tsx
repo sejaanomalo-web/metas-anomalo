@@ -2,7 +2,6 @@ import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import BotaoAtualizarTrafego from "@/components/BotaoAtualizarTrafego"
 import BackfillTrafego from "@/components/BackfillTrafego"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
-import AbasArea from "@/components/AbasArea"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
 import { formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
@@ -55,7 +54,6 @@ export default async function TrafegoOverviewPage({
   const periodo = parsePeriodo(searchParams)
   const mes = periodo.mes
   const ano = periodo.ano
-  const qs = `?mes=${mes}&ano=${ano}`
 
   const [resumo, empresas, empresasInativas, ultimoLog] = await Promise.all([
     getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
@@ -155,22 +153,6 @@ export default async function TrafegoOverviewPage({
               Sentinela {stat.rotulo.toLowerCase()}
             </span>
           </p>
-          <div style={{ marginTop: 18 }}>
-            <AbasArea
-              itens={[
-                {
-                  label: "Visão geral",
-                  href: `/dashboard/trafego${qs}`,
-                  ativo: true,
-                },
-                {
-                  label: "Time",
-                  href: `/dashboard/trafego/time${qs}`,
-                  ativo: false,
-                },
-              ]}
-            />
-          </div>
         </div>
 
         {/* KPIs consolidados — 2 por linha no mobile, 4 no desktop. ROI
