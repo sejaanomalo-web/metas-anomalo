@@ -1,5 +1,6 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import BotaoAtualizarTrafego from "@/components/BotaoAtualizarTrafego"
+import BackfillTrafego from "@/components/BackfillTrafego"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
 import AbasArea from "@/components/AbasArea"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
@@ -49,7 +50,7 @@ export default async function TrafegoOverviewPage({
     modo?: string
   }
 }) {
-  await requererPermissao("dashboard_trafego")
+  const usuario = await requererPermissao("dashboard_trafego")
 
   const periodo = parsePeriodo(searchParams)
   const mes = periodo.mes
@@ -135,6 +136,7 @@ export default async function TrafegoOverviewPage({
               supabaseOk={supabaseOk}
             />
             <BotaoAtualizarTrafego />
+            {usuario.papel === "admin" && <BackfillTrafego />}
           </div>
           <p
             style={{
