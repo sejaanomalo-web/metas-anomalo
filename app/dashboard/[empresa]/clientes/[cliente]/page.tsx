@@ -7,6 +7,7 @@ import PainelTrafego from "@/components/trafego/PainelTrafego"
 import TagStatusCampanha from "@/components/trafego/TagStatusCampanha"
 import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
 import BotaoLinkVendas from "@/components/trafego/BotaoLinkVendas"
+import GerenciadorVendasCliente from "@/components/trafego/GerenciadorVendasCliente"
 import VendasInformadas from "@/components/trafego/VendasInformadas"
 import { requererPermissao } from "@/lib/auth"
 import { listarVendasDoCliente } from "@/lib/vendas-cliente"
@@ -141,6 +142,12 @@ export default async function ClienteTrafegoPage({
               }}
             >
               <BotaoLinkVendas token={cliente.vendas_form_token} />
+              {usuario.papel === "admin" && (
+                <GerenciadorVendasCliente
+                  clienteId={cliente.id}
+                  clienteNome={nomeExibido}
+                />
+              )}
               <BadgeStatusSentinela
                 statusCor={stat.cor}
                 rotulo={stat.rotulo}
