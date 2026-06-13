@@ -10,6 +10,7 @@ import {
   type UsuarioRow,
 } from "@/lib/usuarios-actions"
 import type { ChavePermissao, PapelUsuario, Permissoes } from "@/lib/auth"
+import CampoSenha from "@/components/inputs/CampoSenha"
 
 const CHAVES: { chave: ChavePermissao; rotulo: string; descricao: string }[] = [
   {
@@ -579,6 +580,7 @@ function FormUsuario({
           defaultValue={usuarioEditando?.email}
           disabled={editando}
           required
+          maxLength={120}
           autoComplete="off"
           className="glass-input"
           style={inputEstilo}
@@ -592,6 +594,7 @@ function FormUsuario({
           name="nome"
           defaultValue={usuarioEditando?.nome}
           required
+          maxLength={80}
           className="glass-input"
           style={inputEstilo}
         />
@@ -599,13 +602,14 @@ function FormUsuario({
 
       {!editando && (
         <Campo label="Senha (deixe vazio pra gerar temporária)">
-          <input
-            type="text"
+          <CampoSenha
             name="senha"
             minLength={8}
+            maxLength={128}
             autoComplete="new-password"
             className="glass-input"
-            style={inputEstilo}
+            wrapperStyle={{ marginTop: 8, width: "100%" }}
+            style={{ padding: "10px 14px", fontSize: 14, fontWeight: 400 }}
             placeholder="mín. 8 caracteres"
           />
         </Campo>

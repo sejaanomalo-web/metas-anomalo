@@ -35,6 +35,9 @@ export interface ClienteTrafego {
   status_campanhas: StatusCampanha
   status_atualizado_em: string | null
   ultimo_erro: string | null
+  /** Token secreto do formulário público de vendas (/vendas/<token>).
+   *  Gerado pelo banco; rotacionável via UPDATE se o link vazar. */
+  vendas_form_token: string
 }
 
 export interface ResumoClienteMes {
@@ -62,8 +65,8 @@ export function clienteDisplayName(c: ClienteTrafego): string {
 // Leituras de cadastro (cliente_trafego)
 // ============================================================
 
-const COLUNAS_CLIENTE =
-  "id, empresa_nome, nome, slug, display_name, token_meta_id, empresa_origem_nome, campaign_filter, ativo, ordem, status_campanhas, status_atualizado_em, ultimo_erro"
+export const COLUNAS_CLIENTE =
+  "id, empresa_nome, nome, slug, display_name, token_meta_id, empresa_origem_nome, campaign_filter, ativo, ordem, status_campanhas, status_atualizado_em, ultimo_erro, vendas_form_token"
 
 export async function listarClientesDaEmpresa(
   empresaNome: string,

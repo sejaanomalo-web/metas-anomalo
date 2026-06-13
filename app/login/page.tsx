@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import logo from "@/public/logo-capa-app.png"
 import { estaAutenticado } from "@/lib/auth"
 import { entrarAction } from "./actions"
+import CampoSenha from "@/components/inputs/CampoSenha"
 
 export default function LoginPage({
   searchParams,
@@ -73,6 +74,7 @@ export default function LoginPage({
               autoFocus
               required
               inputMode="email"
+              maxLength={120}
               className="glass-input"
               style={{
                 marginTop: 10,
@@ -97,15 +99,14 @@ export default function LoginPage({
             >
               Senha
             </span>
-            <input
-              type="password"
+            <CampoSenha
               name="senha"
               autoComplete="current-password"
               required
+              maxLength={128}
               className="glass-input"
+              wrapperStyle={{ marginTop: 10, width: "100%" }}
               style={{
-                marginTop: 10,
-                width: "100%",
                 padding: "12px 14px",
                 fontSize: 14,
                 fontWeight: 400,

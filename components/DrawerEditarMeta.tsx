@@ -5,8 +5,17 @@ import { useRouter } from "next/navigation"
 import type { EmpresaDb, Mes, OrigemDadosReais } from "@/lib/data"
 import { ANOS_DISPONIVEIS, MESES, ORIGEM_PADRAO, formatBRL } from "@/lib/data"
 import { salvarMetaEmpresaAction } from "@/lib/metas-empresa"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
+import CampoMoeda from "@/components/inputs/CampoMoeda"
 
 type TipoEmpresa = "leads-reunioes-contratos" | "aton" | "hato" | "diego"
+
+const inputMetaEstilo: React.CSSProperties = {
+  marginTop: 6,
+  width: "100%",
+  padding: "8px 12px",
+  fontSize: 13,
+}
 
 interface Campo {
   chave: string
@@ -417,22 +426,47 @@ export default function DrawerEditarMeta({
                       >
                         {c.rotulo}
                       </span>
-                      <input
-                        type="number"
-                        step={c.tipo === "percent" ? "0.1" : "any"}
-                        value={valorAtual}
-                        onChange={(e) =>
-                          setValores({ ...valores, [c.chave]: e.target.value })
-                        }
-                        placeholder="·"
-                        className="glass-input"
-                        style={{
-                          marginTop: 6,
-                          width: "100%",
-                          padding: "8px 12px",
-                          fontSize: 13,
-                        }}
-                      />
+                      {c.tipo === "brl" ? (
+                        <CampoMoeda
+                          name={c.chave}
+                          value={valorAtual}
+                          onValorChange={(mv) =>
+                            setValores({ ...valores, [c.chave]: mv })
+                          }
+                          placeholder="R$ 0,00"
+                          className="glass-input"
+                          style={inputMetaEstilo}
+                        />
+                      ) : c.tipo === "numero" ? (
+                        <CampoInteiro
+                          name={c.chave}
+                          maxDigitos={9}
+                          value={valorAtual}
+                          onValorChange={(d) =>
+                            setValores({ ...valores, [c.chave]: d })
+                          }
+                          placeholder="·"
+                          className="glass-input"
+                          style={inputMetaEstilo}
+                        />
+                      ) : (
+                        // percent: decimal com 1 casa (ex.: 12,5%). Usa a mesma
+                        // máscara de decimal do sistema (sem R$), limitando a
+                        // até 999,9 — sem permitir letras/sinais/excesso.
+                        <CampoMoeda
+                          name={c.chave}
+                          casas={1}
+                          prefixoReais={false}
+                          maxDigitos={4}
+                          value={valorAtual}
+                          onValorChange={(mv) =>
+                            setValores({ ...valores, [c.chave]: mv })
+                          }
+                          placeholder="·"
+                          className="glass-input"
+                          style={inputMetaEstilo}
+                        />
+                      )}
                       <span
                         style={{
                           fontSize: 9,

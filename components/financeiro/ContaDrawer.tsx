@@ -9,6 +9,8 @@ import {
 import type { ContaFinanceira, TipoConta } from "@/lib/financeiro"
 import { tipoContaRotulo } from "@/lib/financeiro"
 import { formatBRL } from "@/lib/data"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
+import CampoMoeda from "@/components/inputs/CampoMoeda"
 
 interface Props {
   aberto: boolean
@@ -178,10 +180,10 @@ export default function ContaDrawer({ aberto, fechar, conta, saldoAtual }: Props
           </div>
 
           <Campo label="Saldo inicial (R$)">
-            <input
-              type="text" name="saldo_inicial" inputMode="decimal"
-              placeholder="Ex: 5.000,00"
-              defaultValue={conta ? String(conta.saldo_inicial).replace(".", ",") : ""}
+            <CampoMoeda
+              name="saldo_inicial"
+              placeholder="R$ 5.000,00"
+              defaultValue={conta?.saldo_inicial ?? null}
               className="glass-input" style={{ width: "100%" }}
             />
           </Campo>
@@ -195,8 +197,8 @@ export default function ContaDrawer({ aberto, fechar, conta, saldoAtual }: Props
           </Campo>
 
           <Campo label="Ordem">
-            <input
-              type="number" name="ordem" min={0} max={9999}
+            <CampoInteiro
+              name="ordem" maxDigitos={4} valorMax={9999}
               defaultValue={conta?.ordem ?? 0}
               className="glass-input" style={{ width: 100 }}
             />

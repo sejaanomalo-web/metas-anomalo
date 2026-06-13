@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react"
 import type { EmpresaMeta } from "@/lib/data"
 import { salvarRelatorioComercialAction } from "@/lib/relatorios-comerciais"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
+import CampoMoeda from "@/components/inputs/CampoMoeda"
 
 /** Data atual em BRT (UTC-3 sem DST) no formato YYYY-MM-DD. */
 function hojeBRT(): string {
@@ -216,13 +218,11 @@ export default function FormularioComercial({
               <NumCampo label="Propostas enviadas" name="propostas_enviadas" />
               <NumCampo label="Contratos fechados" name="contratos_fechados" />
               <Campo label="Faturamento gerado (R$)">
-                <input
-                  type="text"
+                <CampoMoeda
                   name="faturamento_gerado"
-                  inputMode="decimal"
                   className="glass-input"
                   style={inputEstilo}
-                  placeholder="0,00"
+                  placeholder="R$ 0,00"
                 />
               </Campo>
             </div>
@@ -232,6 +232,7 @@ export default function FormularioComercial({
             <textarea
               name="observacoes"
               rows={3}
+              maxLength={500}
               className="glass-input"
               style={{ ...inputEstilo, resize: "vertical", minHeight: 72 }}
               placeholder="Contexto do dia, bloqueios, destaques…"
@@ -287,11 +288,9 @@ function Grupo({
 function NumCampo({ label, name }: { label: string; name: string }) {
   return (
     <Campo label={label}>
-      <input
-        type="number"
+      <CampoInteiro
         name={name}
-        min="0"
-        inputMode="numeric"
+        maxDigitos={6}
         className="glass-input"
         style={inputEstilo}
         placeholder="0"

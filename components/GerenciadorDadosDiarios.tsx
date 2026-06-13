@@ -9,6 +9,8 @@ import {
   listarDadosDiariosAdmin,
   type DadoDiarioRow,
 } from "@/lib/dados-diarios-admin"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
+import CampoMoeda from "@/components/inputs/CampoMoeda"
 
 /** Primeiro dia do mês atual / hoje em BRT (YYYY-MM-DD). */
 function rangeMesAtual(): { inicio: string; fim: string } {
@@ -310,19 +312,19 @@ function FormEdicao({
 
       <div className="grid grid-cols-2 sm:grid-cols-3" style={{ gap: 10 }}>
         <Campo label="Investimento (R$)">
-          <input type="text" name="investimento_real" inputMode="decimal" defaultValue={valorTexto(l.investimento_real)} className="glass-input" style={inputEstilo} />
+          <CampoMoeda name="investimento_real" defaultValue={l.investimento_real ?? null} className="glass-input" style={inputEstilo} />
         </Campo>
         <NumNull label="Leads" name="leads_real" valor={l.leads_real} />
         <NumNull label="Agendadas" name="reunioes_agendadas_real" valor={l.reunioes_agendadas_real ?? null} />
         <NumNull label="Realizadas" name="reunioes_real" valor={l.reunioes_real} />
         <NumNull label="Contratos" name="contratos_real" valor={l.contratos_real} />
         <Campo label="Faturamento (R$)">
-          <input type="text" name="faturamento_real" inputMode="decimal" defaultValue={valorTexto(l.faturamento_real)} className="glass-input" style={inputEstilo} />
+          <CampoMoeda name="faturamento_real" defaultValue={l.faturamento_real ?? null} className="glass-input" style={inputEstilo} />
         </Campo>
       </div>
 
       <Campo label="Observações">
-        <textarea name="observacoes" rows={2} defaultValue={l.observacoes ?? ""} className="glass-input" style={{ ...inputEstilo, resize: "vertical" }} />
+        <textarea name="observacoes" rows={2} maxLength={500} defaultValue={l.observacoes ?? ""} className="glass-input" style={{ ...inputEstilo, resize: "vertical" }} />
       </Campo>
 
       {erro && <p style={{ fontSize: 12, color: "#e24b4a" }}>{erro}</p>}
@@ -344,7 +346,7 @@ function FormEdicao({
 function NumNull({ label, name, valor }: { label: string; name: string; valor: number | null }) {
   return (
     <Campo label={label}>
-      <input type="number" name={name} min="0" inputMode="numeric" defaultValue={valor ?? ""} className="glass-input" style={inputEstilo} placeholder="—" />
+      <CampoInteiro name={name} maxDigitos={7} defaultValue={valor ?? null} className="glass-input" style={inputEstilo} placeholder="—" />
     </Campo>
   )
 }
@@ -358,10 +360,6 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   )
-}
-
-function valorTexto(v: number | null): string {
-  return v == null ? "" : String(v)
 }
 
 function formatarData(iso: string): string {

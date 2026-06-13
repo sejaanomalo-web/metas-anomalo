@@ -327,6 +327,7 @@ function FormEmpresa({
           <input
             value={nome}
             onChange={(e) => setNome(e.target.value)}
+            maxLength={60}
             placeholder="Ex: Empresa Nova"
             className="glass-input"
             style={{
@@ -343,6 +344,7 @@ function FormEmpresa({
           <input
             value={subtitulo}
             onChange={(e) => setSubtitulo(e.target.value)}
+            maxLength={100}
             placeholder="Ex: Agência de marketing"
             className="glass-input"
             style={{

@@ -9,6 +9,7 @@ import {
   reordenarClientesAction,
 } from "@/lib/clientes-actions"
 import type { ClienteTrafego } from "@/lib/clientes"
+import CampoInteiro from "@/components/inputs/CampoInteiro"
 
 interface TokenOption {
   id: string
@@ -340,6 +341,7 @@ function DrawerCliente({
               type="text"
               name="campaign_filter"
               required
+              maxLength={200}
               placeholder="Ex: \\[F2\\]\\[Loja XYZ\\]"
               defaultValue={cliente?.campaign_filter ?? ""}
               className="glass-input"
@@ -374,11 +376,10 @@ function DrawerCliente({
           </Campo>
 
           <Campo label="Ordem">
-            <input
-              type="number"
+            <CampoInteiro
               name="ordem"
-              min={0}
-              max={9999}
+              maxDigitos={4}
+              valorMax={9999}
               defaultValue={cliente?.ordem ?? 0}
               className="glass-input"
               style={{ width: 100 }}
