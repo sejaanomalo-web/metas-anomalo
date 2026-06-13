@@ -24,6 +24,7 @@ import {
 import {
   getCategoriasPorDiaCliente,
   getClientePorSlug,
+  getFiltroSentinelaDoCliente,
   getLinhasDoMesCliente,
   clienteDisplayName,
 } from "@/lib/clientes"
@@ -66,13 +67,14 @@ export default async function ClienteTrafegoPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [linhas, linhas6m, categoriasPorDia, ultimoLog, vendas] =
+  const [linhas, linhas6m, categoriasPorDia, ultimoLog, vendas, filtroSentinela] =
     await Promise.all([
       getLinhasDoMesCliente(cliente, inicio, fim),
       getLinhasDoMesCliente(cliente, inicioJanela6Meses(fim), fim),
       getCategoriasPorDiaCliente(cliente, inicio, fim),
       getUltimoLogSentinela(),
       listarVendasDoCliente(cliente.id, inicio, fim),
+      getFiltroSentinelaDoCliente(cliente),
     ])
   const resumo = resumirTrafego(linhas)
   const serie = serieMensalDeLinhas(linhas6m)
@@ -113,8 +115,18 @@ export default async function ClienteTrafegoPage({
             <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
           </div>
           <p style={{ fontSize: 14, color: "var(--text-3)", marginTop: 10 }}>
-            Cliente de {empresa.nome} · filtro{" "}
-            <code style={{ color: "var(--accent)", fontSize: 12 }}>{cliente.campaign_filter}</code>
+            Cliente de {empresa.nome}
+            {filtroSentinela ? (
+              <>
+                {" "}· filtro do Sentinela{" "}
+                <code
+                  style={{ color: "var(--accent)", fontSize: 12 }}
+                  title="Regex que o Sentinela aplica ao NOME da campanha no Meta. Se nenhuma campanha casar, o cliente fica sem dados."
+                >
+                  {filtroSentinela}
+                </code>
+              </>
+            ) : null}
           </p>
 
           <div
