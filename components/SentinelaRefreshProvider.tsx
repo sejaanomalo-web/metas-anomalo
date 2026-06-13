@@ -35,9 +35,6 @@ interface Ctx {
   estado: Estado
   rodando: boolean
   iniciar: () => void
-  /** Backfill: reprocessa o Sentinela dia a dia no intervalo [de, ate]
-   *  (YYYY-MM-DD, inclusive). Usa o mesmo estado/indicador global. */
-  iniciarBackfill: (de: string, ate: string) => void
 }
 
 const SentinelaRefreshContext = createContext<Ctx | null>(null)
@@ -60,22 +57,6 @@ function diaBRT(offset = 0): string {
   return brt.toISOString().slice(0, 10)
 }
 
-/** Datas YYYY-MM-DD de `de` até `ate` (inclusive). [] se inválido OU se o
- *  intervalo passar de 62 dias (teto defensivo pra não martelar o Meta). */
-function listaDias(de: string, ate: string): string[] {
-  const re = /^\d{4}-\d{2}-\d{2}$/
-  if (!re.test(de) || !re.test(ate) || de > ate) return []
-  const out: string[] = []
-  let d = new Date(`${de}T00:00:00Z`)
-  const fim = new Date(`${ate}T00:00:00Z`)
-  while (d <= fim) {
-    out.push(d.toISOString().slice(0, 10))
-    if (out.length > 62) return []
-    d = new Date(d.getTime() + 24 * 60 * 60_000)
-  }
-  return out
-}
-
 export default function SentinelaRefreshProvider({
   children,
 }: {
@@ -86,79 +67,57 @@ export default function SentinelaRefreshProvider({
   // Ref pra travar reentrância de forma síncrona (o state é assíncrono).
   const rodandoRef = useRef(false)
 
-  // Núcleo compartilhado: processa uma lista de dias em sequência (cada
-  // chamada re-puxa TODAS as empresas), com progresso real e refresh no fim.
-  const rodarDias = useCallback(
-    async (dias: string[]) => {
-      if (rodandoRef.current || dias.length === 0) return
-      rodandoRef.current = true
+  const iniciar = useCallback(async () => {
+    if (rodandoRef.current) return
+    rodandoRef.current = true
 
-      const total = dias.length
-      let falhas = 0
-      let ultimoErro = ""
-      let contas = 0
+    // Hoje + ontem cobrem os dias voláteis; cada chamada processa TODAS as
+    // empresas ativas. Sequencial → progresso real por etapa.
+    const dias = [diaBRT(0), diaBRT(-1)]
+    const total = dias.length
+    let falhas = 0
+    let ultimoErro = ""
+    let contas = 0
 
-      setEstado({ fase: "rodando", pct: 2 })
-      for (let i = 0; i < total; i++) {
-        setEstado({
-          fase: "rodando",
-          pct: Math.max(2, Math.round((i / total) * 100)),
-        })
-        const r = await dispararSentinelaDia(dias[i])
-        if (!r.ok) {
-          falhas++
-          ultimoErro = r.erro ?? "Falha."
-        } else if (typeof r.contasProcessadas === "number") {
-          contas = Math.max(contas, r.contasProcessadas)
-        }
-        setEstado({ fase: "rodando", pct: Math.round(((i + 1) / total) * 100) })
-      }
-
-      rodandoRef.current = false
-
-      if (falhas === total) {
-        setEstado({ fase: "erro", msg: ultimoErro })
-        setTimeout(() => setEstado({ fase: "idle" }), 5000)
-        return
-      }
-
-      // Recarrega os Server Components da rota ATUAL com os dados novos —
-      // funciona em qualquer aba onde o usuário esteja ao terminar.
-      router.refresh()
-      const resumo =
-        total > 2
-          ? `${total - falhas}/${total} dias`
-          : contas > 0
-          ? `${contas} empresas`
-          : "concluído"
+    setEstado({ fase: "rodando", pct: 2 })
+    for (let i = 0; i < total; i++) {
       setEstado({
-        fase: "ok",
-        resumo: falhas > 0 ? `Parcial · ${resumo}` : resumo,
+        fase: "rodando",
+        pct: Math.max(2, Math.round((i / total) * 100)),
       })
-      setTimeout(() => setEstado({ fase: "idle" }), 3200)
-    },
-    [router]
-  )
+      const r = await dispararSentinelaDia(dias[i])
+      if (!r.ok) {
+        falhas++
+        ultimoErro = r.erro ?? "Falha."
+      } else if (typeof r.contasProcessadas === "number") {
+        contas = Math.max(contas, r.contasProcessadas)
+      }
+      setEstado({ fase: "rodando", pct: Math.round(((i + 1) / total) * 100) })
+    }
 
-  // Hoje + ontem cobrem os dias voláteis; sequencial → progresso por etapa.
-  const iniciar = useCallback(() => {
-    rodarDias([diaBRT(0), diaBRT(-1)])
-  }, [rodarDias])
+    rodandoRef.current = false
 
-  // Backfill de um intervalo (após corrigir filtro/nome de campanha).
-  const iniciarBackfill = useCallback(
-    (de: string, ate: string) => {
-      rodarDias(listaDias(de, ate))
-    },
-    [rodarDias]
-  )
+    if (falhas === total) {
+      setEstado({ fase: "erro", msg: ultimoErro })
+      setTimeout(() => setEstado({ fase: "idle" }), 5000)
+      return
+    }
+
+    // Recarrega os Server Components da rota ATUAL com os dados novos —
+    // funciona em qualquer aba onde o usuário esteja ao terminar.
+    router.refresh()
+    const resumo = contas > 0 ? `${contas} empresas` : "concluído"
+    setEstado({
+      fase: "ok",
+      resumo: falhas > 0 ? `Parcial · ${resumo}` : resumo,
+    })
+    setTimeout(() => setEstado({ fase: "idle" }), 3200)
+  }, [router])
 
   const rodando = estado.fase === "rodando"
 
   return (
-    <SentinelaRefreshContext.Provider
-      value={{ estado, rodando, iniciar, iniciarBackfill }}
-    >
+    <SentinelaRefreshContext.Provider value={{ estado, rodando, iniciar }}>
       {children}
       <IndicadorFlutuante estado={estado} />
     </SentinelaRefreshContext.Provider>
