@@ -89,6 +89,33 @@ export async function listarClientesDaEmpresa(
   return (data ?? []) as ClienteTrafego[]
 }
 
+/** Filtro de campanha que o Sentinela REALMENTE aplica pra este cliente —
+ *  pra exibir no painel e diagnosticar quando o nome das campanhas no Meta
+ *  não casa com o filtro (o caso "cliente sem dados"):
+ *    • modo regex  → o próprio campaign_filter do cliente;
+ *    • modo origem → o campaign_filter da linha de tokens_meta cuja
+ *      empresa = empresa_origem_nome (a conta que alimenta o snapshot dele).
+ *  Somente leitura e NUNCA seleciona o access_token. */
+export async function getFiltroSentinelaDoCliente(
+  cliente: ClienteTrafego
+): Promise<string | null> {
+  if (cliente.campaign_filter) return cliente.campaign_filter
+  if (!cliente.empresa_origem_nome) return null
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from("tokens_meta")
+    .select("campaign_filter")
+    .eq("empresa", cliente.empresa_origem_nome)
+    .eq("ativo", true)
+    .limit(1)
+  if (error) {
+    console.error("[clientes] getFiltroSentinelaDoCliente error", error.message)
+    return null
+  }
+  return (data?.[0]?.campaign_filter as string | null) ?? null
+}
+
 export async function getClientePorSlug(
   empresaNome: string,
   clienteSlug: string
