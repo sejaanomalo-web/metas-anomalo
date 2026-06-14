@@ -13,6 +13,7 @@ import {
   listarEmpresas,
   listarEmpresasInativas,
 } from "@/lib/empresas-actions"
+import { getResumosClientesTodasAssessorias } from "@/lib/clientes"
 import { supabaseConfigurado } from "@/lib/supabase"
 import { requererPermissao } from "@/lib/auth"
 
@@ -54,12 +55,14 @@ export default async function TrafegoOverviewPage({
   const mes = periodo.mes
   const ano = periodo.ano
 
-  const [resumo, empresas, empresasInativas, ultimoLog] = await Promise.all([
-    getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
-    listarEmpresas(true),
-    listarEmpresasInativas(),
-    getUltimoLogSentinela(),
-  ])
+  const [resumo, empresas, empresasInativas, ultimoLog, resumosClientes] =
+    await Promise.all([
+      getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
+      listarEmpresas(true),
+      listarEmpresasInativas(),
+      getUltimoLogSentinela(),
+      getResumosClientesTodasAssessorias(periodo.de, periodo.ate),
+    ])
   const stat = statusSentinela(ultimoLog)
   const supabaseOk = supabaseConfigurado()
 
@@ -215,6 +218,7 @@ export default async function TrafegoOverviewPage({
                   leads={r?.leads ?? 0}
                   cpl={r?.cplReal ?? null}
                   cpm={r?.cpmReal ?? null}
+                  resumoClientes={resumosClientes.get(empresa.nome)}
                 />
               )
             })}

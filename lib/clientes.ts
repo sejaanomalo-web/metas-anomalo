@@ -161,6 +161,36 @@ export async function getEmpresasComClientesTrafego(): Promise<string[]> {
   )
 }
 
+/** Clientes ativos agrupados por empresa (assessoria), pra alimentar selects
+ *  — ex.: o formulário comercial por cliente. Valor = { id, nome de exibição }. */
+export async function getClientesAtivosPorEmpresa(): Promise<
+  Record<string, { id: string; nome: string }[]>
+> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return {}
+  const { data, error } = await supabase
+    .from("cliente_trafego")
+    .select("id, nome, display_name, empresa_nome")
+    .eq("ativo", true)
+    .order("ordem")
+  if (error) {
+    console.error("[clientes] getClientesAtivosPorEmpresa error", error.message)
+    return {}
+  }
+  const out: Record<string, { id: string; nome: string }[]> = {}
+  for (const r of (data ?? []) as {
+    id: string
+    nome: string
+    display_name: string | null
+    empresa_nome: string
+  }[]) {
+    const nome =
+      r.display_name && r.display_name.trim() !== "" ? r.display_name : r.nome
+    ;(out[r.empresa_nome] ??= []).push({ id: r.id, nome })
+  }
+  return out
+}
+
 /** True se a empresa tem ao menos 1 cliente de tráfego ativo. Usado pra
  *  esconder a aba "Tráfego por cliente" de empresas que nunca têm clientes
  *  (ex.: Diego Knebel) — onde a aba não faz sentido. */
@@ -493,6 +523,65 @@ export async function getResumoTodosClientesMes(
       dias: e.dias.size,
     }
   })
+}
+
+export interface ResumoAssessoria {
+  qtdClientes: number
+  investimento: number
+  leads: number
+  cpl: number | null
+  /** Quantos clientes tiveram investimento ou leads no período. */
+  clientesComGasto: number
+}
+
+/**
+ * Soma o realizado (pago) de TODOS os clientes de uma assessoria — pra um
+ * resumo "N clientes · R$X · Y leads" no painel de Tráfego/Metas, mostrando
+ * o que a agência está movimentando mesmo quando ela não roda tráfego no
+ * próprio nome (ex.: Assessoria Sun). Reusa getResumoTodosClientesMes (que
+ * já roteia modo origem/regex). Cada cliente da assessoria tem origem
+ * distinta, então a soma não dupla-conta.
+ */
+export async function getResumoAgregadoClientesPorAssessoria(
+  empresaNome: string,
+  inicio: string,
+  fim: string
+): Promise<ResumoAssessoria> {
+  const resumos = await getResumoTodosClientesMes(empresaNome, inicio, fim)
+  let investimento = 0
+  let leads = 0
+  let clientesComGasto = 0
+  for (const r of resumos) {
+    investimento += r.investimento
+    leads += r.leads
+    if (r.investimento > 0 || r.leads > 0) clientesComGasto++
+  }
+  return {
+    qtdClientes: resumos.length,
+    investimento,
+    leads,
+    cpl: leads > 0 ? investimento / leads : null,
+    clientesComGasto,
+  }
+}
+
+/**
+ * Lote: resumo agregado dos clientes de TODAS as assessorias (empresas com
+ * ≥1 cliente de tráfego), keyed por empresa_nome — pro overview de Tráfego.
+ */
+export async function getResumosClientesTodasAssessorias(
+  inicio: string,
+  fim: string
+): Promise<Map<string, ResumoAssessoria>> {
+  const empresas = await getEmpresasComClientesTrafego()
+  const resultados = await Promise.all(
+    empresas.map((nome) =>
+      getResumoAgregadoClientesPorAssessoria(nome, inicio, fim)
+    )
+  )
+  const map = new Map<string, ResumoAssessoria>()
+  empresas.forEach((nome, i) => map.set(nome, resultados[i]))
+  return map
 }
 
 /** Resumo do mês de UM cliente (4 KPIs do painel). */

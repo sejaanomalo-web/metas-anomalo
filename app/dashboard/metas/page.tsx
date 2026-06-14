@@ -1,8 +1,9 @@
+import Link from "next/link"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import SectionHeader from "@/components/ui/SectionHeader"
 import CardEmpresa from "@/components/CardEmpresa"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
-import { formatNumero } from "@/lib/data"
+import { formatBRL, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
 import { getResumoPorIntervaloPorEmpresa } from "@/lib/sentinela"
 import {
@@ -10,6 +11,10 @@ import {
   listarEmpresasInativas,
 } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
+import {
+  getEmpresasComClientesTrafego,
+  getResumosClientesTodasAssessorias,
+} from "@/lib/clientes"
 import { getRealizadoComercialPagoPorEmpresa } from "@/lib/relatorios-comerciais"
 import { supabaseConfigurado } from "@/lib/supabase"
 import { requererPermissao } from "@/lib/auth"
@@ -45,17 +50,30 @@ export default async function MetasPage({
   const mes = periodo.mes
   const ano = periodo.ano
 
-  const [resumo, comercialPago, empresas, empresasInativas, overridesMes] =
-    await Promise.all([
-      // Realizado PAGO por empresa (mesma fonte do dashboard de Tráfego).
-      // O orgânico aparece no detalhe da empresa via ToggleOrigem.
-      getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
-      // Conversões do comercial 'Anúncios' — sobrepõem o faturamento pago.
-      getRealizadoComercialPagoPorEmpresa(periodo.de, periodo.ate),
-      listarEmpresas(true),
-      listarEmpresasInativas(),
-      getOverridesTodasEmpresasMes(mes, ano),
-    ])
+  const [
+    resumo,
+    comercialPago,
+    empresas,
+    empresasInativas,
+    overridesMes,
+    empresasComClientesArr,
+    resumosClientes,
+  ] = await Promise.all([
+    // Realizado PAGO por empresa (mesma fonte do dashboard de Tráfego).
+    // O orgânico aparece no detalhe da empresa via ToggleOrigem.
+    getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
+    // Conversões do comercial 'Anúncios' — sobrepõem o faturamento pago.
+    getRealizadoComercialPagoPorEmpresa(periodo.de, periodo.ate),
+    listarEmpresas(true),
+    listarEmpresasInativas(),
+    getOverridesTodasEmpresasMes(mes, ano),
+    getEmpresasComClientesTrafego(),
+    // Agregado dos clientes de cada assessoria — pra dar visibilidade às
+    // agências que delegam aos clientes-folha (ex.: Assessoria Sun) e
+    // pareceriam "paradas" olhando só a meta da empresa.
+    getResumosClientesTodasAssessorias(periodo.de, periodo.ate),
+  ])
+  const empresasComClientes = new Set(empresasComClientesArr)
   const supabaseOk = supabaseConfigurado()
 
   return (
@@ -162,16 +180,62 @@ export default async function MetasPage({
                   : null
               const investimentoReal =
                 r && r.investimento > 0 ? r.investimento : null
+              // Agregado dos clientes da assessoria (quando ela delega aos
+              // clientes-folha) — resume "N clientes · R$ · leads" pra não
+              // parecer que nada acontece na empresa.
+              const rc = resumosClientes.get(empresa.nome)
               return (
-                <CardEmpresa
+                <div
                   key={empresa.slug}
-                  empresa={empresa}
-                  mes={mes}
-                  ano={ano}
-                  faturamentoReal={faturamentoReal}
-                  investimentoReal={investimentoReal}
-                  override={overridesMes.get(empresa.db)}
-                />
+                  style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                >
+                  <CardEmpresa
+                    empresa={empresa}
+                    mes={mes}
+                    ano={ano}
+                    faturamentoReal={faturamentoReal}
+                    investimentoReal={investimentoReal}
+                    override={overridesMes.get(empresa.db)}
+                  />
+                  {empresasComClientes.has(empresa.nome) && (
+                    <>
+                      {rc && rc.qtdClientes > 0 && (
+                        <p
+                          style={{
+                            fontSize: 12,
+                            color: "var(--text-3)",
+                            fontWeight: 500,
+                            paddingLeft: 4,
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          👥 {rc.qtdClientes} cliente
+                          {rc.qtdClientes > 1 ? "s" : ""}
+                          {rc.investimento > 0
+                            ? ` · ${formatBRL(rc.investimento)}`
+                            : ""}
+                          {rc.leads > 0
+                            ? ` · ${formatNumero(rc.leads)} leads`
+                            : ""}
+                        </p>
+                      )}
+                      <Link
+                        href={`/dashboard/${empresa.slug}/clientes?mes=${mes}&ano=${ano}`}
+                        className="no-ds hover:brightness-110 transition"
+                        style={{
+                          fontSize: 12,
+                          color: "var(--accent)",
+                          fontWeight: 600,
+                          letterSpacing: "0.03em",
+                          paddingLeft: 4,
+                          textDecoration: "none",
+                        }}
+                      >
+                        Metas dos clientes →
+                      </Link>
+                    </>
+                  )}
+                </div>
               )
             })}
           </div>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import type { EmpresaDb, Mes, OrigemDadosReais } from "@/lib/data"
 import { ANOS_DISPONIVEIS, MESES, ORIGEM_PADRAO, formatBRL } from "@/lib/data"
 import { salvarMetaEmpresaAction } from "@/lib/metas-empresa"
+import { salvarMetaClienteAction } from "@/lib/metas-cliente"
 import CampoInteiro from "@/components/inputs/CampoInteiro"
 import CampoMoeda from "@/components/inputs/CampoMoeda"
 
@@ -132,14 +133,22 @@ export default function DrawerEditarMeta({
   mesInicial,
   linhasPorMes,
   origem = ORIGEM_PADRAO,
+  clienteId,
+  rotuloBotao,
 }: {
-  empresa: EmpresaDb
+  empresa?: EmpresaDb
   empresaNome: string
   tipoEmpresa: TipoEmpresa
   ano: number
   mesInicial: Mes
   linhasPorMes: Record<string, Record<string, number>>
   origem?: OrigemDadosReais
+  /** Quando presente, salva a META DO CLIENTE (metas_cliente) em vez da
+   *  empresa — via salvarMetaClienteAction (cliente_id). O resto da UI é
+   *  idêntico (mesmos campos por tipo de funil/origem). */
+  clienteId?: string
+  /** Rótulo do botão (default "Editar"). Ex.: "Editar meta". */
+  rotuloBotao?: string
 }) {
   const [aberto, setAberto] = useState(false)
   const [mesSelecionado, setMesSelecionado] = useState<Mes>(mesInicial)
@@ -188,7 +197,6 @@ export default function DrawerEditarMeta({
 
   async function salvar() {
     const fd = new FormData()
-    fd.set("empresa", empresa)
     fd.set("mes", mesSelecionado)
     fd.set("ano", String(anoSelecionado))
     fd.set("origem", origem)
@@ -196,7 +204,14 @@ export default function DrawerEditarMeta({
       const v = valores[c.chave]
       if (v !== undefined && v !== "") fd.set(c.chave, v)
     }
-    const r = await salvarMetaEmpresaAction(fd)
+    let r: { ok: boolean; erro?: string }
+    if (clienteId) {
+      fd.set("cliente_id", clienteId)
+      r = await salvarMetaClienteAction(fd)
+    } else {
+      fd.set("empresa", empresa ?? "")
+      r = await salvarMetaEmpresaAction(fd)
+    }
     if (r.ok) {
       setStatus("Salvo ✓")
       router.refresh()
@@ -216,7 +231,7 @@ export default function DrawerEditarMeta({
         onClick={abrir}
         className="btn-gold-filled uppercase"
       >
-        Editar
+        {rotuloBotao ?? "Editar"}
       </button>
 
       {aberto && (

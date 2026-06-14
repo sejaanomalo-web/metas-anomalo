@@ -18,6 +18,7 @@ import { requererPermissao, temPermissao } from "@/lib/auth"
 import { listarUsuariosAction } from "@/lib/usuarios-actions"
 import { listarRelatoriosComerciaisAdmin } from "@/lib/relatorios-comerciais"
 import { listarEmpresas } from "@/lib/empresas-actions"
+import { getClientesAtivosPorEmpresa } from "@/lib/clientes"
 import {
   getPreferenciasNotificacao,
   type PreferenciasNotificacao,
@@ -68,6 +69,7 @@ export default async function ConfiguracoesPage({
     relatoriosComerciais,
     responsaveisTrafego,
     responsaveisComercial,
+    clientesPorEmpresa,
   ] = await Promise.all([
     ehAdmin ? montarResumoDiario() : Promise.resolve(""),
     ehAdmin ? montarResumoSemanal() : Promise.resolve(""),
@@ -78,6 +80,12 @@ export default async function ConfiguracoesPage({
     ehAdmin ? listarRelatoriosComerciaisAdmin() : Promise.resolve([]),
     listarTimePorPapel("gestor_trafego"),
     listarTimePorPapel("comercial"),
+    // Só carrega os clientes quando o usuário enxerga o formulário comercial.
+    formsPermitidos.includes("comercial")
+      ? getClientesAtivosPorEmpresa()
+      : Promise.resolve(
+          {} as Record<string, { id: string; nome: string }[]>
+        ),
   ])
 
   return (
@@ -145,6 +153,7 @@ export default async function ConfiguracoesPage({
             formsPermitidos={formsPermitidos}
             responsaveisTrafego={responsaveisTrafego}
             responsaveisComercial={responsaveisComercial}
+            clientesPorEmpresa={clientesPorEmpresa}
           />
         )}
 
