@@ -90,6 +90,16 @@ export async function salvarRelatorioComercialAction(
 
   const payload = {
     empresa,
+    // Vínculo opcional com um cliente de tráfego (orgânico POR CLIENTE).
+    // Vazio = relatório da empresa inteira (comportamento anterior).
+    cliente_trafego_id:
+      (String(formData.get("cliente_trafego_id") ?? "").trim() || null) as
+        | string
+        | null,
+    cliente_nome:
+      (String(formData.get("cliente_nome") ?? "").trim() || null) as
+        | string
+        | null,
     colaborador_id: respId || usuario?.id || PUBLICO_COMERCIAL_ID,
     colaborador_nome: respNome || usuario?.nome || "Formulário público",
     data,

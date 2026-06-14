@@ -161,6 +161,36 @@ export async function getEmpresasComClientesTrafego(): Promise<string[]> {
   )
 }
 
+/** Clientes ativos agrupados por empresa (assessoria), pra alimentar selects
+ *  — ex.: o formulário comercial por cliente. Valor = { id, nome de exibição }. */
+export async function getClientesAtivosPorEmpresa(): Promise<
+  Record<string, { id: string; nome: string }[]>
+> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return {}
+  const { data, error } = await supabase
+    .from("cliente_trafego")
+    .select("id, nome, display_name, empresa_nome")
+    .eq("ativo", true)
+    .order("ordem")
+  if (error) {
+    console.error("[clientes] getClientesAtivosPorEmpresa error", error.message)
+    return {}
+  }
+  const out: Record<string, { id: string; nome: string }[]> = {}
+  for (const r of (data ?? []) as {
+    id: string
+    nome: string
+    display_name: string | null
+    empresa_nome: string
+  }[]) {
+    const nome =
+      r.display_name && r.display_name.trim() !== "" ? r.display_name : r.nome
+    ;(out[r.empresa_nome] ??= []).push({ id: r.id, nome })
+  }
+  return out
+}
+
 /** True se a empresa tem ao menos 1 cliente de tráfego ativo. Usado pra
  *  esconder a aba "Tráfego por cliente" de empresas que nunca têm clientes
  *  (ex.: Diego Knebel) — onde a aba não faz sentido. */

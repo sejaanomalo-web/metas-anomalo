@@ -30,12 +30,17 @@ export default function FormularioComercial({
   empresas,
   copiarLinkPublico,
   responsaveis,
+  clientesPorEmpresa,
 }: {
   empresas: EmpresaMeta[]
   copiarLinkPublico?: boolean
   responsaveis?: { id: string; nome: string }[]
+  /** Clientes ativos por empresa (assessoria) — habilita o seletor de
+   *  cliente pra lançar o comercial POR CLIENTE (orgânico por cliente). */
+  clientesPorEmpresa?: Record<string, { id: string; nome: string }[]>
 }) {
   const [empresa, setEmpresa] = useState(empresas[0]?.nome ?? "")
+  const [clienteId, setClienteId] = useState("")
   const [data, setData] = useState(hojeBRT())
   const [responsavelId, setResponsavelId] = useState(
     responsaveis?.[0]?.id ?? ""
@@ -152,7 +157,10 @@ export default function FormularioComercial({
             <select
               name="empresa"
               value={empresa}
-              onChange={(e) => setEmpresa(e.target.value)}
+              onChange={(e) => {
+                setEmpresa(e.target.value)
+                setClienteId("")
+              }}
               required
               className="glass-input"
               style={inputEstilo}
@@ -164,6 +172,33 @@ export default function FormularioComercial({
               ))}
             </select>
           </Campo>
+
+          {(clientesPorEmpresa?.[empresa]?.length ?? 0) > 0 && (
+            <Campo label="Cliente (opcional — vazio = empresa toda)">
+              <select
+                value={clienteId}
+                onChange={(e) => setClienteId(e.target.value)}
+                className="glass-input"
+                style={inputEstilo}
+              >
+                <option value="">— Empresa toda —</option>
+                {clientesPorEmpresa![empresa].map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </select>
+              <input type="hidden" name="cliente_trafego_id" value={clienteId} />
+              <input
+                type="hidden"
+                name="cliente_nome"
+                value={
+                  clientesPorEmpresa![empresa].find((c) => c.id === clienteId)
+                    ?.nome ?? ""
+                }
+              />
+            </Campo>
+          )}
 
           <Campo label="Origem">
             <select
