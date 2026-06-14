@@ -10,6 +10,7 @@ import type { ResumoEmpresaMes } from "./sentinela"
 import {
   type ObservacaoComercial,
   type OrigemComercial,
+  type RealizadoOrganicoCliente,
   type RelatorioComercial,
   type ResultadoComercial,
   type ResumoComercial,
@@ -423,6 +424,50 @@ export async function getResumoComercialAnualDaEmpresa(
   const out = new Map<Mes, ResumoEmpresaMes>()
   for (const [mes, ls] of porMes) out.set(mes, comercialParaResumo(empresa, ls))
   return out
+}
+
+/**
+ * Realizado ORGÂNICO de UM cliente de tráfego (vínculo cliente_trafego_id)
+ * no intervalo — pra comparar meta orgânica vs realizado no painel do cliente.
+ * Soma só os lançamentos do comercial vinculados a este cliente (origem
+ * orgânica por padrão). Mesmo mapeamento de comercialParaResumo. Retorna null
+ * quando não há nenhum lançamento, deixando o "sem dados" explícito na UI.
+ */
+export async function getRealizadoOrganicoDoCliente(
+  clienteId: string,
+  de: string,
+  ate: string,
+  origem: OrigemComercial = "organico"
+): Promise<RealizadoOrganicoCliente | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase || !clienteId) return null
+  const { data, error } = await supabase
+    .from("relatorios_comerciais")
+    .select("mensagens, reunioes_realizadas, contratos_fechados, faturamento_gerado")
+    .eq("cliente_trafego_id", clienteId)
+    .eq("origem", origem)
+    .gte("data", de)
+    .lte("data", ate)
+  if (error) {
+    console.error("[comercial] realizado organico do cliente error", error.message)
+    return null
+  }
+  const linhas = (data ?? []) as Pick<
+    RelatorioComercial,
+    "mensagens" | "reunioes_realizadas" | "contratos_fechados" | "faturamento_gerado"
+  >[]
+  if (linhas.length === 0) return null
+  let leads = 0
+  let reunioes = 0
+  let contratos = 0
+  let faturamento = 0
+  for (const l of linhas) {
+    leads += l.mensagens
+    reunioes += l.reunioes_realizadas
+    contratos += l.contratos_fechados
+    faturamento += Number(l.faturamento_gerado ?? 0)
+  }
+  return { leads, reunioes, contratos, faturamento, registros: linhas.length }
 }
 
 /** Realizado comercial PAGO ("Anúncios") por empresa no período — usado pra

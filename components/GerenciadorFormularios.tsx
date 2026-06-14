@@ -43,11 +43,15 @@ export default function GerenciadorFormularios({
   formsPermitidos,
   responsaveisTrafego,
   responsaveisComercial,
+  clientesPorEmpresa,
 }: {
   empresas: EmpresaMeta[]
   formsPermitidos?: FormId[]
   responsaveisTrafego?: { id: string; nome: string }[]
   responsaveisComercial?: { id: string; nome: string }[]
+  /** Clientes ativos por assessoria — habilita o seletor de cliente no
+   *  formulário comercial (orgânico POR CLIENTE), igual ao link público. */
+  clientesPorEmpresa?: Record<string, { id: string; nome: string }[]>
 }) {
   const formsVisiveis = formsPermitidos
     ? FORMS.filter((f) => formsPermitidos.includes(f.id))
@@ -207,6 +211,7 @@ export default function GerenciadorFormularios({
                       <FormularioComercial
                         empresas={empresas}
                         responsaveis={responsaveisComercial}
+                        clientesPorEmpresa={clientesPorEmpresa}
                       />
                     )}
                   </div>

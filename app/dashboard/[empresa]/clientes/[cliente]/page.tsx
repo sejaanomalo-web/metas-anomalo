@@ -29,8 +29,9 @@ import {
   clienteDisplayName,
 } from "@/lib/clientes"
 import { getMetasOverrideCliente } from "@/lib/metas-cliente"
+import { getRealizadoOrganicoDoCliente } from "@/lib/relatorios-comerciais"
 import DrawerEditarMeta from "@/components/DrawerEditarMeta"
-import { formatBRL } from "@/lib/data"
+import { formatBRL, formatNumero } from "@/lib/data"
 
 export const dynamic = "force-dynamic"
 
@@ -69,6 +70,10 @@ export default async function ClienteTrafegoPage({
   const ano = periodo.ano
   const inicio = periodo.de
   const fim = periodo.ate
+  // A meta do cliente é mensal (metaOrgMap.get(mes)). Só faz sentido comparar
+  // realizado-vs-meta (% e "/ meta") quando o período é UM mês fechado; em
+  // modo dia/intervalo o realizado abrange outro recorte e a razão enganaria.
+  const compararComMeta = periodo.modo === "mes"
 
   const [
     linhas,
@@ -79,6 +84,7 @@ export default async function ClienteTrafegoPage({
     filtroSentinela,
     metaPagoMap,
     metaOrgMap,
+    realizadoOrg,
   ] = await Promise.all([
     getLinhasDoMesCliente(cliente, inicio, fim),
     getLinhasDoMesCliente(cliente, inicioJanela6Meses(fim), fim),
@@ -88,6 +94,9 @@ export default async function ClienteTrafegoPage({
     getFiltroSentinelaDoCliente(cliente),
     getMetasOverrideCliente(cliente.id, ano, "pago"),
     getMetasOverrideCliente(cliente.id, ano, "organico"),
+    // Realizado orgânico POR CLIENTE — vem do comercial vinculado a este
+    // cliente (relatorios_comerciais.cliente_trafego_id). null = sem lançamentos.
+    getRealizadoOrganicoDoCliente(cliente.id, inicio, fim),
   ])
   const resumo = resumirTrafego(linhas)
   const metaPagoPorMes = Object.fromEntries(metaPagoMap)
@@ -253,10 +262,48 @@ export default async function ClienteTrafegoPage({
                 ? ` · ${formatBRL(metaOrgMes.faturamento)} fat.`
                 : ""}
             </p>
-            <p style={{ fontSize: 11, color: "var(--text-4)", marginTop: 4 }}>
-              Realizado (pago) nos KPIs abaixo. Realizado orgânico por cliente
-              vem do comercial.
-            </p>
+            {realizadoOrg ? (
+              <p
+                style={{
+                  fontSize: 12.5,
+                  color: "var(--text-2)",
+                  marginTop: 8,
+                  lineHeight: 1.5,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                <strong style={{ color: "var(--accent)" }}>
+                  Realizado orgânico
+                </strong>{" "}
+                — {formatNumero(realizadoOrg.leads)} leads
+                {compararComMeta &&
+                metaOrgMes.leads != null &&
+                metaOrgMes.leads > 0
+                  ? ` / ${formatNumero(metaOrgMes.leads)} meta (${Math.round(
+                      (realizadoOrg.leads / metaOrgMes.leads) * 100
+                    )}%)`
+                  : ""}
+                {" · "}
+                {formatNumero(realizadoOrg.reunioes)} reuniões ·{" "}
+                {formatNumero(realizadoOrg.contratos)} contratos ·{" "}
+                {formatBRL(realizadoOrg.faturamento)}
+                {compararComMeta &&
+                metaOrgMes.faturamento != null &&
+                metaOrgMes.faturamento > 0
+                  ? ` / ${formatBRL(metaOrgMes.faturamento)} meta`
+                  : ""}
+                <span style={{ color: "var(--text-4)" }}>
+                  {" · "}
+                  {realizadoOrg.registros} lançamento
+                  {realizadoOrg.registros > 1 ? "s" : ""} do comercial
+                </span>
+              </p>
+            ) : (
+              <p style={{ fontSize: 11, color: "var(--text-4)", marginTop: 4 }}>
+                Realizado pago nos KPIs abaixo. O realizado orgânico aparece
+                aqui quando o comercial lançar relatórios para este cliente.
+              </p>
+            )}
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <DrawerEditarMeta

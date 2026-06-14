@@ -12,6 +12,10 @@ export type OrigemComercial = "pago" | "organico"
 export interface RelatorioComercial {
   id: string
   empresa: string
+  /** Vínculo opcional com um cliente de tráfego (orgânico POR CLIENTE).
+   *  null/ausente = relatório da empresa inteira (comportamento padrão). */
+  cliente_trafego_id?: string | null
+  cliente_nome?: string | null
   colaborador_id: string | null
   colaborador_nome: string
   data: string
@@ -58,6 +62,20 @@ export interface ResumoComercial {
 export interface ResumoComercialCliente {
   empresa: string
   resumo: ResumoComercial
+}
+
+/** Realizado ORGÂNICO agregado de UM cliente de tráfego (vínculo
+ *  cliente_trafego_id) no período — pra comparar meta orgânica vs realizado
+ *  no painel do cliente. Mesmo mapeamento de comercialParaResumo:
+ *  leads←mensagens, reuniões←reunioes_realizadas,
+ *  contratos←contratos_fechados, faturamento←faturamento_gerado. */
+export interface RealizadoOrganicoCliente {
+  leads: number
+  reunioes: number
+  contratos: number
+  faturamento: number
+  /** Quantos lançamentos do comercial somaram este realizado. */
+  registros: number
 }
 
 export interface ResultadoComercial {
