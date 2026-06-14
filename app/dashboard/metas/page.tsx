@@ -1,3 +1,4 @@
+import Link from "next/link"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import SectionHeader from "@/components/ui/SectionHeader"
 import CardEmpresa from "@/components/CardEmpresa"
@@ -10,6 +11,7 @@ import {
   listarEmpresasInativas,
 } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
+import { getEmpresasComClientesTrafego } from "@/lib/clientes"
 import { getRealizadoComercialPagoPorEmpresa } from "@/lib/relatorios-comerciais"
 import { supabaseConfigurado } from "@/lib/supabase"
 import { requererPermissao } from "@/lib/auth"
@@ -45,17 +47,25 @@ export default async function MetasPage({
   const mes = periodo.mes
   const ano = periodo.ano
 
-  const [resumo, comercialPago, empresas, empresasInativas, overridesMes] =
-    await Promise.all([
-      // Realizado PAGO por empresa (mesma fonte do dashboard de Tráfego).
-      // O orgânico aparece no detalhe da empresa via ToggleOrigem.
-      getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
-      // Conversões do comercial 'Anúncios' — sobrepõem o faturamento pago.
-      getRealizadoComercialPagoPorEmpresa(periodo.de, periodo.ate),
-      listarEmpresas(true),
-      listarEmpresasInativas(),
-      getOverridesTodasEmpresasMes(mes, ano),
-    ])
+  const [
+    resumo,
+    comercialPago,
+    empresas,
+    empresasInativas,
+    overridesMes,
+    empresasComClientesArr,
+  ] = await Promise.all([
+    // Realizado PAGO por empresa (mesma fonte do dashboard de Tráfego).
+    // O orgânico aparece no detalhe da empresa via ToggleOrigem.
+    getResumoPorIntervaloPorEmpresa(periodo.de, periodo.ate, "pago"),
+    // Conversões do comercial 'Anúncios' — sobrepõem o faturamento pago.
+    getRealizadoComercialPagoPorEmpresa(periodo.de, periodo.ate),
+    listarEmpresas(true),
+    listarEmpresasInativas(),
+    getOverridesTodasEmpresasMes(mes, ano),
+    getEmpresasComClientesTrafego(),
+  ])
+  const empresasComClientes = new Set(empresasComClientesArr)
   const supabaseOk = supabaseConfigurado()
 
   return (
@@ -163,15 +173,35 @@ export default async function MetasPage({
               const investimentoReal =
                 r && r.investimento > 0 ? r.investimento : null
               return (
-                <CardEmpresa
+                <div
                   key={empresa.slug}
-                  empresa={empresa}
-                  mes={mes}
-                  ano={ano}
-                  faturamentoReal={faturamentoReal}
-                  investimentoReal={investimentoReal}
-                  override={overridesMes.get(empresa.db)}
-                />
+                  style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                >
+                  <CardEmpresa
+                    empresa={empresa}
+                    mes={mes}
+                    ano={ano}
+                    faturamentoReal={faturamentoReal}
+                    investimentoReal={investimentoReal}
+                    override={overridesMes.get(empresa.db)}
+                  />
+                  {empresasComClientes.has(empresa.nome) && (
+                    <Link
+                      href={`/dashboard/${empresa.slug}/clientes?mes=${mes}&ano=${ano}`}
+                      className="no-ds hover:brightness-110 transition"
+                      style={{
+                        fontSize: 12,
+                        color: "var(--accent)",
+                        fontWeight: 600,
+                        letterSpacing: "0.03em",
+                        paddingLeft: 4,
+                        textDecoration: "none",
+                      }}
+                    >
+                      Metas dos clientes →
+                    </Link>
+                  )}
+                </div>
               )
             })}
           </div>

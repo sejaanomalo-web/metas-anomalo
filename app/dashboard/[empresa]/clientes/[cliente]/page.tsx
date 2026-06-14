@@ -28,6 +28,9 @@ import {
   getLinhasDoMesCliente,
   clienteDisplayName,
 } from "@/lib/clientes"
+import { getMetasOverrideCliente } from "@/lib/metas-cliente"
+import DrawerEditarMeta from "@/components/DrawerEditarMeta"
+import { formatBRL } from "@/lib/data"
 
 export const dynamic = "force-dynamic"
 
@@ -67,16 +70,30 @@ export default async function ClienteTrafegoPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [linhas, linhas6m, categoriasPorDia, ultimoLog, vendas, filtroSentinela] =
-    await Promise.all([
-      getLinhasDoMesCliente(cliente, inicio, fim),
-      getLinhasDoMesCliente(cliente, inicioJanela6Meses(fim), fim),
-      getCategoriasPorDiaCliente(cliente, inicio, fim),
-      getUltimoLogSentinela(),
-      listarVendasDoCliente(cliente.id, inicio, fim),
-      getFiltroSentinelaDoCliente(cliente),
-    ])
+  const [
+    linhas,
+    linhas6m,
+    categoriasPorDia,
+    ultimoLog,
+    vendas,
+    filtroSentinela,
+    metaPagoMap,
+    metaOrgMap,
+  ] = await Promise.all([
+    getLinhasDoMesCliente(cliente, inicio, fim),
+    getLinhasDoMesCliente(cliente, inicioJanela6Meses(fim), fim),
+    getCategoriasPorDiaCliente(cliente, inicio, fim),
+    getUltimoLogSentinela(),
+    listarVendasDoCliente(cliente.id, inicio, fim),
+    getFiltroSentinelaDoCliente(cliente),
+    getMetasOverrideCliente(cliente.id, ano, "pago"),
+    getMetasOverrideCliente(cliente.id, ano, "organico"),
+  ])
   const resumo = resumirTrafego(linhas)
+  const metaPagoPorMes = Object.fromEntries(metaPagoMap)
+  const metaOrgPorMes = Object.fromEntries(metaOrgMap)
+  const metaPagoMes: Record<string, number> = metaPagoMap.get(mes) ?? {}
+  const metaOrgMes: Record<string, number> = metaOrgMap.get(mes) ?? {}
   const serie = serieMensalDeLinhas(linhas6m)
   const nomeExibido = clienteDisplayName(cliente)
   const stat = statusSentinela(ultimoLog)
@@ -189,6 +206,81 @@ export default async function ClienteTrafegoPage({
             {cliente.ultimo_erro ? `: ${cliente.ultimo_erro}` : "."}
           </div>
         )}
+
+        <section
+          className="glass"
+          style={{
+            padding: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <p
+              style={{
+                fontSize: 11,
+                letterSpacing: "1.2px",
+                color: "var(--text-3)",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
+              Metas do mês · {mes}
+            </p>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--text-2)",
+                marginTop: 6,
+                lineHeight: 1.5,
+              }}
+            >
+              <strong>Pago</strong> — meta:{" "}
+              {metaPagoMes.leads != null ? `${metaPagoMes.leads} leads` : "—"}
+              {metaPagoMes.verba != null
+                ? ` · ${formatBRL(metaPagoMes.verba)} verba`
+                : ""}
+              {metaPagoMes.faturamento != null
+                ? ` · ${formatBRL(metaPagoMes.faturamento)} fat.`
+                : ""}
+              {"   ·   "}
+              <strong>Orgânico</strong> — meta:{" "}
+              {metaOrgMes.leads != null ? `${metaOrgMes.leads} leads` : "—"}
+              {metaOrgMes.faturamento != null
+                ? ` · ${formatBRL(metaOrgMes.faturamento)} fat.`
+                : ""}
+            </p>
+            <p style={{ fontSize: 11, color: "var(--text-4)", marginTop: 4 }}>
+              Realizado (pago) nos KPIs abaixo. Realizado orgânico por cliente
+              vem do comercial.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <DrawerEditarMeta
+              clienteId={cliente.id}
+              empresaNome={nomeExibido}
+              tipoEmpresa="leads-reunioes-contratos"
+              ano={ano}
+              mesInicial={mes}
+              linhasPorMes={metaPagoPorMes}
+              origem="pago"
+              rotuloBotao="Meta pago"
+            />
+            <DrawerEditarMeta
+              clienteId={cliente.id}
+              empresaNome={nomeExibido}
+              tipoEmpresa="leads-reunioes-contratos"
+              ano={ano}
+              mesInicial={mes}
+              linhasPorMes={metaOrgPorMes}
+              origem="organico"
+              rotuloBotao="Meta orgânica"
+            />
+          </div>
+        </section>
 
         <PainelTrafego
           resumo={resumo}
