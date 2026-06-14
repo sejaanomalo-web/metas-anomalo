@@ -495,6 +495,65 @@ export async function getResumoTodosClientesMes(
   })
 }
 
+export interface ResumoAssessoria {
+  qtdClientes: number
+  investimento: number
+  leads: number
+  cpl: number | null
+  /** Quantos clientes tiveram investimento ou leads no período. */
+  clientesComGasto: number
+}
+
+/**
+ * Soma o realizado (pago) de TODOS os clientes de uma assessoria — pra um
+ * resumo "N clientes · R$X · Y leads" no painel de Tráfego/Metas, mostrando
+ * o que a agência está movimentando mesmo quando ela não roda tráfego no
+ * próprio nome (ex.: Assessoria Sun). Reusa getResumoTodosClientesMes (que
+ * já roteia modo origem/regex). Cada cliente da assessoria tem origem
+ * distinta, então a soma não dupla-conta.
+ */
+export async function getResumoAgregadoClientesPorAssessoria(
+  empresaNome: string,
+  inicio: string,
+  fim: string
+): Promise<ResumoAssessoria> {
+  const resumos = await getResumoTodosClientesMes(empresaNome, inicio, fim)
+  let investimento = 0
+  let leads = 0
+  let clientesComGasto = 0
+  for (const r of resumos) {
+    investimento += r.investimento
+    leads += r.leads
+    if (r.investimento > 0 || r.leads > 0) clientesComGasto++
+  }
+  return {
+    qtdClientes: resumos.length,
+    investimento,
+    leads,
+    cpl: leads > 0 ? investimento / leads : null,
+    clientesComGasto,
+  }
+}
+
+/**
+ * Lote: resumo agregado dos clientes de TODAS as assessorias (empresas com
+ * ≥1 cliente de tráfego), keyed por empresa_nome — pro overview de Tráfego.
+ */
+export async function getResumosClientesTodasAssessorias(
+  inicio: string,
+  fim: string
+): Promise<Map<string, ResumoAssessoria>> {
+  const empresas = await getEmpresasComClientesTrafego()
+  const resultados = await Promise.all(
+    empresas.map((nome) =>
+      getResumoAgregadoClientesPorAssessoria(nome, inicio, fim)
+    )
+  )
+  const map = new Map<string, ResumoAssessoria>()
+  empresas.forEach((nome, i) => map.set(nome, resultados[i]))
+  return map
+}
+
 /** Resumo do mês de UM cliente (4 KPIs do painel). */
 export async function getResumoMesCliente(
   cliente: ClienteTrafego,

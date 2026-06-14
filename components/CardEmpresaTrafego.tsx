@@ -19,6 +19,7 @@ export default function CardEmpresaTrafego({
   leads,
   cpl,
   cpm,
+  resumoClientes,
 }: {
   empresa: EmpresaMeta
   mes: Mes
@@ -27,6 +28,14 @@ export default function CardEmpresaTrafego({
   leads: number
   cpl: number | null
   cpm: number | null
+  /** Agregado dos clientes da assessoria (quando a empresa delega aos
+   *  clientes-folha, ex.: Assessoria Sun). Mostra o que a agência movimenta
+   *  mesmo sem rodar tráfego no próprio nome. */
+  resumoClientes?: {
+    qtdClientes: number
+    investimento: number
+    leads: number
+  } | null
 }) {
   const href = `/dashboard/${empresa.slug}/trafego?mes=${mes}&ano=${ano}`
   const semDados = investimento === 0 && leads === 0
@@ -90,6 +99,46 @@ export default function CardEmpresaTrafego({
         <Metric label="CPL" valor={cpl ? formatBRL(cpl) : "·"} />
         <Metric label="CPM" valor={cpm ? formatBRL(cpm) : "·"} />
       </div>
+
+      {/* Resumo dos clientes da assessoria (quando houver) */}
+      {resumoClientes && resumoClientes.qtdClientes > 0 && (
+        <div
+          style={{
+            borderTop: "0.5px solid rgba(255,255,255,0.08)",
+            paddingTop: 12,
+          }}
+        >
+          <p
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.8px",
+              color: "var(--text-4)",
+              textTransform: "uppercase",
+              fontWeight: 500,
+            }}
+          >
+            Clientes da assessoria
+          </p>
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--text-2)",
+              fontWeight: 500,
+              marginTop: 3,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            👥 {resumoClientes.qtdClientes} cliente
+            {resumoClientes.qtdClientes > 1 ? "s" : ""}
+            {resumoClientes.investimento > 0
+              ? ` · ${formatBRL(resumoClientes.investimento)}`
+              : ""}
+            {resumoClientes.leads > 0
+              ? ` · ${formatNumero(resumoClientes.leads)} leads`
+              : ""}
+          </p>
+        </div>
+      )}
 
       {/* Footer link */}
       <p
