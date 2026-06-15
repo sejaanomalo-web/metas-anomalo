@@ -2,11 +2,13 @@ import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import BotaoAtualizarTrafego from "@/components/BotaoAtualizarTrafego"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
+import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
 import { formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
 import {
   getResumoPorIntervaloPorEmpresa,
   getUltimoLogSentinela,
+  proximaExecucao,
   statusSentinela,
 } from "@/lib/sentinela"
 import {
@@ -64,6 +66,7 @@ export default async function TrafegoOverviewPage({
       getResumosClientesTodasAssessorias(periodo.de, periodo.ate),
     ])
   const stat = statusSentinela(ultimoLog)
+  const prox = proximaExecucao()
   const supabaseOk = supabaseConfigurado()
 
   // Aba de tráfego mostra TODAS as empresas ativas do Hub. Empresas
@@ -115,9 +118,25 @@ export default async function TrafegoOverviewPage({
             <h1 style={{ fontSize: 36 }}>
               Visão geral de tráfego · {periodo.rotulo}
             </h1>
-            {/* Seletor de período sempre no topo à direita, como nas
-                demais páginas. */}
-            <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
+            {/* À direita: status do Sentinela (última/próxima execução) +
+                seletor de período, como na página de tráfego por empresa. */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 16,
+                flexWrap: "wrap",
+                justifyContent: "flex-end",
+              }}
+            >
+              <BadgeStatusSentinela
+                statusCor={stat.cor}
+                rotulo={stat.rotulo}
+                ultimaExecucao={ultimoLog?.data_execucao ?? null}
+                proximaLabelCompleto={prox.labelCompleto}
+              />
+              <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
+            </div>
           </div>
           {/* Ações específicas do tráfego (gerenciar empresas + atualizar)
               ficam logo abaixo do título, fora da linha do seletor. */}
