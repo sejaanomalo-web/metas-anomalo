@@ -1,4 +1,3 @@
-import Link from "next/link"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import SectionHeader from "@/components/ui/SectionHeader"
 import CardEmpresa from "@/components/CardEmpresa"
@@ -197,48 +196,26 @@ export default async function MetasPage({
                     investimentoReal={investimentoReal}
                     override={overridesMes.get(empresa.db)}
                   />
-                  {empresasComClientes.has(empresa.nome) && (
-                    <>
-                      {rc && rc.qtdClientes > 0 && (
-                        <p
-                          style={{
-                            fontSize: 12,
-                            color: "var(--text-3)",
-                            fontWeight: 500,
-                            paddingLeft: 4,
-                            fontVariantNumeric: "tabular-nums",
-                          }}
-                        >
-                          👥 {rc.qtdClientes} cliente
-                          {rc.qtdClientes > 1 ? "s" : ""}
-                          {rc.investimento > 0
-                            ? ` · ${formatBRL(rc.investimento)}`
-                            : ""}
-                          {rc.leads > 0
-                            ? ` · ${formatNumero(rc.leads)} leads`
-                            : ""}
-                        </p>
-                      )}
-                      <Link
-                        href={`/dashboard/${empresa.slug}/metas?mes=${mes}&ano=${ano}`}
-                        className="no-ds hover:brightness-110 transition"
+                  {empresasComClientes.has(empresa.nome) &&
+                    rc &&
+                    rc.qtdClientes > 0 && (
+                      <p
                         style={{
-                          alignSelf: "flex-start",
-                          padding: "6px 12px",
                           fontSize: 12,
-                          fontWeight: 600,
-                          letterSpacing: "0.03em",
-                          color: "var(--accent)",
-                          border: "0.5px solid rgba(201,149,58,0.45)",
-                          borderRadius: 8,
-                          background: "rgba(201,149,58,0.08)",
-                          textDecoration: "none",
+                          color: "var(--text-3)",
+                          fontWeight: 500,
+                          paddingLeft: 4,
+                          fontVariantNumeric: "tabular-nums",
                         }}
                       >
-                        Metas por cliente →
-                      </Link>
-                    </>
-                  )}
+                        👥 {rc.qtdClientes} cliente
+                        {rc.qtdClientes > 1 ? "s" : ""}
+                        {rc.investimento > 0
+                          ? ` · ${formatBRL(rc.investimento)}`
+                          : ""}
+                        {rc.leads > 0 ? ` · ${formatNumero(rc.leads)} leads` : ""}
+                      </p>
+                    )}
                 </div>
               )
             })}
