@@ -135,6 +135,7 @@ export default function DrawerEditarMeta({
   origem = ORIGEM_PADRAO,
   clienteId,
   rotuloBotao,
+  onSaved,
 }: {
   empresa?: EmpresaDb
   empresaNome: string
@@ -149,6 +150,9 @@ export default function DrawerEditarMeta({
   clienteId?: string
   /** Rótulo do botão (default "Editar"). Ex.: "Editar meta". */
   rotuloBotao?: string
+  /** Chamado após salvar com sucesso — pra quem embute o editor (ex.: o
+   *  drawer "Metas por cliente") re-buscar os dados exibidos. */
+  onSaved?: () => void
 }) {
   const [aberto, setAberto] = useState(false)
   const [mesSelecionado, setMesSelecionado] = useState<Mes>(mesInicial)
@@ -215,6 +219,7 @@ export default function DrawerEditarMeta({
     if (r.ok) {
       setStatus("Salvo ✓")
       router.refresh()
+      onSaved?.()
       setTimeout(() => {
         setStatus(null)
         setAberto(false)
