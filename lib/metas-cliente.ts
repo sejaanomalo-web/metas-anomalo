@@ -9,6 +9,9 @@ import {
   ORIGEM_PADRAO,
   origemValida,
 } from "./data"
+import { getClientePorId, getResumoMesCliente } from "./clientes"
+import { getRealizadoOrganicoDoCliente } from "./relatorios-comerciais"
+import type { RealizadoOrganicoCliente } from "./comercial-tipos"
 
 // ============================================================
 // Metas por CLIENTE de tráfego (espelha lib/metas-empresa.ts).
@@ -180,4 +183,59 @@ export async function salvarMetaClienteAction(
   revalidatePath("/dashboard/metas")
   revalidatePath("/dashboard", "layout")
   return { ok: true }
+}
+
+// ============================================================
+// Painel "Metas por cliente" do /dashboard/metas
+// ============================================================
+
+export interface PainelMetasCliente {
+  /** Metas pago por mês do ano (alimenta o editor DrawerEditarMeta). */
+  pagoPorMes: Record<string, MetaOverride>
+  /** Metas orgânico por mês do ano. */
+  orgPorMes: Record<string, MetaOverride>
+  /** Realizado PAGO do período (tráfego) — pra comparação. */
+  realizadoPago: { investimento: number; leads: number }
+  /** Realizado ORGÂNICO do período (comercial) — null se sem lançamentos. */
+  realizadoOrg: RealizadoOrganicoCliente | null
+}
+
+/**
+ * Tudo que o drawer "Metas por cliente" precisa de UM cliente: metas
+ * pago/orgânico do ano (por mês, pro editor) + realizado do período pra
+ * comparação (pago do tráfego via getResumoMesCliente, orgânico do comercial
+ * via getRealizadoOrganicoDoCliente). Chamado sob demanda quando um cliente é
+ * selecionado. UUID inválido / cliente inexistente → tudo zerado, nunca lança.
+ */
+export async function getPainelMetasCliente(
+  clienteId: string,
+  de: string,
+  ate: string,
+  ano: number
+): Promise<PainelMetasCliente> {
+  const vazio: PainelMetasCliente = {
+    pagoPorMes: {},
+    orgPorMes: {},
+    realizadoPago: { investimento: 0, leads: 0 },
+    realizadoOrg: null,
+  }
+  if (!UUID_RE.test(clienteId)) return vazio
+
+  const cliente = await getClientePorId(clienteId)
+  const [pagoMap, orgMap, realizadoOrg, resumoPago] = await Promise.all([
+    getMetasOverrideCliente(clienteId, ano, "pago"),
+    getMetasOverrideCliente(clienteId, ano, "organico"),
+    getRealizadoOrganicoDoCliente(clienteId, de, ate),
+    cliente ? getResumoMesCliente(cliente, de, ate) : Promise.resolve(null),
+  ])
+
+  return {
+    pagoPorMes: Object.fromEntries(pagoMap),
+    orgPorMes: Object.fromEntries(orgMap),
+    realizadoPago: {
+      investimento: resumoPago?.investimento ?? 0,
+      leads: resumoPago?.leads ?? 0,
+    },
+    realizadoOrg,
+  }
 }

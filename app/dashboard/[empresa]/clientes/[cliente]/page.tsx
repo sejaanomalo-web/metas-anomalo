@@ -28,10 +28,6 @@ import {
   getLinhasDoMesCliente,
   clienteDisplayName,
 } from "@/lib/clientes"
-import { getMetasOverrideCliente } from "@/lib/metas-cliente"
-import { getRealizadoOrganicoDoCliente } from "@/lib/relatorios-comerciais"
-import DrawerEditarMeta from "@/components/DrawerEditarMeta"
-import { formatBRL, formatNumero } from "@/lib/data"
 
 export const dynamic = "force-dynamic"
 
@@ -70,10 +66,6 @@ export default async function ClienteTrafegoPage({
   const ano = periodo.ano
   const inicio = periodo.de
   const fim = periodo.ate
-  // A meta do cliente é mensal (metaOrgMap.get(mes)). Só faz sentido comparar
-  // realizado-vs-meta (% e "/ meta") quando o período é UM mês fechado; em
-  // modo dia/intervalo o realizado abrange outro recorte e a razão enganaria.
-  const compararComMeta = periodo.modo === "mes"
 
   const [
     linhas,
@@ -82,9 +74,6 @@ export default async function ClienteTrafegoPage({
     ultimoLog,
     vendas,
     filtroSentinela,
-    metaPagoMap,
-    metaOrgMap,
-    realizadoOrg,
   ] = await Promise.all([
     getLinhasDoMesCliente(cliente, inicio, fim),
     getLinhasDoMesCliente(cliente, inicioJanela6Meses(fim), fim),
@@ -92,17 +81,8 @@ export default async function ClienteTrafegoPage({
     getUltimoLogSentinela(),
     listarVendasDoCliente(cliente.id, inicio, fim),
     getFiltroSentinelaDoCliente(cliente),
-    getMetasOverrideCliente(cliente.id, ano, "pago"),
-    getMetasOverrideCliente(cliente.id, ano, "organico"),
-    // Realizado orgânico POR CLIENTE — vem do comercial vinculado a este
-    // cliente (relatorios_comerciais.cliente_trafego_id). null = sem lançamentos.
-    getRealizadoOrganicoDoCliente(cliente.id, inicio, fim),
   ])
   const resumo = resumirTrafego(linhas)
-  const metaPagoPorMes = Object.fromEntries(metaPagoMap)
-  const metaOrgPorMes = Object.fromEntries(metaOrgMap)
-  const metaPagoMes: Record<string, number> = metaPagoMap.get(mes) ?? {}
-  const metaOrgMes: Record<string, number> = metaOrgMap.get(mes) ?? {}
   const serie = serieMensalDeLinhas(linhas6m)
   const nomeExibido = clienteDisplayName(cliente)
   const stat = statusSentinela(ultimoLog)
@@ -215,119 +195,6 @@ export default async function ClienteTrafegoPage({
             {cliente.ultimo_erro ? `: ${cliente.ultimo_erro}` : "."}
           </div>
         )}
-
-        <section
-          className="glass"
-          style={{
-            padding: 20,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <p
-              style={{
-                fontSize: 11,
-                letterSpacing: "1.2px",
-                color: "var(--text-3)",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}
-            >
-              Metas do mês · {mes}
-            </p>
-            <p
-              style={{
-                fontSize: 13,
-                color: "var(--text-2)",
-                marginTop: 6,
-                lineHeight: 1.5,
-              }}
-            >
-              <strong>Pago</strong> — meta:{" "}
-              {metaPagoMes.leads != null ? `${metaPagoMes.leads} leads` : "—"}
-              {metaPagoMes.verba != null
-                ? ` · ${formatBRL(metaPagoMes.verba)} verba`
-                : ""}
-              {metaPagoMes.faturamento != null
-                ? ` · ${formatBRL(metaPagoMes.faturamento)} fat.`
-                : ""}
-              {"   ·   "}
-              <strong>Orgânico</strong> — meta:{" "}
-              {metaOrgMes.leads != null ? `${metaOrgMes.leads} leads` : "—"}
-              {metaOrgMes.faturamento != null
-                ? ` · ${formatBRL(metaOrgMes.faturamento)} fat.`
-                : ""}
-            </p>
-            {realizadoOrg ? (
-              <p
-                style={{
-                  fontSize: 12.5,
-                  color: "var(--text-2)",
-                  marginTop: 8,
-                  lineHeight: 1.5,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                <strong style={{ color: "var(--accent)" }}>
-                  Realizado orgânico
-                </strong>{" "}
-                — {formatNumero(realizadoOrg.leads)} leads
-                {compararComMeta &&
-                metaOrgMes.leads != null &&
-                metaOrgMes.leads > 0
-                  ? ` / ${formatNumero(metaOrgMes.leads)} meta (${Math.round(
-                      (realizadoOrg.leads / metaOrgMes.leads) * 100
-                    )}%)`
-                  : ""}
-                {" · "}
-                {formatNumero(realizadoOrg.reunioes)} reuniões ·{" "}
-                {formatNumero(realizadoOrg.contratos)} contratos ·{" "}
-                {formatBRL(realizadoOrg.faturamento)}
-                {compararComMeta &&
-                metaOrgMes.faturamento != null &&
-                metaOrgMes.faturamento > 0
-                  ? ` / ${formatBRL(metaOrgMes.faturamento)} meta`
-                  : ""}
-                <span style={{ color: "var(--text-4)" }}>
-                  {" · "}
-                  {realizadoOrg.registros} lançamento
-                  {realizadoOrg.registros > 1 ? "s" : ""} do comercial
-                </span>
-              </p>
-            ) : (
-              <p style={{ fontSize: 11, color: "var(--text-4)", marginTop: 4 }}>
-                Realizado pago nos KPIs abaixo. O realizado orgânico aparece
-                aqui quando o comercial lançar relatórios para este cliente.
-              </p>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <DrawerEditarMeta
-              clienteId={cliente.id}
-              empresaNome={nomeExibido}
-              tipoEmpresa="leads-reunioes-contratos"
-              ano={ano}
-              mesInicial={mes}
-              linhasPorMes={metaPagoPorMes}
-              origem="pago"
-              rotuloBotao="Meta pago"
-            />
-            <DrawerEditarMeta
-              clienteId={cliente.id}
-              empresaNome={nomeExibido}
-              tipoEmpresa="leads-reunioes-contratos"
-              ano={ano}
-              mesInicial={mes}
-              linhasPorMes={metaOrgPorMes}
-              origem="organico"
-              rotuloBotao="Meta orgânica"
-            />
-          </div>
-        </section>
 
         <PainelTrafego
           resumo={resumo}

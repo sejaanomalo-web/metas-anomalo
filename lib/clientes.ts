@@ -141,6 +141,26 @@ export async function getClientePorSlug(
   return { ...cliente, status_campanhas: statusFresh }
 }
 
+/** Carrega UM cliente por id (uuid). Leitura leve — NÃO deriva status
+ *  (basta os campos de modo p/ ler métricas). Usado pelo painel de metas
+ *  por cliente do /dashboard/metas, que só precisa do realizado. */
+export async function getClientePorId(
+  id: string
+): Promise<ClienteTrafego | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from("cliente_trafego")
+    .select(COLUNAS_CLIENTE)
+    .eq("id", id)
+    .maybeSingle()
+  if (error) {
+    console.error("[clientes] getClientePorId error", error.message)
+    return null
+  }
+  return (data as ClienteTrafego) ?? null
+}
+
 /** Lista DISTINCT de empresas que têm pelo menos 1 cliente ativo
  *  com algum modo configurado (origem ou regex). Usado pelo overview
  *  de tráfego pra incluir agências que não têm token próprio mas
@@ -173,6 +193,7 @@ export async function getClientesAtivosPorEmpresa(): Promise<
     .select("id, nome, display_name, empresa_nome")
     .eq("ativo", true)
     .order("ordem")
+    .order("nome")
   if (error) {
     console.error("[clientes] getClientesAtivosPorEmpresa error", error.message)
     return {}
