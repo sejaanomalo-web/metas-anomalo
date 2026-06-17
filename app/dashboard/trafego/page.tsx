@@ -118,15 +118,16 @@ export default async function TrafegoOverviewPage({
             <h1 style={{ fontSize: 36 }}>
               Visão geral de tráfego · {periodo.rotulo}
             </h1>
-            {/* À direita: status do Sentinela (última/próxima execução) +
-                seletor de período, como na página de tráfego por empresa. */}
+            {/* Status do Sentinela (última/próxima execução) + seletor de
+                período. Mobile: largura total, alinhado à esquerda (coerente
+                com o resto da seção). Desktop: auto-width à direita do título. */}
             <div
+              className="w-full md:w-auto justify-start md:justify-end"
               style={{
                 display: "flex",
                 alignItems: "flex-start",
                 gap: 16,
                 flexWrap: "wrap",
-                justifyContent: "flex-end",
               }}
             >
               <BadgeStatusSentinela
