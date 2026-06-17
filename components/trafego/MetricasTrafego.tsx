@@ -96,9 +96,9 @@ export default function MetricasTrafego({
         </div>
       </section>
 
-      {/* Grade de cartões */}
+      {/* Grade de cartões — 2 col no mobile (mantido), 4+4 no desktop */}
       <section
-        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
+        className="grid grid-cols-2 md:grid-cols-4"
         style={{ gap: 12 }}
       >
         <Cartao
@@ -214,7 +214,8 @@ function Cartao({
 }) {
   const c = COR_MAP[cor]
   return (
-    <div className="glass" style={{ padding: "16px 16px 14px" }}>
+    // Mobile: padding original (16/16/14). Desktop (md+): achatado.
+    <div className="glass px-4 pt-4 pb-3.5 md:pt-3 md:pb-3">
       <span
         style={{
           width: 38,
@@ -231,7 +232,7 @@ function Cartao({
       >
         {icone}
       </span>
-      <p style={{ fontSize: 13, color: "var(--text-2)", marginTop: 12 }}>
+      <p className="mt-3 md:mt-2" style={{ fontSize: 13, color: "var(--text-2)" }}>
         {titulo}
       </p>
       <p
