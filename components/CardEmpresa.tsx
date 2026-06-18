@@ -35,6 +35,7 @@ export default function CardEmpresa({
   faturamentoReal,
   investimentoReal,
   override,
+  qs,
 }: {
   empresa: EmpresaMeta
   mes: Mes
@@ -42,6 +43,9 @@ export default function CardEmpresa({
   faturamentoReal: number | null
   investimentoReal: number | null
   override?: Record<string, number>
+  /** Query string do período global já pronta (preserva modo/de/ate).
+   *  Fallback p/ mes/ano se ausente. */
+  qs?: string
 }) {
   const temProjecao = anoTemProjecao(ano)
   const investimento = getVerbaMesComOverride(empresa, mes, ano, override)
@@ -89,7 +93,7 @@ export default function CardEmpresa({
 
   return (
     <Link
-      href={`/dashboard/${empresa.slug}?mes=${mes}&ano=${ano}`}
+      href={`/dashboard/${empresa.slug}?${qs ?? `mes=${mes}&ano=${ano}`}`}
       className="glass glass-hover block"
       style={{
         opacity: inativa ? 0.4 : 1,

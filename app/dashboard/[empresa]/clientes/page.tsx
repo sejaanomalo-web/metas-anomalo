@@ -9,6 +9,7 @@ import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
 import { requererPermissao } from "@/lib/auth"
 import { subtituloDaEmpresa } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
   listarClientesDaEmpresa,
@@ -71,7 +72,7 @@ export default async function ClientesPage({
       <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
         <div>
           <Link
-            href={`/dashboard/trafego?mes=${mes}&ano=${ano}`}
+            href={`/dashboard/trafego?${periodoQS(periodo)}`}
             style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500 }}
             className="hover:text-[#C9953A] transition"
           >
@@ -162,6 +163,7 @@ export default async function ClientesPage({
                 empresaSlug={empresa.slug}
                 mes={mes}
                 ano={ano}
+                qs={periodoQS(periodo)}
               />
             ))}
           </section>

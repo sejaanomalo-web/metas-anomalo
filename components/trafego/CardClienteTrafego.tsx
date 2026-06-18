@@ -12,14 +12,17 @@ export default function CardClienteTrafego({
   empresaSlug,
   mes,
   ano,
+  qs,
 }: {
   resumo: ResumoClienteMes
   empresaSlug: string
   mes: string
   ano: number
+  /** Query string do período global já pronta (preserva modo/de/ate). */
+  qs?: string
 }) {
   const { cliente, investimento, leads, cpl } = resumo
-  const href = `/dashboard/${empresaSlug}/clientes/${cliente.slug}?mes=${mes}&ano=${ano}`
+  const href = `/dashboard/${empresaSlug}/clientes/${cliente.slug}?${qs ?? `mes=${mes}&ano=${ano}`}`
 
   return (
     <Link

@@ -22,10 +22,10 @@ export default function BadgeStatusSentinela({
   const c = corMap[statusCor]
   return (
     <div
+      className="items-start md:items-end"
       style={{
         display: "inline-flex",
         flexDirection: "column",
-        alignItems: "flex-end",
         gap: 4,
       }}
     >
@@ -52,10 +52,10 @@ export default function BadgeStatusSentinela({
         )}
       </span>
       <div
+        className="items-start md:items-end"
         style={{
           display: "flex",
           flexDirection: "column",
-          alignItems: "flex-end",
           gap: 2,
           fontSize: 10,
           color: "var(--text-4)",

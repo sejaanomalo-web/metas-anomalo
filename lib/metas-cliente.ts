@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
+import { parseNumeroForm } from "./parse-numero"
 import {
   type Mes,
   type OrigemDadosReais,
@@ -9,9 +10,15 @@ import {
   ORIGEM_PADRAO,
   origemValida,
 } from "./data"
-import { getClientePorId, getResumoMesCliente } from "./clientes"
+import {
+  getClientePorId,
+  getResumoMesCliente,
+  getResumoTodosClientesMes,
+  type ClienteTrafego,
+} from "./clientes"
 import { getRealizadoOrganicoDoCliente } from "./relatorios-comerciais"
 import type { RealizadoOrganicoCliente } from "./comercial-tipos"
+import type { DadosReais } from "./supabase"
 
 // ============================================================
 // Metas por CLIENTE de tráfego (espelha lib/metas-empresa.ts).
@@ -34,13 +41,18 @@ export type MetaOverride = Record<string, number>
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/** pt-BR → number: remove pontos de milhar, vírgula vira ponto decimal. */
+/**
+ * Form → number (ou null se vazio/inválido). Delega ao parser canônico
+ * (lib/parse-numero), que aceita tanto o VALOR-MÁQUINA do CampoMoeda
+ * ("10000.00", ponto = decimal) quanto entrada BR digitada ("10.000,00").
+ *
+ * O parser legado fazia `replace(/\./g, "")` — tratava QUALQUER ponto como
+ * separador de milhar e engolia o ponto decimal do valor-máquina: "10000.00"
+ * virava 1.000.000 (erro de 100x em moeda; 10x em percentual). Ver
+ * components/inputs/CampoMoeda.tsx (emite valor-máquina) e lib/mascaras.ts.
+ */
 function parseNum(v: FormDataEntryValue | null): number | null {
-  if (v === null) return null
-  const s = String(v).trim().replace(/\./g, "").replace(",", ".")
-  if (s === "") return null
-  const n = Number(s)
-  return Number.isFinite(n) ? n : null
+  return parseNumeroForm(v).value
 }
 
 function mesValidoFn(m: string): m is Mes {
@@ -238,4 +250,209 @@ export async function getPainelMetasCliente(
     },
     realizadoOrg,
   }
+}
+
+// ============================================================
+// Dashboard de Metas POR CLIENTE (/dashboard/[empresa]/metas[/cliente]).
+// Espelha o fluxo de Tráfego por cliente: lista (cards meta×realizado) +
+// detalhe (CenarioReal + gráfico + tabela/editor). Reutiliza o realizado
+// do tráfego (pago) e do comercial (orgânico), como o dashboard da empresa.
+// ============================================================
+
+// Abril=4 … Dezembro=12 → índice em MESES (que começa em Abril). Jan–Mar
+// não existem em MESES (mesma convenção do resto do app) e são ignorados.
+function mesPorNumero(m: number): Mes | undefined {
+  return MESES[m - 4]
+}
+
+const zeroOuNum = (n: number) => (n > 0 ? n : null)
+
+/**
+ * Realizado de UM cliente no período, no shape DadosReais (alimenta o
+ * CenarioReal do detalhe). PAGO = investimento/leads do tráfego +
+ * reuniões/contratos/faturamento do comercial 'Anúncios' ("comercial vira a
+ * conversão", igual ao dashboard da empresa). ORGÂNICO = 100% do comercial.
+ * Retorna null quando não há nada no período (deixa o "Não inserido" na UI).
+ */
+export async function getRealizadoClienteComoDadosReais(
+  cliente: ClienteTrafego,
+  de: string,
+  ate: string,
+  mes: Mes,
+  ano: number,
+  origem: OrigemDadosReais
+): Promise<DadosReais | null> {
+  if (origem === "organico") {
+    const org = await getRealizadoOrganicoDoCliente(cliente.id, de, ate, "organico")
+    if (!org) return null
+    return {
+      empresa: cliente.empresa_nome,
+      mes,
+      ano,
+      origem: "organico",
+      investimento_real: null,
+      leads_real: zeroOuNum(org.leads),
+      reunioes_agendadas_real: null,
+      reunioes_real: zeroOuNum(org.reunioes),
+      contratos_real: zeroOuNum(org.contratos),
+      faturamento_real: zeroOuNum(org.faturamento),
+      criativos_entregues: null,
+      cpl_real: null,
+      respostas: null,
+      observacoes: null,
+      clientes_ativos: null,
+    }
+  }
+
+  const [resumoPago, comPago] = await Promise.all([
+    getResumoMesCliente(cliente, de, ate),
+    getRealizadoOrganicoDoCliente(cliente.id, de, ate, "pago"),
+  ])
+  const investimento = resumoPago.investimento
+  const leads = resumoPago.leads
+  const reunioes = comPago?.reunioes ?? 0
+  const contratos = comPago?.contratos ?? 0
+  const faturamento = comPago?.faturamento ?? 0
+  if (
+    investimento <= 0 &&
+    leads <= 0 &&
+    reunioes <= 0 &&
+    contratos <= 0 &&
+    faturamento <= 0
+  ) {
+    return null
+  }
+  return {
+    empresa: cliente.empresa_nome,
+    mes,
+    ano,
+    origem: "pago",
+    investimento_real: zeroOuNum(investimento),
+    leads_real: zeroOuNum(leads),
+    reunioes_real: zeroOuNum(reunioes),
+    contratos_real: zeroOuNum(contratos),
+    faturamento_real: zeroOuNum(faturamento),
+    criativos_entregues: null,
+    cpl_real: leads > 0 ? investimento / leads : null,
+    cpa_real: contratos > 0 ? investimento / contratos : null,
+    observacoes: null,
+    clientes_ativos: null,
+  }
+}
+
+/**
+ * Faturamento realizado de UM cliente por mês do ano (comercial vinculado),
+ * para a linha "real" do gráfico do detalhe. Uma query, agrega em memória.
+ */
+export async function getRealizadoAnualClienteFaturamento(
+  clienteId: string,
+  ano: number,
+  origem: OrigemDadosReais
+): Promise<Map<Mes, number>> {
+  const out = new Map<Mes, number>()
+  const supabase = getSupabaseAdmin()
+  if (!supabase || !UUID_RE.test(clienteId)) return out
+  // PAGO usa comercial 'Anúncios'; ORGÂNICO usa comercial orgânico.
+  const origemComercial = origem === "pago" ? "pago" : "organico"
+  const { data, error } = await supabase
+    .from("relatorios_comerciais")
+    .select("data, faturamento_gerado")
+    .eq("cliente_trafego_id", clienteId)
+    .eq("origem", origemComercial)
+    .gte("data", `${ano}-01-01`)
+    .lte("data", `${ano}-12-31`)
+  if (error) {
+    console.error("[metas_cliente] faturamento anual error", error.message)
+    return out
+  }
+  for (const row of (data ?? []) as {
+    data: string
+    faturamento_gerado: number | null
+  }[]) {
+    const mes = mesPorNumero(parseInt(row.data.slice(5, 7), 10))
+    if (!mes) continue
+    out.set(mes, (out.get(mes) ?? 0) + Number(row.faturamento_gerado ?? 0))
+  }
+  return out
+}
+
+export interface ResumoMetaClienteMes {
+  cliente: ClienteTrafego
+  investimentoReal: number
+  leadsReal: number
+  faturamentoReal: number
+  metaInvestimento: number | null
+  metaFaturamento: number | null
+}
+
+/** Faturamento realizado (comercial, todas as origens) por cliente no período. */
+async function getFaturamentoRealPorCliente(
+  clienteIds: string[],
+  de: string,
+  ate: string
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  const supabase = getSupabaseAdmin()
+  if (!supabase || clienteIds.length === 0) return out
+  const { data, error } = await supabase
+    .from("relatorios_comerciais")
+    .select("cliente_trafego_id, faturamento_gerado")
+    .in("cliente_trafego_id", clienteIds)
+    .gte("data", de)
+    .lte("data", ate)
+  if (error) {
+    console.error("[metas_cliente] faturamento por cliente error", error.message)
+    return out
+  }
+  for (const row of (data ?? []) as {
+    cliente_trafego_id: string | null
+    faturamento_gerado: number | null
+  }[]) {
+    if (!row.cliente_trafego_id) continue
+    out.set(
+      row.cliente_trafego_id,
+      (out.get(row.cliente_trafego_id) ?? 0) + Number(row.faturamento_gerado ?? 0)
+    )
+  }
+  return out
+}
+
+/**
+ * Resumo meta×realizado de TODOS os clientes de uma assessoria, para a grade
+ * de cards do /dashboard/[empresa]/metas. Realizado pago (investimento/leads)
+ * vem do tráfego; faturamento realizado do comercial; metas dos overrides do
+ * mês (verba/faturamento). Reusa getResumoTodosClientesMes (que já deriva
+ * status e roteia modo origem/regex).
+ */
+export async function getResumoMetasClientesDaEmpresa(
+  empresaNome: string,
+  de: string,
+  ate: string,
+  mes: Mes,
+  ano: number
+): Promise<ResumoMetaClienteMes[]> {
+  const [resumos, overPago, overOrg] = await Promise.all([
+    getResumoTodosClientesMes(empresaNome, de, ate),
+    getOverridesTodosClientesMes(mes, ano, "pago"),
+    getOverridesTodosClientesMes(mes, ano, "organico"),
+  ])
+  if (resumos.length === 0) return []
+  const fatPorCliente = await getFaturamentoRealPorCliente(
+    resumos.map((r) => r.cliente.id),
+    de,
+    ate
+  )
+  return resumos.map(({ cliente, investimento, leads }) => {
+    const ovP = overPago.get(cliente.id) ?? {}
+    const ovO = overOrg.get(cliente.id) ?? {}
+    return {
+      cliente,
+      investimentoReal: investimento,
+      leadsReal: leads,
+      faturamentoReal: fatPorCliente.get(cliente.id) ?? 0,
+      metaInvestimento: ovP.verba ?? null,
+      // Meta de faturamento: pago tem prioridade; cai pro orgânico se não houver.
+      metaFaturamento: ovP.faturamento ?? ovO.faturamento ?? null,
+    }
+  })
 }

@@ -3,6 +3,7 @@ import AbasArea from "@/components/AbasArea"
 import TimeComercial from "@/components/time/TimeComercial"
 import { requererPermissao } from "@/lib/auth"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import {
   getResumoComercialColaborador,
   listarTimePorPapel,
@@ -43,7 +44,7 @@ export default async function TimeComercialPage({
       return { ...m, resumo, porCliente, observacoes }
     })
   )
-  const qs = `?mes=${periodo.mes}&ano=${periodo.ano}`
+  const qs = `?${periodoQS(periodo)}`
 
   return (
     <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>

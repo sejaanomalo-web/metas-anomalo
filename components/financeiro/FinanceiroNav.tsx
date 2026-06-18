@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import type { Mes, Ano } from "@/lib/data"
+import { periodoQSFromParams } from "@/lib/periodo-url"
 
 interface Props {
   mes: Mes
@@ -20,12 +21,14 @@ const ITEMS: { rotulo: string; href: string; matchExact?: boolean }[] = [
 
 /**
  * Navegação interna do módulo financeiro. Pílulas com a tab ativa
- * em ouro sólido + texto preto, demais ghost com hairline. Carrega
- * o ?mes=X&ano=Y atual em todas as tabs pra manter o período entre
- * navegações. Substitui os chips quick-link antigos da overview.
+ * em ouro sólido + texto preto, demais ghost com hairline. Preserva o
+ * período global ATUAL da URL (modo/de/ate ou mes/ano) em todas as tabs —
+ * antes fixava ?mes=&ano= e derrubava os modos Dia/Intervalo ao navegar.
  */
 export default function FinanceiroNav({ mes, ano }: Props) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const qs = periodoQSFromParams(searchParams, { mes, ano })
 
   return (
     <nav
@@ -43,7 +46,7 @@ export default function FinanceiroNav({ mes, ano }: Props) {
         const ativo = item.matchExact
           ? pathname === item.href
           : pathname.startsWith(item.href)
-        const href = `${item.href}?mes=${mes}&ano=${ano}`
+        const href = qs ? `${item.href}?${qs}` : item.href
         return (
           <Link
             key={item.href}

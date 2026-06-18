@@ -2,11 +2,14 @@ import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import BotaoAtualizarTrafego from "@/components/BotaoAtualizarTrafego"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
+import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
 import { formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import {
   getResumoPorIntervaloPorEmpresa,
   getUltimoLogSentinela,
+  proximaExecucao,
   statusSentinela,
 } from "@/lib/sentinela"
 import {
@@ -64,6 +67,7 @@ export default async function TrafegoOverviewPage({
       getResumosClientesTodasAssessorias(periodo.de, periodo.ate),
     ])
   const stat = statusSentinela(ultimoLog)
+  const prox = proximaExecucao()
   const supabaseOk = supabaseConfigurado()
 
   // Aba de tráfego mostra TODAS as empresas ativas do Hub. Empresas
@@ -115,9 +119,26 @@ export default async function TrafegoOverviewPage({
             <h1 style={{ fontSize: 36 }}>
               Visão geral de tráfego · {periodo.rotulo}
             </h1>
-            {/* Seletor de período sempre no topo à direita, como nas
-                demais páginas. */}
-            <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
+            {/* Status do Sentinela (última/próxima execução) + seletor de
+                período. Mobile: largura total, alinhado à esquerda (coerente
+                com o resto da seção). Desktop: auto-width à direita do título. */}
+            <div
+              className="w-full md:w-auto justify-start md:justify-end"
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <BadgeStatusSentinela
+                statusCor={stat.cor}
+                rotulo={stat.rotulo}
+                ultimaExecucao={ultimoLog?.data_execucao ?? null}
+                proximaLabelCompleto={prox.labelCompleto}
+              />
+              <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
+            </div>
           </div>
           {/* Ações específicas do tráfego (gerenciar empresas + atualizar)
               ficam logo abaixo do título, fora da linha do seletor. */}
@@ -219,6 +240,7 @@ export default async function TrafegoOverviewPage({
                   cpl={r?.cplReal ?? null}
                   cpm={r?.cpmReal ?? null}
                   resumoClientes={resumosClientes.get(empresa.nome)}
+                  qs={periodoQS(periodo)}
                 />
               )
             })}

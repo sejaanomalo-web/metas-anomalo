@@ -2,9 +2,9 @@ import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import SectionHeader from "@/components/ui/SectionHeader"
 import CardEmpresa from "@/components/CardEmpresa"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
-import DrawerMetasPorCliente from "@/components/DrawerMetasPorCliente"
 import { formatBRL, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import { getResumoPorIntervaloPorEmpresa } from "@/lib/sentinela"
 import {
   listarEmpresas,
@@ -12,7 +12,6 @@ import {
 } from "@/lib/empresas-actions"
 import { getOverridesTodasEmpresasMes } from "@/lib/metas-empresa"
 import {
-  getClientesAtivosPorEmpresa,
   getEmpresasComClientesTrafego,
   getResumosClientesTodasAssessorias,
 } from "@/lib/clientes"
@@ -59,7 +58,6 @@ export default async function MetasPage({
     overridesMes,
     empresasComClientesArr,
     resumosClientes,
-    clientesPorEmpresa,
   ] = await Promise.all([
     // Realizado PAGO por empresa (mesma fonte do dashboard de Tráfego).
     // O orgânico aparece no detalhe da empresa via ToggleOrigem.
@@ -74,9 +72,6 @@ export default async function MetasPage({
     // agências que delegam aos clientes-folha (ex.: Assessoria Sun) e
     // pareceriam "paradas" olhando só a meta da empresa.
     getResumosClientesTodasAssessorias(periodo.de, periodo.ate),
-    // Clientes ativos por assessoria — alimenta o seletor do drawer
-    // "Metas por cliente" (edição de metas por cliente vive aqui no Metas).
-    getClientesAtivosPorEmpresa(),
   ])
   const empresasComClientes = new Set(empresasComClientesArr)
   const supabaseOk = supabaseConfigurado()
@@ -201,40 +196,28 @@ export default async function MetasPage({
                     faturamentoReal={faturamentoReal}
                     investimentoReal={investimentoReal}
                     override={overridesMes.get(empresa.db)}
+                    qs={periodoQS(periodo)}
                   />
-                  {empresasComClientes.has(empresa.nome) && (
-                    <>
-                      {rc && rc.qtdClientes > 0 && (
-                        <p
-                          style={{
-                            fontSize: 12,
-                            color: "var(--text-3)",
-                            fontWeight: 500,
-                            paddingLeft: 4,
-                            fontVariantNumeric: "tabular-nums",
-                          }}
-                        >
-                          👥 {rc.qtdClientes} cliente
-                          {rc.qtdClientes > 1 ? "s" : ""}
-                          {rc.investimento > 0
-                            ? ` · ${formatBRL(rc.investimento)}`
-                            : ""}
-                          {rc.leads > 0
-                            ? ` · ${formatNumero(rc.leads)} leads`
-                            : ""}
-                        </p>
-                      )}
-                      <DrawerMetasPorCliente
-                        empresaNome={empresa.nome}
-                        mes={mes}
-                        ano={ano}
-                        de={periodo.de}
-                        ate={periodo.ate}
-                        mesFechado={periodo.modo === "mes"}
-                        clientes={clientesPorEmpresa[empresa.nome] ?? []}
-                      />
-                    </>
-                  )}
+                  {empresasComClientes.has(empresa.nome) &&
+                    rc &&
+                    rc.qtdClientes > 0 && (
+                      <p
+                        style={{
+                          fontSize: 12,
+                          color: "var(--text-3)",
+                          fontWeight: 500,
+                          paddingLeft: 4,
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        👥 {rc.qtdClientes} cliente
+                        {rc.qtdClientes > 1 ? "s" : ""}
+                        {rc.investimento > 0
+                          ? ` · ${formatBRL(rc.investimento)}`
+                          : ""}
+                        {rc.leads > 0 ? ` · ${formatNumero(rc.leads)} leads` : ""}
+                      </p>
+                    )}
                 </div>
               )
             })}

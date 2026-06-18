@@ -5,15 +5,14 @@ import { usePathname, useSearchParams } from "next/navigation"
 import { periodoQSFromParams } from "@/lib/periodo-url"
 
 /**
- * Navegação DENTRO do fluxo de Tráfego de uma empresa: alterna apenas
- * entre "Tráfego pago" e "Tráfego por cliente". NÃO há aba "Visão geral"
- * (Metas) — os fluxos de Tráfego e Metas são separados de propósito: o
- * que se faz em Tráfego fica em Tráfego. Substitui o antigo TabsEmpresa
- * (que cruzava para Metas) nas páginas de tráfego.
+ * Navegação DENTRO do fluxo de Metas de uma empresa: alterna entre "Metas"
+ * (dashboard da empresa, /dashboard/[slug]) e "Metas por cliente"
+ * (/dashboard/[slug]/metas). Espelha o TabsTrafego do fluxo de Tráfego —
+ * mesma ideia de drill Hub → empresa → cliente, agora para metas.
  *
- * A bolinha dourada pulsando sinaliza dado "live" do agente Sentinela.
+ * Empresas sem clientes de tráfego não mostram a aba "Metas por cliente".
  */
-export default function TabsTrafego({
+export default function TabsMetas({
   slug,
   mes,
   ano,
@@ -22,37 +21,36 @@ export default function TabsTrafego({
   slug: string
   mes: string
   ano: number
-  /** Empresas sem clientes de tráfego (ex.: Diego Knebel) não mostram a aba
-   *  "Tráfego por cliente" — não faz sentido. Default true (retrocompat). */
   temClientes?: boolean
 }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const qs = periodoQSFromParams(searchParams, { mes, ano })
   const sufixo = qs ? `?${qs}` : ""
-  const trafegoHref = `/dashboard/${slug}/trafego${sufixo}`
-  const clientesHref = `/dashboard/${slug}/clientes${sufixo}`
+  const metasHref = `/dashboard/${slug}${sufixo}`
+  const clientesHref = `/dashboard/${slug}/metas${sufixo}`
 
-  const noTrafego = pathname === `/dashboard/${slug}/trafego`
-  const nosClientes = pathname.startsWith(`/dashboard/${slug}/clientes`)
+  // "Metas" ativa só na raiz da empresa; "Metas por cliente" em /metas[/...].
+  const nasMetas = pathname === `/dashboard/${slug}`
+  const nosClientes = pathname.startsWith(`/dashboard/${slug}/metas`)
 
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      <TabLink href={trafegoHref} ativa={noTrafego}>
-        <BolinhaLive ativa={noTrafego} />
-        Tráfego pago
+      <TabLink href={metasHref} ativa={nasMetas}>
+        <Bolinha ativa={nasMetas} />
+        Metas
       </TabLink>
       {temClientes && (
         <TabLink href={clientesHref} ativa={nosClientes}>
-          <BolinhaLive ativa={nosClientes} />
-          Tráfego por cliente
+          <Bolinha ativa={nosClientes} />
+          Metas por cliente
         </TabLink>
       )}
     </div>
   )
 }
 
-function BolinhaLive({ ativa }: { ativa: boolean }) {
+function Bolinha({ ativa }: { ativa: boolean }) {
   return (
     <span
       aria-hidden="true"
@@ -62,10 +60,7 @@ function BolinhaLive({ ativa }: { ativa: boolean }) {
         height: 7,
         borderRadius: "50%",
         background: ativa ? "#000" : "var(--accent)",
-        boxShadow: ativa
-          ? "0 0 0 2px rgba(0,0,0,0.0)"
-          : "0 0 6px rgba(201,149,58,0.7)",
-        animation: "pulseGold 2s ease-in-out infinite",
+        boxShadow: ativa ? "none" : "0 0 6px rgba(201,149,58,0.6)",
         flexShrink: 0,
       }}
     />

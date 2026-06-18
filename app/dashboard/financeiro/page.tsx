@@ -3,6 +3,7 @@ import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import KPICard from "@/components/ui/KPICard"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import GraficoFluxoCaixa from "@/components/financeiro/GraficoFluxoCaixa"
+import GraficoCategorias from "@/components/financeiro/GraficoCategorias"
 import { formatBRL, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
 import {
@@ -13,6 +14,7 @@ import {
   getProximosPrevistos,
   listarCategorias,
   getConferenciaSentinelaPeriodo,
+  getDREPeriodo,
 } from "@/lib/financeiro"
 import { requererPermissao } from "@/lib/auth"
 
@@ -101,7 +103,7 @@ export default async function FinanceiroOverviewPage({
   const mes = periodo.mes
   const ano = periodo.ano
 
-  const [resumo, fluxo, saldoTotal, saldoPorConta, proximosPrevistos, categorias, conferencia] =
+  const [resumo, fluxo, saldoTotal, saldoPorConta, proximosPrevistos, categorias, conferencia, dre] =
     await Promise.all([
       getResumoFinanceiroPeriodo(periodo.de, periodo.ate, mes, ano),
       getFluxoCaixaAnual(ano),
@@ -110,6 +112,7 @@ export default async function FinanceiroOverviewPage({
       getProximosPrevistos(5),
       listarCategorias(undefined, false),
       getConferenciaSentinelaPeriodo(periodo.de, periodo.ate),
+      getDREPeriodo(periodo.de, periodo.ate, mes, ano),
     ])
 
   const conferenciaProblemas = conferencia.filter(
@@ -227,6 +230,17 @@ export default async function FinanceiroOverviewPage({
       {/* Gráfico fluxo de caixa */}
       <section>
         <GraficoFluxoCaixa dados={fluxo} ano={ano} />
+      </section>
+
+      {/* Divisão de gastos por categoria — dirigido pelo período global */}
+      <section>
+        <GraficoCategorias
+          despesas={dre.despesas}
+          receitas={dre.receitas}
+          totalDespesas={dre.total_despesas}
+          totalReceitas={dre.total_receitas}
+          rotulo={periodo.rotulo}
+        />
       </section>
 
       {/* Conferência com Sentinela — só aparece se há divergência */}

@@ -2,7 +2,8 @@ import Link from "next/link"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import TabelaLancamentos from "@/components/financeiro/TabelaLancamentos"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
-import { mesValido, anoValido } from "@/lib/data"
+import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import {
   listarLancamentos,
   listarCategorias,
@@ -19,14 +20,18 @@ export default async function FinanceiroLancamentosPage({
   searchParams: {
     mes?: string
     ano?: string
+    de?: string
+    ate?: string
+    modo?: string
     tipo?: string
     status?: string
   }
 }) {
   await requererPermissao("dashboard_financeiro")
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
   const tipo = searchParams?.tipo === "receita" || searchParams?.tipo === "despesa"
     ? (searchParams.tipo as "receita" | "despesa")
     : undefined
@@ -38,13 +43,19 @@ export default async function FinanceiroLancamentosPage({
       : undefined
 
   const [lancamentos, categorias, contas, empresas] = await Promise.all([
-    listarLancamentos({ mes, ano, tipo, status }),
+    listarLancamentos({ de: periodo.de, ate: periodo.ate, tipo, status }),
     listarCategorias(undefined, false),
     listarContas(false),
     listarEmpresas(true),
   ])
 
   const empresasUI = empresas.map((e) => ({ nome: e.nome, slug: e.slug }))
+
+  // Base de query que PRESERVA o período (modo/de/ate ou mes/ano) nos chips
+  // de filtro — antes os chips fixavam ?mes=&ano= e derrubavam dia/intervalo.
+  const base = periodoQS(periodo)
+  const lancHref = (extra?: string) =>
+    `/dashboard/financeiro/lancamentos?${base}${extra ? `&${extra}` : ""}`
 
   return (
     <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
@@ -62,7 +73,7 @@ export default async function FinanceiroLancamentosPage({
             flexWrap: "wrap",
           }}
         >
-          <h1 style={{ fontSize: 36 }}>Lançamentos de {mes}</h1>
+          <h1 style={{ fontSize: 36 }}>Lançamentos · {periodo.rotulo}</h1>
           <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
         </div>
         <div className="gold-divider" style={{ marginTop: 18 }} />
@@ -71,34 +82,19 @@ export default async function FinanceiroLancamentosPage({
       <FinanceiroNav mes={mes} ano={ano} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <FiltroChip
-          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}`}
-          ativo={!tipo && !status}
-        >
+        <FiltroChip href={lancHref()} ativo={!tipo && !status}>
           Todos
         </FiltroChip>
-        <FiltroChip
-          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&tipo=receita`}
-          ativo={tipo === "receita"}
-        >
+        <FiltroChip href={lancHref("tipo=receita")} ativo={tipo === "receita"}>
           Receitas
         </FiltroChip>
-        <FiltroChip
-          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&tipo=despesa`}
-          ativo={tipo === "despesa"}
-        >
+        <FiltroChip href={lancHref("tipo=despesa")} ativo={tipo === "despesa"}>
           Despesas
         </FiltroChip>
-        <FiltroChip
-          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&status=previsto`}
-          ativo={status === "previsto"}
-        >
+        <FiltroChip href={lancHref("status=previsto")} ativo={status === "previsto"}>
           Previstos
         </FiltroChip>
-        <FiltroChip
-          href={`/dashboard/financeiro/lancamentos?mes=${mes}&ano=${ano}&status=realizado`}
-          ativo={status === "realizado"}
-        >
+        <FiltroChip href={lancHref("status=realizado")} ativo={status === "realizado"}>
           Realizados
         </FiltroChip>
       </div>
