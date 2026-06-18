@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
+import { periodoQSFromParams } from "@/lib/periodo-url"
 
 /**
  * Navegação DENTRO do fluxo de Metas de uma empresa: alterna entre "Metas"
@@ -23,9 +24,11 @@ export default function TabsMetas({
   temClientes?: boolean
 }) {
   const pathname = usePathname()
-  const qs = new URLSearchParams({ mes, ano: String(ano) })
-  const metasHref = `/dashboard/${slug}?${qs.toString()}`
-  const clientesHref = `/dashboard/${slug}/metas?${qs.toString()}`
+  const searchParams = useSearchParams()
+  const qs = periodoQSFromParams(searchParams, { mes, ano })
+  const sufixo = qs ? `?${qs}` : ""
+  const metasHref = `/dashboard/${slug}${sufixo}`
+  const clientesHref = `/dashboard/${slug}/metas${sufixo}`
 
   // "Metas" ativa só na raiz da empresa; "Metas por cliente" em /metas[/...].
   const nasMetas = pathname === `/dashboard/${slug}`

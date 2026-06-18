@@ -4,6 +4,7 @@ import CardEmpresa from "@/components/CardEmpresa"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
 import { formatBRL, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import { getResumoPorIntervaloPorEmpresa } from "@/lib/sentinela"
 import {
   listarEmpresas,
@@ -195,6 +196,7 @@ export default async function MetasPage({
                     faturamentoReal={faturamentoReal}
                     investimentoReal={investimentoReal}
                     override={overridesMes.get(empresa.db)}
+                    qs={periodoQS(periodo)}
                   />
                   {empresasComClientes.has(empresa.nome) &&
                     rc &&

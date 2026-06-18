@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
+import { periodoQSFromParams } from "@/lib/periodo-url"
 
 /**
  * Navegação DENTRO do fluxo de Tráfego de uma empresa: alterna apenas
@@ -26,9 +27,11 @@ export default function TabsTrafego({
   temClientes?: boolean
 }) {
   const pathname = usePathname()
-  const qs = new URLSearchParams({ mes, ano: String(ano) })
-  const trafegoHref = `/dashboard/${slug}/trafego?${qs.toString()}`
-  const clientesHref = `/dashboard/${slug}/clientes?${qs.toString()}`
+  const searchParams = useSearchParams()
+  const qs = periodoQSFromParams(searchParams, { mes, ano })
+  const sufixo = qs ? `?${qs}` : ""
+  const trafegoHref = `/dashboard/${slug}/trafego${sufixo}`
+  const clientesHref = `/dashboard/${slug}/clientes${sufixo}`
 
   const noTrafego = pathname === `/dashboard/${slug}/trafego`
   const nosClientes = pathname.startsWith(`/dashboard/${slug}/clientes`)

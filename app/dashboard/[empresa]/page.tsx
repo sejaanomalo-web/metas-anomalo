@@ -39,6 +39,7 @@ import {
   getResumoComercialAnualDaEmpresa,
 } from "@/lib/relatorios-comerciais"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import { getDadosDiariosDoMesPorNome } from "@/lib/dados-diarios"
 import { getMetasOverrideEmpresa } from "@/lib/metas-empresa"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
@@ -229,7 +230,7 @@ export default async function EmpresaPage({
       >
         <div className="hero-banner">
           <Link
-            href={`/dashboard/metas?mes=${mes}&ano=${ano}`}
+            href={`/dashboard/metas?${periodoQS(periodo)}`}
             style={{
               fontSize: 12,
               color: "var(--text-3)",

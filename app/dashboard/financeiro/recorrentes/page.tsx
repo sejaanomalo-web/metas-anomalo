@@ -1,7 +1,7 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import ListaRecorrentes from "@/components/financeiro/ListaRecorrentes"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
-import { mesValido, anoValido } from "@/lib/data"
+import { parsePeriodo } from "@/lib/periodo"
 import {
   listarRecorrentes,
   listarCategorias,
@@ -14,12 +14,16 @@ export const dynamic = "force-dynamic"
 export default async function RecorrentesPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; ano?: string }
+  searchParams: { mes?: string; ano?: string; de?: string; ate?: string; modo?: string }
 }) {
   await requererPermissao("dashboard_financeiro")
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+  // Recorrentes são templates (não filtram por intervalo). Mas derivamos
+  // mes/ano do período pra que "Gerar lançamentos" mire o mês representativo
+  // e a navegação preserve o período global.
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
 
   const [recorrentes, categorias, contas] = await Promise.all([
     listarRecorrentes(false),

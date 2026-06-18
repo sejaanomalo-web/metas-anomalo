@@ -182,6 +182,11 @@ export async function listarContas(ativasApenas = true): Promise<ContaFinanceira
 export interface FiltrosLancamento {
   mes?: Mes
   ano?: number
+  /** Intervalo arbitrário (YYYY-MM-DD, inclusivos). Tem PRIORIDADE sobre
+   *  mes/ano quando ambos presentes — usado pelo período global em modo
+   *  dia/intervalo. Filtra pela coluna `data` (competência). */
+  de?: string
+  ate?: string
   tipo?: TipoLancamento
   status?: StatusLancamento
   conta_id?: string
@@ -203,7 +208,10 @@ export async function listarLancamentos(
     .order("data", { ascending: false })
     .order("created_at", { ascending: false })
 
-  if (filtros.mes && filtros.ano) {
+  if (filtros.de && filtros.ate) {
+    // Intervalo explícito tem prioridade (período global em dia/intervalo).
+    q = q.gte("data", filtros.de).lte("data", filtros.ate)
+  } else if (filtros.mes && filtros.ano) {
     const { inicio, fim } = rangeDoMesISO(filtros.mes, filtros.ano)
     q = q.gte("data", inicio).lte("data", fim)
   } else if (filtros.ano) {
@@ -462,6 +470,22 @@ export interface DREMes {
 }
 
 export async function getDREMes(mes: Mes, ano: number): Promise<DREMes> {
+  const { inicio, fim } = rangeDoMesISO(mes, ano)
+  return getDREPeriodo(inicio, fim, mes, ano)
+}
+
+/**
+ * Igual a getDREMes, mas para um INTERVALO arbitrário de datas
+ * (YYYY-MM-DD, inclusivos). Usado quando o período global está em modo
+ * dia/intervalo e pela divisão de gastos por categoria da Visão geral.
+ * mes/ano são só rótulos do retorno.
+ */
+export async function getDREPeriodo(
+  inicio: string,
+  fim: string,
+  mes: Mes,
+  ano: number
+): Promise<DREMes> {
   const supabase = getSupabaseAdmin()
   const base: DREMes = {
     mes, ano,
@@ -470,7 +494,6 @@ export async function getDREMes(mes: Mes, ano: number): Promise<DREMes> {
   }
   if (!supabase) return base
 
-  const { inicio, fim } = rangeDoMesISO(mes, ano)
   const [{ data: lancamentos }, categorias] = await Promise.all([
     supabase
       .from("lancamento_financeiro")

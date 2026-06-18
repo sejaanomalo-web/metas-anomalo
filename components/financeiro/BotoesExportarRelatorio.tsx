@@ -23,6 +23,19 @@ interface Props {
   projecao: ProjecaoPonto[]
   mes: Mes
   ano: number
+  /** Rótulo do período selecionado (ex.: "Junho 2026", "10 jun", "10 mai – 20 jun").
+   *  O DRE reflete esse período; sem ele, cai no mês representativo. */
+  rotulo?: string
+}
+
+/** Slug seguro p/ nome de arquivo a partir do rótulo do período. */
+function slugRotulo(rotulo: string): string {
+  return rotulo
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
 }
 
 /**
@@ -44,15 +57,21 @@ export default function BotoesExportarRelatorio({
   projecao,
   mes,
   ano,
+  rotulo,
 }: Props) {
+  // Rótulo do período pra cabeçalhos do CSV/arquivo. Em modo 'mes' o
+  // rotulo já é "<Mês> <Ano>"; em dia/intervalo reflete o range real.
+  const periodoLabel = rotulo ?? `${mes}/${ano}`
+  const periodoSlug = rotulo ? slugRotulo(rotulo) : `${mes.toLowerCase()}-${ano}`
+
   function exportarCSV() {
-    const csv = montarCSV(dre, fluxo, projecao, mes, ano)
+    const csv = montarCSV(dre, fluxo, projecao, periodoLabel, ano)
     // BOM UTF-8 — sem ele, Excel mostra "Mãe" como "MÃ£e".
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `relatorio-financeiro-${mes.toLowerCase()}-${ano}.csv`
+    a.download = `relatorio-financeiro-${periodoSlug}.csv`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -108,14 +127,14 @@ function montarCSV(
   dre: DREMes,
   fluxo: PontoFluxo[],
   projecao: ProjecaoPonto[],
-  mes: Mes,
+  periodoLabel: string,
   ano: number
 ): string {
   const linhas: string[] = []
 
   // Cabeçalho geral
   linhas.push(linhaCSV("Relatório financeiro · Anômalo Hub"))
-  linhas.push(linhaCSV(`Mês de referência: ${mes}/${ano}`))
+  linhas.push(linhaCSV(`Período de referência: ${periodoLabel}`))
   linhas.push(
     linhaCSV(
       `Gerado em: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
@@ -124,7 +143,7 @@ function montarCSV(
   linhas.push("")
 
   // === DRE Receitas ===
-  linhas.push(linhaCSV(`DRE Receitas · ${mes}/${ano}`))
+  linhas.push(linhaCSV(`DRE Receitas · ${periodoLabel}`))
   linhas.push(linhaCSV("Categoria", "Lançamentos", "Total (R$)", "% do total"))
   for (const r of dre.receitas) {
     const pct = dre.total_receitas > 0 ? (r.total / dre.total_receitas) * 100 : 0
@@ -134,7 +153,7 @@ function montarCSV(
   linhas.push("")
 
   // === DRE Despesas ===
-  linhas.push(linhaCSV(`DRE Despesas · ${mes}/${ano}`))
+  linhas.push(linhaCSV(`DRE Despesas · ${periodoLabel}`))
   linhas.push(linhaCSV("Categoria", "Lançamentos", "Total (R$)", "% do total"))
   for (const d of dre.despesas) {
     const pct = dre.total_despesas > 0 ? (d.total / dre.total_despesas) * 100 : 0
@@ -144,7 +163,7 @@ function montarCSV(
   linhas.push("")
 
   // === Resultado ===
-  linhas.push(linhaCSV("RESULTADO DO MÊS", dre.resultado.toFixed(2)))
+  linhas.push(linhaCSV("RESULTADO DO PERÍODO", dre.resultado.toFixed(2)))
   linhas.push("")
 
   // === Projeção 3 meses ===

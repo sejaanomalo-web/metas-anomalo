@@ -6,6 +6,7 @@ import CardClienteMeta from "@/components/CardClienteMeta"
 import { requererPermissao } from "@/lib/auth"
 import { subtituloDaEmpresa } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import { getResumoMetasClientesDaEmpresa } from "@/lib/metas-cliente"
 
@@ -52,7 +53,7 @@ export default async function MetasPorClientePage({
     <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
       <div>
         <Link
-          href={`/dashboard/metas?mes=${mes}&ano=${ano}`}
+          href={`/dashboard/metas?${periodoQS(periodo)}`}
           style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500 }}
           className="hover:text-[#C9953A] transition"
         >

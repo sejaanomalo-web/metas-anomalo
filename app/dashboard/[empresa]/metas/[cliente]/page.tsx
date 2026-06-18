@@ -19,6 +19,7 @@ import {
 } from "@/lib/data"
 import { type DadosReais } from "@/lib/supabase"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import { getClientePorSlug, clienteDisplayName } from "@/lib/clientes"
 import {
@@ -127,7 +128,7 @@ export default async function MetasClientePage({
       <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
         <div className="hero-banner">
           <Link
-            href={`/dashboard/${empresa.slug}/metas?mes=${mes}&ano=${ano}`}
+            href={`/dashboard/${empresa.slug}/metas?${periodoQS(periodo)}`}
             style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500 }}
             className="hover:text-[#C9953A] transition"
           >

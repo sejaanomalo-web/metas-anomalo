@@ -5,6 +5,7 @@ import DrawerEmpresas from "@/components/DrawerEmpresas"
 import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
 import { formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import {
   getResumoPorIntervaloPorEmpresa,
   getUltimoLogSentinela,
@@ -239,6 +240,7 @@ export default async function TrafegoOverviewPage({
                   cpl={r?.cplReal ?? null}
                   cpm={r?.cpmReal ?? null}
                   resumoClientes={resumosClientes.get(empresa.nome)}
+                  qs={periodoQS(periodo)}
                 />
               )
             })}

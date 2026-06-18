@@ -1,7 +1,7 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import ListaCategorias from "@/components/financeiro/ListaCategorias"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
-import { mesValido, anoValido } from "@/lib/data"
+import { parsePeriodo } from "@/lib/periodo"
 import { listarCategorias } from "@/lib/financeiro"
 import { requererPermissao } from "@/lib/auth"
 
@@ -10,12 +10,13 @@ export const dynamic = "force-dynamic"
 export default async function CategoriasPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; ano?: string }
+  searchParams: { mes?: string; ano?: string; de?: string; ate?: string; modo?: string }
 }) {
   await requererPermissao("dashboard_financeiro")
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
   const categorias = await listarCategorias(undefined, false)
 
   return (

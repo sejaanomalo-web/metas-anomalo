@@ -8,6 +8,7 @@ import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
 import { requererPermissao } from "@/lib/auth"
 import { subtituloDaEmpresa } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import { empresaTemClientesTrafego } from "@/lib/clientes"
 import {
@@ -115,7 +116,7 @@ export default async function TrafegoPage({
       >
         <div>
           <Link
-            href={`/dashboard/trafego?mes=${mes}&ano=${ano}`}
+            href={`/dashboard/trafego?${periodoQS(periodo)}`}
             style={{
               fontSize: 12,
               color: "var(--text-3)",

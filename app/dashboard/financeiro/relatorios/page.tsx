@@ -1,8 +1,9 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import BotoesExportarRelatorio from "@/components/financeiro/BotoesExportarRelatorio"
-import { mesValido, anoValido, formatBRL, formatNumero, MESES, type Mes } from "@/lib/data"
-import { getDREMes, getFluxoCaixaAnual } from "@/lib/financeiro"
+import { formatBRL, formatNumero, MESES, type Mes } from "@/lib/data"
+import { parsePeriodo } from "@/lib/periodo"
+import { getDREPeriodo, getFluxoCaixaAnual } from "@/lib/financeiro"
 import { requererPermissao } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
@@ -14,15 +15,18 @@ function mesIndex(mes: Mes): number {
 export default async function RelatoriosPage({
   searchParams,
 }: {
-  searchParams: { mes?: string; ano?: string }
+  searchParams: { mes?: string; ano?: string; de?: string; ate?: string; modo?: string }
 }) {
   await requererPermissao("dashboard_financeiro")
 
-  const mes = mesValido(searchParams?.mes)
-  const ano = anoValido(searchParams?.ano)
+  const periodo = parsePeriodo(searchParams)
+  const mes = periodo.mes
+  const ano = periodo.ano
 
   const [dre, fluxo] = await Promise.all([
-    getDREMes(mes, ano),
+    // DRE respeita o período selecionado (mês/dia/intervalo); o histórico
+    // e a projeção continuam ancorados no ANO/mês representativo.
+    getDREPeriodo(periodo.de, periodo.ate, mes, ano),
     getFluxoCaixaAnual(ano),
   ])
 
@@ -62,7 +66,7 @@ export default async function RelatoriosPage({
             flexWrap: "wrap",
           }}
         >
-          <h1 style={{ fontSize: 36 }}>DRE e projeção · {mes} {ano}</h1>
+          <h1 style={{ fontSize: 36 }}>DRE e projeção · {periodo.rotulo}</h1>
           <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
         </div>
         <div className="gold-divider" style={{ marginTop: 18 }} />
@@ -80,6 +84,7 @@ export default async function RelatoriosPage({
           projecao={projecao}
           mes={mes}
           ano={ano}
+          rotulo={periodo.rotulo}
         />
       </div>
 
@@ -120,10 +125,10 @@ export default async function RelatoriosPage({
               textTransform: "uppercase",
             }}
           >
-            Resultado do mês
+            Resultado do período
           </p>
           <p style={{ fontSize: 14, color: "var(--muted-foreground)", marginTop: 4 }}>
-            Receitas − Despesas
+            Receitas − Despesas · {periodo.rotulo}
           </p>
         </div>
         <p

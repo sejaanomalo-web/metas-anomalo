@@ -12,6 +12,7 @@ import VendasInformadas from "@/components/trafego/VendasInformadas"
 import { requererPermissao } from "@/lib/auth"
 import { listarVendasDoCliente } from "@/lib/vendas-cliente"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
   getUltimoLogSentinela,
@@ -98,7 +99,7 @@ export default async function ClienteTrafegoPage({
       <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
         <div>
           <Link
-            href={`/dashboard/${empresa.slug}/clientes?mes=${mes}&ano=${ano}`}
+            href={`/dashboard/${empresa.slug}/clientes?${periodoQS(periodo)}`}
             style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500 }}
             className="hover:text-[#C9953A] transition"
           >

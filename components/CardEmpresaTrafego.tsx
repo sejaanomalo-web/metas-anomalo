@@ -20,6 +20,7 @@ export default function CardEmpresaTrafego({
   cpl,
   cpm,
   resumoClientes,
+  qs,
 }: {
   empresa: EmpresaMeta
   mes: Mes
@@ -28,6 +29,8 @@ export default function CardEmpresaTrafego({
   leads: number
   cpl: number | null
   cpm: number | null
+  /** Query string do período global já pronta (preserva modo/de/ate). */
+  qs?: string
   /** Agregado dos clientes da assessoria (quando a empresa delega aos
    *  clientes-folha, ex.: Assessoria Sun). Mostra o que a agência movimenta
    *  mesmo sem rodar tráfego no próprio nome. */
@@ -37,7 +40,7 @@ export default function CardEmpresaTrafego({
     leads: number
   } | null
 }) {
-  const href = `/dashboard/${empresa.slug}/trafego?mes=${mes}&ano=${ano}`
+  const href = `/dashboard/${empresa.slug}/trafego?${qs ?? `mes=${mes}&ano=${ano}`}`
   const semDados = investimento === 0 && leads === 0
 
   return (
