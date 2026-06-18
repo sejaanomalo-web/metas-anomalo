@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { getSupabase, supabaseConfigurado } from "./supabase"
+import { parseNumeroForm } from "./parse-numero"
 import {
   type EmpresaDb,
   type Mes,
@@ -19,12 +20,18 @@ export interface ResultadoMeta {
 
 export type MetaOverride = Record<string, number>
 
+/**
+ * Form → number (ou null se vazio/inválido). Delega ao parser canônico
+ * (lib/parse-numero), que aceita tanto o VALOR-MÁQUINA do CampoMoeda
+ * ("10000.00", ponto = decimal) quanto entrada BR digitada ("10.000,00").
+ *
+ * O parser legado fazia `replace(/\./g, "")` — tratava QUALQUER ponto como
+ * separador de milhar e engolia o ponto decimal do valor-máquina: "10000.00"
+ * virava 1.000.000 (erro de 100x em moeda; 10x em percentual). Ver
+ * components/inputs/CampoMoeda.tsx (emite valor-máquina) e lib/mascaras.ts.
+ */
 function parseNum(v: FormDataEntryValue | null): number | null {
-  if (v === null) return null
-  const s = String(v).trim().replace(/\./g, "").replace(",", ".")
-  if (s === "") return null
-  const n = Number(s)
-  return Number.isFinite(n) ? n : null
+  return parseNumeroForm(v).value
 }
 
 function empresaValida(e: string): e is EmpresaDb {
