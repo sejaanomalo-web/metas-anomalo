@@ -4,6 +4,23 @@ import { revalidatePath } from "next/cache"
 import { getSupabase, supabaseConfigurado } from "./supabase"
 import { empresas as empresasHardcoded, type EmpresaMeta, type TipoFunil } from "./data"
 
+/**
+ * Revalida TODAS as superfícies que listam empresas ao criar/editar/desativar/
+ * reordenar/excluir uma empresa — incluindo os formulários públicos, pra manter
+ * empresa do formulário sincronizada com o sistema automaticamente.
+ *
+ * Os forms /formulario (tráfego) e /formulario-comercial são `force-dynamic`,
+ * então já re-leem a lista a cada acesso; revalidar aqui é defesa em
+ * profundidade (cobre cache/CDN e mantém a sincronização instantânea mesmo se o
+ * force-dynamic for removido um dia). A revalidação do path da empresa
+ * específica (`/dashboard/<slug>`) continua inline em cada action.
+ */
+function revalidarSuperficiesEmpresas() {
+  revalidatePath("/dashboard")
+  revalidatePath("/formulario")
+  revalidatePath("/formulario-comercial")
+}
+
 export interface EmpresaConfigRow {
   id?: string
   slug: string
@@ -169,7 +186,7 @@ export async function criarEmpresaAction(
     return { ok: false, erro: error.message }
   }
 
-  revalidatePath("/dashboard")
+  revalidarSuperficiesEmpresas()
   revalidatePath(`/dashboard/${slug}`)
   return { ok: true, slug }
 }
@@ -209,7 +226,7 @@ export async function atualizarEmpresaAction(
     .eq("id", id)
   if (error) return { ok: false, erro: error.message }
 
-  revalidatePath("/dashboard")
+  revalidarSuperficiesEmpresas()
   if (atual?.slug) revalidatePath(`/dashboard/${atual.slug}`)
   return { ok: true, slug: atual?.slug }
 }
@@ -232,7 +249,7 @@ export async function desativarEmpresaAction(
     .eq("id", id)
   if (error) return { ok: false, erro: error.message }
 
-  revalidatePath("/dashboard")
+  revalidarSuperficiesEmpresas()
   return { ok: true }
 }
 
@@ -254,7 +271,7 @@ export async function reativarEmpresaAction(
     .eq("id", id)
   if (error) return { ok: false, erro: error.message }
 
-  revalidatePath("/dashboard")
+  revalidarSuperficiesEmpresas()
   return { ok: true }
 }
 
@@ -296,7 +313,7 @@ export async function reordenarEmpresasAction(
     return { ok: false, erro: erro.message }
   }
 
-  revalidatePath("/dashboard")
+  revalidarSuperficiesEmpresas()
   return { ok: true }
 }
 
@@ -349,6 +366,6 @@ export async function excluirEmpresaAction(
     .eq("id", id)
   if (error) return { ok: false, erro: error.message }
 
-  revalidatePath("/dashboard")
+  revalidarSuperficiesEmpresas()
   return { ok: true }
 }
