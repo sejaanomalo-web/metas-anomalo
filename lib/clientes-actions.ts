@@ -4,6 +4,18 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { requererPermissao } from "./auth"
 
+/**
+ * Revalida as superfícies que listam clientes (cliente_trafego) ao criar/editar/
+ * excluir/reordenar — dashboard + formulário comercial (cujo seletor de cliente
+ * vem de getClientesAtivosPorEmpresa). O form é `force-dynamic` (já re-lê a cada
+ * acesso); revalidar aqui é defesa em profundidade, pra o cliente aparecer no
+ * formulário automaticamente assim que cadastrado.
+ */
+function revalidarSuperficiesClientes() {
+  revalidatePath("/dashboard", "layout")
+  revalidatePath("/formulario-comercial")
+}
+
 export interface ResultadoCliente {
   ok: boolean
   erro?: string
@@ -75,7 +87,7 @@ export async function criarClienteAction(
     return { ok: false, erro: error.message }
   }
 
-  revalidatePath("/dashboard", "layout")
+  revalidarSuperficiesClientes()
   return { ok: true, id: data.id as string, slug: data.slug as string }
 }
 
@@ -115,7 +127,7 @@ export async function atualizarClienteAction(
     return { ok: false, erro: error.message }
   }
 
-  revalidatePath("/dashboard", "layout")
+  revalidarSuperficiesClientes()
   return { ok: true, id, slug }
 }
 
@@ -143,7 +155,7 @@ export async function excluirClienteAction(id: string): Promise<ResultadoCliente
   const { error } = await supabase.from("cliente_trafego").delete().eq("id", id)
   if (error) return { ok: false, erro: error.message }
 
-  revalidatePath("/dashboard", "layout")
+  revalidarSuperficiesClientes()
   return { ok: true, id }
 }
 
@@ -200,6 +212,6 @@ export async function reordenarClientesAction(
     return { ok: false, erro: erro.message }
   }
 
-  revalidatePath("/dashboard", "layout")
+  revalidarSuperficiesClientes()
   return { ok: true }
 }

@@ -1,6 +1,7 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import AbasArea from "@/components/AbasArea"
 import TimeComercial from "@/components/time/TimeComercial"
+import GerenciadorColaboradoresComerciais from "@/components/comercial/GerenciadorColaboradoresComerciais"
 import { requererPermissao } from "@/lib/auth"
 import { parsePeriodo } from "@/lib/periodo"
 import { periodoQS } from "@/lib/periodo-url"
@@ -8,6 +9,7 @@ import {
   getResumoComercialColaborador,
   listarTimePorPapel,
 } from "@/lib/time"
+import { listarColaboradoresComerciais } from "@/lib/colaboradores-comerciais"
 import {
   getObservacoesComerciaisDoColaborador,
   getResumoComercialPorEmpresaDoColaborador,
@@ -33,13 +35,24 @@ export default async function TimeComercialPage({
   await requererPermissao("dashboard_comercial")
 
   const periodo = parsePeriodo(searchParams)
-  const time = await listarTimePorPapel("comercial")
+  const [time, colaboradores] = await Promise.all([
+    listarTimePorPapel("comercial"),
+    listarColaboradoresComerciais(),
+  ])
+  // Usuários de LOGIN do time (somente leitura na gerência do roster) — o
+  // restante (tipo "colaborador") já está em `colaboradores`.
+  const usuariosComercial = time
+    .filter((m) => m.tipo !== "colaborador")
+    .map((m) => ({ id: m.id, nome: m.nome, email: m.email }))
   const membros = await Promise.all(
     time.map(async (m) => {
+      // Agrega sob TODOS os uuids da pessoa (id + identidades mescladas), pra
+      // não perder histórico de quem foi do roster e depois ganhou login.
+      const ids = [m.id, ...(m.idsHistoricos ?? [])]
       const [resumo, porCliente, observacoes] = await Promise.all([
-        getResumoComercialColaborador(m.id, periodo.de, periodo.ate),
-        getResumoComercialPorEmpresaDoColaborador(m.id, periodo.de, periodo.ate),
-        getObservacoesComerciaisDoColaborador(m.id, periodo.de, periodo.ate),
+        getResumoComercialColaborador(ids, periodo.de, periodo.ate),
+        getResumoComercialPorEmpresaDoColaborador(ids, periodo.de, periodo.ate),
+        getObservacoesComerciaisDoColaborador(ids, periodo.de, periodo.ate),
       ])
       return { ...m, resumo, porCliente, observacoes }
     })
@@ -86,6 +99,11 @@ export default async function TimeComercialPage({
         </div>
         <div className="gold-divider" style={{ marginTop: 18 }} />
       </div>
+
+      <GerenciadorColaboradoresComerciais
+        colaboradoresIniciais={colaboradores}
+        usuariosComercial={usuariosComercial}
+      />
 
       <TimeComercial membros={membros} />
     </main>

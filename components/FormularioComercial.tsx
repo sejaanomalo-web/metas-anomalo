@@ -50,6 +50,15 @@ export default function FormularioComercial({
   const [feedback, setFeedback] = useState<Feedback>(null)
   const [pending, startTransition] = useTransition()
 
+  // Nomes repetidos entre responsáveis (ex.: dois "Maria" no roster). Como a
+  // página pública só expõe id+nome, desambiguamos a opção com um sufixo curto
+  // do id pra não atribuir o relatório à pessoa errada.
+  const nomesDuplicados = new Set(
+    (responsaveis ?? [])
+      .map((r) => r.nome)
+      .filter((nome, i, arr) => arr.indexOf(nome) !== arr.lastIndexOf(nome))
+  )
+
   async function onSubmit(formData: FormData) {
     setFeedback(null)
     const r = await salvarRelatorioComercialAction(formData)
@@ -138,7 +147,9 @@ export default function FormularioComercial({
               >
                 {responsaveis.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.nome}
+                    {nomesDuplicados.has(r.nome)
+                      ? `${r.nome} · #${r.id.slice(0, 4)}`
+                      : r.nome}
                   </option>
                 ))}
               </select>
