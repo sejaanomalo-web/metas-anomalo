@@ -12,6 +12,20 @@ import {
 } from "./auth"
 import { getSupabaseAdmin } from "./supabase"
 
+/**
+ * Revalida TODAS as superfícies onde um usuário aparece, ao criar/editar/
+ * desativar/excluir/redefinir senha. Inclui os formulários públicos
+ * (/formulario e /formulario-comercial) — antes só revalidava
+ * /dashboard/configuracoes, então uma pessoa desativada/excluída continuava
+ * aparecendo no seletor "Responsável" do formulário. `/dashboard` com "layout"
+ * cobre configurações, comercial/time e demais páginas internas.
+ */
+function revalidarSuperficiesUsuarios() {
+  revalidatePath("/dashboard", "layout")
+  revalidatePath("/formulario")
+  revalidatePath("/formulario-comercial")
+}
+
 export interface UsuarioRow {
   id: string
   email: string
@@ -162,7 +176,7 @@ export async function criarUsuarioAction(
     return { ok: false, erro: error.message }
   }
 
-  revalidatePath("/dashboard/configuracoes")
+  revalidarSuperficiesUsuarios()
   // Devolve a senha temporária se foi gerada (admin precisa pra
   // entregar pro usuário). Se o admin colocou senha custom, não devolve.
   return {
@@ -228,7 +242,7 @@ export async function atualizarUsuarioAction(
     return { ok: false, erro: error.message }
   }
 
-  revalidatePath("/dashboard/configuracoes")
+  revalidarSuperficiesUsuarios()
   return { ok: true }
 }
 
@@ -260,7 +274,7 @@ export async function alternarAtivoUsuarioAction(
     return { ok: false, erro: error.message }
   }
 
-  revalidatePath("/dashboard/configuracoes")
+  revalidarSuperficiesUsuarios()
   return { ok: true }
 }
 
@@ -302,13 +316,64 @@ export async function excluirUsuarioAction(
     return { ok: false, erro: "Supabase indisponível." }
   }
 
+  // Guarda o e-mail ANTES de apagar — usado pra remover também um eventual
+  // gêmeo no roster (colaboradores_comerciais com o mesmo e-mail). Sem isso, ao
+  // excluir o usuário o e-mail sai de usuarios, a supressão de time.ts deixa de
+  // valer e o registro do roster RESSURGE no seletor.
+  const { data: usuarioRow } = await supabase
+    .from("usuarios")
+    .select("email")
+    .eq("id", id)
+    .maybeSingle()
+  const emailUsuario = String((usuarioRow as { email?: string } | null)?.email ?? "")
+    .trim()
+    .toLowerCase()
+
   const { error } = await supabase.from("usuarios").delete().eq("id", id)
   if (error) {
     console.error("[usuarios] excluir error", error.message)
     return { ok: false, erro: error.message }
   }
 
-  revalidatePath("/dashboard/configuracoes")
+  // Remoção TOTAL (decisão de produto) — gate ESTRITO de admin, igual ao purge
+  // do roster em excluirColaboradorComercialAction (requererAdmin) e à política
+  // de auth.ts: apagar dados inseridos é só do admin (gerenciar_usuarios é amplo
+  // demais — um 'custom' poderia tê-lo). Apaga os relatórios comerciais da
+  // pessoa (funil/metas recalculam sem ela) E remove um eventual gêmeo do roster
+  // de mesmo e-mail + os relatórios dele, pra não ressurgir. DESATIVAR não faz
+  // isso (preserva histórico). Best-effort: loga e segue (o usuário já saiu).
+  if (admin.papel === "admin") {
+    const idsParaPurgar = [id]
+
+    if (emailUsuario) {
+      const { data: roster } = await supabase
+        .from("colaboradores_comerciais")
+        .select("id, email")
+      const idsGemeos = ((roster ?? []) as { id: string; email: string | null }[])
+        .filter((g) => (g.email ?? "").trim().toLowerCase() === emailUsuario)
+        .map((g) => g.id)
+      if (idsGemeos.length > 0) {
+        idsParaPurgar.push(...idsGemeos)
+        const { error: errRoster } = await supabase
+          .from("colaboradores_comerciais")
+          .delete()
+          .in("id", idsGemeos)
+        if (errRoster) {
+          console.error("[usuarios] excluir gêmeo roster error", errRoster.message)
+        }
+      }
+    }
+
+    const { error: errRel } = await supabase
+      .from("relatorios_comerciais")
+      .delete()
+      .in("colaborador_id", idsParaPurgar)
+    if (errRel) {
+      console.error("[usuarios] excluir relatorios comerciais error", errRel.message)
+    }
+  }
+
+  revalidarSuperficiesUsuarios()
   return { ok: true }
 }
 
@@ -337,7 +402,7 @@ export async function redefinirSenhaAction(
     return { ok: false, erro: error.message }
   }
 
-  revalidatePath("/dashboard/configuracoes")
+  revalidarSuperficiesUsuarios()
   return { ok: true, senha_temporaria: novaSenha }
 }
 

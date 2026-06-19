@@ -1,5 +1,6 @@
 import Image from "next/image"
 import FormularioManual from "@/components/FormularioManual"
+import RefreshOnFocus from "@/components/RefreshOnFocus"
 import { listarEmpresas } from "@/lib/empresas-actions"
 import { listarTimePorPapel } from "@/lib/time"
 import logo from "@/public/logo-capa-app.png"
@@ -26,6 +27,7 @@ export default async function FormularioPublicoPage() {
       className="min-h-screen mx-auto px-6 py-10"
       style={{ maxWidth: 560 }}
     >
+      <RefreshOnFocus />
       <header
         style={{
           display: "flex",
