@@ -676,3 +676,31 @@ create index if not exists pipeline_comercial_ativo_idx
 -- RLS habilitada sem policy = só service_role acessa (server-only).
 alter table public.relatorios_comerciais enable row level security;
 alter table public.pipeline_comercial enable row level security;
+
+-- Roster do TIME COMERCIAL, desacoplado dos usuários de login ----------------
+-- O seletor "Responsável" do formulário comercial e a aba Time vêm da UNIÃO de
+-- (usuários de login que se qualificam) + (integrantes desta tabela). Permite
+-- cadastrar vendedores/SDRs que só preenchem o formulário, sem conta de acesso
+-- ao painel. O id (uuid) serve como colaborador_id em relatorios_comerciais
+-- (vínculo soft, sem FK), então a atribuição por pessoa na aba Time funciona
+-- sem mudança no schema de relatórios. Ver lib/time.ts (listarTimePorPapel) e
+-- lib/colaboradores-comerciais.ts. NB: é OUTRA tabela que a legada
+-- public.colaboradores (sistema antigo de comissionamento).
+create table if not exists public.colaboradores_comerciais (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  email text,                       -- opcional (vendedor sem login)
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists colaboradores_comerciais_ativo_idx
+  on public.colaboradores_comerciais (ativo);
+-- E-mail único quando informado (vários nulos permitidos pelo WHERE).
+create unique index if not exists colaboradores_comerciais_email_key
+  on public.colaboradores_comerciais (lower(email))
+  where email is not null and email <> '';
+
+-- RLS habilitada sem policy = só service_role acessa (server-only).
+alter table public.colaboradores_comerciais enable row level security;
