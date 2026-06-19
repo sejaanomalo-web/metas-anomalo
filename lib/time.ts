@@ -40,18 +40,23 @@ export interface MembroTime {
  *   2. Integrantes do roster comercial (public.colaboradores_comerciais ativos),
  *      que NÃO precisam de conta de login — cadastrados na aba Comercial › Time.
  * Assim, novos integrantes do comercial aparecem no seletor "Responsável" do
- * formulário e na aba Time mesmo sem login. Deduplicado por e-mail/nome contra
- * os usuários (preferindo o usuário de login quando há sobreposição).
+ * formulário e na aba Time mesmo sem login.
  *
- * Regra dos usuários de login: não basta o papel exato — quem é `custom`
- * (personalizado) e recebeu a função de formulário também conta (assim
- * Felipe/Guilherme, custom com formulario_comercial/trafego, entram). Mapeamento
- * papel → permissão:
- *   comercial      → formulario_comercial
- *   gestor_trafego → formulario_trafego
- * Admins ficam de fora dos usuários de login (são donos, não responsáveis) — se
- * um admin precisa aparecer como responsável do comercial, cadastre-o também no
- * roster (colaboradores_comerciais).
+ * Regra dos usuários de login (role-agnostic — decisão de produto): quem tem a
+ * FUNÇÃO aparece, independente do papel:
+ *   • admin → SEMPRE no comercial (acesso total); no tráfego segue de fora;
+ *   • papel canônico (comercial / gestor_trafego) → entra;
+ *   • custom com a permissão de formulário correspondente → entra. Mapeamento:
+ *       comercial      → formulario_comercial
+ *       gestor_trafego → formulario_trafego
+ *
+ * Dedup do roster (só comercial): o roster é para pessoas SEM login. Se o
+ * e-mail do integrante do roster pertencer a algum usuário de login:
+ *   • usuário de login ATIVO que se qualifica → MESCLA (anexa o id do roster ao
+ *     `idsHistoricos`, pra a aba Time somar relatórios sob os dois uuids);
+ *   • qualquer outro usuário de login (inativo, ou ativo sem a função) →
+ *     SUPRIME o registro do roster (não ressurge alguém que foi removido nem
+ *     duplica quem tem login). Sem e-mail / e-mail sem login → linha própria.
  */
 export async function listarTimePorPapel(
   papel: PapelUsuario
@@ -85,8 +90,11 @@ export async function listarTimePorPapel(
 
   const usuariosTime: MembroTime[] = ((data ?? []) as LinhaUsuario[])
     .filter((u) => {
-      if (u.papel === "admin") return false
-      if (u.papel === papel) return true // papel canônico (ex.: comercial)
+      // Regra role-agnostic (decisão de produto) no COMERCIAL: todo admin
+      // aparece (acesso total). No tráfego mantém o comportamento anterior
+      // (admins de fora — são donos, não responsáveis de tráfego).
+      if (u.papel === "admin") return papel === "comercial"
+      if (u.papel === papel) return true // papel canônico (comercial / gestor_trafego)
       // custom/personalizado com a função de formulário correspondente
       return permForm ? u.permissoes?.[permForm] === true : false
     })
@@ -114,22 +122,35 @@ export async function listarTimePorPapel(
   }
 
   // Dedup/merge — APENAS por E-MAIL (identidade forte). Nome NÃO é usado:
-  //   • casar por nome dropava integrantes distintos que por acaso têm o mesmo
-  //     nome de um usuário de login (dois "João Silva" reais);
-  //   • mesclar por nome juntaria métricas de pessoas DIFERENTES (atribuição
-  //     errada). E-mail é único, então só ele identifica "a mesma pessoa".
-  // Quando o e-mail do roster casa com um usuário de login, é a MESMA conta:
-  // não criamos uma 2ª linha — em vez disso anexamos o id do roster ao
-  // `idsHistoricos` do usuário, para que a aba Time SOME os relatórios lançados
-  // sob qualquer um dos dois uuids (o colaborador_id é congelado no envio e
-  // nunca é reconciliado). Sem e-mail, ou com e-mail distinto, o integrante é
-  // uma linha própria (sua própria identidade/métricas).
+  // casar/mesclar por nome dropava ou juntaria pessoas DIFERENTES que por acaso
+  // têm o mesmo nome. E-mail é único, então só ele identifica "a mesma pessoa".
   const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase()
   const usuarioPorEmail = new Map<string, MembroTime>()
   for (const u of usuariosTime) {
     const e = norm(u.email)
     if (e) usuarioPorEmail.set(e, u)
   }
+
+  // E-mails de TODOS os usuários de login (ativos + inativos, qualquer papel) —
+  // pra suprimir do roster quem já tem identidade de login: evita RESSURGIR
+  // alguém que foi desativado/removido (o registro do roster ficaria como linha
+  // própria depois que o usuário sai do filtro ativo) e evita duplicar quem tem
+  // conta. O roster é, por definição, para pessoas SEM login.
+  const { data: emailsData, error: emailsErr } = await supabase
+    .from("usuarios")
+    .select("email")
+  if (emailsErr) {
+    // Fail-safe: sem a lista de e-mails não dá pra suprimir com segurança. Em
+    // vez de "suprimir nada" (que ressuscitaria removidos), devolve só os
+    // usuários de login qualificados — nunca ressurge alguém nem duplica.
+    console.error("[time] emails login error", emailsErr.message)
+    return usuariosTime.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+  }
+  const emailsComLogin = new Set(
+    ((emailsData ?? []) as { email: string | null }[])
+      .map((u) => norm(u.email))
+      .filter((e) => e.length > 0)
+  )
 
   const roster: MembroTime[] = []
   for (const c of (rosterData ?? []) as {
@@ -140,13 +161,17 @@ export async function listarTimePorPapel(
     const e = norm(c.email)
     const usuarioCasado = e ? usuarioPorEmail.get(e) : undefined
     if (usuarioCasado) {
-      // Mesma conta → mescla: agrega métricas sob os dois uuids.
+      // Mesma conta (login ativo que se qualifica) → mescla: agrega métricas
+      // sob os dois uuids (id do usuário + id do roster).
       usuarioCasado.idsHistoricos = [
         ...(usuarioCasado.idsHistoricos ?? []),
         c.id,
       ]
       continue
     }
+    // E-mail pertence a um usuário de login (inativo, ou ativo sem a função) →
+    // suprime: não ressurge removido nem duplica quem tem conta.
+    if (e && emailsComLogin.has(e)) continue
     roster.push({
       id: c.id,
       nome: c.nome,

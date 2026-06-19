@@ -1,5 +1,6 @@
 import Image from "next/image"
 import FormularioComercial from "@/components/FormularioComercial"
+import RefreshOnFocus from "@/components/RefreshOnFocus"
 import { listarEmpresas } from "@/lib/empresas-actions"
 import { getClientesAtivosPorEmpresa } from "@/lib/clientes"
 import { listarTimePorPapel } from "@/lib/time"
@@ -25,6 +26,7 @@ export default async function FormularioComercialPublicoPage() {
       className="min-h-screen mx-auto px-6 py-10"
       style={{ maxWidth: 560 }}
     >
+      <RefreshOnFocus />
       <header
         style={{
           display: "flex",

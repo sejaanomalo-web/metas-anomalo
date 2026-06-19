@@ -186,11 +186,12 @@ export async function alternarAtivoColaboradorComercialAction(
  * Exclusão definitiva. Gate ESTRITO de admin (requererAdmin), igual às demais
  * ações destrutivas sobre dados inseridos (excluirRelatorioComercialAction):
  * criar/editar/desativar o roster é do time comercial, mas apagar de vez é só
- * do admin. Exige também confirmação textual "Excluir" (defesa em
- * profundidade). Os relatórios comerciais já lançados por essa pessoa NÃO são
- * apagados — continuam somando no funil/Metas (são keyed por colaborador_id,
- * sem FK rígida). Para só tirar do seletor preservando o histórico visível na
- * aba Time, use Desativar.
+ * do admin. Exige também confirmação textual "Excluir" (defesa em profundidade).
+ *
+ * Remoção TOTAL (decisão de produto): além de remover o integrante, PURGA os
+ * relatórios comerciais lançados por ele (relatorios_comerciais.colaborador_id —
+ * uuid soft, sem FK) — o funil e as metas orgânicas passam a somar sem ele.
+ * Para só tirar do seletor preservando o histórico, use Desativar.
  */
 export async function excluirColaboradorComercialAction(
   formData: FormData
@@ -214,6 +215,20 @@ export async function excluirColaboradorComercialAction(
   if (error) {
     console.error("[colaboradores-comerciais] excluir error", error.message)
     return { ok: false, erro: error.message }
+  }
+
+  // Remoção TOTAL: purga os relatórios comerciais lançados por essa pessoa
+  // (keyed por colaborador_id = id do roster). Não falha a exclusão se o purge
+  // der erro — loga e segue.
+  const { error: errRel } = await supabase
+    .from("relatorios_comerciais")
+    .delete()
+    .eq("colaborador_id", id)
+  if (errRel) {
+    console.error(
+      "[colaboradores-comerciais] excluir relatorios error",
+      errRel.message
+    )
   }
 
   revalidarSuperficiesComercial()
