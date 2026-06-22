@@ -89,6 +89,11 @@ export default async function TrafegoPage({
   const trackeada = empresasTrackeadas.includes(empresa.nome)
   const stat = statusSentinela(ultimoLog)
   const prox = proximaExecucao()
+  // Ponte MCP: se há linhas via MCP no período exibido, badge mostra "MCP".
+  const emModoMCP = linhas.some((l) => l.coleta_status === "mcp")
+  const statusBadge = emModoMCP
+    ? { cor: "neutral" as const, rotulo: "MCP" }
+    : { cor: stat.cor, rotulo: stat.rotulo }
   const anomaliasEmpresa: AnomaliaSentinela[] = (
     ultimoLog?.anomalias_detectadas ?? []
   ).filter((a) => a.empresa === empresa.nome)
@@ -146,8 +151,8 @@ export default async function TrafegoPage({
               marginTop: 10,
             }}
           >
-            {subtituloDaEmpresa(empresa)} · Atualizado automaticamente pelo
-            Sentinela
+            {subtituloDaEmpresa(empresa)} · Atualizado automaticamente
+            {emModoMCP ? " via MCP" : " pelo Sentinela"}
           </p>
 
           <div
@@ -167,8 +172,8 @@ export default async function TrafegoPage({
               temClientes={temClientes}
             />
             <BadgeStatusSentinela
-              statusCor={stat.cor}
-              rotulo={stat.rotulo}
+              statusCor={statusBadge.cor}
+              rotulo={statusBadge.rotulo}
               ultimaExecucao={ultimoLog?.data_execucao ?? null}
               proximaLabelCompleto={prox.labelCompleto}
             />

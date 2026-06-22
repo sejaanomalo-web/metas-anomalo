@@ -88,6 +88,10 @@ export default async function ClienteTrafegoPage({
   const nomeExibido = clienteDisplayName(cliente)
   const stat = statusSentinela(ultimoLog)
   const prox = proximaExecucao()
+  const emModoMCP = linhas.some((l) => l.coleta_status === "mcp")
+  const statusBadge = emModoMCP
+    ? { cor: "neutral" as const, rotulo: "MCP" }
+    : { cor: stat.cor, rotulo: stat.rotulo }
 
   return (
     <>
@@ -168,8 +172,8 @@ export default async function ClienteTrafegoPage({
                 />
               )}
               <BadgeStatusSentinela
-                statusCor={stat.cor}
-                rotulo={stat.rotulo}
+                statusCor={statusBadge.cor}
+                rotulo={statusBadge.rotulo}
                 ultimaExecucao={ultimoLog?.data_execucao ?? null}
                 proximaLabelCompleto={prox.labelCompleto}
               />
