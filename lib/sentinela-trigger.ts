@@ -23,6 +23,9 @@ export interface ResultadoSentinelaDia {
   ok: boolean
   data: string
   status?: string
+  /** Fonte real dos dados nesta atualização: 'sentinela' (app do Meta) ou
+   *  'mcp' (coleta na nuvem, quando a Sentinela não processou nada). */
+  fonte?: "sentinela" | "mcp"
   contasProcessadas?: number
   contasFalhas?: number
   investimentoTotal?: number
@@ -110,21 +113,17 @@ export async function dispararSentinelaDia(
     }
     const processadas = json.totais?.contas_processadas ?? 0
     const contasFalhas = json.totais?.contas_falhas ?? 0
-    // A edge function responde 200 mesmo quando NÃO puxou nada (ex.: app do
-    // Meta apagado → todas as contas falham). Tratamos como ERRO pra não
-    // exibir um "Atualizado ✓" falso no botão.
-    if (json.status === "falha" || (processadas === 0 && contasFalhas > 0)) {
-      return {
-        ok: false,
-        data: dataISO,
-        status: json.status,
-        contasFalhas,
-        erro: "Sentinela fora (app do Meta) — dados via MCP provisório.",
-      }
-    }
+    // Quando a Sentinela não processa nada (ex.: app do Meta fora), os dados
+    // exibidos vêm da ponte MCP (rotina na nuvem) — NÃO é erro. Sinalizamos a
+    // fonte pra UI mostrar "Atualizado · MCP" em vez de "· Sentinela".
+    const fonte: "sentinela" | "mcp" =
+      json.status === "falha" || (processadas === 0 && contasFalhas > 0)
+        ? "mcp"
+        : "sentinela"
     return {
       ok: true,
       data: dataISO,
+      fonte,
       status: json.status,
       contasProcessadas: json.totais?.contas_processadas,
       contasFalhas: json.totais?.contas_falhas,
