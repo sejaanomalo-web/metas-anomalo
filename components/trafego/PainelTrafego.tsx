@@ -202,8 +202,13 @@ function LinhaTabela({
 }) {
   const hojeISO = new Date().toISOString().slice(0, 10)
   const ehSentinela = linha.preenchedor_nome === SENTINELA_NOME
+  // Ponte MCP: linhas gravadas pelo "Sentinela MCP" (coleta provisória via
+  // conector, enquanto o app do Meta está fora) aparecem com a tag "MCP
+  // provisório" em vez do nome cru — pra deixar a distinção clara.
+  const ehMCP = linha.preenchedor_nome === "Sentinela MCP"
+  const ehAutomatico = ehSentinela || ehMCP
   const ehHoje = linha.data === hojeISO
-  const parcial = ehSentinela && ehHoje
+  const parcial = ehAutomatico && ehHoje
   const dia = linha.data.slice(8, 10)
   return (
     <tr>
@@ -233,8 +238,16 @@ function LinhaTabela({
             title={linha.preenchedor_nome}
             style={{
               fontSize: 11,
-              color: ehSentinela ? "var(--accent)" : "var(--text-2)",
-              background: ehSentinela ? "rgba(201,149,58,0.10)" : "rgba(255,255,255,0.04)",
+              color: ehSentinela
+                ? "var(--accent)"
+                : ehMCP
+                ? "var(--warning)"
+                : "var(--text-2)",
+              background: ehSentinela
+                ? "rgba(201,149,58,0.10)"
+                : ehMCP
+                ? "var(--warning-bg)"
+                : "rgba(255,255,255,0.04)",
               padding: "3px 8px",
               borderRadius: 999,
               display: "inline-flex",
@@ -244,7 +257,12 @@ function LinhaTabela({
               letterSpacing: "0.02em",
             }}
           >
-            {ehSentinela ? "🤖" : "👤"} {ehSentinela ? "Sentinela" : linha.preenchedor_nome}
+            {ehSentinela ? "🤖" : ehMCP ? "📡" : "👤"}{" "}
+            {ehSentinela
+              ? "Sentinela"
+              : ehMCP
+              ? "MCP provisório"
+              : linha.preenchedor_nome}
           </span>
         ) : (
           <span style={{ color: "var(--text-4)", fontSize: 11 }}>·</span>

@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { formatBRL, formatNumero, type EmpresaMeta, type Mes } from "@/lib/data"
+import BadgeColeta from "@/components/trafego/BadgeColeta"
 
 /**
  * Card de uma empresa na visão agregada de tráfego pago
@@ -21,6 +22,7 @@ export default function CardEmpresaTrafego({
   cpm,
   resumoClientes,
   qs,
+  coletaStatus,
 }: {
   empresa: EmpresaMeta
   mes: Mes
@@ -29,6 +31,8 @@ export default function CardEmpresaTrafego({
   leads: number
   cpl: number | null
   cpm: number | null
+  /** Fonte da coleta (ponte MCP enquanto o app do Meta está fora). */
+  coletaStatus?: "mcp" | "mcp_disabled" | null
   /** Query string do período global já pronta (preserva modo/de/ate). */
   qs?: string
   /** Agregado dos clientes da assessoria (quando a empresa delega aos
@@ -80,6 +84,11 @@ export default function CardEmpresaTrafego({
         >
           {empresa.nome}
         </h3>
+        {coletaStatus && (
+          <div style={{ marginTop: 8 }}>
+            <BadgeColeta status={coletaStatus} />
+          </div>
+        )}
       </div>
 
       {/* KPIs principais */}

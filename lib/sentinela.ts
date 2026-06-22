@@ -620,6 +620,10 @@ export interface ResumoEmpresaMes {
   // Métricas de negócio derivadas.
   lucro: number // faturamento - investimento
   roi: number | null // (faturamento - investimento) / investimento
+  // Fonte da coleta do dia mais recente no período (ponte MCP enquanto o
+  // app do Meta está fora): 'mcp' = puxado pela ponte (aproximado),
+  // 'mcp_disabled' = conta sem Ads MCP no Meta, null = coleta normal.
+  coletaStatus?: "mcp" | "mcp_disabled" | null
 }
 
 /** Range YYYY-MM-DD do mês/ano selecionado (lte fim para incluir o último dia). */
@@ -668,10 +672,12 @@ interface LinhaAgregavel {
   cliques_real: number | null
   alcance_real: number | null
   conversas_real: number | null
+  // Fonte da coleta (ponte MCP): 'mcp' | 'mcp_disabled' | null.
+  coleta_status: string | null
 }
 
 const COLUNAS_AGREGAR =
-  "empresa, data, investimento_real, leads_real, reunioes_real, contratos_real, faturamento_real, criativos_entregues, criativos_usados, clientes_ativos, observacoes, respostas, preenchedor_nome, impressoes_real, cpm_real, cliques_real, alcance_real, conversas_real"
+  "empresa, data, investimento_real, leads_real, reunioes_real, contratos_real, faturamento_real, criativos_entregues, criativos_usados, clientes_ativos, observacoes, respostas, preenchedor_nome, impressoes_real, cpm_real, cliques_real, alcance_real, conversas_real, coleta_status"
 
 /** Agrega uma lista de linhas (mesma empresa, mesmo mês) num resumo. */
 function agregarLinhas(
@@ -724,10 +730,14 @@ function agregarLinhas(
     ) {
       observacoes = l.observacoes
     }
-    if (l.preenchedor_nome === SENTINELA_NOME) {
+    if (l.preenchedor_nome === SENTINELA_NOME || l.coleta_status === "mcp") {
       temSentinela = true
     }
   }
+
+  // Badge de fonte: usa o dia MAIS RECENTE do período (ordenadas[0]).
+  const coletaStatus =
+    (ordenadas[0]?.coleta_status as "mcp" | "mcp_disabled" | null) ?? null
 
   return {
     empresa,
@@ -760,6 +770,7 @@ function agregarLinhas(
     custoPorConversa: conversas > 0 ? investimento / conversas : null,
     lucro: faturamento - investimento,
     roi: investimento > 0 ? (faturamento - investimento) / investimento : null,
+    coletaStatus,
   }
 }
 

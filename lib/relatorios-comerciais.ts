@@ -243,22 +243,19 @@ export async function getResumoComercialPorEmpresa(
   return agruparPorEmpresa(await listarRelatoriosComerciais(inicio, fim))
 }
 
-/** Quebra por cliente das prospecções de UMA pessoa no período. Aceita um id
- *  OU vários (identidades mescladas — ver lib/time.ts idsHistoricos). */
+/** Quebra por cliente das prospecções de UMA pessoa no período. */
 export async function getResumoComercialPorEmpresaDoColaborador(
-  colaboradorId: string | string[],
+  colaboradorId: string,
   inicio: string,
   fim: string
 ): Promise<ResumoComercialCliente[]> {
-  const ids = (Array.isArray(colaboradorId) ? colaboradorId : [colaboradorId])
-    .filter((x) => Boolean(x))
-  if (ids.length === 0) return []
+  if (!colaboradorId) return []
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
   const { data, error } = await supabase
     .from("relatorios_comerciais")
     .select("*")
-    .in("colaborador_id", ids)
+    .eq("colaborador_id", colaboradorId)
     .gte("data", inicio)
     .lte("data", fim)
   if (error) {
@@ -271,19 +268,17 @@ export async function getResumoComercialPorEmpresaDoColaborador(
 /** Anotações (observações) de UMA pessoa no período, mais recentes primeiro.
  *  Combinada (pago + orgânico) — é a trilha de notas da pessoa no processo. */
 export async function getObservacoesComerciaisDoColaborador(
-  colaboradorId: string | string[],
+  colaboradorId: string,
   inicio: string,
   fim: string
 ): Promise<ObservacaoComercial[]> {
-  const ids = (Array.isArray(colaboradorId) ? colaboradorId : [colaboradorId])
-    .filter((x) => Boolean(x))
-  if (ids.length === 0) return []
+  if (!colaboradorId) return []
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
   const { data, error } = await supabase
     .from("relatorios_comerciais")
     .select("data, empresa, colaborador_nome, origem, observacoes")
-    .in("colaborador_id", ids)
+    .eq("colaborador_id", colaboradorId)
     .gte("data", inicio)
     .lte("data", fim)
     .not("observacoes", "is", null)

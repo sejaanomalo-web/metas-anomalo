@@ -108,6 +108,20 @@ export async function dispararSentinelaDia(
       // Resposta não-JSON mas 200 — considera ok sem detalhes.
       return { ok: true, data: dataISO }
     }
+    const processadas = json.totais?.contas_processadas ?? 0
+    const contasFalhas = json.totais?.contas_falhas ?? 0
+    // A edge function responde 200 mesmo quando NÃO puxou nada (ex.: app do
+    // Meta apagado → todas as contas falham). Tratamos como ERRO pra não
+    // exibir um "Atualizado ✓" falso no botão.
+    if (json.status === "falha" || (processadas === 0 && contasFalhas > 0)) {
+      return {
+        ok: false,
+        data: dataISO,
+        status: json.status,
+        contasFalhas,
+        erro: "Sentinela fora (app do Meta) — dados via MCP provisório.",
+      }
+    }
     return {
       ok: true,
       data: dataISO,

@@ -6,8 +6,11 @@ import TrafegoRealtime from "@/components/TrafegoRealtime"
 import CardClienteTrafego from "@/components/trafego/CardClienteTrafego"
 import GerenciadorClientes from "@/components/trafego/GerenciadorClientes"
 import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
+import PainelKpisResumo, {
+  fmtBRLResumo,
+} from "@/components/trafego/PainelKpisResumo"
 import { requererPermissao } from "@/lib/auth"
-import { subtituloDaEmpresa } from "@/lib/data"
+import { subtituloDaEmpresa, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
 import { periodoQS } from "@/lib/periodo-url"
 import { getEmpresaAsync } from "@/lib/empresas-actions"
@@ -64,6 +67,19 @@ export default async function ClientesPage({
   ])
   const stat = statusSentinela(ultimoLog)
   const prox = proximaExecucao()
+
+  // Agregado dos clientes desta empresa (espelha o KPI do overview, mas
+  // somando os clientes da agência em vez das empresas do Hub). "Clientes
+  // anunciando" = clientes com investimento > 0 no período.
+  let somaInv = 0
+  let somaLeads = 0
+  let clientesAnunciando = 0
+  for (const r of resumos) {
+    somaInv += r.investimento
+    somaLeads += r.leads
+    if (r.investimento > 0) clientesAnunciando += 1
+  }
+  const cplMedio = somaLeads > 0 ? somaInv / somaLeads : null
 
   return (
     <>
@@ -152,21 +168,40 @@ export default async function ClientesPage({
             </p>
           </div>
         ) : (
-          <section
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-            style={{ gap: 16 }}
-          >
-            {resumos.map((r) => (
-              <CardClienteTrafego
-                key={r.cliente.id}
-                resumo={r}
-                empresaSlug={empresa.slug}
-                mes={mes}
-                ano={ano}
-                qs={periodoQS(periodo)}
-              />
-            ))}
-          </section>
+          <>
+            {/* KPIs consolidados dos clientes desta empresa — mesma barra
+                do overview de Tráfego, agregando o resultado da agência. */}
+            <PainelKpisResumo
+              kpis={[
+                { label: "Investimento total", valor: fmtBRLResumo(somaInv) },
+                {
+                  label: "Clientes anunciando",
+                  valor: formatNumero(clientesAnunciando),
+                },
+                { label: "Leads totais", valor: formatNumero(somaLeads) },
+                {
+                  label: "CPL médio",
+                  valor: cplMedio ? fmtBRLResumo(cplMedio) : "·",
+                },
+              ]}
+            />
+
+            <section
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+              style={{ gap: 16 }}
+            >
+              {resumos.map((r) => (
+                <CardClienteTrafego
+                  key={r.cliente.id}
+                  resumo={r}
+                  empresaSlug={empresa.slug}
+                  mes={mes}
+                  ano={ano}
+                  qs={periodoQS(periodo)}
+                />
+              ))}
+            </section>
+          </>
         )}
       </main>
     </>
