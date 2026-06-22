@@ -233,20 +233,14 @@ function LinhaTabela({
         )}
       </td>
       <td style={celulaStyle}>
-        {linha.preenchedor_nome ? (
+        {linha.preenchedor_nome && linha.preenchedor_nome !== "MCP Disabled" ? (
           <span
             title={linha.preenchedor_nome}
             style={{
               fontSize: 11,
-              color: ehSentinela
-                ? "var(--accent)"
-                : ehMCP
-                ? "var(--warning)"
-                : "var(--text-2)",
-              background: ehSentinela
+              color: ehAutomatico ? "var(--accent)" : "var(--text-2)",
+              background: ehAutomatico
                 ? "rgba(201,149,58,0.10)"
-                : ehMCP
-                ? "var(--warning-bg)"
                 : "rgba(255,255,255,0.04)",
               padding: "3px 8px",
               borderRadius: 999,
@@ -258,11 +252,7 @@ function LinhaTabela({
             }}
           >
             {ehSentinela ? "🤖" : ehMCP ? "📡" : "👤"}{" "}
-            {ehSentinela
-              ? "Sentinela"
-              : ehMCP
-              ? "MCP provisório"
-              : linha.preenchedor_nome}
+            {ehSentinela ? "Sentinela" : ehMCP ? "MCP" : linha.preenchedor_nome}
           </span>
         ) : (
           <span style={{ color: "var(--text-4)", fontSize: 11 }}>·</span>

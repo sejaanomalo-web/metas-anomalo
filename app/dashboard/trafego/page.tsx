@@ -79,7 +79,7 @@ export default async function TrafegoOverviewPage({
   // Volta sozinho ao status da Sentinela quando ela reescrever os dados.
   const emModoMCP = [...resumo.values()].some((r) => r.coletaStatus === "mcp")
   const statusBadge = emModoMCP
-    ? { cor: "warning" as const, rotulo: "MCP provisório" }
+    ? { cor: "neutral" as const, rotulo: "MCP" }
     : { cor: stat.cor, rotulo: stat.rotulo }
 
   // Aba de tráfego mostra TODAS as empresas ativas do Hub. Empresas
@@ -185,7 +185,7 @@ export default async function TrafegoOverviewPage({
             {" · "}
             <span style={{ color: "var(--text-2)" }}>
               {emModoMCP
-                ? "Coleta via MCP (provisório)"
+                ? "Coleta via MCP"
                 : `Sentinela ${stat.rotulo.toLowerCase()}`}
             </span>
           </p>

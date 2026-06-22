@@ -78,6 +78,7 @@ export default function SentinelaRefreshProvider({
     let falhas = 0
     let ultimoErro = ""
     let contas = 0
+    let fonte: "sentinela" | "mcp" | null = null
 
     setEstado({ fase: "rodando", pct: 2 })
     for (let i = 0; i < total; i++) {
@@ -89,8 +90,13 @@ export default function SentinelaRefreshProvider({
       if (!r.ok) {
         falhas++
         ultimoErro = r.erro ?? "Falha."
-      } else if (typeof r.contasProcessadas === "number") {
-        contas = Math.max(contas, r.contasProcessadas)
+      } else {
+        if (typeof r.contasProcessadas === "number") {
+          contas = Math.max(contas, r.contasProcessadas)
+        }
+        // Sentinela tem precedência; só fica "mcp" se nenhum dia veio dela.
+        if (r.fonte === "sentinela") fonte = "sentinela"
+        else if (r.fonte === "mcp" && fonte !== "sentinela") fonte = "mcp"
       }
       setEstado({ fase: "rodando", pct: Math.round(((i + 1) / total) * 100) })
     }
@@ -106,7 +112,8 @@ export default function SentinelaRefreshProvider({
     // Recarrega os Server Components da rota ATUAL com os dados novos —
     // funciona em qualquer aba onde o usuário esteja ao terminar.
     router.refresh()
-    const resumo = contas > 0 ? `${contas} empresas` : "concluído"
+    // Mostra a FONTE da atualização ("MCP" ou "Sentinela"), nunca como erro.
+    const resumo = fonte === "mcp" ? "MCP" : "Sentinela"
     setEstado({
       fase: "ok",
       resumo: falhas > 0 ? `Parcial · ${resumo}` : resumo,
