@@ -371,6 +371,44 @@ export async function redefinirSenhaAction(
   return { ok: true, senha_temporaria: novaSenha }
 }
 
+/**
+ * Troca a SENHA DO PRÓPRIO usuário pra uma escolhida por ele (sem precisar
+ * da permissão 'gerenciar_usuarios'). Usado pelo botão "Reset senha" quando
+ * o alvo é o próprio perfil: em vez de gerar uma senha temporária, ele
+ * pode definir a nova senha na hora. Sem fluxo de "senha atual" — o usuário
+ * já está autenticado por sessão; trocar a própria senha é low-risk.
+ */
+export async function definirMinhaSenhaAction(
+  formData: FormData
+): Promise<ResultadoUsuario> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+
+  const novaSenha = String(formData.get("nova_senha") ?? "")
+  if (novaSenha.length < 6) {
+    return { ok: false, erro: "Senha precisa ter pelo menos 6 caracteres." }
+  }
+  if (novaSenha.length > 200) {
+    return { ok: false, erro: "Senha muito longa (máx 200 caracteres)." }
+  }
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const senha_hash = hashSenha(novaSenha)
+  const { error } = await supabase
+    .from("usuarios")
+    .update({ senha_hash, updated_at: new Date().toISOString() })
+    .eq("id", usuario.id)
+  if (error) {
+    console.error("[usuarios] definir minha senha error", error.message)
+    return { ok: false, erro: error.message }
+  }
+
+  revalidarSuperficiesUsuarios()
+  return { ok: true }
+}
+
 // Re-export pra uso em pages que querem checar permissão na UI inline.
 export async function getUsuarioAtualAction() {
   return getUsuarioAtual()

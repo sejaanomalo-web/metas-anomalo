@@ -10,9 +10,20 @@ import {
 import { useRouter } from "next/navigation"
 import {
   dispararRotinaMCP,
-  dispararSentinelaDia,
   ultimaAtualizacaoMCP,
 } from "@/lib/sentinela-trigger"
+
+/** Próximo horário da rotina MCP em BRT (mesma agenda do cron antigo:
+ *  9h, 15h, 20h). Devolve string tipo "15h" ou "9h de amanhã". */
+function proximaRotinaBRT(): string {
+  const agoraUTC = new Date()
+  const ms = agoraUTC.getTime() + agoraUTC.getTimezoneOffset() * 60_000
+  const brt = new Date(ms - 3 * 60 * 60_000)
+  const h = brt.getUTCHours()
+  const slots = [9, 15, 20]
+  const prox = slots.find((s) => s > h)
+  return prox ? `${prox}h` : "9h de amanhã"
+}
 
 /**
  * Provider do "Atualizar dados" do Tráfego que roda em SEGUNDO PLANO.
@@ -53,14 +64,6 @@ export function useSentinelaRefresh(): Ctx {
   return ctx
 }
 
-/** Data em BRT (UTC-3, sem DST) no formato YYYY-MM-DD, com offset de dias. */
-function diaBRT(offset = 0): string {
-  const agora = new Date()
-  const utcMs = agora.getTime() + agora.getTimezoneOffset() * 60_000
-  const brt = new Date(utcMs - 3 * 60 * 60_000 + offset * 24 * 60 * 60_000)
-  return brt.toISOString().slice(0, 10)
-}
-
 export default function SentinelaRefreshProvider({
   children,
 }: {
@@ -85,16 +88,14 @@ export default function SentinelaRefreshProvider({
 
     const disparo = await dispararRotinaMCP()
 
-    // SEM token configurado → fallback honesto pra Sentinela legacy.
+    // SEM token configurado → NÃO disparamos nada (a Sentinela legacy
+    // está morta e mentiria sucesso). Falamos a verdade pro usuário.
     if (!disparo.ok && disparo.semToken) {
-      const r = await dispararSentinelaDia(diaBRT(0))
-      router.refresh()
-      const fonte = r.ok && r.fonte === "sentinela" ? "Sentinela" : "MCP"
       setEstado({
-        fase: "ok",
-        resumo: `${fonte} · próxima coleta automática 15h/20h`,
+        fase: "erro",
+        msg: `Botão precisa do token MCP no Vercel. Próxima coleta automática: ${proximaRotinaBRT()} BRT.`,
       })
-      setTimeout(() => setEstado({ fase: "idle" }), 6000)
+      setTimeout(() => setEstado({ fase: "idle" }), 12000)
       rodandoRef.current = false
       return
     }

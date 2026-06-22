@@ -5,6 +5,7 @@ import {
   alternarAtivoUsuarioAction,
   atualizarUsuarioAction,
   criarUsuarioAction,
+  definirMinhaSenhaAction,
   excluirUsuarioAction,
   redefinirSenhaAction,
   type UsuarioRow,
@@ -265,6 +266,13 @@ function AcoesLinha({
   const [modoExcluir, setModoExcluir] = useState(false)
   const [confirmacao, setConfirmacao] = useState("")
   const [erroExcluir, setErroExcluir] = useState<string | null>(null)
+  // Quando o usuário troca a PRÓPRIA senha, ele escolhe (em vez de receber
+  // uma senha temporária gerada). modoMinhaSenha abre os inputs inline.
+  const [modoMinhaSenha, setModoMinhaSenha] = useState(false)
+  const [novaSenhaInput, setNovaSenhaInput] = useState("")
+  const [confirmSenhaInput, setConfirmSenhaInput] = useState("")
+  const [erroMinhaSenha, setErroMinhaSenha] = useState<string | null>(null)
+  const [okMinhaSenha, setOkMinhaSenha] = useState(false)
 
   function alternarAtivo() {
     startTransition(async () => {
@@ -278,6 +286,16 @@ function AcoesLinha({
   }
 
   function resetSenha() {
+    // No próprio perfil: abre input pra escolher a nova senha (em vez de
+    // gerar temporária). Em outros: comportamento clássico — gera e exibe.
+    if (ehMeuPerfil) {
+      setNovaSenhaInput("")
+      setConfirmSenhaInput("")
+      setErroMinhaSenha(null)
+      setOkMinhaSenha(false)
+      setModoMinhaSenha(true)
+      return
+    }
     if (!confirm(`Redefinir senha de ${usuario.email}?`)) return
     startTransition(async () => {
       const fd = new FormData()
@@ -286,6 +304,43 @@ function AcoesLinha({
       if (r.ok && r.senha_temporaria) setNovaSenha(r.senha_temporaria)
       else alert(r.erro ?? "Erro ao redefinir senha")
     })
+  }
+
+  function salvarMinhaSenha() {
+    setErroMinhaSenha(null)
+    if (novaSenhaInput.length < 6) {
+      setErroMinhaSenha("Senha precisa ter pelo menos 6 caracteres.")
+      return
+    }
+    if (novaSenhaInput !== confirmSenhaInput) {
+      setErroMinhaSenha("As duas senhas não coincidem.")
+      return
+    }
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("nova_senha", novaSenhaInput)
+      const r = await definirMinhaSenhaAction(fd)
+      if (r.ok) {
+        setOkMinhaSenha(true)
+        setNovaSenhaInput("")
+        setConfirmSenhaInput("")
+        // Fecha em 2.5s pro usuário ver o "salvo".
+        setTimeout(() => {
+          setModoMinhaSenha(false)
+          setOkMinhaSenha(false)
+        }, 2500)
+      } else {
+        setErroMinhaSenha(r.erro ?? "Erro ao salvar.")
+      }
+    })
+  }
+
+  function cancelarMinhaSenha() {
+    setModoMinhaSenha(false)
+    setNovaSenhaInput("")
+    setConfirmSenhaInput("")
+    setErroMinhaSenha(null)
+    setOkMinhaSenha(false)
   }
 
   function confirmarExclusao() {
@@ -392,6 +447,76 @@ function AcoesLinha({
     )
   }
 
+  // Modo "trocar minha senha": ocupa a linha de ações inteira com 2 inputs
+  // + botão. Sai por "Definir" (com sucesso) ou "Cancelar".
+  if (modoMinhaSenha) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          flexShrink: 0,
+          minWidth: 280,
+        }}
+      >
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input
+            type="password"
+            autoFocus
+            value={novaSenhaInput}
+            onChange={(e) => {
+              setNovaSenhaInput(e.target.value)
+              setErroMinhaSenha(null)
+            }}
+            placeholder="Nova senha (mín 6)"
+            disabled={pending || okMinhaSenha}
+            className="no-ds"
+            style={inputSenhaEstilo()}
+          />
+          <input
+            type="password"
+            value={confirmSenhaInput}
+            onChange={(e) => {
+              setConfirmSenhaInput(e.target.value)
+              setErroMinhaSenha(null)
+            }}
+            placeholder="Confirmar"
+            disabled={pending || okMinhaSenha}
+            className="no-ds"
+            style={inputSenhaEstilo()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") salvarMinhaSenha()
+            }}
+          />
+          <button
+            type="button"
+            onClick={salvarMinhaSenha}
+            disabled={pending || okMinhaSenha}
+            className="no-ds"
+            style={botaoEstilo("success")}
+          >
+            {okMinhaSenha ? "Salvo ✓" : pending ? "Salvando…" : "Definir"}
+          </button>
+          <button
+            type="button"
+            onClick={cancelarMinhaSenha}
+            disabled={pending}
+            className="no-ds"
+            style={botaoEstilo("ghost")}
+          >
+            Cancelar
+          </button>
+        </div>
+        {erroMinhaSenha && (
+          <span style={{ fontSize: 11, color: "#e24b4a" }}>
+            {erroMinhaSenha}
+          </span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div
       style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}
@@ -425,8 +550,13 @@ function AcoesLinha({
         disabled={pending}
         className="no-ds"
         style={botaoEstilo("ghost")}
+        title={
+          ehMeuPerfil
+            ? "Trocar a sua senha (você define a nova)"
+            : "Gera uma senha temporária pra esse usuário"
+        }
       >
-        Reset senha
+        {ehMeuPerfil ? "Trocar minha senha" : "Reset senha"}
       </button>
       {!ehMeuPerfil && (
         <button
@@ -453,6 +583,20 @@ function AcoesLinha({
       )}
     </div>
   )
+}
+
+function inputSenhaEstilo(): React.CSSProperties {
+  return {
+    flex: 1,
+    minWidth: 0,
+    padding: "6px 10px",
+    fontSize: 12,
+    background: "rgba(255,255,255,0.04)",
+    border: "0.5px solid rgba(255,255,255,0.18)",
+    borderRadius: 6,
+    color: "var(--text-1)",
+    fontFamily: "inherit",
+  }
 }
 
 function botaoEstilo(
