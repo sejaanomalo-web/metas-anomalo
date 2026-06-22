@@ -3,6 +3,9 @@ import BotaoAtualizarTrafego from "@/components/BotaoAtualizarTrafego"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
 import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
+import PainelKpisResumo, {
+  fmtBRLResumo,
+} from "@/components/trafego/PainelKpisResumo"
 import { formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
 import { periodoQS } from "@/lib/periodo-url"
@@ -70,6 +73,15 @@ export default async function TrafegoOverviewPage({
   const prox = proximaExecucao()
   const supabaseOk = supabaseConfigurado()
 
+  // Ponte MCP: enquanto a Sentinela está fora (app do Meta) e a coleta vem
+  // provisoriamente pelo conector MCP, o badge de status mostra "MCP
+  // provisório" em vez de "Sentinela falha" — pra deixar a distinção clara.
+  // Volta sozinho ao status da Sentinela quando ela reescrever os dados.
+  const emModoMCP = [...resumo.values()].some((r) => r.coletaStatus === "mcp")
+  const statusBadge = emModoMCP
+    ? { cor: "warning" as const, rotulo: "MCP provisório" }
+    : { cor: stat.cor, rotulo: stat.rotulo }
+
   // Aba de tráfego mostra TODAS as empresas ativas do Hub. Empresas
   // sem token Meta (ex.: agências que delegam aos clientes-folha)
   // aparecem zeradas — o gestor decide configurar o conector pelo Hub.
@@ -78,13 +90,13 @@ export default async function TrafegoOverviewPage({
   // Totais agregados pro hero (KPI consolidado).
   let somaInv = 0
   let somaLeads = 0
-  let empresasGerenciadas = 0
+  let empresasAnunciando = 0
   for (const empresa of empresasTrafego) {
     const r = resumo.get(empresa.nome)
     if (!r) continue
     somaInv += r.investimento
     somaLeads += r.leads
-    if (r.investimento > 0) empresasGerenciadas += 1
+    if (r.investimento > 0) empresasAnunciando += 1
   }
   const cplMedio = somaLeads > 0 ? somaInv / somaLeads : null
 
@@ -132,8 +144,8 @@ export default async function TrafegoOverviewPage({
               }}
             >
               <BadgeStatusSentinela
-                statusCor={stat.cor}
-                rotulo={stat.rotulo}
+                statusCor={statusBadge.cor}
+                rotulo={statusBadge.rotulo}
                 ultimaExecucao={ultimoLog?.data_execucao ?? null}
                 proximaLabelCompleto={prox.labelCompleto}
               />
@@ -172,28 +184,29 @@ export default async function TrafegoOverviewPage({
               : "empresas com tráfego ativo"}
             {" · "}
             <span style={{ color: "var(--text-2)" }}>
-              Sentinela {stat.rotulo.toLowerCase()}
+              {emModoMCP
+                ? "Coleta via MCP (provisório)"
+                : `Sentinela ${stat.rotulo.toLowerCase()}`}
             </span>
           </p>
         </div>
 
         {/* KPIs consolidados — 2 por linha no mobile, 4 no desktop. ROI
             removido (não é a métrica de destaque do hub). */}
-        <section
-          className="glass grid grid-cols-2 lg:grid-cols-4"
-          style={{ padding: "20px 24px", gap: 16 }}
-        >
-          <KpiMini label="Investimento total" valor={fmtBRL(somaInv)} />
-          <KpiMini
-            label="Empresas gerenciadas"
-            valor={formatNumero(empresasGerenciadas)}
-          />
-          <KpiMini label="Leads totais" valor={formatNumero(somaLeads)} />
-          <KpiMini
-            label="CPL médio"
-            valor={cplMedio ? fmtBRL(cplMedio) : "·"}
-          />
-        </section>
+        <PainelKpisResumo
+          kpis={[
+            { label: "Investimento total", valor: fmtBRLResumo(somaInv) },
+            {
+              label: "Empresas anunciando",
+              valor: formatNumero(empresasAnunciando),
+            },
+            { label: "Leads totais", valor: formatNumero(somaLeads) },
+            {
+              label: "CPL médio",
+              valor: cplMedio ? fmtBRLResumo(cplMedio) : "·",
+            },
+          ]}
+        />
 
         {/* Cards por empresa */}
         <section>
@@ -239,6 +252,7 @@ export default async function TrafegoOverviewPage({
                   leads={r?.leads ?? 0}
                   cpl={r?.cplReal ?? null}
                   cpm={r?.cpmReal ?? null}
+                  coletaStatus={r?.coletaStatus ?? null}
                   resumoClientes={resumosClientes.get(empresa.nome)}
                   qs={periodoQS(periodo)}
                 />
@@ -263,44 +277,5 @@ export default async function TrafegoOverviewPage({
         </p>
       </footer>
     </>
-  )
-}
-
-function fmtBRL(n: number): string {
-  return n.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  })
-}
-
-function KpiMini({ label, valor }: { label: string; valor: string }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <p
-        style={{
-          fontSize: 11,
-          letterSpacing: "1px",
-          color: "var(--text-4)",
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        {label}
-      </p>
-      <p
-        style={{
-          fontSize: 22,
-          fontWeight: 700,
-          color: "var(--text-1)",
-          letterSpacing: "-0.01em",
-          fontVariantNumeric: "tabular-nums",
-          marginTop: 4,
-        }}
-      >
-        {valor}
-      </p>
-    </div>
   )
 }
