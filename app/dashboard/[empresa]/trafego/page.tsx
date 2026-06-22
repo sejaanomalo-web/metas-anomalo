@@ -202,8 +202,10 @@ export default async function TrafegoPage({
           </div>
         )}
 
-        {/* Banner se Sentinela retornou erro pra essa empresa */}
-        {trackeada && erroEmpresa && (
+        {/* Banner se Sentinela retornou erro pra essa empresa.
+            Em modo MCP, escondemos: o erro vem da Sentinela offline (app
+            do Meta apagado), mas a coleta atual vem do MCP — ignorar. */}
+        {trackeada && !emModoMCP && erroEmpresa && (
           <div
             style={{
               padding: 18,
@@ -224,8 +226,10 @@ export default async function TrafegoPage({
           </div>
         )}
 
-        {/* Sem movimento detectado */}
-        {trackeada && !erroEmpresa && semAtividade && (
+        {/* Sem movimento detectado (escondido em modo MCP — o sinal vem
+            de outra fonte e o status "sem atividade" do log da Sentinela
+            é irrelevante). */}
+        {trackeada && !emModoMCP && !erroEmpresa && semAtividade && (
           <div
             style={{
               padding: 18,

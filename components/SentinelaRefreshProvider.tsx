@@ -8,7 +8,11 @@ import {
   useState,
 } from "react"
 import { useRouter } from "next/navigation"
-import { dispararSentinelaDia } from "@/lib/sentinela-trigger"
+import {
+  dispararRotinaMCP,
+  dispararSentinelaDia,
+  ultimaAtualizacaoMCP,
+} from "@/lib/sentinela-trigger"
 
 /**
  * Provider do "Atualizar dados" do Tráfego que roda em SEGUNDO PLANO.
@@ -27,7 +31,7 @@ import { dispararSentinelaDia } from "@/lib/sentinela-trigger"
  */
 type Estado =
   | { fase: "idle" }
-  | { fase: "rodando"; pct: number }
+  | { fase: "rodando"; pct: number; etapa: string }
   | { fase: "ok"; resumo: string }
   | { fase: "erro"; msg: string }
 
@@ -71,54 +75,77 @@ export default function SentinelaRefreshProvider({
     if (rodandoRef.current) return
     rodandoRef.current = true
 
-    // Hoje + ontem cobrem os dias voláteis; cada chamada processa TODAS as
-    // empresas ativas. Sequencial → progresso real por etapa.
-    const dias = [diaBRT(0), diaBRT(-1)]
-    const total = dias.length
-    let falhas = 0
-    let ultimoErro = ""
-    let contas = 0
-    let fonte: "sentinela" | "mcp" | null = null
+    // Estratégia: tenta o MCP primeiro (fonte de dados ativa enquanto o app
+    // do Meta está fora). Se o token não estiver configurado no Vercel,
+    // cai pra Sentinela legacy (que vai falhar rápido e sinalizar "MCP").
+    setEstado({ fase: "rodando", pct: 3, etapa: "Disparando coleta…" })
 
-    setEstado({ fase: "rodando", pct: 2 })
-    for (let i = 0; i < total; i++) {
+    const snapshotAntes = await ultimaAtualizacaoMCP()
+    const ultimaAntes = snapshotAntes.iso
+
+    const disparo = await dispararRotinaMCP()
+
+    // SEM token configurado → fallback honesto pra Sentinela legacy.
+    if (!disparo.ok && disparo.semToken) {
+      const r = await dispararSentinelaDia(diaBRT(0))
+      router.refresh()
+      const fonte = r.ok && r.fonte === "sentinela" ? "Sentinela" : "MCP"
       setEstado({
-        fase: "rodando",
-        pct: Math.max(2, Math.round((i / total) * 100)),
+        fase: "ok",
+        resumo: `${fonte} · próxima coleta automática 15h/20h`,
       })
-      const r = await dispararSentinelaDia(dias[i])
-      if (!r.ok) {
-        falhas++
-        ultimoErro = r.erro ?? "Falha."
-      } else {
-        if (typeof r.contasProcessadas === "number") {
-          contas = Math.max(contas, r.contasProcessadas)
-        }
-        // Sentinela tem precedência; só fica "mcp" se nenhum dia veio dela.
-        if (r.fonte === "sentinela") fonte = "sentinela"
-        else if (r.fonte === "mcp" && fonte !== "sentinela") fonte = "mcp"
-      }
-      setEstado({ fase: "rodando", pct: Math.round(((i + 1) / total) * 100) })
-    }
-
-    rodandoRef.current = false
-
-    if (falhas === total) {
-      setEstado({ fase: "erro", msg: ultimoErro })
-      setTimeout(() => setEstado({ fase: "idle" }), 5000)
+      setTimeout(() => setEstado({ fase: "idle" }), 6000)
+      rodandoRef.current = false
       return
     }
 
-    // Recarrega os Server Components da rota ATUAL com os dados novos —
-    // funciona em qualquer aba onde o usuário esteja ao terminar.
-    router.refresh()
-    // Mostra a FONTE da atualização ("MCP" ou "Sentinela"), nunca como erro.
-    const resumo = fonte === "mcp" ? "MCP" : "Sentinela"
+    if (!disparo.ok) {
+      setEstado({ fase: "erro", msg: disparo.erro ?? "Falha ao disparar." })
+      setTimeout(() => setEstado({ fase: "idle" }), 6000)
+      rodandoRef.current = false
+      return
+    }
+
+    // Polling do banco até detectar timestamp MAIOR que o snapshot. A barra
+    // sobe pelo tempo decorrido vs. duração estimada (curva conservadora:
+    // chega só a 90% até o dado realmente aparecer — evita "fingir" 100%).
+    const inicio = Date.now()
+    const estimadaMs = disparo.duracaoEstimadaSegundos * 1000
+    const timeoutMs = Math.max(estimadaMs * 3, 180_000) // 3x o esperado, mín 3 min
+    const intervaloMs = 2500
+
+    while (Date.now() - inicio < timeoutMs) {
+      await new Promise((r) => setTimeout(r, intervaloMs))
+
+      const decorrido = Date.now() - inicio
+      const fracao = Math.min(1, decorrido / estimadaMs)
+      const pct = Math.max(3, Math.min(90, Math.round(fracao * 90)))
+      setEstado({
+        fase: "rodando",
+        pct,
+        etapa: `Coletando do Meta… ${Math.round(decorrido / 1000)}s`,
+      })
+
+      const snap = await ultimaAtualizacaoMCP()
+      if (snap.ok && snap.iso && snap.iso !== ultimaAntes) {
+        setEstado({ fase: "rodando", pct: 96, etapa: "Recarregando…" })
+        router.refresh()
+        const seg = Math.round((Date.now() - inicio) / 1000)
+        setEstado({ fase: "ok", resumo: `MCP · ${seg}s` })
+        setTimeout(() => setEstado({ fase: "idle" }), 4500)
+        rodandoRef.current = false
+        return
+      }
+    }
+
+    // Timeout: a rotina pode ainda estar rodando — instrui o usuário a
+    // recarregar em alguns minutos. Não é erro de sistema.
     setEstado({
-      fase: "ok",
-      resumo: falhas > 0 ? `Parcial · ${resumo}` : resumo,
+      fase: "erro",
+      msg: "Coleta MCP demorando mais que o esperado — recarregue em 1–2 min.",
     })
-    setTimeout(() => setEstado({ fase: "idle" }), 3200)
+    setTimeout(() => setEstado({ fase: "idle" }), 8000)
+    rodandoRef.current = false
   }, [router])
 
   const rodando = estado.fase === "rodando"
@@ -140,7 +167,7 @@ function IndicadorFlutuante({ estado }: { estado: Estado }) {
   const ok = estado.fase === "ok"
 
   const texto = rodando
-    ? `Atualizando tráfego… ${estado.pct}%`
+    ? `${estado.etapa} · ${estado.pct}%`
     : ok
     ? `Tráfego atualizado · ${estado.resumo}`
     : estado.msg
