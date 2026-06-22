@@ -258,7 +258,7 @@ export async function getLinhasDoMes(
   const { data, error } = await supabase
     .from("dados_diarios_log")
     .select(
-      "data, investimento_real, leads_real, cpl_real, reunioes_agendadas_real, reunioes_real, contratos_real, faturamento_real, impressoes_real, cliques_real, alcance_real, conversas_real, cpm_real, preenchedor_nome, created_at"
+      "data, investimento_real, leads_real, cpl_real, reunioes_agendadas_real, reunioes_real, contratos_real, faturamento_real, impressoes_real, cliques_real, alcance_real, conversas_real, cpm_real, preenchedor_nome, coleta_status, created_at"
     )
     .eq("empresa", empresaNome)
     .eq("origem", "pago")
@@ -292,6 +292,8 @@ export interface LinhaDoMes {
   categoria?: string | null
   destino?: string | null
   preenchedor_nome: string | null
+  // Fonte da coleta (ponte MCP): 'mcp' | 'mcp_disabled' | null.
+  coleta_status?: string | null
   created_at: string
 }
 

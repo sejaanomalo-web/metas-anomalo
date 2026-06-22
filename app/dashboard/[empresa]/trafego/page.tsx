@@ -89,6 +89,11 @@ export default async function TrafegoPage({
   const trackeada = empresasTrackeadas.includes(empresa.nome)
   const stat = statusSentinela(ultimoLog)
   const prox = proximaExecucao()
+  // Ponte MCP: se há linhas via MCP no período exibido, badge mostra "MCP".
+  const emModoMCP = linhas.some((l) => l.coleta_status === "mcp")
+  const statusBadge = emModoMCP
+    ? { cor: "neutral" as const, rotulo: "MCP" }
+    : { cor: stat.cor, rotulo: stat.rotulo }
   const anomaliasEmpresa: AnomaliaSentinela[] = (
     ultimoLog?.anomalias_detectadas ?? []
   ).filter((a) => a.empresa === empresa.nome)
@@ -146,8 +151,8 @@ export default async function TrafegoPage({
               marginTop: 10,
             }}
           >
-            {subtituloDaEmpresa(empresa)} · Atualizado automaticamente pelo
-            Sentinela
+            {subtituloDaEmpresa(empresa)} · Atualizado automaticamente
+            {emModoMCP ? " via MCP" : " pelo Sentinela"}
           </p>
 
           <div
@@ -167,8 +172,8 @@ export default async function TrafegoPage({
               temClientes={temClientes}
             />
             <BadgeStatusSentinela
-              statusCor={stat.cor}
-              rotulo={stat.rotulo}
+              statusCor={statusBadge.cor}
+              rotulo={statusBadge.rotulo}
               ultimaExecucao={ultimoLog?.data_execucao ?? null}
               proximaLabelCompleto={prox.labelCompleto}
             />
@@ -197,8 +202,10 @@ export default async function TrafegoPage({
           </div>
         )}
 
-        {/* Banner se Sentinela retornou erro pra essa empresa */}
-        {trackeada && erroEmpresa && (
+        {/* Banner se Sentinela retornou erro pra essa empresa.
+            Em modo MCP, escondemos: o erro vem da Sentinela offline (app
+            do Meta apagado), mas a coleta atual vem do MCP — ignorar. */}
+        {trackeada && !emModoMCP && erroEmpresa && (
           <div
             style={{
               padding: 18,
@@ -219,8 +226,10 @@ export default async function TrafegoPage({
           </div>
         )}
 
-        {/* Sem movimento detectado */}
-        {trackeada && !erroEmpresa && semAtividade && (
+        {/* Sem movimento detectado (escondido em modo MCP — o sinal vem
+            de outra fonte e o status "sem atividade" do log da Sentinela
+            é irrelevante). */}
+        {trackeada && !emModoMCP && !erroEmpresa && semAtividade && (
           <div
             style={{
               padding: 18,

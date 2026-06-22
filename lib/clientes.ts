@@ -320,7 +320,7 @@ export async function getLinhasDoMesCliente(
     const { data, error } = await supabase
       .from("dados_diarios_log")
       .select(
-        "data, investimento_real, leads_real, cpl_real, reunioes_agendadas_real, reunioes_real, contratos_real, faturamento_real, impressoes_real, cliques_real, alcance_real, conversas_real, cpm_real, preenchedor_nome, created_at"
+        "data, investimento_real, leads_real, cpl_real, reunioes_agendadas_real, reunioes_real, contratos_real, faturamento_real, impressoes_real, cliques_real, alcance_real, conversas_real, cpm_real, preenchedor_nome, coleta_status, created_at"
       )
       .eq("empresa", cliente.empresa_origem_nome)
       .eq("origem", "pago")

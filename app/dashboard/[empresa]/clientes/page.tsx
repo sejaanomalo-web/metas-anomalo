@@ -20,6 +20,7 @@ import {
 } from "@/lib/clientes"
 import { listarTokensDaEmpresa } from "@/lib/clientes-actions"
 import {
+  getLinhasDoMes,
   getUltimoLogSentinela,
   proximaExecucao,
   statusSentinela,
@@ -59,14 +60,21 @@ export default async function ClientesPage({
   const inicio = periodo.de
   const fim = periodo.ate
 
-  const [resumos, clientes, tokens, ultimoLog] = await Promise.all([
-    getResumoTodosClientesMes(empresa.nome, inicio, fim),
-    listarClientesDaEmpresa(empresa.nome, false),
-    listarTokensDaEmpresa(empresa.nome),
-    getUltimoLogSentinela(),
-  ])
+  const [resumos, clientes, tokens, ultimoLog, linhasEmpresa] =
+    await Promise.all([
+      getResumoTodosClientesMes(empresa.nome, inicio, fim),
+      listarClientesDaEmpresa(empresa.nome, false),
+      listarTokensDaEmpresa(empresa.nome),
+      getUltimoLogSentinela(),
+      // só pra detectar fonte de coleta no período (uma query leve).
+      getLinhasDoMes(empresa.nome, inicio, fim),
+    ])
   const stat = statusSentinela(ultimoLog)
   const prox = proximaExecucao()
+  const emModoMCP = linhasEmpresa.some((l) => l.coleta_status === "mcp")
+  const statusBadge = emModoMCP
+    ? { cor: "neutral" as const, rotulo: "MCP" }
+    : { cor: stat.cor, rotulo: stat.rotulo }
 
   // Agregado dos clientes desta empresa (espelha o KPI do overview, mas
   // somando os clientes da agência em vez das empresas do Hub). "Clientes
@@ -109,7 +117,7 @@ export default async function ClientesPage({
           </div>
           <p style={{ fontSize: 14, color: "var(--text-3)", marginTop: 10 }}>
             {subtituloDaEmpresa(empresa)} · Clientes atualizados automaticamente
-            pelo Sentinela
+            {emModoMCP ? " via MCP" : " pelo Sentinela"}
           </p>
 
           <div
@@ -130,8 +138,8 @@ export default async function ClientesPage({
             />
             <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <BadgeStatusSentinela
-                statusCor={stat.cor}
-                rotulo={stat.rotulo}
+                statusCor={statusBadge.cor}
+                rotulo={statusBadge.rotulo}
                 ultimaExecucao={ultimoLog?.data_execucao ?? null}
                 proximaLabelCompleto={prox.labelCompleto}
               />
