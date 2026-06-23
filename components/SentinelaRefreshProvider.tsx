@@ -110,9 +110,13 @@ export default function SentinelaRefreshProvider({
     // Polling do banco até detectar timestamp MAIOR que o snapshot. A barra
     // sobe pelo tempo decorrido vs. duração estimada (curva conservadora:
     // chega só a 90% até o dado realmente aparecer — evita "fingir" 100%).
+    //
+    // Timeout generoso: o cold start do agente na nuvem (CCR) + conexão MCP +
+    // processamento de 14 contas pode levar 3-5 min na primeira execução do
+    // ciclo. Mantemos 8 min pra cobrir cenário pessimista sem travar o usuário.
     const inicio = Date.now()
     const estimadaMs = disparo.duracaoEstimadaSegundos * 1000
-    const timeoutMs = Math.max(estimadaMs * 3, 180_000) // 3x o esperado, mín 3 min
+    const timeoutMs = 480_000 // 8 min
     const intervaloMs = 2500
 
     while (Date.now() - inicio < timeoutMs) {
@@ -139,13 +143,15 @@ export default function SentinelaRefreshProvider({
       }
     }
 
-    // Timeout: a rotina pode ainda estar rodando — instrui o usuário a
-    // recarregar em alguns minutos. Não é erro de sistema.
+    // Timeout: NÃO é falha — a rotina foi disparada com sucesso e está
+    // rodando na nuvem. Apenas demorou além do que esperamos esperar
+    // bloqueando o usuário. Usamos fase "ok" (verde) pra não alarmar.
+    router.refresh()
     setEstado({
-      fase: "erro",
-      msg: "Coleta MCP demorando mais que o esperado — recarregue em 1–2 min.",
+      fase: "ok",
+      resumo: "MCP rodando em segundo plano · recarregue em 2-3 min",
     })
-    setTimeout(() => setEstado({ fase: "idle" }), 8000)
+    setTimeout(() => setEstado({ fase: "idle" }), 10000)
     rodandoRef.current = false
   }, [router])
 
