@@ -3,9 +3,8 @@
 import { useState } from "react"
 import type { EmpresaMeta } from "@/lib/data"
 import FormularioComercial from "./FormularioComercial"
-import FormularioManual from "./FormularioManual"
 
-export type FormId = "trafego" | "comercial"
+export type FormId = "comercial"
 
 interface FormDef {
   id: FormId
@@ -15,12 +14,6 @@ interface FormDef {
 }
 
 const FORMS: FormDef[] = [
-  {
-    id: "trafego",
-    titulo: "Formulário Gestor de Tráfego",
-    descricao: "Reuniões, contratos e faturamento por empresa",
-    rota: "/formulario",
-  },
   {
     id: "comercial",
     titulo: "Formulário Comercial",
@@ -41,13 +34,11 @@ const FORMS: FormDef[] = [
 export default function GerenciadorFormularios({
   empresas,
   formsPermitidos,
-  responsaveisTrafego,
   responsaveisComercial,
   clientesPorEmpresa,
 }: {
   empresas: EmpresaMeta[]
   formsPermitidos?: FormId[]
-  responsaveisTrafego?: { id: string; nome: string }[]
   responsaveisComercial?: { id: string; nome: string }[]
   /** Clientes ativos por assessoria — habilita o seletor de cliente no
    *  formulário comercial (orgânico POR CLIENTE), igual ao link público. */
@@ -202,18 +193,11 @@ export default function GerenciadorFormularios({
                   }}
                 >
                   <div style={{ marginTop: 16 }}>
-                    {form.id === "trafego" ? (
-                      <FormularioManual
-                        empresas={empresas}
-                        responsaveis={responsaveisTrafego}
-                      />
-                    ) : (
-                      <FormularioComercial
-                        empresas={empresas}
-                        responsaveis={responsaveisComercial}
-                        clientesPorEmpresa={clientesPorEmpresa}
-                      />
-                    )}
+                    <FormularioComercial
+                      empresas={empresas}
+                      responsaveis={responsaveisComercial}
+                      clientesPorEmpresa={clientesPorEmpresa}
+                    />
                   </div>
                 </div>
               )}

@@ -53,7 +53,6 @@ export default async function ConfiguracoesPage({
     chavesNotif.push("dados_comercial", "nova_venda")
   }
   const formsPermitidos: FormId[] = []
-  if (temPermissao(usuario, "formulario_trafego")) formsPermitidos.push("trafego")
   if (temPermissao(usuario, "formulario_comercial"))
     formsPermitidos.push("comercial")
 
@@ -67,7 +66,6 @@ export default async function ConfiguracoesPage({
     empresas,
     preferencias,
     relatoriosComerciais,
-    responsaveisTrafego,
     responsaveisComercial,
     clientesPorEmpresa,
   ] = await Promise.all([
@@ -78,7 +76,6 @@ export default async function ConfiguracoesPage({
     listarEmpresas(true),
     getPreferenciasNotificacao(usuario.id),
     ehAdmin ? listarRelatoriosComerciaisAdmin() : Promise.resolve([]),
-    listarTimePorPapel("gestor_trafego"),
     listarTimePorPapel("comercial"),
     // Só carrega os clientes quando o usuário enxerga o formulário comercial.
     formsPermitidos.includes("comercial")
@@ -151,7 +148,6 @@ export default async function ConfiguracoesPage({
           <GerenciadorFormularios
             empresas={empresas}
             formsPermitidos={formsPermitidos}
-            responsaveisTrafego={responsaveisTrafego}
             responsaveisComercial={responsaveisComercial}
             clientesPorEmpresa={clientesPorEmpresa}
           />
