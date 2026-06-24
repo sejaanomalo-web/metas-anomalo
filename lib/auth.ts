@@ -108,6 +108,7 @@ export type ChavePermissao =
   | "configuracoes"
   | "gerenciar_usuarios"
   | "ver_notificacoes"
+  | "crm"
 
 export type Permissoes = Record<ChavePermissao, boolean>
 
@@ -128,6 +129,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     configuracoes: true,
     gerenciar_usuarios: true,
     ver_notificacoes: true,
+    crm: true,
   },
   gestor_trafego: {
     dashboard_principal: false,
@@ -142,6 +144,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     configuracoes: true,
     gerenciar_usuarios: false,
     ver_notificacoes: true,
+    crm: false,
   },
   comercial: {
     dashboard_principal: false,
@@ -156,6 +159,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     configuracoes: true,
     gerenciar_usuarios: false,
     ver_notificacoes: true,
+    crm: true,
   },
   custom: {
     dashboard_principal: false,
@@ -170,6 +174,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     configuracoes: false,
     gerenciar_usuarios: false,
     ver_notificacoes: false,
+    crm: false,
   },
 }
 

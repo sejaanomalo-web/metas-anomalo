@@ -222,6 +222,8 @@ function SidebarRail({
   const financeiroAtivo = pathname.startsWith("/dashboard/financeiro")
   const comercialAtivo =
     pathname === "/dashboard/comercial" || pathname.endsWith("/comercial")
+  const crmAtivo =
+    pathname === "/dashboard/crm" || pathname.startsWith("/dashboard/crm/")
   // Metas (antigo Empresas) só ativa quando NÃO estamos em tráfego,
   // comercial nem financeiro — evita destacar dois items ao mesmo tempo
   // em rotas aninhadas. Cobre /dashboard/metas e o detalhe de empresa
@@ -231,6 +233,7 @@ function SidebarRail({
     !trafegoAtivo &&
     !financeiroAtivo &&
     !comercialAtivo &&
+    !crmAtivo &&
     ehRotaEmpresa(pathname)
   const configAtivo = pathname === "/dashboard/configuracoes"
 
@@ -240,6 +243,7 @@ function SidebarRail({
   const podeEmpresas = temPermissao(usuarioAtual, "dashboard_empresas")
   const podeTrafego = temPermissao(usuarioAtual, "dashboard_trafego")
   const podeComercial = temPermissao(usuarioAtual, "dashboard_comercial")
+  const podeCrm = temPermissao(usuarioAtual, "crm")
   const podeFinanceiro = temPermissao(usuarioAtual, "dashboard_financeiro")
   const podeConfig = temPermissao(usuarioAtual, "configuracoes")
 
@@ -301,6 +305,15 @@ function SidebarRail({
             href="/dashboard/comercial"
             expandido={expandido}
             ativo={comercialAtivo}
+          />
+        )}
+        {podeCrm && (
+          <ItemMenu
+            icon={<IconeCrm />}
+            rotulo="CRM"
+            href="/dashboard/crm"
+            expandido={expandido}
+            ativo={crmAtivo}
           />
         )}
         {podeFinanceiro && (
@@ -627,6 +640,25 @@ function IconeComercial() {
       aria-hidden="true"
     >
       <path d="M3 4h18l-7 8v6l-4 2v-8L3 4Z" />
+    </svg>
+  )
+}
+
+function IconeCrm() {
+  // Balão de conversa — CRM centrado em WhatsApp/atendimento.
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z" />
     </svg>
   )
 }
