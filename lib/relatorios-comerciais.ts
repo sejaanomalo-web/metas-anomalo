@@ -515,18 +515,31 @@ export async function getRealizadoComercialPagoPorEmpresa(
 // (diferente do salvar do formulário — editar/excluir não é "envio").
 // ============================================================
 
-/** Todos os relatórios comerciais (admin), mais recentes primeiro. */
-export async function listarRelatoriosComerciaisAdmin(): Promise<
-  RelatorioComercial[]
-> {
+/** Relatórios comerciais (admin) FILTRADOS por intervalo (obrigatório, pra
+ *  não varrer a tabela) e empresa (opcional) — mesmo padrão do gerenciador de
+ *  tráfego. A UI só mostra a lista depois da busca. */
+export async function listarRelatoriosComerciaisAdmin(
+  formData: FormData
+): Promise<RelatorioComercial[]> {
   await requererAdmin()
+  const empresa = String(formData.get("empresa") ?? "").trim()
+  const inicio = String(formData.get("inicio") ?? "").trim()
+  const fim = String(formData.get("fim") ?? "").trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fim)) {
+    return []
+  }
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
-  const { data, error } = await supabase
+  let q = supabase
     .from("relatorios_comerciais")
     .select("*")
+    .gte("data", inicio)
+    .lte("data", fim)
     .order("data", { ascending: false })
+    .order("empresa", { ascending: true })
     .limit(500)
+  if (empresa) q = q.eq("empresa", empresa)
+  const { data, error } = await q
   if (error) {
     console.error("[comercial] listar admin error", error.message)
     return []
