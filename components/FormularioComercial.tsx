@@ -30,11 +30,15 @@ export default function FormularioComercial({
   empresas,
   copiarLinkPublico,
   responsaveis,
+  responsavelPadraoId,
   clientesPorEmpresa,
 }: {
   empresas: EmpresaMeta[]
   copiarLinkPublico?: boolean
   responsaveis?: { id: string; nome: string }[]
+  /** Pré-seleciona um responsável (ex.: o usuário logado na versão
+   *  autenticada dentro do sistema). Cai pro primeiro da lista se ausente. */
+  responsavelPadraoId?: string
   /** Clientes ativos por empresa (assessoria) — habilita o seletor de
    *  cliente pra lançar o comercial POR CLIENTE (orgânico por cliente). */
   clientesPorEmpresa?: Record<string, { id: string; nome: string }[]>
@@ -43,7 +47,7 @@ export default function FormularioComercial({
   const [clienteId, setClienteId] = useState("")
   const [data, setData] = useState(hojeBRT())
   const [responsavelId, setResponsavelId] = useState(
-    responsaveis?.[0]?.id ?? ""
+    responsavelPadraoId ?? responsaveis?.[0]?.id ?? ""
   )
   // Origem do lead: 'organico' (prospecção fria) ou 'pago' (rótulo "Anúncios").
   const [origem, setOrigem] = useState<"organico" | "pago">("organico")
