@@ -74,6 +74,11 @@ const CHAVES: { chave: ChavePermissao; rotulo: string; descricao: string }[] = [
     rotulo: "Notificações",
     descricao: "Sino flutuante (push + in-app)",
   },
+  {
+    chave: "crm",
+    rotulo: "CRM",
+    descricao: "/dashboard/crm (leads, WhatsApp, Kanban, calendário)",
+  },
 ]
 
 export default function GerenciadorUsuarios({
@@ -986,6 +991,7 @@ const PRESET_ADMIN: Permissoes = {
   configuracoes: true,
   gerenciar_usuarios: true,
   ver_notificacoes: true,
+  crm: true,
 }
 
 const PRESET_GESTOR: Permissoes = {
@@ -1001,6 +1007,7 @@ const PRESET_GESTOR: Permissoes = {
   configuracoes: true,
   gerenciar_usuarios: false,
   ver_notificacoes: true,
+  crm: false,
 }
 
 const PRESET_COMERCIAL: Permissoes = {
@@ -1016,4 +1023,5 @@ const PRESET_COMERCIAL: Permissoes = {
   configuracoes: true,
   gerenciar_usuarios: false,
   ver_notificacoes: true,
+  crm: true,
 }
