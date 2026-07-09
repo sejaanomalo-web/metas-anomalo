@@ -80,3 +80,109 @@ export async function enviarTextoEvolution(
     return { ok: false, erro: msg }
   }
 }
+
+export interface ResultadoInstanciaEvolution {
+  ok: boolean
+  erro?: string
+  status?: number
+}
+
+async function extrairErroResposta(resp: Response): Promise<string> {
+  const json: unknown = await resp.json().catch(() => null)
+  const obj = (json ?? {}) as Record<string, unknown>
+  return (
+    (typeof obj.message === "string" && obj.message) ||
+    (typeof obj.error === "string" && obj.error) ||
+    `HTTP ${resp.status}`
+  )
+}
+
+/**
+ * Cria uma instancia nova na Evolution API. NAO retorna o QR aqui — o QR
+ * chega pelo evento QRCODE_UPDATED do webhook (lib/crm-inbound.ts), que
+ * persiste em crm_instancias.ultimo_qr. Chamar antes disso
+ * crm_instancias.insert() com o mesmo instanceName.
+ */
+export async function criarInstanciaEvolution(
+  instanceName: string
+): Promise<ResultadoInstanciaEvolution> {
+  const base = process.env.EVOLUTION_API_URL
+  const apikey = process.env.EVOLUTION_API_KEY
+  if (!base || !apikey) {
+    console.error("[evolution] EVOLUTION_API_URL ou EVOLUTION_API_KEY ausente")
+    return { ok: false, erro: "credenciais_ausentes" }
+  }
+
+  const url = `${base.replace(/\/$/, "")}/instance/create`
+
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { apikey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instanceName,
+        qrcode: true,
+        integration: "WHATSAPP-BAILEYS",
+      }),
+      signal: AbortSignal.timeout(15_000),
+      cache: "no-store",
+    })
+    if (!resp.ok) {
+      const msg = await extrairErroResposta(resp)
+      console.error(
+        `[evolution] falha instance/create (${instanceName}): ${resp.status} ${msg}`
+      )
+      return { ok: false, erro: msg, status: resp.status }
+    }
+    return { ok: true, status: resp.status }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(
+      `[evolution] erro de rede instance/create (${instanceName}): ${msg}`
+    )
+    return { ok: false, erro: msg }
+  }
+}
+
+/**
+ * Dispara/renova a geracao do QR de uma instancia ja criada. A fonte de
+ * verdade do QR continua sendo o evento QRCODE_UPDATED do webhook — esta
+ * funcao so pede pra Evolution gerar um novo (ex: QR expirou).
+ */
+export async function conectarInstanciaEvolution(
+  instanceName: string
+): Promise<ResultadoInstanciaEvolution> {
+  const base = process.env.EVOLUTION_API_URL
+  const apikey = process.env.EVOLUTION_API_KEY
+  if (!base || !apikey) {
+    console.error("[evolution] EVOLUTION_API_URL ou EVOLUTION_API_KEY ausente")
+    return { ok: false, erro: "credenciais_ausentes" }
+  }
+
+  const url = `${base.replace(/\/$/, "")}/instance/connect/${encodeURIComponent(
+    instanceName
+  )}`
+
+  try {
+    const resp = await fetch(url, {
+      method: "GET",
+      headers: { apikey },
+      signal: AbortSignal.timeout(15_000),
+      cache: "no-store",
+    })
+    if (!resp.ok) {
+      const msg = await extrairErroResposta(resp)
+      console.error(
+        `[evolution] falha instance/connect (${instanceName}): ${resp.status} ${msg}`
+      )
+      return { ok: false, erro: msg, status: resp.status }
+    }
+    return { ok: true, status: resp.status }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(
+      `[evolution] erro de rede instance/connect (${instanceName}): ${msg}`
+    )
+    return { ok: false, erro: msg }
+  }
+}

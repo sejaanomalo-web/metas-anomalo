@@ -9,76 +9,140 @@ import CampoMoeda from "@/components/inputs/CampoMoeda"
 import {
   atualizarRelatorioComercialAction,
   excluirRelatorioComercialAction,
+  listarRelatoriosComerciaisAdmin,
 } from "@/lib/relatorios-comerciais"
 
+/** Primeiro dia do mês atual / hoje em BRT (YYYY-MM-DD). */
+function rangeMesAtual(): { inicio: string; fim: string } {
+  const agora = new Date()
+  const utcMs = agora.getTime() + agora.getTimezoneOffset() * 60_000
+  const brt = new Date(utcMs - 3 * 60 * 60_000)
+  const ano = brt.getUTCFullYear()
+  const mes = String(brt.getUTCMonth() + 1).padStart(2, "0")
+  const dia = String(brt.getUTCDate()).padStart(2, "0")
+  return { inicio: `${ano}-${mes}-01`, fim: `${ano}-${mes}-${dia}` }
+}
+
 /**
- * Admin · Configurações → Gerenciar dados (comercial). Lista os relatórios
- * comerciais inseridos e permite EDITAR ou EXCLUIR cada um. Exclusão exige
- * digitar "Excluir". Gate de admin é feito no server (requererAdmin) e na
- * page (só renderiza pra papel admin).
+ * Admin · Configurações → Gerenciar dados (comercial). FILTRA os relatórios
+ * comerciais por empresa + período (igual ao de tráfego pago) e só mostra a
+ * lista DEPOIS da busca. Permite EDITAR ou EXCLUIR cada registro. Exclusão
+ * exige digitar "Excluir". Gate de admin no server (requererAdmin) + na page.
  */
 export default function GerenciadorRelatoriosComerciais({
-  registrosIniciais,
   empresas,
 }: {
-  registrosIniciais: RelatorioComercial[]
   empresas: EmpresaMeta[]
 }) {
   const router = useRouter()
-  const [registros, setRegistros] = useState(registrosIniciais)
+  const inicial = rangeMesAtual()
+  const [pending, startTransition] = useTransition()
+  const [registros, setRegistros] = useState<RelatorioComercial[] | null>(null)
   const [editandoId, setEditandoId] = useState<string | null>(null)
 
+  function buscar(formData: FormData) {
+    setEditandoId(null)
+    startTransition(async () => {
+      const rows = await listarRelatoriosComerciaisAdmin(formData)
+      setRegistros(rows)
+    })
+  }
+
   function removerDaLista(id: string) {
-    setRegistros((atual) => atual.filter((r) => r.id !== id))
+    setRegistros((atual) => (atual ? atual.filter((r) => r.id !== id) : atual))
   }
   function atualizarNaLista(r: RelatorioComercial) {
-    setRegistros((atual) => atual.map((x) => (x.id === r.id ? r : x)))
+    setRegistros((atual) =>
+      atual ? atual.map((x) => (x.id === r.id ? r : x)) : atual
+    )
   }
 
   return (
     <div className="glass" style={{ padding: 24 }}>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 14 }}>
         <p style={rotuloSecao}>Gerenciar dados · admin</p>
         <h2 style={tituloSecao}>Relatórios comerciais</h2>
         <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>
-          {registros.length}{" "}
-          {registros.length === 1 ? "registro inserido" : "registros inseridos"}{" "}
-          · editar ou excluir dados lançados de forma indevida.
+          Filtre por empresa e período pra listar · editar ou excluir dados
+          lançados de forma indevida.
         </p>
       </div>
 
-      {registros.length === 0 ? (
-        <p style={vazioEstilo}>Nenhum relatório comercial registrado.</p>
-      ) : (
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {registros.map((r) =>
-            editandoId === r.id ? (
-              <li key={r.id} style={liEstilo}>
-                <FormEdicao
-                  registro={r}
-                  empresas={empresas}
-                  onCancelar={() => setEditandoId(null)}
-                  onSucesso={(atualizado) => {
-                    atualizarNaLista(atualizado)
-                    setEditandoId(null)
-                    router.refresh()
-                  }}
-                />
-              </li>
-            ) : (
-              <li key={r.id} style={liEstilo}>
-                <LinhaRegistro
-                  registro={r}
-                  onEditar={() => setEditandoId(r.id)}
-                  onExcluir={() => {
-                    removerDaLista(r.id)
-                    router.refresh()
-                  }}
-                />
-              </li>
-            )
+      <form
+        action={(fd) => buscar(fd)}
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+          marginTop: 16,
+        }}
+      >
+        <Campo label="Empresa">
+          <select name="empresa" defaultValue="" className="glass-input" style={inputEstilo}>
+            <option value="">Todas</option>
+            {empresas.map((e) => (
+              <option key={e.slug} value={e.nome}>
+                {e.nome}
+              </option>
+            ))}
+          </select>
+        </Campo>
+        <Campo label="De">
+          <input type="date" name="inicio" defaultValue={inicial.inicio} className="glass-input" style={inputEstilo} />
+        </Campo>
+        <Campo label="Até">
+          <input type="date" name="fim" defaultValue={inicial.fim} className="glass-input" style={inputEstilo} />
+        </Campo>
+        <button type="submit" disabled={pending} className="btn-gold-filled uppercase" style={{ opacity: pending ? 0.6 : 1 }}>
+          {pending ? "Buscando…" : "Buscar"}
+        </button>
+      </form>
+
+      {registros !== null && (
+        <div style={{ marginTop: 18 }}>
+          {registros.length === 0 ? (
+            <p style={vazioEstilo}>
+              Nenhum relatório comercial no período/empresa selecionados.
+            </p>
+          ) : (
+            <>
+              <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 10 }}>
+                {registros.length}{" "}
+                {registros.length === 1 ? "registro" : "registros"} no filtro.
+              </p>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                {registros.map((r) =>
+                  editandoId === r.id ? (
+                    <li key={r.id} style={liEstilo}>
+                      <FormEdicao
+                        registro={r}
+                        empresas={empresas}
+                        onCancelar={() => setEditandoId(null)}
+                        onSucesso={(atualizado) => {
+                          atualizarNaLista(atualizado)
+                          setEditandoId(null)
+                          router.refresh()
+                        }}
+                      />
+                    </li>
+                  ) : (
+                    <li key={r.id} style={liEstilo}>
+                      <LinhaRegistro
+                        registro={r}
+                        onEditar={() => setEditandoId(r.id)}
+                        onExcluir={() => {
+                          removerDaLista(r.id)
+                          router.refresh()
+                        }}
+                      />
+                    </li>
+                  )
+                )}
+              </ul>
+            </>
           )}
-        </ul>
+        </div>
       )}
     </div>
   )

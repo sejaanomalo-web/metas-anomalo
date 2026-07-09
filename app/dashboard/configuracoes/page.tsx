@@ -16,7 +16,6 @@ import {
 } from "@/lib/resumos"
 import { requererPermissao, temPermissao } from "@/lib/auth"
 import { listarUsuariosAction } from "@/lib/usuarios-actions"
-import { listarRelatoriosComerciaisAdmin } from "@/lib/relatorios-comerciais"
 import { listarEmpresas } from "@/lib/empresas-actions"
 import { getClientesAtivosPorEmpresa } from "@/lib/clientes"
 import {
@@ -53,7 +52,6 @@ export default async function ConfiguracoesPage({
     chavesNotif.push("dados_comercial", "nova_venda")
   }
   const formsPermitidos: FormId[] = []
-  if (temPermissao(usuario, "formulario_trafego")) formsPermitidos.push("trafego")
   if (temPermissao(usuario, "formulario_comercial"))
     formsPermitidos.push("comercial")
 
@@ -66,8 +64,6 @@ export default async function ConfiguracoesPage({
     usuarios,
     empresas,
     preferencias,
-    relatoriosComerciais,
-    responsaveisTrafego,
     responsaveisComercial,
     clientesPorEmpresa,
   ] = await Promise.all([
@@ -77,8 +73,6 @@ export default async function ConfiguracoesPage({
     podeGerenciarUsuarios ? listarUsuariosAction() : Promise.resolve([]),
     listarEmpresas(true),
     getPreferenciasNotificacao(usuario.id),
-    ehAdmin ? listarRelatoriosComerciaisAdmin() : Promise.resolve([]),
-    listarTimePorPapel("gestor_trafego"),
     listarTimePorPapel("comercial"),
     // Só carrega os clientes quando o usuário enxerga o formulário comercial.
     formsPermitidos.includes("comercial")
@@ -151,7 +145,6 @@ export default async function ConfiguracoesPage({
           <GerenciadorFormularios
             empresas={empresas}
             formsPermitidos={formsPermitidos}
-            responsaveisTrafego={responsaveisTrafego}
             responsaveisComercial={responsaveisComercial}
             clientesPorEmpresa={clientesPorEmpresa}
           />
@@ -159,10 +152,7 @@ export default async function ConfiguracoesPage({
 
         {ehAdmin && (
           <>
-            <GerenciadorRelatoriosComerciais
-              registrosIniciais={relatoriosComerciais}
-              empresas={empresas}
-            />
+            <GerenciadorRelatoriosComerciais empresas={empresas} />
             <GerenciadorDadosDiarios empresas={empresas} />
           </>
         )}
