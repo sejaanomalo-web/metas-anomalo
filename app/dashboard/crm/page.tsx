@@ -1,43 +1,86 @@
+import Link from "next/link"
 import { requererPermissao } from "@/lib/auth"
+import { listarLeadsInbox, buscarLead, listarMensagensDoLead } from "@/lib/crm-leads"
+import ListaConversas from "@/components/crm/ListaConversas"
+import Thread from "@/components/crm/Thread"
+import CrmRealtime from "@/components/crm/CrmRealtime"
 
 export const dynamic = "force-dynamic"
 
 /**
- * CRM — placeholder da Fase 0. A fundacao ja esta no ar: o webhook da Evolution
- * cria leads e grava mensagens em crm_*. As telas (inbox, Kanban, calendario,
- * ficha) chegam nas Fases 1-4. Gated pela permissao 'crm'.
+ * Inbox do CRM (Fase 1). Master-detail via query string (?lead=<id>) em vez
+ * de rota dinâmica, já que o Kanban da Fase 2 reaproveita a mesma lista de
+ * leads. Fundação (schema + webhook Evolution) é da Fase 0.
  */
-export default async function CrmPage() {
+export default async function CrmPage({
+  searchParams,
+}: {
+  searchParams: { lead?: string }
+}) {
   await requererPermissao("crm")
 
+  const leads = await listarLeadsInbox()
+  const leadId = searchParams.lead
+  const [lead, mensagens] = leadId
+    ? await Promise.all([buscarLead(leadId), listarMensagensDoLead(leadId)])
+    : [null, []]
+
   return (
-    <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
-      <div className="hero-banner">
-        <p
+    <main className="mx-auto px-8 py-10" style={{ maxWidth: 1280 }}>
+      <CrmRealtime />
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <p
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: "var(--text-3)",
+              letterSpacing: "0.01em",
+            }}
+          >
+            CRM
+          </p>
+          <h1 style={{ fontSize: 32, marginTop: 6 }}>Conversas</h1>
+        </div>
+        <Link
+          href="/dashboard/crm/conexoes"
+          style={{ fontSize: 12, color: "var(--gold, #C9953A)" }}
+        >
+          Conexões WhatsApp →
+        </Link>
+      </div>
+
+      <div
+        className="glass"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "320px 1fr",
+          height: "calc(100vh - 260px)",
+          minHeight: 480,
+          overflow: "hidden",
+        }}
+      >
+        <div
           style={{
-            fontSize: 12,
-            fontWeight: 500,
-            color: "var(--text-3)",
-            letterSpacing: "0.01em",
+            borderRight: "0.5px solid rgba(255,255,255,0.08)",
+            overflowY: "auto",
+            padding: 10,
           }}
         >
-          CRM
-        </p>
-        <h1 style={{ fontSize: 36, marginTop: 6 }}>CRM · em construção</h1>
-        <p
-          style={{
-            fontSize: 14,
-            color: "var(--text-3)",
-            marginTop: 10,
-            lineHeight: 1.6,
-            maxWidth: 620,
-          }}
-        >
-          Fundação no ar. Assim que as 3 instâncias da Evolution forem
-          conectadas, os leads do WhatsApp já começam a entrar automaticamente.
-          As telas — caixa de entrada, Kanban e calendário — chegam nas
-          próximas fases.
-        </p>
+          <ListaConversas leads={leads} leadSelecionadoId={lead?.id} />
+        </div>
+
+        <div style={{ minWidth: 0 }}>
+          {lead ? (
+            <Thread lead={lead} mensagens={mensagens} />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p style={{ fontSize: 13, color: "var(--text-3)" }}>
+                Selecione uma conversa à esquerda.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </main>
   )

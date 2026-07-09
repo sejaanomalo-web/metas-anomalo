@@ -2,10 +2,12 @@
 // CRM — processamento de webhooks da Evolution (INBOUND). Server-only (usa
 // service_role; importado pelo route handler do webhook, nunca pelo client).
 // =============================================================================
-// Fase 0: so trata messages.upsert — cria/mergeia o lead, grava a mensagem
-// recebida (idempotente por instancia_id+wa_message_id) e emite o ping de
-// realtime. Status de entrega, conexao/QR e outbound entram nas proximas
-// fases. NUNCA lanca excecao fatal pro webhook: retorna { ok, info?, erro? }.
+// Fase 0: messages.upsert — cria/mergeia o lead, grava a mensagem recebida
+// (idempotente por instancia_id+wa_message_id) e emite o ping de realtime.
+// Fase 1: QRCODE_UPDATED/CONNECTION_UPDATE — reflete status_conexao/ultimo_qr
+// em crm_instancias pra UI de admin de conexao. Status de entrega (mensagem
+// lida/entregue) e outbound continuam fora do escopo. NUNCA lanca excecao
+// fatal pro webhook: retorna { ok, info?, erro? }.
 
 import { getSupabaseAdmin } from "./supabase"
 
@@ -68,16 +70,122 @@ function tsParaIso(ts: unknown): string | null {
   return new Date(n * 1000).toISOString()
 }
 
+/** Extrai o base64 do QR do payload (formatos variam entre builds da
+ *  Evolution: data.qrcode.base64, data.base64, ou data como string crua). */
+function extrairQrBase64(data: unknown): string | null {
+  if (!data) return null
+  if (typeof data === "string") return data
+  const d = data as Record<string, any>
+  return d.qrcode?.base64 ?? d.base64 ?? d.qrcode ?? null
+}
+
+/** Mapeia o `state` da Evolution/Baileys pro enum de status_conexao. */
+function mapearStatusConexao(state: unknown): string | null {
+  switch (state) {
+    case "open":
+      return "conectado"
+    case "close":
+      return "desconectado"
+    case "connecting":
+      return "qrcode"
+    default:
+      return null
+  }
+}
+
+async function processarQrcodeUpdate(
+  instanceName: string | undefined,
+  data: unknown
+): Promise<ResultadoProcessamento> {
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "service_role_ausente" }
+  if (!instanceName) return { ok: false, erro: "instance ausente no payload" }
+
+  const qr = extrairQrBase64(data)
+  if (!qr) return { ok: true, info: "qrcode_updated sem base64 no payload" }
+
+  const { data: inst } = await db
+    .from("crm_instancias")
+    .select("id, empresa_slug")
+    .eq("instance_name", instanceName)
+    .maybeSingle()
+  if (!inst) return { ok: true, info: `instancia desconhecida: ${instanceName}` }
+
+  await db
+    .from("crm_instancias")
+    .update({
+      ultimo_qr: qr,
+      status_conexao: "qrcode",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", inst.id)
+
+  await db
+    .from("crm_realtime_ping")
+    .insert({ empresa_slug: inst.empresa_slug as string, kind: "conexao" })
+
+  return { ok: true, info: "qrcode atualizado" }
+}
+
+async function processarConnectionUpdate(
+  instanceName: string | undefined,
+  data: unknown
+): Promise<ResultadoProcessamento> {
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "service_role_ausente" }
+  if (!instanceName) return { ok: false, erro: "instance ausente no payload" }
+
+  const status = mapearStatusConexao((data as Record<string, any>)?.state)
+  if (!status) {
+    return {
+      ok: true,
+      info: `connection_update com state desconhecido: ${(data as any)?.state}`,
+    }
+  }
+
+  const { data: inst } = await db
+    .from("crm_instancias")
+    .select("id, empresa_slug")
+    .eq("instance_name", instanceName)
+    .maybeSingle()
+  if (!inst) return { ok: true, info: `instancia desconhecida: ${instanceName}` }
+
+  const agora = new Date().toISOString()
+  const patch: Record<string, unknown> = {
+    status_conexao: status,
+    updated_at: agora,
+  }
+  if (status === "conectado") {
+    patch.conectado_em = agora
+    patch.ultimo_qr = null // QR ja foi usado, evita reexibir na UI
+  }
+
+  await db.from("crm_instancias").update(patch).eq("id", inst.id)
+
+  await db
+    .from("crm_realtime_ping")
+    .insert({ empresa_slug: inst.empresa_slug as string, kind: "conexao" })
+
+  return { ok: true, info: `conexao: ${status}` }
+}
+
 export async function processarEventoWebhook(
   payload: any
 ): Promise<ResultadoProcessamento> {
   const evento: string = payload?.event ?? ""
   const instanceName: string | undefined = payload?.instance
 
-  // Fase 0: so mensagens recebidas. Outros eventos (status/conexao/qrcode) sao
-  // logados pelo route handler e ignorados aqui por ora.
+  if (evento === "qrcode.updated" || evento === "QRCODE_UPDATED") {
+    return processarQrcodeUpdate(instanceName, payload?.data)
+  }
+  if (evento === "connection.update" || evento === "CONNECTION_UPDATE") {
+    return processarConnectionUpdate(instanceName, payload?.data)
+  }
+
+  // Fase 1: mensagens recebidas + conexao/QR (acima). Demais eventos (status
+  // de entrega/leitura, etc.) seguem ignorados por ora.
   const ehMsg = evento === "messages.upsert" || evento === "MESSAGES_UPSERT"
-  if (!ehMsg) return { ok: true, info: `evento ignorado na fase 0: ${evento}` }
+  if (!ehMsg) return { ok: true, info: `evento ignorado: ${evento}` }
 
   const db = getSupabaseAdmin()
   if (!db) return { ok: false, erro: "service_role_ausente" }
