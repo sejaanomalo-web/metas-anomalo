@@ -10,10 +10,11 @@ const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   // Não vaza a URL completa pra origens externas.
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  // Desliga APIs sensíveis que o app não usa.
+  // Desliga APIs sensíveis que o app não usa. `microphone=(self)`: liberado só
+  // pra própria origem — necessário pra gravar áudio no CRM (MediaRecorder).
   {
     key: "Permissions-Policy",
-    value: "geolocation=(), microphone=(), camera=()",
+    value: "geolocation=(), microphone=(self), camera=()",
   },
   // Força HTTPS por 1 ano (Vercel já serve TLS).
   {

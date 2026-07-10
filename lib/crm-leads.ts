@@ -26,6 +26,8 @@ export interface CrmLeadRow {
   telefone_e164: string | null
   nome: string | null
   email: string | null
+  foto_url: string | null
+  ultima_msg_preview: string | null
   etapa_id: string | null
   ordem_na_etapa: number
   responsavel_id: string | null

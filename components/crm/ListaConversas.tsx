@@ -57,7 +57,7 @@ export default function ListaConversas({
                 : "0.5px solid transparent",
             }}
           >
-            <Avatar nome={nomeExibido} cor={cor} size={38} />
+            <Avatar nome={nomeExibido} cor={cor} fotoUrl={lead.foto_url} size={44} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <p
@@ -74,6 +74,35 @@ export default function ListaConversas({
                   {tempoRelativo(lead.ultima_interacao_em)}
                 </span>
               </div>
+              {lead.ultima_msg_preview && (
+                <div className="flex items-center justify-between gap-2 mt-0.5">
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: lead.nao_lidas > 0 ? "var(--text-2, #ddd)" : "var(--text-3)",
+                      fontWeight: lead.nao_lidas > 0 ? 500 : 400,
+                    }}
+                    className="truncate"
+                  >
+                    {lead.ultima_msg_preview}
+                  </p>
+                  {lead.nao_lidas > 0 && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: "#0a0a0a",
+                        background: "var(--gold, #C9953A)",
+                        borderRadius: 999,
+                        padding: "1px 7px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {lead.nao_lidas}
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="flex items-center justify-between gap-2 mt-0.5">
                 <span
                   style={{
@@ -85,7 +114,7 @@ export default function ListaConversas({
                 >
                   {lead.empresa_nome}
                 </span>
-                {lead.nao_lidas > 0 && (
+                {lead.nao_lidas > 0 && !lead.ultima_msg_preview && (
                   <span
                     style={{
                       fontSize: 10,

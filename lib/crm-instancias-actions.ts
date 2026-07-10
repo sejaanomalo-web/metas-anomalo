@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
-import { criarInstanciaEvolution, conectarInstanciaEvolution } from "./evolution"
+import {
+  criarInstanciaEvolution,
+  conectarInstanciaEvolution,
+  excluirInstanciaEvolution,
+} from "./evolution"
 import { CORES_INSTANCIA } from "./crm-cores"
 
 export interface CrmInstanciaRow {
@@ -192,6 +196,49 @@ export async function reativarInstanciaAction(
   const { error } = await db
     .from("crm_instancias")
     .update({ ativo: true, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("usuario_id", usuario.id)
+  if (error) return { ok: false, erro: error.message }
+
+  revalidarConexoes()
+  return { ok: true }
+}
+
+/**
+ * Exclui a instância DE VEZ: apaga na Evolution (logout + delete) e remove a
+ * linha em crm_instancias. As mensagens ficam preservadas
+ * (crm_mensagens.instancia_id é ON DELETE SET NULL); os contatos cacheados
+ * dessa instância somem (ON DELETE CASCADE). Diferente de "Desativar", que só
+ * esconde e para de receber — este é irreversível (precisa reconectar o QR do
+ * zero pra usar o número de novo). Só o dono pode excluir.
+ */
+export async function excluirInstanciaAction(
+  formData: FormData
+): Promise<ResultadoInstancia> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, erro: "ID inválido." }
+
+  const { data: inst } = await db
+    .from("crm_instancias")
+    .select("instance_name")
+    .eq("id", id)
+    .eq("usuario_id", usuario.id)
+    .maybeSingle()
+  if (!inst) return { ok: false, erro: "Instância não encontrada." }
+
+  // Best-effort na Evolution: se falhar (VPS fora, já não existe lá), ainda
+  // removemos a linha local pra não deixar órfã — o número no VPS pode ser
+  // limpo à parte.
+  await excluirInstanciaEvolution(inst.instance_name as string)
+
+  const { error } = await db
+    .from("crm_instancias")
+    .delete()
     .eq("id", id)
     .eq("usuario_id", usuario.id)
   if (error) return { ok: false, erro: error.message }
