@@ -22,8 +22,9 @@ export const maxDuration = 60
  *
  * Configurar na Evolution (por instancia ou global) apontando pra:
  *   POST <APP_URL>/api/crm/wa/webhook/<EVOLUTION_WEBHOOK_SECRET>
- * com os eventos MESSAGES_UPSERT, CONNECTION_UPDATE, QRCODE_UPDATED
- * (+ futuramente MESSAGES_UPDATE, pra status de entrega/leitura).
+ * com os eventos MESSAGES_UPSERT, CONNECTION_UPDATE, QRCODE_UPDATED,
+ * CONTACTS_UPSERT, CONTACTS_UPDATE (+ futuramente MESSAGES_UPDATE, pra
+ * status de entrega/leitura).
  */
 export async function POST(
   req: Request,

@@ -31,8 +31,9 @@ export async function enviarMensagemAction(
 
   const { data: lead } = await db
     .from("crm_leads")
-    .select("id, empresa_slug, telefone_e164")
+    .select("id, empresa_slug, telefone_e164, usuario_id")
     .eq("id", leadId)
+    .eq("usuario_id", usuario.id)
     .maybeSingle()
   if (!lead) return { ok: false, erro: "Lead não encontrado." }
   if (!lead.telefone_e164) {
@@ -43,6 +44,7 @@ export async function enviarMensagemAction(
     .from("crm_instancias")
     .select("id, instance_name")
     .eq("empresa_slug", lead.empresa_slug)
+    .eq("usuario_id", usuario.id)
     .eq("ativo", true)
     .eq("status_conexao", "conectado")
     .limit(1)
@@ -62,6 +64,7 @@ export async function enviarMensagemAction(
     lead_id: leadId,
     instancia_id: inst.id,
     empresa_slug: lead.empresa_slug,
+    usuario_id: lead.usuario_id,
     direcao: "out",
     tipo: "texto",
     conteudo: textoLimpo,
@@ -90,8 +93,14 @@ export async function enviarMensagemAction(
 }
 
 export async function marcarLeadComoLidoAction(leadId: string): Promise<void> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return
   const db = getSupabaseAdmin()
   if (!db) return
-  await db.from("crm_leads").update({ nao_lidas: 0 }).eq("id", leadId)
+  await db
+    .from("crm_leads")
+    .update({ nao_lidas: 0 })
+    .eq("id", leadId)
+    .eq("usuario_id", usuario.id)
   revalidatePath("/dashboard/crm")
 }

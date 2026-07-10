@@ -9,8 +9,11 @@ import {
   gerarQrAction,
   desativarInstanciaAction,
   reativarInstanciaAction,
+  atualizarCorInstanciaAction,
 } from "@/lib/crm-instancias-actions"
+import { CORES_INSTANCIA } from "@/lib/crm-cores"
 import IconBadge from "@/components/ui/IconBadge"
+import Avatar from "@/components/crm/Avatar"
 
 const STATUS_LABEL: Record<CrmInstanciaRow["status_conexao"], string> = {
   conectado: "Conectado",
@@ -91,6 +94,41 @@ export default function GerenciadorInstancias({
   )
 }
 
+function SeletorCor({
+  corAtual,
+  onEscolher,
+}: {
+  corAtual: string
+  onEscolher: (cor: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {CORES_INSTANCIA.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onEscolher(c)}
+          aria-label={`Cor ${c}`}
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: c,
+            border:
+              c.toLowerCase() === corAtual.toLowerCase()
+                ? "2px solid #fff"
+                : "1px solid rgba(255,255,255,0.25)",
+            boxShadow:
+              c.toLowerCase() === corAtual.toLowerCase()
+                ? "0 0 0 2px rgba(0,0,0,0.4)"
+                : "none",
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 function FormNovaInstancia({
   empresas,
   onClose,
@@ -102,6 +140,7 @@ function FormNovaInstancia({
   const [instanceName, setInstanceName] = useState("")
   const [numero, setNumero] = useState("")
   const [displayNome, setDisplayNome] = useState("")
+  const [cor, setCor] = useState(CORES_INSTANCIA[0])
   const [pending, startTransition] = useTransition()
   const [status, setStatus] = useState<string | null>(null)
   const router = useRouter()
@@ -112,6 +151,7 @@ function FormNovaInstancia({
     fd.set("instance_name", instanceName)
     fd.set("numero_e164", numero)
     fd.set("display_nome", displayNome)
+    fd.set("cor", cor)
     const r = await criarInstanciaAction(fd)
     if (r.ok) {
       setStatus(r.erro ? `Criada, com aviso: ${r.erro}` : "Criada ✓")
@@ -195,6 +235,13 @@ function FormNovaInstancia({
           />
         </label>
 
+        <div>
+          <LabelSmall>Cor de identificação</LabelSmall>
+          <div style={{ marginTop: 8 }}>
+            <SeletorCor corAtual={cor} onEscolher={setCor} />
+          </div>
+        </div>
+
         <div className="flex items-center gap-3 pt-2">
           <button
             type="button"
@@ -232,10 +279,12 @@ function LinhaInstancia({
 }) {
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
+  const [corAberta, setCorAberta] = useState(false)
   const router = useRouter()
   const empresaNome =
     empresas.find((e) => e.slug === instancia.empresa_slug)?.nome ??
     instancia.empresa_slug
+  const nomeExibido = instancia.display_nome || instancia.instance_name
 
   async function gerarQr() {
     const fd = new FormData()
@@ -255,10 +304,20 @@ function LinhaInstancia({
     router.refresh()
   }
 
+  async function mudarCor(cor: string) {
+    const fd = new FormData()
+    fd.set("id", instancia.id)
+    fd.set("cor", cor)
+    await atualizarCorInstanciaAction(fd)
+    setCorAberta(false)
+    router.refresh()
+  }
+
   return (
     <div
       style={{
         border: "0.5px solid rgba(255,255,255,0.08)",
+        borderLeft: `3px solid ${instancia.cor}`,
         borderRadius: 10,
         padding: 14,
         opacity: inativa ? 0.6 : 1,
@@ -266,13 +325,50 @@ function LinhaInstancia({
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <IconBadge status={STATUS_ICONBADGE[instancia.status_conexao]} size="sm">
-            ●
-          </IconBadge>
+          <div style={{ position: "relative" }}>
+            <Avatar nome={nomeExibido} cor={instancia.cor} size={36} />
+            <span
+              title={STATUS_LABEL[instancia.status_conexao]}
+              style={{
+                position: "absolute",
+                bottom: -2,
+                right: -2,
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                border: "2px solid var(--surface-1)",
+                background:
+                  instancia.status_conexao === "conectado"
+                    ? "var(--success)"
+                    : instancia.status_conexao === "qrcode"
+                    ? "var(--warning)"
+                    : instancia.status_conexao === "desconectado"
+                    ? "var(--danger)"
+                    : "rgba(255,255,255,0.3)",
+              }}
+            />
+          </div>
           <div className="min-w-0">
-            <p style={{ fontSize: 13, fontWeight: 500 }} className="truncate">
-              {instancia.display_nome || instancia.instance_name}
-            </p>
+            <div className="flex items-center gap-2">
+              <p style={{ fontSize: 13, fontWeight: 500 }} className="truncate">
+                {nomeExibido}
+              </p>
+              {!inativa && (
+                <button
+                  type="button"
+                  onClick={() => setCorAberta((v) => !v)}
+                  title="Mudar cor"
+                  style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: "50%",
+                    background: instancia.cor,
+                    border: "1px solid rgba(255,255,255,0.3)",
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+            </div>
             <p style={{ fontSize: 11, color: "var(--text-3)" }} className="truncate">
               {empresaNome} · {instancia.instance_name}
               {instancia.numero_e164 ? ` · ${instancia.numero_e164}` : ""}
@@ -319,6 +415,12 @@ function LinhaInstancia({
           </button>
         </div>
       </div>
+
+      {corAberta && (
+        <div style={{ marginTop: 12 }}>
+          <SeletorCor corAtual={instancia.cor} onEscolher={mudarCor} />
+        </div>
+      )}
 
       {!inativa && instancia.status_conexao === "qrcode" && instancia.ultimo_qr && (
         <div style={{ marginTop: 14, textAlign: "center" }}>

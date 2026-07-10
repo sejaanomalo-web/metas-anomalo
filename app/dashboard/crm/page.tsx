@@ -1,16 +1,22 @@
 import Link from "next/link"
 import { requererPermissao } from "@/lib/auth"
 import { listarLeadsInbox, buscarLead, listarMensagensDoLead } from "@/lib/crm-leads"
+import { listarInstancias } from "@/lib/crm-instancias-actions"
+import { listarEtapas } from "@/lib/crm-etapas"
+import { listarEtiquetas } from "@/lib/crm-etiquetas-actions"
+import { listarAtividadesCalendario } from "@/lib/crm-atividades-actions"
 import ListaConversas from "@/components/crm/ListaConversas"
 import Thread from "@/components/crm/Thread"
 import CrmRealtime from "@/components/crm/CrmRealtime"
+import PainelKanbanCalendario from "@/components/crm/PainelKanbanCalendario"
 
 export const dynamic = "force-dynamic"
 
 /**
- * Inbox do CRM (Fase 1). Master-detail via query string (?lead=<id>) em vez
- * de rota dinâmica, já que o Kanban da Fase 2 reaproveita a mesma lista de
- * leads. Fundação (schema + webhook Evolution) é da Fase 0.
+ * CRM: inbox (conversas) em cima, alternador Kanban/Calendário embaixo —
+ * todos reaproveitando a MESMA lista de leads do usuário logado (isolamento
+ * total: cada usuário só vê o que ele mesmo conectou). Master-detail do
+ * inbox via query string (?lead=<id>).
  */
 export default async function CrmPage({
   searchParams,
@@ -19,16 +25,30 @@ export default async function CrmPage({
 }) {
   await requererPermissao("crm")
 
-  const leads = await listarLeadsInbox()
+  const agora = new Date()
+  const inicioJanela = new Date(agora.getFullYear(), agora.getMonth() - 2, 1).toISOString()
+  const fimJanela = new Date(agora.getFullYear(), agora.getMonth() + 7, 0).toISOString()
+
+  const [leads, instancias, etapas, etiquetas, atividades] = await Promise.all([
+    listarLeadsInbox(),
+    listarInstancias(),
+    listarEtapas(),
+    listarEtiquetas(),
+    listarAtividadesCalendario(inicioJanela, fimJanela),
+  ])
+
+  const corPorEmpresa: Record<string, string> = {}
+  for (const inst of instancias) corPorEmpresa[inst.empresa_slug] = inst.cor
+
   const leadId = searchParams.lead
   const [lead, mensagens] = leadId
     ? await Promise.all([buscarLead(leadId), listarMensagensDoLead(leadId)])
     : [null, []]
 
   return (
-    <main className="mx-auto px-8 py-10" style={{ maxWidth: 1280 }}>
+    <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
       <CrmRealtime />
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between">
         <div>
           <p
             style={{
@@ -55,8 +75,7 @@ export default async function CrmPage({
         style={{
           display: "grid",
           gridTemplateColumns: "320px 1fr",
-          height: "calc(100vh - 260px)",
-          minHeight: 480,
+          height: 560,
           overflow: "hidden",
         }}
       >
@@ -67,12 +86,21 @@ export default async function CrmPage({
             padding: 10,
           }}
         >
-          <ListaConversas leads={leads} leadSelecionadoId={lead?.id} />
+          <ListaConversas
+            leads={leads}
+            leadSelecionadoId={lead?.id}
+            corPorEmpresa={corPorEmpresa}
+          />
         </div>
 
         <div style={{ minWidth: 0 }}>
           {lead ? (
-            <Thread lead={lead} mensagens={mensagens} />
+            <Thread
+              lead={lead}
+              mensagens={mensagens}
+              cor={corPorEmpresa[lead.empresa_slug] ?? "#C9953A"}
+              todasEtiquetas={etiquetas}
+            />
           ) : (
             <div className="flex items-center justify-center h-full">
               <p style={{ fontSize: 13, color: "var(--text-3)" }}>
@@ -81,6 +109,15 @@ export default async function CrmPage({
             </div>
           )}
         </div>
+      </div>
+
+      <div className="glass" style={{ padding: 20 }}>
+        <PainelKanbanCalendario
+          etapas={etapas}
+          leads={leads}
+          corPorEmpresa={corPorEmpresa}
+          atividades={atividades}
+        />
       </div>
     </main>
   )

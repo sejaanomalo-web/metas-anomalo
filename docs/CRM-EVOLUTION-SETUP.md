@@ -13,12 +13,21 @@ serverless — é só um POST recebido).
 
 ## 1. VPS
 
-Recomendado: Hetzner CX22 (2 vCPU / 4GB RAM, ~€4-5/mês) ou equivalente
-(Contabo, DigitalOcean). Evitar tiers "grátis" instáveis — o WhatsApp
-conectado precisa de uptime alto; um VPS pago e previsível compensa o custo
-baixo.
+Recomendado: DigitalOcean Basic (Regular CPU, 2GB RAM, ~$12/mês) ou
+equivalente (Hetzner, Contabo). Evitar o tier de 512MB/1GB — aperta demais
+rodando Postgres + Redis + Evolution juntos. Evitar tiers "grátis" instáveis
+— o WhatsApp conectado precisa de uptime alto; um VPS pago e previsível
+compensa o custo baixo.
 
-Ubuntu 22.04+, com Docker e Docker Compose instalados.
+Ubuntu 24.04+, com Docker e Docker Compose instalados
+(`curl -fsSL https://get.docker.com | sh`).
+
+**Sem domínio próprio?** Não tem problema — dá pra usar o IP do servidor
+direto (`http://<IP>:8080`) sem TLS. O único efeito colateral é o navegador
+avisar que a conexão não é criptografada ao abrir o Manager da Evolution
+direto; a chamada da Evolution pro nosso webhook continua normal (o webhook
+em si já é `https://` porque mora na Vercel). A seção 3 (Caddy/TLS) fica
+opcional nesse caso — pule pra seção 4.
 
 ## 2. Docker Compose
 
@@ -46,7 +55,7 @@ services:
       - evolution_redis:/data
 
   evolution-api:
-    image: atendai/evolution-api:latest
+    image: evoapicloud/evolution-api:v2.3.7
     restart: always
     depends_on:
       - postgres
@@ -58,16 +67,18 @@ services:
       DATABASE_CONNECTION_URI: postgresql://evolution:<senha>@postgres:5432/evolution
       CACHE_REDIS_ENABLED: "true"
       CACHE_REDIS_URI: redis://redis:6379
-      WEBHOOK_GLOBAL_URL: https://<dominio-vercel>/api/crm/wa/webhook/<EVOLUTION_WEBHOOK_SECRET>
+      WEBHOOK_GLOBAL_URL: https://<dominio-ou-app-vercel>/api/crm/wa/webhook/<EVOLUTION_WEBHOOK_SECRET>
       WEBHOOK_GLOBAL_ENABLED: "true"
       WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
       WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
       WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
       WEBHOOK_EVENTS_QRCODE_UPDATED: "true"
+      WEBHOOK_EVENTS_CONTACTS_UPSERT: "true"
+      WEBHOOK_EVENTS_CONTACTS_UPDATE: "true"
     volumes:
       - evolution_instances:/evolution/instances
     ports:
-      - "8080:8080" # atrás do Caddy, não exposto direto
+      - "8080:8080" # atrás do Caddy se tiver domínio, ou exposto direto se for só IP
 
 volumes:
   evolution_pg:
@@ -75,9 +86,17 @@ volumes:
   evolution_instances:
 ```
 
+> **Nome da imagem**: o projeto migrou de `atendai/evolution-api` pra
+> `evoapicloud/evolution-api` (mesmo time, repositório novo) — e nenhum dos
+> dois publica a tag `:latest` de forma confiável. Sempre fixar uma versão
+> (`v2.3.7` no momento em que este runbook foi escrito) e conferir a mais
+> recente em hub.docker.com/r/evoapicloud/evolution-api/tags antes de subir.
+
 `AUTHENTICATION_API_KEY` vira o `EVOLUTION_API_KEY` do nosso `.env` (Vercel).
 `WEBHOOK_GLOBAL_URL` já aponta pro segredo que vai em `EVOLUTION_WEBHOOK_SECRET`
 — gerar um valor aleatório novo (ex: `openssl rand -hex 32`) só pra isso.
+`CONTACTS_UPSERT`/`CONTACTS_UPDATE` (Fase 2) alimentam o nome salvo no
+celular (`crm_contatos`), preferido sobre o pushName ao criar um lead.
 
 ## 3. TLS / reverse proxy (Caddy)
 
@@ -97,7 +116,7 @@ direto na internet, só via `localhost` pro Caddy.
 Preencher as 3 já existentes em `.env.example`, hoje em branco:
 
 ```
-EVOLUTION_API_URL=https://evolution.anomalo.com.br
+EVOLUTION_API_URL=https://evolution.anomalo.com.br   (ou http://<IP-do-VPS>:8080 sem domínio)
 EVOLUTION_API_KEY=<mesma AUTHENTICATION_API_KEY do compose>
 EVOLUTION_WEBHOOK_SECRET=<mesmo segredo usado no WEBHOOK_GLOBAL_URL>
 ```
@@ -110,6 +129,11 @@ dar um nome técnico à instância (ex: `tato-comercial`) e clicar em "Criar
 instância". O QR aparece assim que a Evolution disparar o evento
 `QRCODE_UPDATED` pro nosso webhook — escanear no WhatsApp do celular em
 "Aparelhos conectados → Conectar aparelho".
+
+**Isolamento por usuário (Fase 2)**: cada instância pertence a quem a
+criou — literal como WhatsApp Web. Se dois colegas precisam gerenciar
+números diferentes, cada um cria a própria instância logado com o próprio
+usuário; não existe uma instância "da equipe" visível pra todo mundo.
 
 ## 6. Backup
 

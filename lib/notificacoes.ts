@@ -8,15 +8,22 @@ export type TipoNotificacao =
   | "dados_trafego"
   | "meta_batida"
   | "dados_sentinela"
+  | "crm_lembrete"
 
 // Papéis que podem receber notificações (filtrados depois por
 // ver_notificacoes + preferência do usuário).
 const PAPEIS_NOTIFICAVEIS = ["admin", "gestor_trafego", "comercial", "custom"]
 
 /**
- * Cria uma notificação e faz fan-out para os usuários elegíveis:
- * ativos, com papel em papelAlvo, com ver_notificacoes (admin bypassa) e
- * com a PREFERÊNCIA do tipo ligada (ausência de preferência = ligado).
+ * Cria uma notificação e faz fan-out para os destinatários.
+ *
+ * Dois modos:
+ *   - `usuarioIds` informado: fan-out DIRETO só pra esses usuários (ainda
+ *     respeitando a preferência do tipo) — usado por fluxos que já sabem
+ *     exatamente quem notificar (ex: lembrete de follow-up do CRM, que é do
+ *     dono do lead, não de um papel inteiro).
+ *   - `usuarioIds` ausente: comportamento original — fan-out por papelAlvo +
+ *     ver_notificacoes (admin bypassa), igual antes.
  *
  * O push é enviado automaticamente: existe um trigger em
  * notificacoes_usuario (fn_dispatch_push_async) que chama /api/push/dispatch
@@ -29,6 +36,7 @@ export async function criarNotificacao(opts: {
   mensagem: string
   payload?: Record<string, unknown> | null
   papelAlvo?: string[]
+  usuarioIds?: string[]
 }): Promise<void> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return
@@ -51,19 +59,29 @@ export async function criarNotificacao(opts: {
     return
   }
 
-  const { data: users, error: errUsers } = await supabase
-    .from("usuarios")
-    .select("id, papel, permissoes")
-    .eq("ativo", true)
-    .in("papel", papelAlvo)
-  if (errUsers || !users || users.length === 0) return
-
-  const elegiveis = users.filter(
-    (u) =>
-      u.papel === "admin" ||
-      (u.permissoes as Record<string, boolean> | null)?.ver_notificacoes ===
-        true
-  )
+  let elegiveis: { id: string }[]
+  if (opts.usuarioIds && opts.usuarioIds.length > 0) {
+    const { data: users, error: errUsers } = await supabase
+      .from("usuarios")
+      .select("id")
+      .eq("ativo", true)
+      .in("id", opts.usuarioIds)
+    if (errUsers || !users || users.length === 0) return
+    elegiveis = users as { id: string }[]
+  } else {
+    const { data: users, error: errUsers } = await supabase
+      .from("usuarios")
+      .select("id, papel, permissoes")
+      .eq("ativo", true)
+      .in("papel", papelAlvo)
+    if (errUsers || !users || users.length === 0) return
+    elegiveis = users.filter(
+      (u) =>
+        u.papel === "admin" ||
+        (u.permissoes as Record<string, boolean> | null)?.ver_notificacoes ===
+          true
+    )
+  }
   if (elegiveis.length === 0) return
 
   // Filtra por preferência do tipo (default ligado se não houver linha).
