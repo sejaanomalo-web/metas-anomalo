@@ -2,14 +2,19 @@
 
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
+import { getUsuarioAtual } from "./auth"
 import { criarInstanciaEvolution, conectarInstanciaEvolution } from "./evolution"
+import { CORES_INSTANCIA } from "./crm-cores"
 
 export interface CrmInstanciaRow {
   id: string
   instance_name: string
   empresa_slug: string
+  usuario_id: string
+  usuario_nome: string | null
   numero_e164: string | null
   display_nome: string | null
+  cor: string
   status_conexao: "conectado" | "desconectado" | "qrcode" | "desconhecido"
   ultimo_qr: string | null
   conectado_em: string | null
@@ -25,15 +30,20 @@ export interface ResultadoInstancia {
 
 function revalidarConexoes() {
   revalidatePath("/dashboard/crm/conexoes")
+  revalidatePath("/dashboard/crm")
 }
 
-/** Todas as instâncias (ativas e inativas) — a UI decide o que mostrar. */
+/** Instâncias do usuário logado (ativas e inativas) — isolamento total:
+ *  cada usuário só vê as que ELE cadastrou, literal como WhatsApp Web. */
 export async function listarInstancias(): Promise<CrmInstanciaRow[]> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return []
   const db = getSupabaseAdmin()
   if (!db) return []
   const { data, error } = await db
     .from("crm_instancias")
     .select("*")
+    .eq("usuario_id", usuario.id)
     .order("created_at", { ascending: false })
   if (error) {
     console.error("[crm_instancias] list error", error.message)
@@ -51,14 +61,22 @@ function normalizarInstanceName(bruto: string): string {
     .replace(/^-|-$/g, "")
 }
 
+function corValida(bruto: string | null): string | null {
+  if (!bruto) return null
+  return /^#[0-9a-fA-F]{6}$/.test(bruto) ? bruto : null
+}
+
 /**
- * Cria a linha em crm_instancias e, em seguida, a instância correspondente
- * na Evolution API. Se a chamada à Evolution falhar, a linha permanece
- * criada (status 'desconhecido') — o botão "Gerar QR" tenta de novo.
+ * Cria a linha em crm_instancias (dona do usuário logado) e, em seguida, a
+ * instância correspondente na Evolution API. Se a chamada à Evolution
+ * falhar, a linha permanece criada (status 'desconhecido') — o botão
+ * "Gerar QR" tenta de novo.
  */
 export async function criarInstanciaAction(
   formData: FormData
 ): Promise<ResultadoInstancia> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
   const db = getSupabaseAdmin()
   if (!db) return { ok: false, erro: "Supabase indisponível." }
 
@@ -69,6 +87,8 @@ export async function criarInstanciaAction(
   const numeroE164 =
     String(formData.get("numero_e164") ?? "").replace(/\D/g, "") || null
   const displayNome = String(formData.get("display_nome") ?? "").trim() || null
+  const cor =
+    corValida(String(formData.get("cor") ?? "")) ?? CORES_INSTANCIA[0]
 
   if (!empresaSlug) return { ok: false, erro: "Selecione a empresa." }
   if (!instanceName) return { ok: false, erro: "Nome da instância inválido." }
@@ -85,8 +105,11 @@ export async function criarInstanciaAction(
   const { error } = await db.from("crm_instancias").insert({
     instance_name: instanceName,
     empresa_slug: empresaSlug,
+    usuario_id: usuario.id,
+    usuario_nome: usuario.nome,
     numero_e164: numeroE164,
     display_nome: displayNome,
+    cor,
     status_conexao: "desconhecido",
     ativo: true,
   })
@@ -111,6 +134,8 @@ export async function criarInstanciaAction(
 export async function gerarQrAction(
   formData: FormData
 ): Promise<ResultadoInstancia> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
   const db = getSupabaseAdmin()
   if (!db) return { ok: false, erro: "Supabase indisponível." }
 
@@ -121,6 +146,7 @@ export async function gerarQrAction(
     .from("crm_instancias")
     .select("instance_name")
     .eq("id", id)
+    .eq("usuario_id", usuario.id)
     .maybeSingle()
   if (!inst) return { ok: false, erro: "Instância não encontrada." }
 
@@ -133,6 +159,8 @@ export async function gerarQrAction(
 export async function desativarInstanciaAction(
   formData: FormData
 ): Promise<ResultadoInstancia> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
   const db = getSupabaseAdmin()
   if (!db) return { ok: false, erro: "Supabase indisponível." }
 
@@ -143,6 +171,7 @@ export async function desativarInstanciaAction(
     .from("crm_instancias")
     .update({ ativo: false, updated_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("usuario_id", usuario.id)
   if (error) return { ok: false, erro: error.message }
 
   revalidarConexoes()
@@ -152,6 +181,8 @@ export async function desativarInstanciaAction(
 export async function reativarInstanciaAction(
   formData: FormData
 ): Promise<ResultadoInstancia> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
   const db = getSupabaseAdmin()
   if (!db) return { ok: false, erro: "Supabase indisponível." }
 
@@ -162,6 +193,32 @@ export async function reativarInstanciaAction(
     .from("crm_instancias")
     .update({ ativo: true, updated_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("usuario_id", usuario.id)
+  if (error) return { ok: false, erro: error.message }
+
+  revalidarConexoes()
+  return { ok: true }
+}
+
+/** Muda só a cor de identificação visual de uma instância já criada. */
+export async function atualizarCorInstanciaAction(
+  formData: FormData
+): Promise<ResultadoInstancia> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  const cor = corValida(String(formData.get("cor") ?? ""))
+  if (!id) return { ok: false, erro: "ID inválido." }
+  if (!cor) return { ok: false, erro: "Cor inválida." }
+
+  const { error } = await db
+    .from("crm_instancias")
+    .update({ cor, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("usuario_id", usuario.id)
   if (error) return { ok: false, erro: error.message }
 
   revalidarConexoes()

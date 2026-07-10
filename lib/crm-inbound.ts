@@ -5,9 +5,13 @@
 // Fase 0: messages.upsert — cria/mergeia o lead, grava a mensagem recebida
 // (idempotente por instancia_id+wa_message_id) e emite o ping de realtime.
 // Fase 1: QRCODE_UPDATED/CONNECTION_UPDATE — reflete status_conexao/ultimo_qr
-// em crm_instancias pra UI de admin de conexao. Status de entrega (mensagem
-// lida/entregue) e outbound continuam fora do escopo. NUNCA lanca excecao
-// fatal pro webhook: retorna { ok, info?, erro? }.
+// em crm_instancias pra UI de admin de conexao.
+// Fase 2: CONTACTS_UPSERT/CONTACTS_UPDATE — cacheia o nome salvo no celular
+// (crm_contatos), preferido sobre o pushName ao criar/atualizar um lead.
+// Leads/mensagens herdam usuario_id/usuario_nome da instancia (isolamento
+// por usuario). Status de entrega (mensagem lida/entregue) e outbound
+// continuam fora do escopo. NUNCA lanca excecao fatal pro webhook: retorna
+// { ok, info?, erro? }.
 
 import { getSupabaseAdmin } from "./supabase"
 
@@ -169,6 +173,73 @@ async function processarConnectionUpdate(
   return { ok: true, info: `conexao: ${status}` }
 }
 
+// Limite defensivo pro sync inicial de contatos (a Evolution manda o catalogo
+// inteiro do celular no primeiro CONTACTS_UPSERT apos conectar — pode ser
+// centenas). Processa os primeiros N por chamada; entregas seguintes (a
+// Evolution reenvia em lotes) completam o resto.
+const MAX_CONTATOS_POR_EVENTO = 300
+
+async function processarContatosEvento(
+  instanceName: string | undefined,
+  data: unknown
+): Promise<ResultadoProcessamento> {
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "service_role_ausente" }
+  if (!instanceName) return { ok: false, erro: "instance ausente no payload" }
+
+  const { data: inst } = await db
+    .from("crm_instancias")
+    .select("id, empresa_slug")
+    .eq("instance_name", instanceName)
+    .maybeSingle()
+  if (!inst) return { ok: true, info: `instancia desconhecida: ${instanceName}` }
+  const instanciaId = inst.id as string
+  const empresaSlug = inst.empresa_slug as string
+
+  const bruto = data
+  const lista = (Array.isArray(bruto) ? bruto : bruto ? [bruto] : []).slice(
+    0,
+    MAX_CONTATOS_POR_EVENTO
+  )
+  const agora = new Date().toISOString()
+
+  // "name" (as-vezes "verifiedName") e o nome salvo no celular — mais
+  // autoritativo que pushName/notify, que e autodeclarado pelo contato.
+  const linhas = lista
+    .map((c) => {
+      const registro = c as Record<string, any>
+      const telefone = telefoneDoJid(registro?.id)
+      const nome = registro?.name ?? registro?.verifiedName ?? null
+      if (!telefone || !nome) return null
+      return { instancia_id: instanciaId, telefone_e164: telefone, nome, updated_at: agora }
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+
+  if (linhas.length === 0) {
+    return { ok: true, info: "contatos sem nome/telefone valido nesta entrega" }
+  }
+
+  const { error: errUpsert } = await db
+    .from("crm_contatos")
+    .upsert(linhas, { onConflict: "instancia_id,telefone_e164" })
+  if (errUpsert) {
+    console.error("[crm-inbound] erro ao cachear contatos", errUpsert.message)
+    return { ok: false, erro: errUpsert.message }
+  }
+
+  // Mantem leads JA existentes com o nome sincronizado (so afeta quem ja
+  // trocou mensagem — a maioria dos contatos do sync inicial nao tem lead).
+  for (const l of linhas) {
+    await db
+      .from("crm_leads")
+      .update({ nome: l.nome })
+      .eq("empresa_slug", empresaSlug)
+      .eq("telefone_e164", l.telefone_e164)
+  }
+
+  return { ok: true, info: `contatos cacheados: ${linhas.length}` }
+}
+
 export async function processarEventoWebhook(
   payload: any
 ): Promise<ResultadoProcessamento> {
@@ -181,6 +252,14 @@ export async function processarEventoWebhook(
   if (evento === "connection.update" || evento === "CONNECTION_UPDATE") {
     return processarConnectionUpdate(instanceName, payload?.data)
   }
+  if (
+    evento === "contacts.upsert" ||
+    evento === "CONTACTS_UPSERT" ||
+    evento === "contacts.update" ||
+    evento === "CONTACTS_UPDATE"
+  ) {
+    return processarContatosEvento(instanceName, payload?.data)
+  }
 
   // Fase 1: mensagens recebidas + conexao/QR (acima). Demais eventos (status
   // de entrega/leitura, etc.) seguem ignorados por ora.
@@ -191,10 +270,10 @@ export async function processarEventoWebhook(
   if (!db) return { ok: false, erro: "service_role_ausente" }
   if (!instanceName) return { ok: false, erro: "instance ausente no payload" }
 
-  // Resolve a instancia -> empresa.
+  // Resolve a instancia -> empresa (+ dono, herdado pelo lead/mensagem).
   const { data: inst } = await db
     .from("crm_instancias")
-    .select("id, empresa_slug, ativo")
+    .select("id, empresa_slug, ativo, usuario_id, usuario_nome")
     .eq("instance_name", instanceName)
     .maybeSingle()
   if (!inst || inst.ativo === false) {
@@ -202,6 +281,8 @@ export async function processarEventoWebhook(
   }
   const empresaSlug = inst.empresa_slug as string
   const instanciaId = inst.id as string
+  const usuarioId = inst.usuario_id as string
+  const usuarioNome = (inst.usuario_nome as string) ?? null
 
   // Nome da empresa (denormalizado no lead).
   const { data: emp } = await db
@@ -260,13 +341,24 @@ export async function processarEventoWebhook(
         .order("ordem", { ascending: true })
         .limit(1)
         .maybeSingle()
+      // Nome salvo no celular (crm_contatos) e mais autoritativo que o
+      // pushName autodeclarado — prefere ele quando ja sincronizado.
+      const { data: contato } = await db
+        .from("crm_contatos")
+        .select("nome")
+        .eq("instancia_id", instanciaId)
+        .eq("telefone_e164", telefone)
+        .maybeSingle()
+      const nomeInicial = (contato?.nome as string) ?? pushName
       const { data: novo, error: errLead } = await db
         .from("crm_leads")
         .insert({
           empresa_slug: empresaSlug,
           empresa_nome: empresaNome,
+          usuario_id: usuarioId,
+          usuario_nome: usuarioNome,
           telefone_e164: telefone,
-          nome: pushName,
+          nome: nomeInicial,
           origem: "whatsapp",
           etapa_id: etapa?.id ?? null,
           status: "aberto",
@@ -302,6 +394,7 @@ export async function processarEventoWebhook(
           lead_id: leadId,
           instancia_id: instanciaId,
           empresa_slug: empresaSlug,
+          usuario_id: usuarioId,
           direcao: "in",
           tipo,
           conteudo,

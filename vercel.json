@@ -7,6 +7,10 @@
     {
       "path": "/api/wa/diario",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/crm/lembretes",
+      "schedule": "0 13 * * *"
     }
   ]
 }

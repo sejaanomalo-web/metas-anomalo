@@ -4,17 +4,30 @@
 // escrevem (enviar mensagem, marcar como lido) ficam em
 // lib/crm-mensagens-actions.ts.
 // =============================================================================
+// Isolamento por usuário (Fase 2): cada função só lê o que pertence ao
+// usuário da sessão atual — literal como WhatsApp Web, ninguém vê a conexão
+// de outro sem ter conectado a própria.
 
 import { getSupabaseAdmin } from "./supabase"
+import { getUsuarioAtual } from "./auth"
+
+export interface CrmEtiquetaResumo {
+  id: string
+  nome: string
+  cor: string
+}
 
 export interface CrmLeadRow {
   id: string
   empresa_slug: string
   empresa_nome: string
+  usuario_id: string
+  usuario_nome: string | null
   telefone_e164: string | null
   nome: string | null
   email: string | null
   etapa_id: string | null
+  ordem_na_etapa: number
   responsavel_id: string | null
   responsavel_nome: string | null
   valor_estimado: number | null
@@ -24,6 +37,7 @@ export interface CrmLeadRow {
   nao_lidas: number
   arquivado: boolean
   created_at: string
+  etiquetas: CrmEtiquetaResumo[]
 }
 
 export interface CrmMensagemRow {
@@ -45,14 +59,29 @@ export interface CrmMensagemRow {
   created_at: string
 }
 
-/** Leads abertos, mais recentes primeiro. Sem filtro por usuário — "todos
- *  veem tudo" (mesma política de relatorios_comerciais). */
+const SELECT_LEAD_COM_ETIQUETAS =
+  "*, crm_lead_etiquetas(etiqueta:crm_etiquetas(id,nome,cor))"
+
+function normalizarLead(row: Record<string, any>): CrmLeadRow {
+  const rel = Array.isArray(row.crm_lead_etiquetas) ? row.crm_lead_etiquetas : []
+  const etiquetas: CrmEtiquetaResumo[] = rel
+    .map((r: any) => (Array.isArray(r.etiqueta) ? r.etiqueta[0] : r.etiqueta))
+    .filter(Boolean)
+    .map((e: any) => ({ id: e.id as string, nome: e.nome as string, cor: e.cor as string }))
+  const { crm_lead_etiquetas: _omit, ...resto } = row
+  return { ...(resto as CrmLeadRow), etiquetas }
+}
+
+/** Leads abertos do usuário logado, mais recentes primeiro. */
 export async function listarLeadsInbox(): Promise<CrmLeadRow[]> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return []
   const db = getSupabaseAdmin()
   if (!db) return []
   const { data, error } = await db
     .from("crm_leads")
-    .select("*")
+    .select(SELECT_LEAD_COM_ETIQUETAS)
+    .eq("usuario_id", usuario.id)
     .eq("arquivado", false)
     .order("ultima_interacao_em", { ascending: false, nullsFirst: false })
     .limit(200)
@@ -60,33 +89,41 @@ export async function listarLeadsInbox(): Promise<CrmLeadRow[]> {
     console.error("[crm_leads] list error", error.message)
     return []
   }
-  return (data ?? []) as CrmLeadRow[]
+  return (data ?? []).map(normalizarLead)
 }
 
 export async function buscarLead(leadId: string): Promise<CrmLeadRow | null> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return null
   const db = getSupabaseAdmin()
   if (!db) return null
   const { data, error } = await db
     .from("crm_leads")
-    .select("*")
+    .select(SELECT_LEAD_COM_ETIQUETAS)
     .eq("id", leadId)
+    .eq("usuario_id", usuario.id)
     .maybeSingle()
   if (error) {
     console.error("[crm_leads] get error", error.message)
     return null
   }
-  return (data as CrmLeadRow) ?? null
+  return data ? normalizarLead(data) : null
 }
 
+/** Mensagens do lead — filtra por usuario_id direto (sem depender do
+ *  chamador já ter verificado o dono do lead antes). */
 export async function listarMensagensDoLead(
   leadId: string
 ): Promise<CrmMensagemRow[]> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return []
   const db = getSupabaseAdmin()
   if (!db) return []
   const { data, error } = await db
     .from("crm_mensagens")
     .select("*")
     .eq("lead_id", leadId)
+    .eq("usuario_id", usuario.id)
     .order("wa_timestamp", { ascending: true })
   if (error) {
     console.error("[crm_mensagens] list error", error.message)

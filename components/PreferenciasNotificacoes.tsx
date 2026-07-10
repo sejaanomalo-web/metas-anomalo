@@ -39,6 +39,11 @@ const ITENS: { chave: Tipo; rotulo: string; descricao: string }[] = [
     rotulo: "Lembretes",
     descricao: "Lembretes diários para preencher os dados",
   },
+  {
+    chave: "crm_lembrete",
+    rotulo: "Follow-up do CRM",
+    descricao: "No dia marcado pra retomar contato com um lead",
+  },
 ]
 
 /**
