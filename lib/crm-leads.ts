@@ -25,6 +25,8 @@ export interface CrmLeadRow {
   usuario_nome: string | null
   telefone_e164: string | null
   nome: string | null
+  nome_manual: boolean
+  sobre: string | null
   email: string | null
   foto_url: string | null
   ultima_msg_preview: string | null

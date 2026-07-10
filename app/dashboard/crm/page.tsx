@@ -90,10 +90,16 @@ export default async function CrmPage({
         }}
       >
         <div
+          className="scrollbar-thin"
           style={{
             borderRight: "0.5px solid rgba(255,255,255,0.08)",
             overflowY: "auto",
             padding: 10,
+            // Isola a pintura e impede o scroll de "vazar" pra página — junto
+            // com content-visibility nas linhas, deixa o scroll fluido.
+            contain: "paint",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           <ListaConversas

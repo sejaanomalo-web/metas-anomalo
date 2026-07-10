@@ -14,6 +14,10 @@ import {
   criarTipoAtividadeAction,
   excluirTipoAtividadeAction,
 } from "@/lib/crm-atividades-actions"
+import {
+  renomearLeadAction,
+  sincronizarContatoAction,
+} from "@/lib/crm-leads-actions"
 import { TIPOS_ATIVIDADE_PADRAO } from "@/lib/crm-tipos-atividade"
 import Avatar from "@/components/crm/Avatar"
 import EtiquetasPicker, { EtiquetaChip } from "@/components/crm/Etiquetas"
@@ -73,8 +77,6 @@ export default function Thread({
     fimRef.current?.scrollIntoView({ block: "end" })
   }, [mensagens.length])
 
-  const nomeExibido = lead.nome || lead.telefone_e164 || "Lead sem nome"
-
   async function enviar() {
     const corpo = texto.trim()
     if (!corpo) return
@@ -99,18 +101,7 @@ export default function Thread({
         }}
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Avatar nome={nomeExibido} cor={cor} fotoUrl={lead.foto_url} size={44} />
-            <div className="min-w-0">
-              <p style={{ fontSize: 14, fontWeight: 600 }} className="truncate">
-                {nomeExibido}
-              </p>
-              <p style={{ fontSize: 11, color: cor, fontWeight: 500 }} className="truncate">
-                {lead.empresa_nome}
-                {lead.telefone_e164 ? ` · ${lead.telefone_e164}` : ""}
-              </p>
-            </div>
-          </div>
+          <CabecalhoContato lead={lead} cor={cor} />
           <AtribuirAtividade leadId={lead.id} tiposCustom={tiposCustom} />
         </div>
 
@@ -212,6 +203,7 @@ export default function Thread({
             }}
             placeholder="Escreva uma mensagem..."
             rows={2}
+            autoFocus
             className="glass-input"
             style={{ flex: 1, padding: "8px 12px", fontSize: 13, resize: "none" }}
           />
@@ -256,7 +248,176 @@ function ConteudoMensagem({ mensagem: m }: { mensagem: CrmMensagemRow }) {
       </div>
     )
   }
-  return <>{m.conteudo || `[${m.tipo}]`}</>
+  if (m.conteudo) return <>{m.conteudo}</>
+  // Sem corpo (mídia sem legenda, ou texto que não pôde ser extraído): rótulo
+  // discreto por tipo, em vez do cru "[texto]".
+  const rotulos: Record<string, string> = {
+    audio: "🎤 Áudio",
+    imagem: "🖼️ Imagem",
+    video: "🎬 Vídeo",
+    documento: "📄 Documento",
+    figurinha: "🌟 Figurinha",
+    localizacao: "📍 Localização",
+    contato: "👤 Contato",
+  }
+  return (
+    <span style={{ opacity: 0.7, fontStyle: "italic" }}>
+      {rotulos[m.tipo] ?? "Mensagem"}
+    </span>
+  )
+}
+
+/** Cabeçalho do contato: avatar + nome editável (ou "adicionar nome" quando é
+ *  só um número) + empresa/telefone + recado, e o botão de puxar o contato do
+ *  WhatsApp. */
+function CabecalhoContato({ lead, cor }: { lead: CrmLeadRow; cor: string }) {
+  const [editando, setEditando] = useState(false)
+  const [nome, setNome] = useState(lead.nome ?? "")
+  const [status, setStatus] = useState<string | null>(null)
+  const [pendingNome, startNome] = useTransition()
+  const [pendingSync, startSync] = useTransition()
+  const router = useRouter()
+
+  const nomeExibido = lead.nome || lead.telefone_e164 || "Lead sem nome"
+
+  async function salvarNome() {
+    const n = nome.trim()
+    if (!n) return
+    const r = await renomearLeadAction(lead.id, n)
+    if (r.ok) {
+      setEditando(false)
+      setStatus(null)
+      router.refresh()
+    } else {
+      setStatus(r.erro ?? "Erro ao salvar")
+    }
+  }
+
+  async function atualizar() {
+    setStatus("Buscando no WhatsApp…")
+    const r = await sincronizarContatoAction(lead.id)
+    if (r.ok) {
+      setStatus(null)
+      router.refresh()
+    } else {
+      setStatus(r.erro ?? "Erro ao atualizar")
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 min-w-0" style={{ flex: 1 }}>
+      <Avatar nome={nomeExibido} cor={cor} fotoUrl={lead.foto_url} size={44} />
+      <div className="min-w-0" style={{ flex: 1 }}>
+        {editando ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  startNome(() => salvarNome())
+                } else if (e.key === "Escape") {
+                  setEditando(false)
+                  setNome(lead.nome ?? "")
+                }
+              }}
+              placeholder="Nome do contato"
+              maxLength={80}
+              autoFocus
+              className="glass-input"
+              style={{ fontSize: 13, padding: "4px 8px", flex: 1, minWidth: 0 }}
+            />
+            <button
+              type="button"
+              onClick={() => startNome(() => salvarNome())}
+              disabled={pendingNome || !nome.trim()}
+              className="btn-gold-filled"
+              style={{ fontSize: 11, padding: "4px 8px" }}
+            >
+              ✓
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditando(false)
+                setNome(lead.nome ?? "")
+              }}
+              style={{ fontSize: 12, color: "var(--text-3)", padding: "0 4px" }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : lead.nome ? (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p style={{ fontSize: 14, fontWeight: 600 }} className="truncate">
+              {lead.nome}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setNome(lead.nome ?? "")
+                setEditando(true)
+              }}
+              title="Editar nome"
+              style={{ fontSize: 12, color: "var(--text-4)", flexShrink: 0 }}
+            >
+              ✎
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setNome("")
+              setEditando(true)
+            }}
+            style={{ fontSize: 13, fontWeight: 600, color: "var(--gold, #C9953A)" }}
+          >
+            ＋ Adicionar nome
+          </button>
+        )}
+
+        <p style={{ fontSize: 11, color: cor, fontWeight: 500 }} className="truncate">
+          {lead.empresa_nome}
+          {lead.telefone_e164 ? ` · ${lead.telefone_e164}` : ""}
+        </p>
+
+        {lead.sobre && (
+          <p
+            style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic" }}
+            className="truncate"
+          >
+            “{lead.sobre}”
+          </p>
+        )}
+
+        <div className="flex items-center gap-2" style={{ marginTop: 2 }}>
+          {!editando && (
+            <button
+              type="button"
+              onClick={() => startSync(() => atualizar())}
+              disabled={pendingSync}
+              title="Puxar nome/recado/foto do WhatsApp"
+              style={{ fontSize: 10, color: "var(--text-4)" }}
+            >
+              {pendingSync ? "Atualizando…" : "↻ Atualizar do WhatsApp"}
+            </button>
+          )}
+          {status && (
+            <span
+              style={{
+                fontSize: 10,
+                color: status.includes("…") ? "var(--text-4)" : "var(--danger)",
+              }}
+            >
+              {status}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // =============================================================================
