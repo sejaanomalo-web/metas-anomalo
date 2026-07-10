@@ -149,3 +149,41 @@ um bucket), ou snapshot do disco do provedor de VPS.
 3. Apontar o DNS de `evolution.anomalo.com.br` pro IP novo.
 4. Nenhuma mudança necessária no nosso app — só reaponta o DNS, as env vars
    continuam as mesmas (mesma URL, mesma apikey).
+
+## 8. Fase 3 — áudio, fotos de perfil, mídia e tipos de atividade
+
+O que mudou e o que exige ação sua:
+
+- **Migração `20260711_crm_fase3_midia_fotos_tipos.sql`** — aplicar (via
+  `apply_migration` / SQL do Supabase). Ela: cria as colunas de foto/preview,
+  a tabela de tipos de atividade, **cria o bucket `crm-midia`** (Storage,
+  público) e **corrige o histórico** de mensagens que apareciam do lado errado
+  (as enviadas pelo próprio celular).
+
+- **Enviar áudio (nota de voz)** — botão 🎤 na conversa grava pelo navegador e
+  manda pra Evolution (`/message/sendWhatsAppAudio`). Nenhuma env nova. Só
+  exige **HTTPS** (o microfone do navegador não funciona em `http://` — na
+  Vercel já é https). O `next.config.mjs` foi ajustado (`microphone=(self)`).
+
+- **Foto + nome do contato (estilo WhatsApp)** — a foto vem de dois lugares:
+  do evento `CONTACTS_UPSERT` (campo `profilePicUrl`, já habilitado no
+  compose) e de uma busca sob demanda na criação do lead
+  (`/chat/fetchProfilePictureUrl`). URLs de foto do WhatsApp **expiram** — se
+  quebrar, a UI cai no avatar de iniciais automaticamente.
+
+- **Áudios/imagens recebidos** — o webhook não traz o binário, então o app
+  baixa sob demanda (`/chat/getBase64FromMediaMessage`) e sobe pro bucket
+  `crm-midia`. É best-effort: se a Evolution não devolver a mídia, a conversa
+  mostra o rótulo (`🎤 Áudio` / `🖼️ Imagem`) mesmo assim.
+
+- **Excluir instância** — a tela de Conexões agora tem 🗑 (com confirmação),
+  que desloga e apaga a instância na Evolution (`/instance/logout` +
+  `/instance/delete`) e remove a linha local. O histórico de mensagens fica
+  preservado.
+
+- **Opcional (recibos de leitura)** — pra ✓✓ no futuro, habilitar
+  `WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"` no compose. Não é necessário agora.
+
+> **Resumo do que você precisa fazer:** (1) aplicar a migração `20260711`;
+> (2) confirmar que o app roda em HTTPS (Vercel já roda); (3) nada de env nova.
+> O resto é automático.

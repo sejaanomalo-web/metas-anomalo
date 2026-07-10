@@ -10,6 +10,7 @@ import {
   desativarInstanciaAction,
   reativarInstanciaAction,
   atualizarCorInstanciaAction,
+  excluirInstanciaAction,
 } from "@/lib/crm-instancias-actions"
 import { CORES_INSTANCIA } from "@/lib/crm-cores"
 import IconBadge from "@/components/ui/IconBadge"
@@ -280,6 +281,7 @@ function LinhaInstancia({
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
   const [corAberta, setCorAberta] = useState(false)
+  const [confirmarExcluir, setConfirmarExcluir] = useState(false)
   const router = useRouter()
   const empresaNome =
     empresas.find((e) => e.slug === instancia.empresa_slug)?.nome ??
@@ -311,6 +313,18 @@ function LinhaInstancia({
     await atualizarCorInstanciaAction(fd)
     setCorAberta(false)
     router.refresh()
+  }
+
+  async function excluir() {
+    const fd = new FormData()
+    fd.set("id", instancia.id)
+    const r = await excluirInstanciaAction(fd)
+    if (r.ok) {
+      setConfirmarExcluir(false)
+      router.refresh()
+    } else {
+      setErro(r.erro ?? "Erro ao excluir")
+    }
   }
 
   return (
@@ -413,8 +427,67 @@ function LinhaInstancia({
           >
             {inativa ? "Reativar" : "Desativar"}
           </button>
+          <button
+            type="button"
+            onClick={() => setConfirmarExcluir(true)}
+            disabled={pending}
+            title="Excluir instância"
+            aria-label="Excluir instância"
+            style={{ fontSize: 14, color: "var(--danger)", padding: "6px 6px" }}
+          >
+            🗑
+          </button>
         </div>
       </div>
+
+      {confirmarExcluir && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 12,
+            borderRadius: 8,
+            border: "0.5px solid rgba(226,75,74,0.4)",
+            background: "rgba(226,75,74,0.08)",
+          }}
+        >
+          <p style={{ fontSize: 12, color: "var(--text-2, #ddd)", marginBottom: 4 }}>
+            Excluir <strong>{nomeExibido}</strong> definitivamente?
+          </p>
+          <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 10 }}>
+            Desconecta o número na Evolution e remove a instância. O histórico de
+            mensagens é preservado, mas para usar o número de novo será preciso
+            reconectar o QR do zero. Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => startTransition(() => excluir())}
+              disabled={pending}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                color: "#fff",
+                background: "var(--danger)",
+                borderRadius: 8,
+                padding: "6px 14px",
+                opacity: pending ? 0.5 : 1,
+              }}
+            >
+              {pending ? "Excluindo..." : "Sim, excluir"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmarExcluir(false)}
+              disabled={pending}
+              style={{ fontSize: 11, color: "var(--text-3)" }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {corAberta && (
         <div style={{ marginTop: 12 }}>

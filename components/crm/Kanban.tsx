@@ -227,7 +227,13 @@ function Coluna({
         <span style={{ fontSize: 11, color: "var(--text-4)" }}>{leads.length}</span>
       </div>
       <SortableContext items={leads.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-2" style={{ minHeight: 40 }}>
+        {/* Altura fixa + scroll vertical: o Kanban fica compacto (na altura da
+            tela de conversas) e cada etapa rola por dentro quando tem muitos
+            leads, em vez de esticar a página inteira. */}
+        <div
+          className="space-y-2"
+          style={{ minHeight: 40, maxHeight: 460, overflowY: "auto", paddingRight: 2 }}
+        >
           {leads.map((lead) => (
             <CartaoArrastavel
               key={lead.id}

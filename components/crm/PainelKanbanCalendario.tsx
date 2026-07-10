@@ -14,11 +14,13 @@ export default function PainelKanbanCalendario({
   leads,
   corPorEmpresa,
   atividades,
+  proximas,
 }: {
   etapas: CrmEtapaRow[]
   leads: CrmLeadRow[]
   corPorEmpresa: Record<string, string>
   atividades: CrmAtividadeRow[]
+  proximas: CrmAtividadeRow[]
 }) {
   const [aba, setAba] = useState<"kanban" | "calendario">("kanban")
 
@@ -64,7 +66,7 @@ export default function PainelKanbanCalendario({
       {aba === "kanban" ? (
         <Kanban etapas={etapas} leads={leads} corPorEmpresa={corPorEmpresa} />
       ) : (
-        <Calendario atividades={atividades} />
+        <Calendario atividades={atividades} proximas={proximas} />
       )}
     </div>
   )

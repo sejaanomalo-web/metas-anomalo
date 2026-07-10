@@ -14,11 +14,40 @@
 // { ok, info?, erro? }.
 
 import { getSupabaseAdmin } from "./supabase"
+import {
+  buscarFotoPerfilEvolution,
+  baixarMidiaEvolution,
+} from "./evolution"
+import { uploadMidiaCrm } from "./crm-midia"
 
 interface ResultadoProcessamento {
   ok: boolean
   info?: string
   erro?: string
+}
+
+/** Previa curta da ultima mensagem pra lista de conversas (estilo WhatsApp).
+ *  Midia vira um rotulo com icone; texto e truncado. */
+function previewMensagem(tipo: string, conteudo: string | null): string {
+  const t = (conteudo ?? "").trim()
+  switch (tipo) {
+    case "audio":
+      return "🎤 Áudio"
+    case "imagem":
+      return t ? `🖼️ ${t}` : "🖼️ Imagem"
+    case "video":
+      return t ? `🎬 ${t}` : "🎬 Vídeo"
+    case "documento":
+      return t ? `📄 ${t}` : "📄 Documento"
+    case "figurinha":
+      return "🌟 Figurinha"
+    case "localizacao":
+      return "📍 Localização"
+    case "contato":
+      return "👤 Contato"
+    default:
+      return t.length > 90 ? `${t.slice(0, 90)}…` : t
+  }
 }
 
 /** Telefone E.164 (so digitos) a partir do remoteJid. null se for grupo
@@ -205,34 +234,71 @@ async function processarContatosEvento(
 
   // "name" (as-vezes "verifiedName") e o nome salvo no celular — mais
   // autoritativo que pushName/notify, que e autodeclarado pelo contato.
+  // profilePicUrl (quando vem) alimenta a foto do avatar (estilo WhatsApp).
   const linhas = lista
     .map((c) => {
       const registro = c as Record<string, any>
       const telefone = telefoneDoJid(registro?.id)
       const nome = registro?.name ?? registro?.verifiedName ?? null
-      if (!telefone || !nome) return null
-      return { instancia_id: instanciaId, telefone_e164: telefone, nome, updated_at: agora }
+      const fotoRaw =
+        registro?.profilePicUrl ?? registro?.profilePictureUrl ?? null
+      const foto =
+        typeof fotoRaw === "string" && fotoRaw.startsWith("http") ? fotoRaw : null
+      // Guarda se tiver telefone E (nome OU foto) — so foto ja vale o cache.
+      if (!telefone || (!nome && !foto)) return null
+      return { telefone_e164: telefone, nome, foto_url: foto }
     })
     .filter((r): r is NonNullable<typeof r> => r !== null)
 
   if (linhas.length === 0) {
-    return { ok: true, info: "contatos sem nome/telefone valido nesta entrega" }
+    return { ok: true, info: "contatos sem nome/foto/telefone valido nesta entrega" }
   }
 
-  const { error: errUpsert } = await db
-    .from("crm_contatos")
-    .upsert(linhas, { onConflict: "instancia_id,telefone_e164" })
-  if (errUpsert) {
-    console.error("[crm-inbound] erro ao cachear contatos", errUpsert.message)
-    return { ok: false, erro: errUpsert.message }
+  // Upsert em ATE dois lotes separados por coluna — um so com `nome`, outro so
+  // com `foto_url`. Eventos da Evolution sao PARCIAIS (uma atualizacao de foto
+  // vem sem nome, e vice-versa); um lote misto faria SET na coluna ausente com
+  // null e zeraria o cache. Cada lote so toca a propria coluna, preservando a
+  // outra ja cacheada.
+  const comNome = linhas
+    .filter((l) => l.nome)
+    .map((l) => ({
+      instancia_id: instanciaId,
+      telefone_e164: l.telefone_e164,
+      nome: l.nome,
+      updated_at: agora,
+    }))
+  const comFoto = linhas
+    .filter((l) => l.foto_url)
+    .map((l) => ({
+      instancia_id: instanciaId,
+      telefone_e164: l.telefone_e164,
+      foto_url: l.foto_url,
+      updated_at: agora,
+    }))
+
+  if (comNome.length > 0) {
+    const { error } = await db
+      .from("crm_contatos")
+      .upsert(comNome, { onConflict: "instancia_id,telefone_e164" })
+    if (error) console.error("[crm-inbound] erro ao cachear nomes de contatos", error.message)
+  }
+  if (comFoto.length > 0) {
+    const { error } = await db
+      .from("crm_contatos")
+      .upsert(comFoto, { onConflict: "instancia_id,telefone_e164" })
+    if (error) console.error("[crm-inbound] erro ao cachear fotos de contatos", error.message)
   }
 
-  // Mantem leads JA existentes com o nome sincronizado (so afeta quem ja
+  // Mantem leads JA existentes com nome/foto sincronizados (so afeta quem ja
   // trocou mensagem — a maioria dos contatos do sync inicial nao tem lead).
   for (const l of linhas) {
+    const patch: Record<string, unknown> = {}
+    if (l.nome) patch.nome = l.nome
+    if (l.foto_url) patch.foto_url = l.foto_url
+    if (Object.keys(patch).length === 0) continue
     await db
       .from("crm_leads")
-      .update({ nome: l.nome })
+      .update(patch)
       .eq("empresa_slug", empresaSlug)
       .eq("telefone_e164", l.telefone_e164)
   }
@@ -320,6 +386,8 @@ export async function processarEventoWebhook(
     const conteudo = extrairTexto(m?.message)
     const waTs = tsParaIso(m?.messageTimestamp)
     const agora = new Date().toISOString()
+    const ehMidia =
+      tipo === "audio" || tipo === "imagem" || tipo === "video" || tipo === "documento"
 
     // 1) Resolve/cria o lead (sem incrementar nao_lidas ainda).
     let leadId: string | null = null
@@ -342,14 +410,21 @@ export async function processarEventoWebhook(
         .limit(1)
         .maybeSingle()
       // Nome salvo no celular (crm_contatos) e mais autoritativo que o
-      // pushName autodeclarado — prefere ele quando ja sincronizado.
+      // pushName autodeclarado — prefere ele quando ja sincronizado. Num
+      // fromMe o pushName e o MEU nome, entao nao serve de nome do contato.
       const { data: contato } = await db
         .from("crm_contatos")
-        .select("nome")
+        .select("nome, foto_url")
         .eq("instancia_id", instanciaId)
         .eq("telefone_e164", telefone)
         .maybeSingle()
-      const nomeInicial = (contato?.nome as string) ?? pushName
+      const nomeInicial =
+        (contato?.nome as string) ?? (fromMe ? null : pushName)
+      // Foto de perfil (estilo WhatsApp): usa a do cache, senao busca na
+      // Evolution — best-effort, so na criacao do lead (1x por contato novo).
+      const fotoInicial =
+        (contato?.foto_url as string) ??
+        (await buscarFotoPerfilEvolution(instanceName, telefone))
       const { data: novo, error: errLead } = await db
         .from("crm_leads")
         .insert({
@@ -359,10 +434,12 @@ export async function processarEventoWebhook(
           usuario_nome: usuarioNome,
           telefone_e164: telefone,
           nome: nomeInicial,
+          foto_url: fotoInicial,
           origem: "whatsapp",
           etapa_id: etapa?.id ?? null,
           status: "aberto",
           ultima_interacao_em: waTs ?? agora,
+          ultima_msg_preview: previewMensagem(tipo, conteudo),
           nao_lidas: 0,
         })
         .select("id")
@@ -395,11 +472,16 @@ export async function processarEventoWebhook(
           instancia_id: instanciaId,
           empresa_slug: empresaSlug,
           usuario_id: usuarioId,
-          direcao: "in",
+          // fromMe = enviada pelo PROPRIO celular -> lado direito (igual as
+          // enviadas pelo CRM). Corrige o bug de aparecerem como do cliente.
+          direcao: fromMe ? "out" : "in",
           tipo,
           conteudo,
+          // Preenchido logo abaixo, so pra mensagem NOVA (evita rebaixar/
+          // resubir a midia numa reentrega do webhook).
+          midia_url: null,
           wa_message_id: waMessageId,
-          status: "recebida",
+          status: fromMe ? "enviada" : "recebida",
           from_me: fromMe,
           wa_timestamp: waTs,
           metadados: { messageType: m?.messageType ?? null },
@@ -412,12 +494,29 @@ export async function processarEventoWebhook(
       ignoradas++
       continue
     }
-    const foiNova = Array.isArray(inseridas) && inseridas.length > 0
-    if (!foiNova) {
+    const novaMsgId =
+      Array.isArray(inseridas) && inseridas.length > 0
+        ? (inseridas[0].id as string)
+        : null
+    if (!novaMsgId) {
       duplicadas++
       continue
     }
     novas++
+
+    // Midia (audio/imagem/video/documento): o webhook so traz metadados —
+    // baixa o binario da Evolution e sobe pro storage, SO pra mensagem nova.
+    // Best-effort: se falhar, a mensagem fica com o rotulo do tipo (a UI cai
+    // pra "🎤 Áudio"/"🖼️ Imagem").
+    if (ehMidia) {
+      const midia = await baixarMidiaEvolution(instanceName, m)
+      if (midia) {
+        const url = await uploadMidiaCrm(midia.base64, midia.mimetype, `in/${empresaSlug}`)
+        if (url) {
+          await db.from("crm_mensagens").update({ midia_url: url }).eq("id", novaMsgId)
+        }
+      }
+    }
 
     // 3) Mensagem nova: atualiza o lead (+1 nao-lida so se veio do cliente) e
     //    emite o ping de realtime (sem PII).
@@ -427,15 +526,16 @@ export async function processarEventoWebhook(
       .eq("id", leadId as string)
       .maybeSingle()
     const naoLidas = ((leadAtual?.nao_lidas as number) ?? 0) + (fromMe ? 0 : 1)
-    await db
-      .from("crm_leads")
-      .update({
-        ultima_interacao_em: waTs ?? agora,
-        nao_lidas: naoLidas,
-        nome: leadNome ?? pushName,
-        updated_at: agora,
-      })
-      .eq("id", leadId as string)
+    const patchLead: Record<string, unknown> = {
+      ultima_interacao_em: waTs ?? agora,
+      nao_lidas: naoLidas,
+      ultima_msg_preview: previewMensagem(tipo, conteudo),
+      updated_at: agora,
+    }
+    // So preenche o nome via pushName se o lead ainda nao tem nome E a msg
+    // veio DO cliente (num fromMe o pushName e o meu, nao serve).
+    if (!leadNome && !fromMe && pushName) patchLead.nome = pushName
+    await db.from("crm_leads").update(patchLead).eq("id", leadId as string)
 
     await db
       .from("crm_realtime_ping")

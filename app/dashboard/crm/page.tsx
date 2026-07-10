@@ -4,7 +4,11 @@ import { listarLeadsInbox, buscarLead, listarMensagensDoLead } from "@/lib/crm-l
 import { listarInstancias } from "@/lib/crm-instancias-actions"
 import { listarEtapas } from "@/lib/crm-etapas"
 import { listarEtiquetas } from "@/lib/crm-etiquetas-actions"
-import { listarAtividadesCalendario } from "@/lib/crm-atividades-actions"
+import {
+  listarAtividadesCalendario,
+  listarProximasAtividades,
+  listarTiposAtividade,
+} from "@/lib/crm-atividades-actions"
 import ListaConversas from "@/components/crm/ListaConversas"
 import Thread from "@/components/crm/Thread"
 import CrmRealtime from "@/components/crm/CrmRealtime"
@@ -29,13 +33,16 @@ export default async function CrmPage({
   const inicioJanela = new Date(agora.getFullYear(), agora.getMonth() - 2, 1).toISOString()
   const fimJanela = new Date(agora.getFullYear(), agora.getMonth() + 7, 0).toISOString()
 
-  const [leads, instancias, etapas, etiquetas, atividades] = await Promise.all([
-    listarLeadsInbox(),
-    listarInstancias(),
-    listarEtapas(),
-    listarEtiquetas(),
-    listarAtividadesCalendario(inicioJanela, fimJanela),
-  ])
+  const [leads, instancias, etapas, etiquetas, atividades, proximas, tipos] =
+    await Promise.all([
+      listarLeadsInbox(),
+      listarInstancias(),
+      listarEtapas(),
+      listarEtiquetas(),
+      listarAtividadesCalendario(inicioJanela, fimJanela),
+      listarProximasAtividades(),
+      listarTiposAtividade(),
+    ])
 
   const corPorEmpresa: Record<string, string> = {}
   for (const inst of instancias) corPorEmpresa[inst.empresa_slug] = inst.cor
@@ -74,8 +81,11 @@ export default async function CrmPage({
         className="glass"
         style={{
           display: "grid",
-          gridTemplateColumns: "320px 1fr",
-          height: 560,
+          gridTemplateColumns: "340px 1fr",
+          // Mais alta e responsiva à janela (antes era fixa em 560, cortava
+          // mensagens). Mínimo garante uso em telas menores.
+          height: "min(760px, calc(100vh - 210px))",
+          minHeight: 520,
           overflow: "hidden",
         }}
       >
@@ -96,10 +106,12 @@ export default async function CrmPage({
         <div style={{ minWidth: 0 }}>
           {lead ? (
             <Thread
+              key={lead.id}
               lead={lead}
               mensagens={mensagens}
               cor={corPorEmpresa[lead.empresa_slug] ?? "#C9953A"}
               todasEtiquetas={etiquetas}
+              tiposCustom={tipos}
             />
           ) : (
             <div className="flex items-center justify-center h-full">
@@ -117,6 +129,7 @@ export default async function CrmPage({
           leads={leads}
           corPorEmpresa={corPorEmpresa}
           atividades={atividades}
+          proximas={proximas}
         />
       </div>
     </main>

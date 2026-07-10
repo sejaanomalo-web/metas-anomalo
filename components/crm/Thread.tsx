@@ -3,11 +3,18 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { CrmLeadRow, CrmMensagemRow } from "@/lib/crm-leads"
+import type { CrmTipoAtividadeRow } from "@/lib/crm-atividades-actions"
 import {
   enviarMensagemAction,
+  enviarAudioAction,
   marcarLeadComoLidoAction,
 } from "@/lib/crm-mensagens-actions"
-import { criarFollowUpAction } from "@/lib/crm-atividades-actions"
+import {
+  criarFollowUpAction,
+  criarTipoAtividadeAction,
+  excluirTipoAtividadeAction,
+} from "@/lib/crm-atividades-actions"
+import { TIPOS_ATIVIDADE_PADRAO } from "@/lib/crm-tipos-atividade"
 import Avatar from "@/components/crm/Avatar"
 import EtiquetasPicker, { EtiquetaChip } from "@/components/crm/Etiquetas"
 
@@ -17,6 +24,11 @@ interface EtiquetaResumo {
   cor: string
 }
 
+// Balões: meus (enviados) à direita em AMARELO; do cliente à esquerda em cinza.
+const BOLHA_MINHA = "rgba(240, 199, 94, 0.22)"
+const BOLHA_MINHA_BORDA = "rgba(240, 199, 94, 0.34)"
+const BOLHA_CLIENTE = "rgba(255,255,255,0.06)"
+
 function formatarHora(iso: string | null): string {
   if (!iso) return ""
   return new Date(iso).toLocaleTimeString("pt-BR", {
@@ -25,21 +37,29 @@ function formatarHora(iso: string | null): string {
   })
 }
 
+/** "agora" local no formato do input datetime-local (YYYY-MM-DDTHH:mm). */
+function agoraLocalInput(): string {
+  const d = new Date()
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
 export default function Thread({
   lead,
   mensagens,
   cor,
   todasEtiquetas,
+  tiposCustom,
 }: {
   lead: CrmLeadRow
   mensagens: CrmMensagemRow[]
   cor: string
   todasEtiquetas: EtiquetaResumo[]
+  tiposCustom: CrmTipoAtividadeRow[]
 }) {
   const [texto, setTexto] = useState("")
   const [erro, setErro] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
-  const [followUpAberto, setFollowUpAberto] = useState(false)
   const router = useRouter()
   const fimRef = useRef<HTMLDivElement>(null)
 
@@ -69,17 +89,18 @@ export default function Thread({
   }
 
   return (
-    <div className="flex flex-col" style={{ height: "100%" }}>
+    <div className="flex flex-col" style={{ height: "100%", minHeight: 0 }}>
       <div
         style={{
           padding: "14px 18px",
           borderBottom: "0.5px solid rgba(255,255,255,0.08)",
           borderLeft: `3px solid ${cor}`,
+          flexShrink: 0,
         }}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <Avatar nome={nomeExibido} cor={cor} size={40} />
+            <Avatar nome={nomeExibido} cor={cor} fotoUrl={lead.foto_url} size={44} />
             <div className="min-w-0">
               <p style={{ fontSize: 14, fontWeight: 600 }} className="truncate">
                 {nomeExibido}
@@ -90,21 +111,7 @@ export default function Thread({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setFollowUpAberto((v) => !v)}
-            style={{
-              fontSize: 11,
-              color: "var(--text-3)",
-              border: "0.5px solid rgba(255,255,255,0.15)",
-              borderRadius: 8,
-              padding: "6px 10px",
-              flexShrink: 0,
-              whiteSpace: "nowrap",
-            }}
-          >
-            📅 Follow-up
-          </button>
+          <AtribuirAtividade leadId={lead.id} tiposCustom={tiposCustom} />
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -117,66 +124,79 @@ export default function Thread({
             todasEtiquetas={todasEtiquetas}
           />
         </div>
-
-        {followUpAberto && (
-          <FormFollowUp
-            leadId={lead.id}
-            onClose={() => setFollowUpAberto(false)}
-          />
-        )}
       </div>
 
       <div
         className="flex-1 overflow-y-auto"
-        style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 8 }}
+        style={{
+          padding: "16px 18px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          minHeight: 0,
+        }}
       >
         {mensagens.length === 0 && (
           <p style={{ fontSize: 12, color: "var(--text-3)" }}>
             Sem mensagens ainda.
           </p>
         )}
-        {mensagens.map((m) => (
-          <div
-            key={m.id}
-            style={{
-              alignSelf: m.direcao === "out" ? "flex-end" : "flex-start",
-              maxWidth: "70%",
-            }}
-          >
+        {mensagens.map((m) => {
+          const meu = m.from_me || m.direcao === "out"
+          return (
             <div
+              key={m.id}
               style={{
-                padding: "8px 12px",
-                borderRadius: 10,
-                background:
-                  m.direcao === "out"
-                    ? "rgba(201,149,58,0.16)"
-                    : "rgba(255,255,255,0.06)",
-                fontSize: 13,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
+                alignSelf: meu ? "flex-end" : "flex-start",
+                maxWidth: "74%",
               }}
             >
-              {m.conteudo || `[${m.tipo}]`}
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 12,
+                  borderTopRightRadius: meu ? 4 : 12,
+                  borderTopLeftRadius: meu ? 12 : 4,
+                  background: meu ? BOLHA_MINHA : BOLHA_CLIENTE,
+                  border: meu
+                    ? `0.5px solid ${BOLHA_MINHA_BORDA}`
+                    : "0.5px solid transparent",
+                  fontSize: 13,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                <ConteudoMensagem mensagem={m} />
+              </div>
+              <p
+                style={{
+                  fontSize: 10,
+                  color: "var(--text-4)",
+                  marginTop: 2,
+                  textAlign: meu ? "right" : "left",
+                }}
+              >
+                {formatarHora(m.wa_timestamp)}
+                {m.status === "falha" && (
+                  <span style={{ color: "var(--danger)" }}>
+                    {" "}
+                    · falhou{m.erro ? `: ${m.erro}` : ""}
+                  </span>
+                )}
+              </p>
             </div>
-            <p
-              style={{
-                fontSize: 10,
-                color: "var(--text-4)",
-                marginTop: 2,
-                textAlign: m.direcao === "out" ? "right" : "left",
-              }}
-            >
-              {formatarHora(m.wa_timestamp)}
-              {m.status === "falha" && (
-                <span style={{ color: "var(--danger)" }}> · falhou{m.erro ? `: ${m.erro}` : ""}</span>
-              )}
-            </p>
-          </div>
-        ))}
+          )
+        })}
         <div ref={fimRef} />
       </div>
 
-      <div style={{ padding: "12px 18px", borderTop: "0.5px solid rgba(255,255,255,0.08)" }}>
+      <div
+        style={{
+          padding: "12px 18px",
+          borderTop: "0.5px solid rgba(255,255,255,0.08)",
+          flexShrink: 0,
+        }}
+      >
         {erro && (
           <p style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{erro}</p>
         )}
@@ -195,6 +215,7 @@ export default function Thread({
             className="glass-input"
             style={{ flex: 1, padding: "8px 12px", fontSize: 13, resize: "none" }}
           />
+          <GravadorAudio leadId={lead.id} onErro={setErro} />
           <button
             type="button"
             onClick={() => startTransition(() => enviar())}
@@ -210,15 +231,415 @@ export default function Thread({
   )
 }
 
-function FormFollowUp({
+/** Renderiza o conteúdo por tipo: áudio toca inline, imagem exibe, resto é
+ *  texto (com fallback pro rótulo do tipo quando não há corpo). */
+function ConteudoMensagem({ mensagem: m }: { mensagem: CrmMensagemRow }) {
+  if (m.tipo === "audio" && m.midia_url) {
+    return (
+      <audio
+        controls
+        preload="none"
+        src={m.midia_url}
+        style={{ maxWidth: 240, height: 36, display: "block" }}
+      />
+    )
+  }
+  if (m.tipo === "imagem" && m.midia_url) {
+    return (
+      <div>
+        <img
+          src={m.midia_url}
+          alt={m.conteudo ?? "Imagem"}
+          style={{ maxWidth: 240, borderRadius: 8, display: "block" }}
+        />
+        {m.conteudo && <p style={{ marginTop: 6 }}>{m.conteudo}</p>}
+      </div>
+    )
+  }
+  return <>{m.conteudo || `[${m.tipo}]`}</>
+}
+
+// =============================================================================
+// Gravador de áudio (nota de voz) — MediaRecorder no navegador.
+// =============================================================================
+function GravadorAudio({
   leadId,
+  onErro,
+}: {
+  leadId: string
+  onErro: (m: string | null) => void
+}) {
+  const [gravando, setGravando] = useState(false)
+  const [enviando, setEnviando] = useState(false)
+  const [segundos, setSegundos] = useState(0)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const cancelarRef = useRef(false)
+  const montadoRef = useRef(true)
+  const router = useRouter()
+
+  function pararTudo() {
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = null
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+  }
+
+  useEffect(() => {
+    montadoRef.current = true
+    return () => {
+      montadoRef.current = false
+      pararTudo()
+    }
+  }, [])
+
+  async function iniciar() {
+    onErro(null)
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      onErro("Seu navegador não suporta gravação de áudio.")
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Se o componente desmontou durante o prompt de permissão (ex: troca de
+      // conversa), desliga o microfone e sai — senão o stream fica vivo.
+      if (!montadoRef.current) {
+        stream.getTracks().forEach((t) => t.stop())
+        return
+      }
+      streamRef.current = stream
+      chunksRef.current = []
+      cancelarRef.current = false
+      const rec = new MediaRecorder(stream)
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data)
+      }
+      rec.onstop = async () => {
+        pararTudo()
+        setGravando(false)
+        if (cancelarRef.current) return
+        const blob = new Blob(chunksRef.current, {
+          type: chunksRef.current[0]?.type || "audio/webm",
+        })
+        if (blob.size === 0) return
+        await enviar(blob)
+      }
+      recorderRef.current = rec
+      rec.start()
+      setGravando(true)
+      setSegundos(0)
+      timerRef.current = setInterval(() => setSegundos((s) => s + 1), 1000)
+    } catch {
+      // Falha após o getUserMedia (ex: MediaRecorder não suportado) também
+      // precisa desligar o microfone que já pode estar aberto.
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+      onErro("Não foi possível acessar o microfone (permita o acesso no navegador).")
+    }
+  }
+
+  function parar() {
+    recorderRef.current?.stop()
+  }
+
+  function cancelar() {
+    cancelarRef.current = true
+    recorderRef.current?.stop()
+  }
+
+  async function enviar(blob: Blob) {
+    setEnviando(true)
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader()
+        fr.onload = () => resolve(String(fr.result))
+        fr.onerror = () => reject(fr.error)
+        fr.readAsDataURL(blob)
+      })
+      const r = await enviarAudioAction(leadId, dataUrl, blob.type || null)
+      if (r.ok) router.refresh()
+      else onErro(r.erro ?? "Erro ao enviar áudio")
+    } catch {
+      onErro("Erro ao processar o áudio.")
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const mm = String(Math.floor(segundos / 60)).padStart(2, "0")
+  const ss = String(segundos % 60).padStart(2, "0")
+
+  if (gravando) {
+    return (
+      <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+        <span
+          style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--danger)" }}
+        />
+        <span style={{ fontSize: 12, color: "var(--text-2, #ddd)", fontVariantNumeric: "tabular-nums" }}>
+          {mm}:{ss}
+        </span>
+        <button
+          type="button"
+          onClick={cancelar}
+          title="Cancelar"
+          style={{ fontSize: 11, color: "var(--text-3)", padding: "6px 8px" }}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={parar}
+          title="Enviar áudio"
+          className="btn-gold-filled"
+          style={{ fontSize: 12, padding: "8px 12px" }}
+        >
+          ➤
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={iniciar}
+      disabled={enviando}
+      title="Gravar áudio"
+      style={{
+        flexShrink: 0,
+        fontSize: 18,
+        padding: "6px 10px",
+        borderRadius: 8,
+        border: "0.5px solid rgba(255,255,255,0.15)",
+        color: "var(--text-2, #ddd)",
+        opacity: enviando ? 0.5 : 1,
+      }}
+    >
+      {enviando ? "…" : "🎤"}
+    </button>
+  )
+}
+
+// =============================================================================
+// Atribuir atividade — menu de tipos (Follow-up / Reunião / Fechamento / +) e
+// formulário com data. Substitui o antigo botão "Follow-up".
+// =============================================================================
+function AtribuirAtividade({
+  leadId,
+  tiposCustom,
+}: {
+  leadId: string
+  tiposCustom: CrmTipoAtividadeRow[]
+}) {
+  const [aberto, setAberto] = useState(false)
+  const [categoria, setCategoria] = useState<string | null>(null)
+
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={() => {
+          setAberto((v) => !v)
+          setCategoria(null)
+        }}
+        style={{
+          fontSize: 11,
+          color: "var(--text-2, #ddd)",
+          border: "0.5px solid rgba(255,255,255,0.15)",
+          borderRadius: 8,
+          padding: "6px 10px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        ＋ Atividade
+      </button>
+
+      {aberto && (
+        <>
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => setAberto(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 15, cursor: "default" }}
+          />
+          <div
+            className="glass"
+            style={{
+              position: "absolute",
+              top: "100%",
+              right: 0,
+              marginTop: 6,
+              padding: 12,
+              width: 280,
+              zIndex: 20,
+            }}
+          >
+            {categoria ? (
+              <FormAtividade
+                leadId={leadId}
+                categoria={categoria}
+                onVoltar={() => setCategoria(null)}
+                onClose={() => setAberto(false)}
+              />
+            ) : (
+              <MenuTipos
+                tiposCustom={tiposCustom}
+                onEscolher={setCategoria}
+              />
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function MenuTipos({
+  tiposCustom,
+  onEscolher,
+}: {
+  tiposCustom: CrmTipoAtividadeRow[]
+  onEscolher: (categoria: string) => void
+}) {
+  const [novoTipo, setNovoTipo] = useState("")
+  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+
+  function criarTipo() {
+    const nome = novoTipo.trim()
+    if (!nome) return
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("nome", nome)
+      await criarTipoAtividadeAction(fd)
+      setNovoTipo("")
+      router.refresh()
+    })
+  }
+
+  function excluirTipo(id: string) {
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("id", id)
+      await excluirTipoAtividadeAction(fd)
+      router.refresh()
+    })
+  }
+
+  return (
+    <div>
+      <p
+        style={{
+          fontSize: 9,
+          letterSpacing: "1.5px",
+          textTransform: "uppercase",
+          color: "var(--text-4)",
+          fontWeight: 500,
+          marginBottom: 8,
+        }}
+      >
+        Registrar ponto de contato
+      </p>
+      <div className="flex flex-col gap-1">
+        {TIPOS_ATIVIDADE_PADRAO.map((t) => (
+          <button
+            key={t.nome}
+            type="button"
+            onClick={() => onEscolher(t.nome)}
+            className="flex items-center gap-2"
+            style={{
+              fontSize: 13,
+              padding: "7px 8px",
+              borderRadius: 8,
+              textAlign: "left",
+              background: "rgba(255,255,255,0.03)",
+            }}
+          >
+            <span>{t.emoji}</span>
+            {t.nome}
+          </button>
+        ))}
+        {tiposCustom.map((t) => (
+          <div key={t.id} className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onEscolher(t.nome)}
+              className="flex items-center gap-2 flex-1"
+              style={{
+                fontSize: 13,
+                padding: "7px 8px",
+                borderRadius: 8,
+                textAlign: "left",
+                background: "rgba(255,255,255,0.03)",
+              }}
+            >
+              <span>🏷️</span>
+              {t.nome}
+            </button>
+            <button
+              type="button"
+              onClick={() => excluirTipo(t.id)}
+              disabled={pending}
+              title="Remover tipo"
+              style={{ fontSize: 13, color: "var(--text-4)", padding: "4px 6px" }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 4,
+          marginTop: 10,
+          borderTop: "0.5px solid rgba(255,255,255,0.08)",
+          paddingTop: 10,
+        }}
+      >
+        <input
+          value={novoTipo}
+          onChange={(e) => setNovoTipo(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              criarTipo()
+            }
+          }}
+          placeholder="Novo tipo de atividade..."
+          maxLength={60}
+          className="glass-input"
+          style={{ flex: 1, fontSize: 12, padding: "6px 8px" }}
+        />
+        <button
+          type="button"
+          onClick={criarTipo}
+          disabled={pending || !novoTipo.trim()}
+          className="btn-gold-filled"
+          style={{ fontSize: 13, padding: "6px 10px" }}
+        >
+          ＋
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function FormAtividade({
+  leadId,
+  categoria,
+  onVoltar,
   onClose,
 }: {
   leadId: string
+  categoria: string
+  onVoltar: () => void
   onClose: () => void
 }) {
   const [titulo, setTitulo] = useState("")
-  const [quando, setQuando] = useState("")
+  const [quando, setQuando] = useState(agoraLocalInput())
   const [pending, startTransition] = useTransition()
   const [status, setStatus] = useState<string | null>(null)
   const router = useRouter()
@@ -230,6 +651,7 @@ function FormFollowUp({
     }
     const fd = new FormData()
     fd.set("lead_id", leadId)
+    fd.set("categoria", categoria)
     fd.set("titulo", titulo)
     fd.set("agendado_para", quando)
     const r = await criarFollowUpAction(fd)
@@ -243,26 +665,33 @@ function FormFollowUp({
   }
 
   return (
-    <div
-      className="glass"
-      style={{ marginTop: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}
-    >
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onVoltar}
+          style={{ fontSize: 13, color: "var(--text-3)" }}
+        >
+          ‹
+        </button>
+        <p style={{ fontSize: 13, fontWeight: 600 }}>{categoria}</p>
+      </div>
       <input
         value={titulo}
         onChange={(e) => setTitulo(e.target.value)}
-        placeholder="Ex: Ligar pra fechar proposta"
+        placeholder="Detalhe (opcional)"
         maxLength={100}
         className="glass-input"
         style={{ fontSize: 12, padding: "6px 10px" }}
       />
+      <input
+        type="datetime-local"
+        value={quando}
+        onChange={(e) => setQuando(e.target.value)}
+        className="glass-input"
+        style={{ fontSize: 12, padding: "6px 10px" }}
+      />
       <div className="flex items-center gap-2">
-        <input
-          type="datetime-local"
-          value={quando}
-          onChange={(e) => setQuando(e.target.value)}
-          className="glass-input"
-          style={{ fontSize: 12, padding: "6px 10px", flex: 1 }}
-        />
         <button
           type="button"
           onClick={() => startTransition(() => salvar())}
@@ -279,17 +708,17 @@ function FormFollowUp({
         >
           Cancelar
         </button>
+        {status && (
+          <span
+            style={{
+              fontSize: 11,
+              color: status.includes("✓") ? "var(--success)" : "var(--danger)",
+            }}
+          >
+            {status}
+          </span>
+        )}
       </div>
-      {status && (
-        <span
-          style={{
-            fontSize: 11,
-            color: status.includes("✓") ? "var(--success)" : "var(--danger)",
-          }}
-        >
-          {status}
-        </span>
-      )}
     </div>
   )
 }

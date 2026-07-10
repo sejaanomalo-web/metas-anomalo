@@ -29,8 +29,12 @@ function chaveDia(d: Date): string {
  *  uma janela larga de uma vez (ver listarAtividadesCalendario na page). */
 export default function Calendario({
   atividades,
+  proximas,
 }: {
   atividades: CrmAtividadeRow[]
+  /** Todos os compromissos futuros (mesmo além da janela do mês) — lista
+   *  "Próximos compromissos", ordenada do mais próximo ao mais distante. */
+  proximas: CrmAtividadeRow[]
 }) {
   const hoje = useMemo(() => new Date(), [])
   const [mesRef, setMesRef] = useState(
@@ -187,7 +191,15 @@ export default function Calendario({
         )}
       </div>
 
-      <div style={{ flex: "1 1 260px", minWidth: 260 }}>
+      <div
+        style={{
+          flex: "1 1 300px",
+          minWidth: 260,
+          maxHeight: 560,
+          overflowY: "auto",
+          paddingRight: 4,
+        }}
+      >
         <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 10 }}>
           {diaSelecionado
             ? new Date(`${diaSelecionado}T00:00:00`).toLocaleDateString("pt-BR", {
@@ -206,8 +218,98 @@ export default function Calendario({
             ))}
           </div>
         )}
+
+        <div
+          style={{
+            marginTop: 20,
+            borderTop: "0.5px solid rgba(255,255,255,0.08)",
+            paddingTop: 14,
+          }}
+        >
+          <p
+            style={{
+              fontSize: 9,
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              color: "var(--text-4)",
+              fontWeight: 500,
+              marginBottom: 10,
+            }}
+          >
+            Próximos compromissos
+          </p>
+          {proximas.length === 0 ? (
+            <p style={{ fontSize: 12, color: "var(--text-4)" }}>
+              Nenhum compromisso futuro marcado.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {proximas.map((a) => (
+                <ItemProximo
+                  key={a.id}
+                  atividade={a}
+                  onSelecionarDia={(chave) => {
+                    setDiaSelecionado(chave)
+                    setMesRef(new Date(`${chave}T00:00:00`))
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
+  )
+}
+
+/** Item da lista "Próximos compromissos": nome + data completa. Clicar leva o
+ *  calendário até o mês/dia do compromisso. */
+function ItemProximo({
+  atividade,
+  onSelecionarDia,
+}: {
+  atividade: CrmAtividadeRow
+  onSelecionarDia: (chaveDia: string) => void
+}) {
+  const nome =
+    atividade.lead_nome || atividade.lead_telefone || "Lead sem nome"
+  const quando = atividade.agendado_para
+    ? new Date(atividade.agendado_para)
+    : null
+  const dataLabel = quando
+    ? quando.toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : ""
+  const horaLabel = quando
+    ? quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : ""
+  const chave = atividade.agendado_para
+    ? atividade.agendado_para.slice(0, 10)
+    : null
+
+  return (
+    <button
+      type="button"
+      onClick={() => chave && onSelecionarDia(chave)}
+      className="glass"
+      style={{ padding: 10, width: "100%", textAlign: "left", display: "block" }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p style={{ fontSize: 12, fontWeight: 500 }} className="truncate">
+          {atividade.categoria || atividade.titulo || "Follow-up"}
+        </p>
+        <span style={{ fontSize: 10, color: "var(--gold, #C9953A)", flexShrink: 0 }}>
+          {dataLabel} · {horaLabel}
+        </span>
+      </div>
+      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }} className="truncate">
+        {nome}
+        {atividade.lead_empresa_nome ? ` · ${atividade.lead_empresa_nome}` : ""}
+      </p>
+    </button>
   )
 }
 

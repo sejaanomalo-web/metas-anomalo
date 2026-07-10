@@ -4,12 +4,14 @@ import { randomBytes } from "crypto"
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
+import { tipoTecnicoDaCategoria } from "./crm-tipos-atividade"
 
 export interface CrmAtividadeRow {
   id: string
   lead_id: string
   empresa_slug: string
   tipo: string
+  categoria: string | null
   titulo: string | null
   corpo: string | null
   agendado_para: string | null
@@ -21,6 +23,12 @@ export interface CrmAtividadeRow {
   lead_nome: string | null
   lead_telefone: string | null
   lead_empresa_nome: string | null
+}
+
+export interface CrmTipoAtividadeRow {
+  id: string
+  nome: string
+  ordem: number
 }
 
 export interface ResultadoAtividade {
@@ -64,6 +72,41 @@ export async function listarAtividadesCalendario(
   return (data ?? []).map(normalizarAtividade)
 }
 
+/** Proximos compromissos do usuario logado — TODOS os futuros ainda nao
+ *  concluidos, do mais proximo ao mais distante (mesmo que seja em dez do ano
+ *  que vem). Alimenta a lista "Próximos compromissos" do calendario, sem
+ *  janela de mes (diferente de listarAtividadesCalendario). */
+export async function listarProximasAtividades(
+  limite = 100
+): Promise<CrmAtividadeRow[]> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return []
+  const db = getSupabaseAdmin()
+  if (!db) return []
+  // A partir do inicio de hoje (nao "agora"), pra nao sumir com um follow-up
+  // marcado pra hoje de manha quando ja passou da hora.
+  const agora = new Date()
+  const inicioHoje = new Date(
+    agora.getFullYear(),
+    agora.getMonth(),
+    agora.getDate()
+  ).toISOString()
+  const { data, error } = await db
+    .from("crm_atividades")
+    .select("*, lead:crm_leads(nome, telefone_e164, empresa_nome)")
+    .eq("usuario_id", usuario.id)
+    .not("agendado_para", "is", null)
+    .gte("agendado_para", inicioHoje)
+    .is("concluido_em", null)
+    .order("agendado_para", { ascending: true })
+    .limit(limite)
+  if (error) {
+    console.error("[crm_atividades] listar proximas error", error.message)
+    return []
+  }
+  return (data ?? []).map(normalizarAtividade)
+}
+
 export async function listarAtividadesDoLead(
   leadId: string
 ): Promise<CrmAtividadeRow[]> {
@@ -96,6 +139,7 @@ export async function criarFollowUpAction(
 
   const leadId = String(formData.get("lead_id") ?? "").trim()
   const titulo = String(formData.get("titulo") ?? "").trim()
+  const categoria = String(formData.get("categoria") ?? "").trim() || "Follow-up"
   const corpo = String(formData.get("corpo") ?? "").trim() || null
   const agendadoParaBruto = String(formData.get("agendado_para") ?? "")
   if (!leadId) return { ok: false, erro: "Lead inválido." }
@@ -119,14 +163,86 @@ export async function criarFollowUpAction(
     lead_id: leadId,
     empresa_slug: lead.empresa_slug,
     usuario_id: usuario.id,
-    tipo: "tarefa",
-    titulo: titulo || "Follow-up",
+    // `tipo` = eixo tecnico (CHECK do schema); `categoria` = rotulo escolhido.
+    tipo: tipoTecnicoDaCategoria(categoria),
+    categoria,
+    titulo: titulo || categoria,
     corpo,
     agendado_para: agendadoIso,
     lembrete_em: agendadoIso,
     autor_id: usuario.id,
     autor_nome: usuario.nome,
   })
+  if (error) return { ok: false, erro: error.message }
+
+  revalidatePath("/dashboard/crm")
+  return { ok: true }
+}
+
+/** Tipos de atividade CUSTOM do usuario (alem dos 4 padrao, que ficam em
+ *  lib/crm-tipos-atividade.ts). */
+export async function listarTiposAtividade(): Promise<CrmTipoAtividadeRow[]> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return []
+  const db = getSupabaseAdmin()
+  if (!db) return []
+  const { data, error } = await db
+    .from("crm_tipos_atividade")
+    .select("id, nome, ordem")
+    .eq("usuario_id", usuario.id)
+    .order("ordem", { ascending: true })
+    .order("nome", { ascending: true })
+  if (error) {
+    console.error("[crm_tipos_atividade] list error", error.message)
+    return []
+  }
+  return (data ?? []) as CrmTipoAtividadeRow[]
+}
+
+export async function criarTipoAtividadeAction(
+  formData: FormData
+): Promise<ResultadoAtividade & { id?: string }> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const nome = String(formData.get("nome") ?? "").trim().slice(0, 60)
+  if (!nome) return { ok: false, erro: "Nome do tipo obrigatório." }
+
+  const { data, error } = await db
+    .from("crm_tipos_atividade")
+    .insert({ usuario_id: usuario.id, nome })
+    .select("id")
+    .single()
+  if (error) {
+    const jaExiste = error.code === "23505"
+    return {
+      ok: false,
+      erro: jaExiste ? `Você já tem o tipo "${nome}".` : error.message,
+    }
+  }
+
+  revalidatePath("/dashboard/crm")
+  return { ok: true, id: data?.id as string }
+}
+
+export async function excluirTipoAtividadeAction(
+  formData: FormData
+): Promise<ResultadoAtividade> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!id) return { ok: false, erro: "ID inválido." }
+
+  const { error } = await db
+    .from("crm_tipos_atividade")
+    .delete()
+    .eq("id", id)
+    .eq("usuario_id", usuario.id)
   if (error) return { ok: false, erro: error.message }
 
   revalidatePath("/dashboard/crm")
