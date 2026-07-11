@@ -4,120 +4,67 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
 import type { CrmEtiquetaResumo } from "./crm-leads"
-import { CORES_ETIQUETA } from "./crm-cores"
+import { sincronizarEtiquetaDaEtapa } from "./crm-etapas"
 
 export interface ResultadoEtiqueta {
   ok: boolean
   erro?: string
 }
 
-function corValida(bruto: string | null): string | null {
-  if (!bruto) return null
-  return /^#[0-9a-fA-F]{6}$/.test(bruto) ? bruto : null
-}
-
 function revalidarCrm() {
   revalidatePath("/dashboard/crm")
 }
 
-/** Etiquetas do usuário logado (vocabulário pessoal, igual labels do
- *  WhatsApp Business). */
+/**
+ * Etiquetas do usuário logado — Fase 6: deixaram de ser um vocabulário livre
+ * (criado em Conversas) e viraram um ESPELHO das etapas do Kanban visíveis a
+ * ele (padrão + próprias), pra funcionar como as mesmas "fases". Criação/
+ * edição/exclusão só acontece via etapa (Kanban); aqui só garantimos (self-
+ * healing) que toda etapa visível tem uma etiqueta correspondente — cobre
+ * também usuários novos, sem depender de backfill em migração.
+ */
 export async function listarEtiquetas(): Promise<CrmEtiquetaResumo[]> {
   const usuario = await getUsuarioAtual()
   if (!usuario) return []
   const db = getSupabaseAdmin()
   if (!db) return []
-  const { data, error } = await db
-    .from("crm_etiquetas")
+
+  const { data: etapas } = await db
+    .from("crm_etapas")
     .select("id, nome, cor")
+    .eq("ativo", true)
+    .or(`usuario_id.is.null,usuario_id.eq.${usuario.id}`)
+  if (!etapas || etapas.length === 0) return []
+
+  const { data: existentes, error } = await db
+    .from("crm_etiquetas")
+    .select("id, nome, cor, etapa_id")
     .eq("usuario_id", usuario.id)
-    .order("nome", { ascending: true })
   if (error) {
     console.error("[crm_etiquetas] list error", error.message)
     return []
   }
-  return (data ?? []) as CrmEtiquetaResumo[]
-}
 
-export async function criarEtiquetaAction(
-  formData: FormData
-): Promise<ResultadoEtiqueta & { id?: string }> {
-  const usuario = await getUsuarioAtual()
-  if (!usuario) return { ok: false, erro: "Sessão expirada." }
-  const db = getSupabaseAdmin()
-  if (!db) return { ok: false, erro: "Supabase indisponível." }
+  const idsEtapasComEtiqueta = new Set((existentes ?? []).map((e) => e.etapa_id))
+  const faltando = etapas.filter((et) => !idsEtapasComEtiqueta.has(et.id))
 
-  const nome = String(formData.get("nome") ?? "").trim()
-  const cor = corValida(String(formData.get("cor") ?? "")) ?? CORES_ETIQUETA[0]
-  if (!nome) return { ok: false, erro: "Nome da etiqueta obrigatório." }
-
-  const { data, error } = await db
-    .from("crm_etiquetas")
-    .insert({ usuario_id: usuario.id, nome, cor })
-    .select("id")
-    .single()
-  if (error) {
-    const jaExiste = error.code === "23505"
-    return {
-      ok: false,
-      erro: jaExiste ? `Você já tem uma etiqueta "${nome}".` : error.message,
-    }
+  if (faltando.length === 0) {
+    return (existentes ?? [])
+      .filter((e) => e.etapa_id)
+      .map((e) => ({ id: e.id as string, nome: e.nome as string, cor: e.cor as string }))
   }
 
-  revalidarCrm()
-  return { ok: true, id: data?.id as string }
-}
+  // Em paralelo (não sequencial) — cada etapa faltante é independente, e
+  // isso importa principalmente no primeiro carregamento de um usuário novo
+  // (várias etapas padrão pra sincronizar de uma vez só).
+  await Promise.all(faltando.map((etapa) => sincronizarEtiquetaDaEtapa(db, usuario.id, etapa)))
 
-export async function editarEtiquetaAction(
-  formData: FormData
-): Promise<ResultadoEtiqueta> {
-  const usuario = await getUsuarioAtual()
-  if (!usuario) return { ok: false, erro: "Sessão expirada." }
-  const db = getSupabaseAdmin()
-  if (!db) return { ok: false, erro: "Supabase indisponível." }
-
-  const id = String(formData.get("id") ?? "").trim()
-  const nome = String(formData.get("nome") ?? "").trim()
-  const cor = corValida(String(formData.get("cor") ?? ""))
-  if (!id) return { ok: false, erro: "ID inválido." }
-  if (!nome) return { ok: false, erro: "Nome da etiqueta obrigatório." }
-
-  const patch: Record<string, unknown> = { nome }
-  if (cor) patch.cor = cor
-
-  const { error } = await db
+  const { data: final } = await db
     .from("crm_etiquetas")
-    .update(patch)
-    .eq("id", id)
+    .select("id, nome, cor")
     .eq("usuario_id", usuario.id)
-  if (error) return { ok: false, erro: error.message }
-
-  revalidarCrm()
-  return { ok: true }
-}
-
-export async function excluirEtiquetaAction(
-  formData: FormData
-): Promise<ResultadoEtiqueta> {
-  const usuario = await getUsuarioAtual()
-  if (!usuario) return { ok: false, erro: "Sessão expirada." }
-  const db = getSupabaseAdmin()
-  if (!db) return { ok: false, erro: "Supabase indisponível." }
-
-  const id = String(formData.get("id") ?? "").trim()
-  if (!id) return { ok: false, erro: "ID inválido." }
-
-  // crm_lead_etiquetas tem ON DELETE CASCADE — apagar a etiqueta já remove
-  // as atribuições nos leads automaticamente.
-  const { error } = await db
-    .from("crm_etiquetas")
-    .delete()
-    .eq("id", id)
-    .eq("usuario_id", usuario.id)
-  if (error) return { ok: false, erro: error.message }
-
-  revalidarCrm()
-  return { ok: true }
+    .not("etapa_id", "is", null)
+  return (final ?? []) as CrmEtiquetaResumo[]
 }
 
 export async function atribuirEtiquetaAction(

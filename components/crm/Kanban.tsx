@@ -26,6 +26,8 @@ import type { CrmLeadRow } from "@/lib/crm-leads"
 import {
   moverLeadAction,
   criarEtapaAction,
+  editarEtapaAction,
+  moverEtapaAction,
   excluirEtapaAction,
 } from "@/lib/crm-kanban-actions"
 import { CORES_ETIQUETA } from "@/lib/crm-cores"
@@ -178,12 +180,14 @@ export default function Kanban({
         className="flex gap-3 overflow-x-auto scrollbar-thin"
         style={{ height: "100%", paddingBottom: 8 }}
       >
-        {etapas.map((etapa) => (
+        {etapas.map((etapa, index) => (
           <Coluna
             key={etapa.id}
             etapa={etapa}
             leads={colunas[etapa.id] ?? []}
             corPorEmpresa={corPorEmpresa}
+            isFirst={index === 0}
+            isLast={index === etapas.length - 1}
           />
         ))}
         <NovaColuna />
@@ -205,30 +209,16 @@ function Coluna({
   etapa,
   leads,
   corPorEmpresa,
+  isFirst,
+  isLast,
 }: {
   etapa: CrmEtapaRow
   leads: CrmLeadRow[]
   corPorEmpresa: Record<string, string>
+  isFirst: boolean
+  isLast: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: etapa.id })
-  const [pending, startTransition] = useTransition()
-  const [confirmando, setConfirmando] = useState(false)
-  const router = useRouter()
-
-  function pedirExclusao() {
-    if (!confirmando) {
-      setConfirmando(true)
-      setTimeout(() => setConfirmando(false), 3000)
-      return
-    }
-    setConfirmando(false)
-    startTransition(async () => {
-      const fd = new FormData()
-      fd.set("id", etapa.id)
-      await excluirEtapaAction(fd)
-      router.refresh()
-    })
-  }
 
   return (
     <div
@@ -270,22 +260,7 @@ function Coluna({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span style={{ fontSize: 11, color: "var(--text-4)" }}>{leads.length}</span>
-          {etapa.propria && (
-            <button
-              type="button"
-              onClick={pedirExclusao}
-              disabled={pending}
-              title={confirmando ? "Clique de novo pra confirmar" : "Excluir etapa"}
-              style={{
-                fontSize: confirmando ? 9 : 12,
-                fontWeight: confirmando ? 600 : 400,
-                color: confirmando ? "var(--danger)" : "var(--text-4)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {confirmando ? "confirmar ×" : "×"}
-            </button>
-          )}
+          <MenuEtapa etapa={etapa} isFirst={isFirst} isLast={isLast} />
         </div>
       </div>
       <SortableContext items={leads.map((l) => l.id)} strategy={verticalListSortingStrategy}>
@@ -305,6 +280,258 @@ function Coluna({
         </div>
       </SortableContext>
     </div>
+  )
+}
+
+/** Menu (⋮) do cabeçalho de cada coluna — editar nome/cor, mover pra
+ *  esquerda/direita (reordena o Kanban) e excluir a fase. Vale pra QUALQUER
+ *  etapa, inclusive as padrão (Novo/Em conversa/Qualificado/...): excluir ou
+ *  editar uma etapa padrão afeta todo mundo que usa o CRM, não só quem
+ *  criou (elas não têm dono). */
+function MenuEtapa({
+  etapa,
+  isFirst,
+  isLast,
+}: {
+  etapa: CrmEtapaRow
+  isFirst: boolean
+  isLast: boolean
+}) {
+  const [aberto, setAberto] = useState(false)
+  const [editando, setEditando] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
+  const [nome, setNome] = useState(etapa.nome)
+  const [cor, setCor] = useState(etapa.cor || CORES_ETIQUETA[0])
+  const [erro, setErro] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+
+  function fechar() {
+    setAberto(false)
+    setEditando(false)
+    setConfirmando(false)
+    setErro(null)
+  }
+
+  // Ressincroniza nome/cor a partir das props no momento de abrir o form —
+  // não em fechar(): logo após salvar, fechar() roda antes do
+  // router.refresh() terminar, então a prop `etapa` ainda é a versão velha;
+  // resetar por ali deixaria o form com o nome antigo numa próxima abertura.
+  // Também desarma a exclusão e limpa erro de uma tentativa anterior — senão
+  // "Excluir" fica armado (1 clique = exclui) ou o form reabre mostrando um
+  // erro de outra edição já abandonada.
+  function abrirEdicao() {
+    setNome(etapa.nome)
+    setCor(etapa.cor || CORES_ETIQUETA[0])
+    setConfirmando(false)
+    setErro(null)
+    setEditando(true)
+  }
+
+  function mover(direcao: "esquerda" | "direita") {
+    setConfirmando(false)
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("id", etapa.id)
+      fd.set("direcao", direcao)
+      await moverEtapaAction(fd)
+      router.refresh()
+    })
+  }
+
+  function salvarEdicao() {
+    const n = nome.trim()
+    if (!n) return
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("id", etapa.id)
+      fd.set("nome", n)
+      fd.set("cor", cor)
+      const r = await editarEtapaAction(fd)
+      if (r.ok) {
+        fechar()
+        router.refresh()
+      } else {
+        setErro(r.erro ?? "Erro ao salvar")
+      }
+    })
+  }
+
+  function excluir() {
+    if (!confirmando) {
+      setConfirmando(true)
+      setTimeout(() => setConfirmando(false), 3000)
+      return
+    }
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("id", etapa.id)
+      await excluirEtapaAction(fd)
+      fechar()
+      router.refresh()
+    })
+  }
+
+  // Alterna abrir/fechar pelo próprio botão ⋮ — fechar por AQUI (em vez de
+  // só alternar `aberto`) importa pro caso de teclado (Tab + Enter/Espaço no
+  // botão): esse clique não passa pela hit-test do overlay de fundo, então é
+  // o único jeito de fechar que não passava por fechar() e podia deixar
+  // editando/confirmando/erro "presos" pra próxima abertura.
+  function alternar() {
+    if (aberto) fechar()
+    else setAberto(true)
+  }
+
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={alternar}
+        title="Opções da etapa"
+        style={{ fontSize: 14, color: "var(--text-4)", padding: "2px 4px", lineHeight: 1 }}
+      >
+        ⋮
+      </button>
+
+      {aberto && (
+        <>
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={fechar}
+            style={{ position: "fixed", inset: 0, zIndex: 15, cursor: "default" }}
+          />
+          <div
+            className="glass"
+            style={{
+              position: "absolute",
+              top: "100%",
+              right: 0,
+              marginTop: 6,
+              padding: 10,
+              width: 200,
+              zIndex: 20,
+            }}
+          >
+            {editando ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <input
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      salvarEdicao()
+                    } else if (e.key === "Escape") {
+                      fechar()
+                    }
+                  }}
+                  placeholder="Nome da etapa..."
+                  maxLength={60}
+                  autoFocus
+                  className="glass-input"
+                  style={{ fontSize: 12, padding: "6px 8px", width: "100%" }}
+                />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {CORES_ETIQUETA.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCor(c)}
+                      aria-label={`Cor ${c}`}
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: "50%",
+                        background: c,
+                        border:
+                          c.toLowerCase() === cor.toLowerCase()
+                            ? "2px solid #fff"
+                            : "1px solid rgba(255,255,255,0.25)",
+                      }}
+                    />
+                  ))}
+                </div>
+                {erro && <p style={{ fontSize: 10, color: "var(--danger)" }}>{erro}</p>}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={salvarEdicao}
+                    disabled={pending || !nome.trim()}
+                    className="btn-gold-filled"
+                    style={{ fontSize: 11, padding: "5px 10px" }}
+                  >
+                    {pending ? "Salvando..." : "Salvar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditando(false)}
+                    style={{ fontSize: 11, color: "var(--text-3)" }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col" style={{ gap: 2 }}>
+                <BotaoMenu label="Editar nome" onClick={abrirEdicao} />
+                <BotaoMenu
+                  label="← Mover pra esquerda"
+                  onClick={() => mover("esquerda")}
+                  disabled={isFirst || pending}
+                />
+                <BotaoMenu
+                  label="Mover pra direita →"
+                  onClick={() => mover("direita")}
+                  disabled={isLast || pending}
+                />
+                <BotaoMenu
+                  label={confirmando ? "Confirmar exclusão?" : "Excluir fase"}
+                  onClick={excluir}
+                  disabled={pending}
+                  perigo
+                />
+                {!etapa.propria && (
+                  <p style={{ fontSize: 9, color: "var(--text-4)", padding: "4px 8px 0" }}>
+                    Etapa compartilhada — afeta todos os usuários.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function BotaoMenu({
+  label,
+  onClick,
+  disabled,
+  perigo,
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  perigo?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        fontSize: 12,
+        textAlign: "left",
+        padding: "6px 8px",
+        borderRadius: 6,
+        color: perigo ? "var(--danger)" : "var(--text-2, #ddd)",
+        opacity: disabled ? 0.4 : 1,
+      }}
+    >
+      {label}
+    </button>
   )
 }
 
@@ -423,6 +650,10 @@ function CartaoArrastavel({ lead, cor }: { lead: CrmLeadRow; cor: string }) {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
+    // Sem isso, o touch-scroll nativo da coluna disputa com o dnd-kit no
+    // celular (o toque tenta rolar E arrastar ao mesmo tempo) — trava o
+    // gesto de rolar a coluna.
+    touchAction: "none" as const,
   }
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>

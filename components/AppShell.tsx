@@ -196,7 +196,12 @@ export default function AppShell({
           // CSS var permite que a regra mobile sobrescreva pra 0 sem
           // que precisemos checar matchMedia no React.
           ["--rail-width" as string]: `${railWidth}px`,
-          minHeight: "100vh",
+          // dvh (não vh): em mobile, vh usa a viewport "grande" (barra do
+          // navegador recolhida) — quando a barra está visível (o estado
+          // mais comum), min-height:100vh deixa esse container mais alto do
+          // que o conteúdo (ex: a tela cheia do CRM, que já usa dvh),
+          // sobrando um espaço em branco rolável no fim da página.
+          minHeight: "100dvh",
         }}
       >
         {children}

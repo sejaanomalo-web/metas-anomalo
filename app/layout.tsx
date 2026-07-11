@@ -50,7 +50,11 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen">{children}</body>
+      {/* min-h-dvh (não min-h-screen/100vh): em mobile, vh usa a viewport
+          "grande" (barra do navegador recolhida) — com a barra visível
+          (o estado mais comum), min-height:100vh deixa o body mais alto do
+          que o conteúdo, sobrando espaço em branco rolável no fim da página. */}
+      <body className="min-h-dvh">{children}</body>
     </html>
   )
 }

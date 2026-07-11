@@ -668,6 +668,52 @@ table {
   }
 }
 
+/* ============ CRM — tela cheia responsiva ============
+ * .crm-fullscreen preenche a viewport inteira dentro do .app-main. Usa dvh
+ * (não vh) pra não quebrar quando o teclado/barra do navegador mobile muda
+ * a altura visível; no mobile o .app-main ganha padding-top:56px pro botão
+ * hambúrguer (regra acima) — dvh sozinho não desconta isso, então
+ * subtraímos aqui (senão o rodapé da tela — composer, fundo da lista —
+ * fica ~56px abaixo da dobra, "sem aparecer teclado"/"sem ver conversas").
+ */
+.crm-fullscreen {
+  height: 100dvh;
+}
+@media (max-width: 1023px) {
+  .crm-fullscreen {
+    height: calc(100dvh - 56px);
+  }
+}
+
+/* Conversas: sidebar + thread lado a lado no desktop. No mobile (<=768px,
+ * telas de celular) vira uma tela por vez, estilo WhatsApp — mostra OU a
+ * lista OU a conversa aberta; os 360px fixos da sidebar não cabem do lado
+ * de uma thread numa tela de telefone (as duas ficavam espremidas a ponto
+ * de sumir/travar). */
+.crm-conversas-grid {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+.crm-back-mobile {
+  display: none;
+}
+@media (max-width: 768px) {
+  .crm-conversas-grid {
+    grid-template-columns: 1fr;
+  }
+  .crm-conversas-grid:not(.tem-lead) .crm-thread-pane {
+    display: none;
+  }
+  .crm-conversas-grid.tem-lead .crm-sidebar-pane {
+    display: none;
+  }
+  .crm-back-mobile {
+    display: inline-flex;
+  }
+}
+
 /* ============ Sino flutuante (botão) ============
  * Botão fixo no canto superior direito, sempre visível.
  * z-index 60 = mesmo do hambúrguer mobile (top-left); não conflitam.

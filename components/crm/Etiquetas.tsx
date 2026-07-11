@@ -3,11 +3,9 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
-  criarEtiquetaAction,
   atribuirEtiquetaAction,
   removerEtiquetaAction,
 } from "@/lib/crm-etiquetas-actions"
-import { CORES_ETIQUETA } from "@/lib/crm-cores"
 
 interface EtiquetaResumo {
   id: string
@@ -62,8 +60,9 @@ export function EtiquetaChip({
   )
 }
 
-/** Popover de atribuição de etiquetas a um lead — checkboxes + criação
- *  inline de etiqueta nova (mesmo espírito dos labels do WhatsApp Business). */
+/** Popover de atribuição de etiquetas a um lead — checkboxes das etiquetas
+ *  sincronizadas com as etapas do Kanban (Fase 6: não dá mais pra criar
+ *  etiqueta nova aqui, só em Kanban → elas viram "fases"). */
 export default function EtiquetasPicker({
   leadId,
   etiquetasDoLead,
@@ -74,7 +73,6 @@ export default function EtiquetasPicker({
   todasEtiquetas: EtiquetaResumo[]
 }) {
   const [aberto, setAberto] = useState(false)
-  const [novoNome, setNovoNome] = useState("")
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -87,26 +85,6 @@ export default function EtiquetasPicker({
     startTransition(async () => {
       if (atribuida) await removerEtiquetaAction(fd)
       else await atribuirEtiquetaAction(fd)
-      router.refresh()
-    })
-  }
-
-  function criarNova() {
-    const nome = novoNome.trim()
-    if (!nome) return
-    const cor = CORES_ETIQUETA[todasEtiquetas.length % CORES_ETIQUETA.length]
-    startTransition(async () => {
-      const fdCriar = new FormData()
-      fdCriar.set("nome", nome)
-      fdCriar.set("cor", cor)
-      const r = await criarEtiquetaAction(fdCriar)
-      if (r.ok && r.id) {
-        const fdAtribuir = new FormData()
-        fdAtribuir.set("lead_id", leadId)
-        fdAtribuir.set("etiqueta_id", r.id)
-        await atribuirEtiquetaAction(fdAtribuir)
-      }
-      setNovoNome("")
       router.refresh()
     })
   }
@@ -188,42 +166,9 @@ export default function EtiquetasPicker({
               ))}
               {todasEtiquetas.length === 0 && (
                 <p style={{ fontSize: 11, color: "var(--text-4)" }}>
-                  Nenhuma etiqueta ainda.
+                  Nenhuma etiqueta ainda. Crie fases no Kanban.
                 </p>
               )}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 4,
-                marginTop: 8,
-                borderTop: "0.5px solid rgba(255,255,255,0.08)",
-                paddingTop: 8,
-              }}
-            >
-              <input
-                value={novoNome}
-                onChange={(e) => setNovoNome(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    criarNova()
-                  }
-                }}
-                placeholder="Nova etiqueta..."
-                maxLength={40}
-                className="glass-input"
-                style={{ flex: 1, fontSize: 11, padding: "4px 8px" }}
-              />
-              <button
-                type="button"
-                onClick={criarNova}
-                disabled={pending || !novoNome.trim()}
-                className="btn-gold-filled"
-                style={{ fontSize: 11, padding: "4px 8px" }}
-              >
-                +
-              </button>
             </div>
           </div>
         </>

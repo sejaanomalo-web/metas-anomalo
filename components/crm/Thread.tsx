@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import type { CrmLeadRow, CrmMensagemRow } from "@/lib/crm-leads"
 import type { CrmTipoAtividadeRow } from "@/lib/crm-atividades-actions"
 import {
@@ -163,7 +164,27 @@ export default function Thread({
         }}
       >
         <div className="flex items-start justify-between gap-3">
-          <CabecalhoContato lead={lead} cor={cor} />
+          <div className="flex items-start gap-2 min-w-0" style={{ flex: 1 }}>
+            <Link
+              href="/dashboard/crm?view=conversas"
+              className="crm-back-mobile"
+              aria-label="Voltar pras conversas"
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                color: "var(--text-2, #ddd)",
+                flexShrink: 0,
+                fontSize: 20,
+                textDecoration: "none",
+              }}
+            >
+              ‹
+            </Link>
+            <CabecalhoContato lead={lead} cor={cor} />
+          </div>
           <AtribuirAtividade leadId={lead.id} tiposCustom={tiposCustom} />
         </div>
 
@@ -710,7 +731,7 @@ function AtribuirAtividade({
           whiteSpace: "nowrap",
         }}
       >
-        ＋ Atividade
+        ＋ Agendar
       </button>
 
       {aberto && (

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
+import { listarEtapas, sincronizarEtiquetaDaEtapa } from "./crm-etapas"
 
 export interface ResultadoMoverLead {
   ok: boolean
@@ -90,6 +91,13 @@ export async function criarEtapaAction(
   const cor = corValida(String(formData.get("cor") ?? "")) ?? "#C9953A"
   if (!nome) return { ok: false, erro: "Nome da etapa obrigatório." }
 
+  // Nome único entre as etapas visíveis ao usuário — evita duas colunas com
+  // o mesmo nome, o que colidiria na etiqueta espelhada (única por
+  // usuario_id+nome, ver sincronizarEtiquetaDaEtapa).
+  const visiveis = await listarEtapas()
+  const colisao = visiveis.find((e) => e.nome.toLowerCase() === nome.toLowerCase())
+  if (colisao) return { ok: false, erro: `Já existe uma etapa "${nome}".` }
+
   const { data: ultima } = await db
     .from("crm_etapas")
     .select("ordem")
@@ -113,13 +121,116 @@ export async function criarEtapaAction(
     .single()
   if (error) return { ok: false, erro: error.message }
 
+  const etapaId = data?.id as string
+  await sincronizarEtiquetaDaEtapa(db, usuario.id, { id: etapaId, nome, cor })
+
   revalidatePath("/dashboard/crm")
-  return { ok: true, id: data?.id as string }
+  return { ok: true, id: etapaId }
 }
 
-/** Remove uma etapa CUSTOM do próprio usuário (não mexe nas 7 padrão — essas
- *  não têm dono, ninguém apaga pela UI). Leads que estavam nela voltam pra
- *  "sem etapa" (etapa_id null) em vez de sumir. */
+/** Renomeia/recolore uma etapa — padrão (compartilhada) ou própria. O nome
+ *  novo propaga pra etiqueta espelhada de TODO usuário que a enxerga (a
+ *  etapa é uma só; a etiqueta é 1 cópia por usuário). */
+export async function editarEtapaAction(
+  formData: FormData
+): Promise<ResultadoEtapa> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  const nome = String(formData.get("nome") ?? "").trim().slice(0, 60)
+  const cor = corValida(String(formData.get("cor") ?? ""))
+  if (!id) return { ok: false, erro: "ID inválido." }
+  if (!nome) return { ok: false, erro: "Nome da etapa obrigatório." }
+
+  const { data: etapa } = await db
+    .from("crm_etapas")
+    .select("id, usuario_id")
+    .eq("id", id)
+    .maybeSingle()
+  if (!etapa) return { ok: false, erro: "Etapa não encontrada." }
+  if (etapa.usuario_id && etapa.usuario_id !== usuario.id) {
+    return { ok: false, erro: "Essa etapa não é sua." }
+  }
+
+  const visiveis = await listarEtapas()
+  const colisao = visiveis.find(
+    (e) => e.id !== id && e.nome.toLowerCase() === nome.toLowerCase()
+  )
+  if (colisao) return { ok: false, erro: `Já existe uma etapa "${nome}".` }
+
+  const patch: Record<string, unknown> = { nome }
+  if (cor) patch.cor = cor
+
+  const { error } = await db.from("crm_etapas").update(patch).eq("id", id)
+  if (error) return { ok: false, erro: error.message }
+
+  const patchEtiqueta: Record<string, unknown> = { nome }
+  if (cor) patchEtiqueta.cor = cor
+  const { error: erroEtiqueta } = await db
+    .from("crm_etiquetas")
+    .update(patchEtiqueta)
+    .eq("etapa_id", id)
+  if (erroEtiqueta) {
+    // A etapa já foi renomeada (statement acima) — isso só pode falhar por
+    // colisão de nome na etiqueta espelhada de outro usuário (unique por
+    // usuario_id+nome), que não dá pra prever aqui (não enxergamos etapas
+    // privadas de outros usuários). Reporta em vez de mentir "ok" com o
+    // espelho dessincronizado.
+    return {
+      ok: false,
+      erro: `Etapa renomeada, mas a etiqueta de algum usuário colidiu com outro nome já existente: ${erroEtiqueta.message}`,
+    }
+  }
+
+  revalidatePath("/dashboard/crm")
+  return { ok: true }
+}
+
+/** Move uma etapa um passo pra esquerda/direita na ordem do Kanban, trocando
+ *  a `ordem` com a vizinha (visível ao usuário — nunca vê etapa própria de
+ *  outro usuário, então a troca é sempre seguro). */
+export async function moverEtapaAction(
+  formData: FormData
+): Promise<ResultadoEtapa> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  const direcao = String(formData.get("direcao") ?? "")
+  if (!id) return { ok: false, erro: "ID inválido." }
+  if (direcao !== "esquerda" && direcao !== "direita") {
+    return { ok: false, erro: "Direção inválida." }
+  }
+
+  const visiveis = await listarEtapas()
+  const idx = visiveis.findIndex((e) => e.id === id)
+  if (idx === -1) return { ok: false, erro: "Etapa não encontrada." }
+  const idxVizinha = direcao === "esquerda" ? idx - 1 : idx + 1
+  if (idxVizinha < 0 || idxVizinha >= visiveis.length) {
+    return { ok: true } // já está na ponta — no-op silencioso
+  }
+
+  const atual = visiveis[idx]
+  const vizinha = visiveis[idxVizinha]
+
+  const [{ error: e1 }, { error: e2 }] = await Promise.all([
+    db.from("crm_etapas").update({ ordem: vizinha.ordem }).eq("id", atual.id),
+    db.from("crm_etapas").update({ ordem: atual.ordem }).eq("id", vizinha.id),
+  ])
+  if (e1 || e2) return { ok: false, erro: (e1 ?? e2)?.message }
+
+  revalidatePath("/dashboard/crm")
+  return { ok: true }
+}
+
+/** Remove uma etapa — padrão (compartilhada, afeta todo mundo) ou própria.
+ *  Leads que estavam nela voltam pra "sem etapa" (etapa_id null) em vez de
+ *  sumir; etiquetas espelhadas somem junto (ON DELETE CASCADE). */
 export async function excluirEtapaAction(
   formData: FormData
 ): Promise<ResultadoEtapa> {
@@ -137,15 +248,22 @@ export async function excluirEtapaAction(
     .eq("id", id)
     .maybeSingle()
   if (!etapa) return { ok: false, erro: "Etapa não encontrada." }
-  if (etapa.usuario_id !== usuario.id) {
-    return { ok: false, erro: "Só é possível excluir etapas criadas por você." }
+  if (etapa.usuario_id && etapa.usuario_id !== usuario.id) {
+    return { ok: false, erro: "Essa etapa não é sua." }
   }
 
-  await db
-    .from("crm_leads")
-    .update({ etapa_id: null })
-    .eq("etapa_id", id)
-    .eq("usuario_id", usuario.id)
+  // Etapa padrão (usuario_id null) é compartilhada — leads de QUALQUER dono
+  // podem estar nela, então o reset não filtra por usuario_id. Etapa própria
+  // só tem leads do próprio dono (moverLeadAction já garante isso).
+  if (etapa.usuario_id) {
+    await db
+      .from("crm_leads")
+      .update({ etapa_id: null })
+      .eq("etapa_id", id)
+      .eq("usuario_id", usuario.id)
+  } else {
+    await db.from("crm_leads").update({ etapa_id: null }).eq("etapa_id", id)
+  }
 
   const { error } = await db.from("crm_etapas").delete().eq("id", id)
   if (error) return { ok: false, erro: error.message }

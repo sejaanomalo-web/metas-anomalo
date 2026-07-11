@@ -70,8 +70,8 @@ export default async function CrmPage({
 
   return (
     <main
-      className="mx-auto px-8 py-8 flex flex-col"
-      style={{ maxWidth: 1400, height: "100vh" }}
+      className="crm-fullscreen mx-auto px-8 py-8 flex flex-col"
+      style={{ maxWidth: 1400 }}
     >
       <CrmRealtime />
       <div className="flex items-center justify-between flex-wrap gap-4" style={{ flexShrink: 0 }}>
@@ -103,17 +103,9 @@ export default async function CrmPage({
 
       <div style={{ flex: 1, minHeight: 0, marginTop: 20 }}>
         {aba === "conversas" && (
-          <div
-            className="glass"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "360px 1fr",
-              height: "100%",
-              overflow: "hidden",
-            }}
-          >
+          <div className={`glass crm-conversas-grid ${lead ? "tem-lead" : ""}`}>
             <div
-              className="scrollbar-thin"
+              className="crm-sidebar-pane scrollbar-thin"
               style={{
                 borderRight: "0.5px solid rgba(255,255,255,0.08)",
                 overflowY: "auto",
@@ -133,7 +125,7 @@ export default async function CrmPage({
               />
             </div>
 
-            <div style={{ minWidth: 0 }}>
+            <div className="crm-thread-pane" style={{ minWidth: 0 }}>
               {lead ? (
                 <Thread
                   key={lead.id}
