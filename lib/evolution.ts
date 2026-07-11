@@ -176,6 +176,63 @@ export async function buscarFotoPerfilEvolution(
   }
 }
 
+export interface PerfilContatoEvolution {
+  nome: string | null
+  sobre: string | null
+  foto: string | null
+}
+
+/**
+ * Busca o perfil de um contato no WhatsApp (nome salvo/pushname, recado/status
+ * e foto) por uma instancia. Best-effort: retorna todos os campos null em
+ * qualquer falha. Endpoint: /chat/fetchProfile/{instance}.
+ */
+export async function buscarPerfilContatoEvolution(
+  instanceName: string,
+  telefoneE164: string
+): Promise<PerfilContatoEvolution> {
+  const vazio: PerfilContatoEvolution = { nome: null, sobre: null, foto: null }
+  const base = process.env.EVOLUTION_API_URL
+  const apikey = process.env.EVOLUTION_API_KEY
+  if (!base || !apikey) return vazio
+
+  const url = `${base.replace(/\/$/, "")}/chat/fetchProfile/${encodeURIComponent(
+    instanceName
+  )}`
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { apikey, "Content-Type": "application/json" },
+      body: JSON.stringify({ number: telefoneE164 }),
+      signal: AbortSignal.timeout(12_000),
+      cache: "no-store",
+    })
+    if (!resp.ok) return vazio
+    const json = (await resp.json().catch(() => null)) as Record<string, any> | null
+    if (!json) return vazio
+    // A forma varia entre builds: name/pushName/verifiedName; status pode vir
+    // string ou objeto { status }. picture/profilePictureUrl pra foto.
+    const nome =
+      json.name ?? json.pushName ?? json.verifiedName ?? json.wpp_name ?? null
+    const statusBruto = json.status
+    const sobre =
+      typeof statusBruto === "string"
+        ? statusBruto
+        : (statusBruto?.status as string) ?? json.about ?? null
+    const fotoBruta = json.picture ?? json.profilePictureUrl ?? json.profilePicUrl ?? null
+    return {
+      nome: typeof nome === "string" && nome.trim() ? nome.trim() : null,
+      sobre: typeof sobre === "string" && sobre.trim() ? sobre.trim() : null,
+      foto:
+        typeof fotoBruta === "string" && fotoBruta.startsWith("http")
+          ? fotoBruta
+          : null,
+    }
+  } catch {
+    return vazio
+  }
+}
+
 /**
  * Baixa o binario (base64) de uma mensagem de midia recebida — a Evolution
  * nao manda o conteudo no webhook por padrao, so os metadados. Best-effort:

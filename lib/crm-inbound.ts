@@ -291,16 +291,24 @@ async function processarContatosEvento(
 
   // Mantem leads JA existentes com nome/foto sincronizados (so afeta quem ja
   // trocou mensagem — a maioria dos contatos do sync inicial nao tem lead).
+  // O nome so e atualizado quando nome_manual=false (nome digitado à mão
+  // manda); a foto e sempre atualizada.
   for (const l of linhas) {
-    const patch: Record<string, unknown> = {}
-    if (l.nome) patch.nome = l.nome
-    if (l.foto_url) patch.foto_url = l.foto_url
-    if (Object.keys(patch).length === 0) continue
-    await db
-      .from("crm_leads")
-      .update(patch)
-      .eq("empresa_slug", empresaSlug)
-      .eq("telefone_e164", l.telefone_e164)
+    if (l.nome) {
+      await db
+        .from("crm_leads")
+        .update({ nome: l.nome })
+        .eq("empresa_slug", empresaSlug)
+        .eq("telefone_e164", l.telefone_e164)
+        .eq("nome_manual", false)
+    }
+    if (l.foto_url) {
+      await db
+        .from("crm_leads")
+        .update({ foto_url: l.foto_url })
+        .eq("empresa_slug", empresaSlug)
+        .eq("telefone_e164", l.telefone_e164)
+    }
   }
 
   return { ok: true, info: `contatos cacheados: ${linhas.length}` }
