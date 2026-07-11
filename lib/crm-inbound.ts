@@ -8,6 +8,14 @@
 // em crm_instancias pra UI de admin de conexao.
 // Fase 2: CONTACTS_UPSERT/CONTACTS_UPDATE — cacheia o nome salvo no celular
 // (crm_contatos), preferido sobre o pushName ao criar/atualizar um lead.
+// Fase 7: CHATS_DELETE — chat apagado no celular arquiva o lead no CRM (nao
+// apaga de vez; ver processarChatsDelete). Contato criado/editado/excluido
+// pelo CRM (lib/crm-leads-actions.ts) e o INVERSO desta direcao: nao ha
+// evento de webhook pra isso, e o WhatsApp em si nao expoe "criar/editar/
+// apagar contato" via API (contato e dado do catalogo de enderecos do
+// celular) — a unica sincronizacao real e a mensagem em si (mandar uma
+// mensagem cria a conversa no celular) e o archiveChat (o mais perto de
+// "excluir" que a API oferece).
 // Leads/mensagens herdam usuario_id/usuario_nome da instancia (isolamento
 // por usuario). Status de entrega (mensagem lida/entregue) e outbound
 // continuam fora do escopo. NUNCA lanca excecao fatal pro webhook: retorna
@@ -314,6 +322,84 @@ async function processarContatosEvento(
   return { ok: true, info: `contatos cacheados: ${linhas.length}` }
 }
 
+/**
+ * Fase 7: chat apagado NO CELULAR (evento CHATS_DELETE) — arquiva o lead
+ * correspondente no CRM (arquivado=true) em vez de apagar de vez: some do
+ * inbox normal (listarLeadsInbox já filtra por arquivado=false) mas fica
+ * recuperável em "Ver arquivados", já que WhatsApp não tem um conceito de
+ * "apagar contato" — apagar o chat no celular é mais parecido com
+ * arquivar/limpar do que com destruir o histórico permanentemente.
+ */
+// Mesmo espirito do MAX_CONTATOS_POR_EVENTO acima — defesa contra um payload
+// gigante (ou hostil, ja que esse endpoint so e protegido por um segredo
+// compartilhado, sem token por instancia) travar o processamento sequencial
+// e estourar o maxDuration da rota.
+const MAX_CHATS_POR_EVENTO = 500
+
+async function processarChatsDelete(
+  instanceName: string | undefined,
+  data: unknown
+): Promise<ResultadoProcessamento> {
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "service_role_ausente" }
+  if (!instanceName) return { ok: false, erro: "instance ausente no payload" }
+
+  const { data: inst } = await db
+    .from("crm_instancias")
+    .select("id, empresa_slug")
+    .eq("instance_name", instanceName)
+    .maybeSingle()
+  if (!inst) return { ok: true, info: `instancia desconhecida: ${instanceName}` }
+  const empresaSlug = inst.empresa_slug as string
+
+  const bruto = data
+  const lista = (Array.isArray(bruto) ? bruto : bruto ? [bruto] : []).slice(
+    0,
+    MAX_CHATS_POR_EVENTO
+  )
+  // Formato varia entre builds: array de strings (JID cru) ou de objetos
+  // {id: jid, ...}.
+  const telefones = [
+    ...new Set(
+      lista
+        .map((item) =>
+          telefoneDoJid(typeof item === "string" ? item : (item as Record<string, any>)?.id)
+        )
+        .filter((t): t is string => Boolean(t))
+    ),
+  ]
+  if (telefones.length === 0) {
+    return { ok: true, info: "chats.delete sem telefone valido no payload" }
+  }
+
+  // 1 UPDATE em lote (em vez de 1 round-trip por telefone) — pega os ids
+  // realmente arquivados de volta pra emitir o ping de realtime.
+  const { data: arquivados, error } = await db
+    .from("crm_leads")
+    .update({ arquivado: true, updated_at: new Date().toISOString() })
+    .eq("empresa_slug", empresaSlug)
+    .in("telefone_e164", telefones)
+    .eq("arquivado", false)
+    .select("id")
+  if (error) {
+    console.error("[crm-inbound] erro ao arquivar leads via chats.delete", error.message)
+    return { ok: false, erro: error.message }
+  }
+
+  if (arquivados && arquivados.length > 0) {
+    await db
+      .from("crm_realtime_ping")
+      .insert(
+        arquivados.map((l) => ({ empresa_slug: empresaSlug, lead_id: l.id, kind: "lead" }))
+      )
+  }
+
+  return {
+    ok: true,
+    info: `chats.delete: ${arquivados?.length ?? 0}/${telefones.length} arquivados`,
+  }
+}
+
 export async function processarEventoWebhook(
   payload: any
 ): Promise<ResultadoProcessamento> {
@@ -333,6 +419,9 @@ export async function processarEventoWebhook(
     evento === "CONTACTS_UPDATE"
   ) {
     return processarContatosEvento(instanceName, payload?.data)
+  }
+  if (evento === "chats.delete" || evento === "CHATS_DELETE") {
+    return processarChatsDelete(instanceName, payload?.data)
   }
 
   // Fase 1: mensagens recebidas + conexao/QR (acima). Demais eventos (status

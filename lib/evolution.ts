@@ -272,6 +272,103 @@ export async function baixarMidiaEvolution(
   }
 }
 
+/**
+ * Confere se um numero existe no WhatsApp antes de criar um contato manual
+ * no CRM — evita salvar leads com numero errado/inexistente. Best-effort:
+ * null quando nao da pra determinar (instancia offline, API fora, formato
+ * de resposta inesperado) — quem chama trata null como "nao bloqueia,
+ * so nao confirma". Endpoint: /chat/whatsappNumbers/{instance}.
+ */
+export async function verificarNumeroWhatsappEvolution(
+  instanceName: string,
+  telefoneE164: string
+): Promise<boolean | null> {
+  const base = process.env.EVOLUTION_API_URL
+  const apikey = process.env.EVOLUTION_API_KEY
+  if (!base || !apikey) return null
+
+  const url = `${base.replace(/\/$/, "")}/chat/whatsappNumbers/${encodeURIComponent(
+    instanceName
+  )}`
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { apikey, "Content-Type": "application/json" },
+      body: JSON.stringify({ numbers: [telefoneE164] }),
+      signal: AbortSignal.timeout(10_000),
+      cache: "no-store",
+    })
+    if (!resp.ok) return null
+    const json: unknown = await resp.json().catch(() => null)
+    // A resposta e uma lista (as vezes envelopada em {contacts:[...]} ou
+    // {response:{contacts:[...]}}) de objetos com `exists`/`jid` (formato
+    // Baileys onWhatsApp) — varia entre builds, entao checa alguns formatos.
+    const lista: any[] = Array.isArray(json)
+      ? json
+      : (json as any)?.contacts ?? (json as any)?.response?.contacts ?? []
+    if (!Array.isArray(lista) || lista.length === 0) return null
+    const item = lista[0] as Record<string, any>
+    if (typeof item.exists === "boolean") return item.exists
+    if (typeof item.jid === "string") return item.jid.length > 0
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Arquiva (ou desarquiva) uma conversa na Evolution — a coisa mais proxima
+ * de "excluir contato" que a API expoe (nao existe endpoint de apagar
+ * chat/contato: WhatsApp nao suporta isso remotamente, so localmente no
+ * celular). Precisa da ultima mensagem do chat (key.id/fromMe) — a Evolution
+ * usa isso pra localizar a conversa. Best-effort: falha nao deve travar a
+ * exclusao no CRM (o dado local ja e a fonte de verdade). Endpoint:
+ * /chat/archiveChat/{instance}.
+ */
+export async function arquivarChatEvolution(
+  instanceName: string,
+  telefoneE164: string,
+  ultimaMensagem: { waMessageId: string; fromMe: boolean }
+): Promise<ResultadoEvolution> {
+  const base = process.env.EVOLUTION_API_URL
+  const apikey = process.env.EVOLUTION_API_KEY
+  if (!base || !apikey) return { ok: false, erro: "credenciais_ausentes" }
+
+  const remoteJid = `${telefoneE164}@s.whatsapp.net`
+  const url = `${base.replace(/\/$/, "")}/chat/archiveChat/${encodeURIComponent(
+    instanceName
+  )}`
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { apikey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat: remoteJid,
+        archive: true,
+        lastMessage: {
+          key: {
+            remoteJid,
+            fromMe: ultimaMensagem.fromMe,
+            id: ultimaMensagem.waMessageId,
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(15_000),
+      cache: "no-store",
+    })
+    if (!resp.ok) {
+      const msg = await extrairErroResposta(resp)
+      console.error(`[evolution] falha archiveChat (${instanceName}): ${resp.status} ${msg}`)
+      return { ok: false, erro: msg, status: resp.status }
+    }
+    return { ok: true, status: resp.status }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(`[evolution] erro de rede archiveChat (${instanceName}): ${msg}`)
+    return { ok: false, erro: msg }
+  }
+}
+
 export interface ResultadoInstanciaEvolution {
   ok: boolean
   erro?: string

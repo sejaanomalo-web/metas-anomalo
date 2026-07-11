@@ -76,8 +76,13 @@ function normalizarLead(row: Record<string, any>): CrmLeadRow {
   return { ...(resto as CrmLeadRow), etiquetas }
 }
 
-/** Leads abertos do usuário logado, mais recentes primeiro. */
-export async function listarLeadsInbox(): Promise<CrmLeadRow[]> {
+/** Leads do usuário logado, mais recentes primeiro. `arquivados=true` mostra
+ *  só os arquivados em vez dos ativos (ex: conversa apagada no celular —
+ *  ver CHATS_DELETE em lib/crm-inbound.ts — some do inbox normal, mas fica
+ *  recuperável em vez de vazar dado silenciosamente). */
+export async function listarLeadsInbox(opts?: {
+  arquivados?: boolean
+}): Promise<CrmLeadRow[]> {
   const usuario = await getUsuarioAtual()
   if (!usuario) return []
   const db = getSupabaseAdmin()
@@ -86,7 +91,7 @@ export async function listarLeadsInbox(): Promise<CrmLeadRow[]> {
     .from("crm_leads")
     .select(SELECT_LEAD_COM_ETIQUETAS)
     .eq("usuario_id", usuario.id)
-    .eq("arquivado", false)
+    .eq("arquivado", Boolean(opts?.arquivados))
     .order("ultima_interacao_em", { ascending: false, nullsFirst: false })
     .limit(200)
   if (error) {
@@ -94,6 +99,21 @@ export async function listarLeadsInbox(): Promise<CrmLeadRow[]> {
     return []
   }
   return (data ?? []).map(normalizarLead)
+}
+
+/** Quantidade de leads arquivados do usuário — pra mostrar/esconder o link
+ *  "Ver arquivados" sem precisar buscar a lista inteira. */
+export async function contarLeadsArquivados(): Promise<number> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return 0
+  const db = getSupabaseAdmin()
+  if (!db) return 0
+  const { count } = await db
+    .from("crm_leads")
+    .select("id", { count: "exact", head: true })
+    .eq("usuario_id", usuario.id)
+    .eq("arquivado", true)
+  return count ?? 0
 }
 
 export async function buscarLead(leadId: string): Promise<CrmLeadRow | null> {

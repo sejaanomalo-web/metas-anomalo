@@ -1,6 +1,11 @@
 import Link from "next/link"
 import { requererPermissao } from "@/lib/auth"
-import { listarLeadsInbox, buscarLead, listarMensagensDoLead } from "@/lib/crm-leads"
+import {
+  listarLeadsInbox,
+  buscarLead,
+  listarMensagensDoLead,
+  contarLeadsArquivados,
+} from "@/lib/crm-leads"
 import { listarInstancias } from "@/lib/crm-instancias-actions"
 import { listarEtapas } from "@/lib/crm-etapas"
 import { listarEtiquetas } from "@/lib/crm-etiquetas-actions"
@@ -14,6 +19,7 @@ import Thread from "@/components/crm/Thread"
 import CrmRealtime from "@/components/crm/CrmRealtime"
 import Kanban from "@/components/crm/Kanban"
 import Calendario from "@/components/crm/Calendario"
+import NovoContato from "@/components/crm/NovoContato"
 
 export const dynamic = "force-dynamic"
 
@@ -35,7 +41,7 @@ const ABAS: { chave: Aba; label: string }[] = [
 export default async function CrmPage({
   searchParams,
 }: {
-  searchParams: { lead?: string; view?: string }
+  searchParams: { lead?: string; view?: string; arquivados?: string }
 }) {
   await requererPermissao("crm")
 
@@ -44,21 +50,27 @@ export default async function CrmPage({
   )
     ? (searchParams.view as Aba)
     : "conversas"
+  const verArquivados = searchParams.arquivados === "1"
 
   const agora = new Date()
   const inicioJanela = new Date(agora.getFullYear(), agora.getMonth() - 2, 1).toISOString()
   const fimJanela = new Date(agora.getFullYear(), agora.getMonth() + 7, 0).toISOString()
 
-  const [leads, instancias, etapas, etiquetas, atividades, proximas, tipos] =
+  const [leads, leadsArquivados, instancias, etapas, etiquetas, atividades, proximas, tipos, totalArquivados] =
     await Promise.all([
       listarLeadsInbox(),
+      verArquivados ? listarLeadsInbox({ arquivados: true }) : Promise.resolve([]),
       listarInstancias(),
       listarEtapas(),
       listarEtiquetas(),
       listarAtividadesCalendario(inicioJanela, fimJanela),
       listarProximasAtividades(),
       listarTiposAtividade(),
+      contarLeadsArquivados(),
     ])
+  // Kanban/Calendário sempre usam os ativos — "Ver arquivados" é só uma
+  // lente da lista de Conversas, não afeta as outras abas.
+  const leadsConversas = verArquivados ? leadsArquivados : leads
 
   const corPorEmpresa: Record<string, string> = {}
   for (const inst of instancias) corPorEmpresa[inst.empresa_slug] = inst.cor
@@ -118,8 +130,23 @@ export default async function CrmPage({
                 WebkitOverflowScrolling: "touch",
               }}
             >
+              <div className="flex items-center justify-between gap-2" style={{ padding: "2px 4px 10px" }}>
+                <NovoContato instancias={instancias} />
+                {(verArquivados || totalArquivados > 0) && (
+                  <Link
+                    href={
+                      verArquivados
+                        ? "/dashboard/crm?view=conversas"
+                        : "/dashboard/crm?view=conversas&arquivados=1"
+                    }
+                    style={{ fontSize: 11, color: "var(--text-3)" }}
+                  >
+                    {verArquivados ? "‹ Voltar" : `Arquivados (${totalArquivados})`}
+                  </Link>
+                )}
+              </div>
               <ListaConversas
-                leads={leads}
+                leads={leadsConversas}
                 leadSelecionadoId={lead?.id}
                 corPorEmpresa={corPorEmpresa}
               />
