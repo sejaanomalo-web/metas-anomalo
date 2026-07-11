@@ -5,10 +5,42 @@ import { getSupabaseAdmin } from "./supabase"
 import { enviarTextoEvolution, enviarAudioEvolution } from "./evolution"
 import { uploadMidiaCrm } from "./crm-midia"
 import { getUsuarioAtual } from "./auth"
+import {
+  MENSAGENS_POR_PAGINA,
+  type CrmMensagemRow,
+  type PaginaMensagens,
+} from "./crm-leads"
 
 export interface ResultadoEnvio {
   ok: boolean
   erro?: string
+}
+
+/** Página de mensagens ANTERIORES a um cursor (wa_timestamp da mais antiga já
+ *  carregada) — usada pelo botão "Carregar mensagens anteriores" da thread. */
+export async function carregarMensagensAntigasAction(
+  leadId: string,
+  antesIso: string,
+  limite = MENSAGENS_POR_PAGINA
+): Promise<PaginaMensagens> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { mensagens: [], temMaisAntigas: false }
+  const db = getSupabaseAdmin()
+  if (!db) return { mensagens: [], temMaisAntigas: false }
+  const { data, error } = await db
+    .from("crm_mensagens")
+    .select("*")
+    .eq("lead_id", leadId)
+    .eq("usuario_id", usuario.id)
+    .lt("wa_timestamp", antesIso)
+    .order("wa_timestamp", { ascending: false, nullsFirst: false })
+    .limit(limite)
+  if (error) {
+    console.error("[crm_mensagens] carregar antigas error", error.message)
+    return { mensagens: [], temMaisAntigas: false }
+  }
+  const linhas = ((data ?? []) as CrmMensagemRow[]).reverse()
+  return { mensagens: linhas, temMaisAntigas: linhas.length === limite }
 }
 
 /** Resolve a instancia CONECTADA da empresa do lead, do usuario logado.
@@ -151,10 +183,16 @@ export async function enviarAudioAction(
     return { ok: false, erro: "Nenhuma instância conectada para esta empresa." }
   }
 
-  // Sobe pro storage pra tocar de volta na thread; se o storage falhar, guarda
-  // o proprio data URL como fallback (a mensagem continua audivel).
+  // Sobe pro storage pra tocar de volta na thread. Se o storage falhar, só usa
+  // o proprio data URL como fallback quando for PEQUENO (nota curta) — um
+  // fallback grande direto na coluna midia_url deixaria a mensagem com vários
+  // MB de string, travando a conversa inteira ao carregar a thread depois.
+  // Acima do limite, a entrega no WhatsApp continua normal (abaixo); só a
+  // reprodução dentro do app fica indisponível pra essa mensagem.
+  const LIMITE_FALLBACK_INLINE = 300 * 1024
   const urlStorage = await uploadMidiaCrm(audioBase64, mimetype, `out/${usuario.id}`)
-  const midiaUrl = urlStorage ?? audioBase64
+  const midiaUrl =
+    urlStorage ?? (audioBase64.length <= LIMITE_FALLBACK_INLINE ? audioBase64 : null)
 
   const agora = new Date().toISOString()
   const envio = await enviarAudioEvolution(

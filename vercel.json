@@ -11,6 +11,10 @@
     {
       "path": "/api/crm/lembretes",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/crm/sincronizar-contatos",
+      "schedule": "0 9 * * *"
     }
   ]
 }
