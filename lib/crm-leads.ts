@@ -114,24 +114,40 @@ export async function buscarLead(leadId: string): Promise<CrmLeadRow | null> {
   return data ? normalizarLead(data) : null
 }
 
-/** Mensagens do lead — filtra por usuario_id direto (sem depender do
- *  chamador já ter verificado o dono do lead antes). */
+export interface PaginaMensagens {
+  mensagens: CrmMensagemRow[]
+  /** true = pode haver mensagens mais antigas ainda não carregadas. */
+  temMaisAntigas: boolean
+}
+
+// Tamanho da página de mensagens — igual ao WhatsApp Web, a thread abre só
+// com as mais recentes; o resto vem sob demanda ("Carregar anteriores").
+// Sem isso, uma conversa com milhares de mensagens carregava tudo de uma vez
+// e travava a página inteira ao abrir.
+export const MENSAGENS_POR_PAGINA = 60
+
+/** Mensagens mais RECENTES do lead (últimas MENSAGENS_POR_PAGINA), em ordem
+ *  cronológica. Filtra por usuario_id direto (sem depender do chamador já ter
+ *  verificado o dono do lead antes). */
 export async function listarMensagensDoLead(
-  leadId: string
-): Promise<CrmMensagemRow[]> {
+  leadId: string,
+  limite = MENSAGENS_POR_PAGINA
+): Promise<PaginaMensagens> {
   const usuario = await getUsuarioAtual()
-  if (!usuario) return []
+  if (!usuario) return { mensagens: [], temMaisAntigas: false }
   const db = getSupabaseAdmin()
-  if (!db) return []
+  if (!db) return { mensagens: [], temMaisAntigas: false }
   const { data, error } = await db
     .from("crm_mensagens")
     .select("*")
     .eq("lead_id", leadId)
     .eq("usuario_id", usuario.id)
-    .order("wa_timestamp", { ascending: true })
+    .order("wa_timestamp", { ascending: false, nullsFirst: false })
+    .limit(limite)
   if (error) {
     console.error("[crm_mensagens] list error", error.message)
-    return []
+    return { mensagens: [], temMaisAntigas: false }
   }
-  return (data ?? []) as CrmMensagemRow[]
+  const linhas = ((data ?? []) as CrmMensagemRow[]).reverse()
+  return { mensagens: linhas, temMaisAntigas: linhas.length === limite }
 }

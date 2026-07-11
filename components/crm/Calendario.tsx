@@ -85,7 +85,7 @@ export default function Calendario({
   const atividadesDoDia = diaSelecionado ? porDia[diaSelecionado] ?? [] : []
 
   return (
-    <div className="flex gap-6" style={{ flexWrap: "wrap" }}>
+    <div className="flex gap-6" style={{ flexWrap: "wrap", height: "100%" }}>
       <div style={{ flex: "1 1 340px", maxWidth: 380 }}>
         <div className="flex items-center justify-between mb-3">
           <button
@@ -192,10 +192,11 @@ export default function Calendario({
       </div>
 
       <div
+        className="scrollbar-thin"
         style={{
           flex: "1 1 300px",
           minWidth: 260,
-          maxHeight: 560,
+          maxHeight: "100%",
           overflowY: "auto",
           paddingRight: 4,
         }}
@@ -349,7 +350,7 @@ function ItemAtividade({
       </div>
       {atividade.lead_nome && (
         <Link
-          href={`/dashboard/crm?lead=${atividade.lead_id}`}
+          href={`/dashboard/crm?view=conversas&lead=${atividade.lead_id}`}
           style={{ fontSize: 11, color: "var(--gold, #C9953A)" }}
         >
           {atividade.lead_nome}

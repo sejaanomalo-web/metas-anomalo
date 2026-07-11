@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { CrmLeadRow, CrmMensagemRow } from "@/lib/crm-leads"
 import type { CrmTipoAtividadeRow } from "@/lib/crm-atividades-actions"
@@ -8,6 +8,7 @@ import {
   enviarMensagemAction,
   enviarAudioAction,
   marcarLeadComoLidoAction,
+  carregarMensagensAntigasAction,
 } from "@/lib/crm-mensagens-actions"
 import {
   criarFollowUpAction,
@@ -50,13 +51,15 @@ function agoraLocalInput(): string {
 
 export default function Thread({
   lead,
-  mensagens,
+  mensagensIniciais,
+  temMaisAntigasInicial,
   cor,
   todasEtiquetas,
   tiposCustom,
 }: {
   lead: CrmLeadRow
-  mensagens: CrmMensagemRow[]
+  mensagensIniciais: CrmMensagemRow[]
+  temMaisAntigasInicial: boolean
   cor: string
   todasEtiquetas: EtiquetaResumo[]
   tiposCustom: CrmTipoAtividadeRow[]
@@ -64,8 +67,14 @@ export default function Thread({
   const [texto, setTexto] = useState("")
   const [erro, setErro] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const [mensagens, setMensagens] = useState(mensagensIniciais)
+  const [temMaisAntigas, setTemMaisAntigas] = useState(temMaisAntigasInicial)
+  const [carregandoAntigas, setCarregandoAntigas] = useState(false)
   const router = useRouter()
   const fimRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const ultimoIdRef = useRef<string | null>(null)
+  const alturaAntesCarregarRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (lead.nao_lidas > 0) {
@@ -73,9 +82,62 @@ export default function Thread({
     }
   }, [lead.id, lead.nao_lidas])
 
+  // Mescla o que o servidor manda (via router.refresh() — ex: mensagem nova
+  // chegando por realtime) com o que já está carregado no cliente. Sem isso,
+  // cada refresh() jogaria fora as páginas antigas que "Carregar anteriores"
+  // já tinha buscado.
   useEffect(() => {
-    fimRef.current?.scrollIntoView({ block: "end" })
-  }, [mensagens.length])
+    setMensagens((atual) => {
+      const porId = new Map(atual.map((m) => [m.id, m]))
+      for (const m of mensagensIniciais) porId.set(m.id, m)
+      return Array.from(porId.values()).sort((a, b) => {
+        const ta = a.wa_timestamp ?? a.created_at
+        const tb = b.wa_timestamp ?? b.created_at
+        return ta.localeCompare(tb)
+      })
+    })
+  }, [mensagensIniciais])
+
+  // Sobe automaticamente só quando uma mensagem NOVA chega no final (append) —
+  // não quando "Carregar anteriores" insere mensagens no topo (prepend).
+  useEffect(() => {
+    const ultimo = mensagens[mensagens.length - 1]?.id ?? null
+    if (ultimo && ultimo !== ultimoIdRef.current) {
+      ultimoIdRef.current = ultimo
+      fimRef.current?.scrollIntoView({ block: "end" })
+    }
+  }, [mensagens])
+
+  // Depois de prepender mensagens antigas, mantém a MESMA posição visual
+  // (senão o conteúdo "pula" — o navegador ancora no topo por padrão).
+  useLayoutEffect(() => {
+    const alturaAntes = alturaAntesCarregarRef.current
+    const el = scrollRef.current
+    if (alturaAntes != null && el) {
+      el.scrollTop += el.scrollHeight - alturaAntes
+      alturaAntesCarregarRef.current = null
+    }
+  }, [mensagens])
+
+  async function carregarAntigas() {
+    const maisAntiga = mensagens[0]
+    if (!maisAntiga || carregandoAntigas) return
+    setCarregandoAntigas(true)
+    alturaAntesCarregarRef.current = scrollRef.current?.scrollHeight ?? null
+    const cursor = maisAntiga.wa_timestamp ?? maisAntiga.created_at
+    const pagina = await carregarMensagensAntigasAction(lead.id, cursor)
+    setMensagens((atual) => {
+      const porId = new Map(pagina.mensagens.map((m) => [m.id, m]))
+      for (const m of atual) porId.set(m.id, m)
+      return Array.from(porId.values()).sort((a, b) => {
+        const ta = a.wa_timestamp ?? a.created_at
+        const tb = b.wa_timestamp ?? b.created_at
+        return ta.localeCompare(tb)
+      })
+    })
+    setTemMaisAntigas(pagina.temMaisAntigas)
+    setCarregandoAntigas(false)
+  }
 
   async function enviar() {
     const corpo = texto.trim()
@@ -118,7 +180,8 @@ export default function Thread({
       </div>
 
       <div
-        className="flex-1 overflow-y-auto"
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto scrollbar-thin"
         style={{
           padding: "16px 18px",
           display: "flex",
@@ -131,6 +194,24 @@ export default function Thread({
           <p style={{ fontSize: 12, color: "var(--text-3)" }}>
             Sem mensagens ainda.
           </p>
+        )}
+        {temMaisAntigas && (
+          <button
+            type="button"
+            onClick={carregarAntigas}
+            disabled={carregandoAntigas}
+            style={{
+              alignSelf: "center",
+              fontSize: 11,
+              color: "var(--text-3)",
+              padding: "6px 14px",
+              borderRadius: 999,
+              border: "0.5px solid rgba(255,255,255,0.12)",
+              marginBottom: 4,
+            }}
+          >
+            {carregandoAntigas ? "Carregando…" : "↑ Carregar mensagens anteriores"}
+          </button>
         )}
         {mensagens.map((m) => {
           const meu = m.from_me || m.direcao === "out"
@@ -276,9 +357,24 @@ function CabecalhoContato({ lead, cor }: { lead: CrmLeadRow; cor: string }) {
   const [status, setStatus] = useState<string | null>(null)
   const [pendingNome, startNome] = useTransition()
   const [pendingSync, startSync] = useTransition()
+  const jaTentouRef = useRef(false)
   const router = useRouter()
 
   const nomeExibido = lead.nome || lead.telefone_e164 || "Lead sem nome"
+
+  // Auto-sync silencioso: abrir uma conversa sem nome ou foto já dispara a
+  // busca no WhatsApp sozinho, sem precisar clicar em nada. Respeita
+  // nome_manual (nome digitado à mão nunca é sobrescrito). Uma tentativa por
+  // abertura de conversa (Thread remonta por lead — key={lead.id} na page).
+  useEffect(() => {
+    if (jaTentouRef.current) return
+    if (lead.nome && lead.foto_url) return
+    jaTentouRef.current = true
+    sincronizarContatoAction(lead.id).then((r) => {
+      if (r.ok) router.refresh()
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id])
 
   async function salvarNome() {
     const n = nome.trim()
@@ -295,7 +391,7 @@ function CabecalhoContato({ lead, cor }: { lead: CrmLeadRow; cor: string }) {
 
   async function atualizar() {
     setStatus("Buscando no WhatsApp…")
-    const r = await sincronizarContatoAction(lead.id)
+    const r = await sincronizarContatoAction(lead.id, { forcar: true })
     if (r.ok) {
       setStatus(null)
       router.refresh()
