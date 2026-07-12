@@ -19,6 +19,9 @@ import {
 import {
   renomearLeadAction,
   sincronizarContatoAction,
+  editarLeadAction,
+  excluirLeadAction,
+  desarquivarLeadAction,
 } from "@/lib/crm-leads-actions"
 import { TIPOS_ATIVIDADE_PADRAO } from "@/lib/crm-tipos-atividade"
 import Avatar from "@/components/crm/Avatar"
@@ -185,7 +188,10 @@ export default function Thread({
             </Link>
             <CabecalhoContato lead={lead} cor={cor} />
           </div>
-          <AtribuirAtividade leadId={lead.id} tiposCustom={tiposCustom} />
+          <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+            <AtribuirAtividade leadId={lead.id} tiposCustom={tiposCustom} />
+            <MenuContato lead={lead} />
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -533,6 +539,277 @@ function CabecalhoContato({ lead, cor }: { lead: CrmLeadRow; cor: string }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// Menu (⋮) do contato — editar (nome/e-mail) ou excluir o lead. Editar/
+// excluir só existe no lado do CRM: o WhatsApp não expõe nenhuma forma de um
+// dispositivo vinculado alterar o nome salvo no celular ou apagar um
+// contato remotamente — a aproximação mais próxima de "excluir" é arquivar a
+// conversa no celular (checkbox opcional aqui), oferecida via Evolution.
+// =============================================================================
+function MenuContato({ lead }: { lead: CrmLeadRow }) {
+  const [aberto, setAberto] = useState(false)
+  const [modo, setModo] = useState<"menu" | "editar" | "excluir">("menu")
+  const [nome, setNome] = useState(lead.nome ?? "")
+  const [email, setEmail] = useState(lead.email ?? "")
+  const [arquivarNoWhatsapp, setArquivarNoWhatsapp] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+
+  function fechar() {
+    setAberto(false)
+    setModo("menu")
+    setErro(null)
+  }
+
+  // Alterna abrir/fechar pelo próprio botão ⋮ — fechar por AQUI (em vez de
+  // só alternar `aberto`) importa pro caso de teclado (Tab + Enter/Espaço no
+  // botão): esse clique não passa pela hit-test do overlay de fundo, então é
+  // o único jeito de fechar que não passava por fechar() e podia deixar
+  // modo/erro "presos" pra próxima abertura (mesmo bug já corrigido no menu
+  // de etapas do Kanban).
+  function alternar() {
+    if (aberto) fechar()
+    else setAberto(true)
+  }
+
+  // Troca de modo sempre limpa erro — senão um erro de "editar" (ex: nome
+  // vazio) reaparece ao abrir "excluir" na mesma sessão do popover.
+  function irPara(m: "menu" | "editar" | "excluir") {
+    setErro(null)
+    setModo(m)
+  }
+
+  function abrirEditar() {
+    setNome(lead.nome ?? "")
+    setEmail(lead.email ?? "")
+    irPara("editar")
+  }
+
+  function salvarEdicao() {
+    if (!nome.trim()) {
+      setErro("Nome obrigatório.")
+      return
+    }
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("lead_id", lead.id)
+      fd.set("nome", nome.trim())
+      fd.set("email", email.trim())
+      const r = await editarLeadAction(fd)
+      if (r.ok) {
+        fechar()
+        router.refresh()
+      } else {
+        setErro(r.erro ?? "Erro ao salvar")
+      }
+    })
+  }
+
+  function excluir() {
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("lead_id", lead.id)
+      fd.set("arquivar_no_whatsapp", String(arquivarNoWhatsapp))
+      const r = await excluirLeadAction(fd)
+      if (r.ok) {
+        fechar()
+        router.push("/dashboard/crm?view=conversas")
+        router.refresh()
+      } else {
+        setErro(r.erro ?? "Erro ao excluir")
+      }
+    })
+  }
+
+  function desarquivar() {
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("lead_id", lead.id)
+      const r = await desarquivarLeadAction(fd)
+      if (r.ok) {
+        fechar()
+        router.refresh()
+      } else {
+        setErro(r.erro ?? "Erro ao desarquivar")
+      }
+    })
+  }
+
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={alternar}
+        title="Opções do contato"
+        style={{
+          fontSize: 14,
+          color: "var(--text-4)",
+          padding: "6px 8px",
+          border: "0.5px solid rgba(255,255,255,0.15)",
+          borderRadius: 8,
+          lineHeight: 1,
+        }}
+      >
+        ⋮
+      </button>
+
+      {aberto && (
+        <>
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={fechar}
+            style={{ position: "fixed", inset: 0, zIndex: 15, cursor: "default" }}
+          />
+          <div
+            className="glass"
+            style={{
+              position: "absolute",
+              top: "100%",
+              right: 0,
+              marginTop: 6,
+              padding: 12,
+              width: 260,
+              zIndex: 20,
+            }}
+          >
+            {modo === "menu" && (
+              <div className="flex flex-col" style={{ gap: 2 }}>
+                <button
+                  type="button"
+                  onClick={abrirEditar}
+                  disabled={pending}
+                  style={{ fontSize: 13, textAlign: "left", padding: "7px 8px", borderRadius: 8 }}
+                >
+                  Editar contato
+                </button>
+                {lead.arquivado && (
+                  <button
+                    type="button"
+                    onClick={desarquivar}
+                    disabled={pending}
+                    style={{ fontSize: 13, textAlign: "left", padding: "7px 8px", borderRadius: 8 }}
+                  >
+                    {pending ? "Tirando do arquivo..." : "Tirar do arquivo"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => irPara("excluir")}
+                  disabled={pending}
+                  style={{
+                    fontSize: 13,
+                    textAlign: "left",
+                    padding: "7px 8px",
+                    borderRadius: 8,
+                    color: "var(--danger)",
+                  }}
+                >
+                  Excluir contato
+                </button>
+              </div>
+            )}
+
+            {modo === "editar" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <p style={{ fontSize: 13, fontWeight: 600 }}>Editar contato</p>
+                <input
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  placeholder="Nome"
+                  maxLength={80}
+                  autoFocus
+                  className="glass-input"
+                  style={{ fontSize: 12, padding: "6px 8px" }}
+                />
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="E-mail (opcional)"
+                  type="email"
+                  maxLength={120}
+                  className="glass-input"
+                  style={{ fontSize: 12, padding: "6px 8px" }}
+                />
+                {erro && <p style={{ fontSize: 11, color: "var(--danger)" }}>{erro}</p>}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={salvarEdicao}
+                    disabled={pending}
+                    className="btn-gold-filled"
+                    style={{ fontSize: 11, padding: "5px 10px", opacity: pending ? 0.5 : 1 }}
+                  >
+                    {pending ? "Salvando..." : "Salvar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => irPara("menu")}
+                    disabled={pending}
+                    style={{ fontSize: 11, color: "var(--text-3)" }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {modo === "excluir" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--danger)" }}>
+                  Excluir contato?
+                </p>
+                <p style={{ fontSize: 11, color: "var(--text-3)" }}>
+                  Apaga o contato, as mensagens, atividades e etiquetas dele no
+                  CRM. Não dá pra desfazer.
+                </p>
+                <label
+                  className="flex items-center gap-2"
+                  style={{ fontSize: 11, color: "var(--text-3)", cursor: "pointer" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={arquivarNoWhatsapp}
+                    onChange={(e) => setArquivarNoWhatsapp(e.target.checked)}
+                  />
+                  Também arquivar a conversa no WhatsApp do celular
+                </label>
+                {erro && <p style={{ fontSize: 11, color: "var(--danger)" }}>{erro}</p>}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={excluir}
+                    disabled={pending}
+                    style={{
+                      fontSize: 11,
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      color: "#fff",
+                      background: "var(--danger)",
+                      opacity: pending ? 0.5 : 1,
+                    }}
+                  >
+                    {pending ? "Excluindo..." : "Excluir de vez"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => irPara("menu")}
+                    disabled={pending}
+                    style={{ fontSize: 11, color: "var(--text-3)" }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
