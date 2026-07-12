@@ -1,3 +1,5 @@
+import { withSentryConfig } from "@sentry/nextjs"
+
 /** @type {import('next').NextConfig} */
 
 // Headers de segurança aplicados a TODAS as respostas. Conjunto conservador
@@ -27,6 +29,11 @@ const nextConfig = {
   reactStrictMode: true,
   // Não anuncia "X-Powered-By: Next.js".
   poweredByHeader: false,
+  // Necessário no Next 14 pra o Next carregar instrumentation.ts (Sentry).
+  // No Next 15+ isso é padrão e o flag pode sair.
+  experimental: {
+    instrumentationHook: true,
+  },
   async headers() {
     return [
       {
@@ -37,4 +44,15 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+// Envolve a config com o Sentry: injeta a instrumentação e sobe source maps no
+// build (usando SENTRY_AUTH_TOKEN do ambiente da Vercel; sem o token o build
+// segue normal, só sem source maps — os erros ainda são capturados).
+export default withSentryConfig(nextConfig, {
+  org: "anomalo-hub",
+  project: "metas-anomalo",
+  // Silencioso fora de CI; oculta source maps do bundle público.
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  hideSourceMaps: true,
+  disableLogger: true,
+})
