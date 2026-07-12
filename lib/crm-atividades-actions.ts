@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
 import { tipoTecnicoDaCategoria } from "./crm-tipos-atividade"
-import { sincronizarEtiquetaDaEtapa } from "./crm-etapas"
+import { aplicarFaseAoLead } from "./crm-etapas"
 
 export interface CrmAtividadeRow {
   id: string
@@ -203,62 +203,12 @@ async function sincronizarLeadComEtapaDaCategoria(
   )
   if (!etapa) return
 
-  const etiquetaId = await sincronizarEtiquetaDaEtapa(db, usuarioId, etapa)
-
-  const { data: ultimoNaColuna } = await db
-    .from("crm_leads")
-    .select("ordem_na_etapa")
-    .eq("etapa_id", etapa.id)
-    .order("ordem_na_etapa", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  const novaOrdem = ((ultimoNaColuna?.ordem_na_etapa as number) ?? 0) + 1000
-
-  const patch: Record<string, unknown> = {
-    etapa_id: etapa.id,
-    ordem_na_etapa: novaOrdem,
-    updated_at: new Date().toISOString(),
-  }
-  if (etapa.tipo === "ganho") patch.status = "ganho"
-  else if (etapa.tipo === "perdido") patch.status = "perdido"
-  else patch.status = "aberto"
-
-  const { error: erroMover } = await db
-    .from("crm_leads")
-    .update(patch)
-    .eq("id", leadId)
-    .eq("usuario_id", usuarioId)
-  if (erroMover) {
-    console.error("[crm_leads] sync com categoria do agendamento falhou", erroMover.message)
-    return
-  }
-
-  if (!etiquetaId) return
-
-  // Etiqueta reflete a etapa ATUAL do lead (elas viram "fases" — troca, não
-  // acumula): tira qualquer etiqueta espelhada de OUTRA etapa antes de
-  // aplicar a nova, senão o card acumula tags de fases já ultrapassadas.
-  const { data: etiquetasDeEtapa } = await db
-    .from("crm_etiquetas")
-    .select("id")
-    .eq("usuario_id", usuarioId)
-    .not("etapa_id", "is", null)
-    .neq("id", etiquetaId)
-  const idsParaRemover = (etiquetasDeEtapa ?? []).map((e) => e.id as string)
-  if (idsParaRemover.length > 0) {
-    await db
-      .from("crm_lead_etiquetas")
-      .delete()
-      .eq("lead_id", leadId)
-      .in("etiqueta_id", idsParaRemover)
-  }
-
-  const { error: erroTag } = await db
-    .from("crm_lead_etiquetas")
-    .upsert({ lead_id: leadId, etiqueta_id: etiquetaId }, { onConflict: "lead_id,etiqueta_id" })
-  if (erroTag) {
-    console.error("[crm_lead_etiquetas] sync com categoria do agendamento falhou", erroTag.message)
-  }
+  await aplicarFaseAoLead(db, usuarioId, leadId, {
+    id: etapa.id as string,
+    nome: etapa.nome as string,
+    tipo: etapa.tipo as "aberta" | "ganho" | "perdido",
+    cor: (etapa.cor as string) ?? null,
+  })
 }
 
 /** Tipos de atividade CUSTOM do usuario (alem dos 4 padrao, que ficam em
