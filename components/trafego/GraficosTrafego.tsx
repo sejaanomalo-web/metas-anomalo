@@ -37,7 +37,7 @@ export default function GraficosTrafego({
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 16 }}>
-      <Card titulo="Evolução Mensal" sub="Investimento, conversas iniciadas e faturamento">
+      <Card titulo="Evolução Mensal" sub="Investimento, conversas / formulários e faturamento">
         {vazio ? (
           <Vazio />
         ) : (
@@ -49,7 +49,7 @@ export default function GraficosTrafego({
                 <YAxis stroke="rgba(255,255,255,0.3)" tickLine={false} axisLine={false} style={{ fontSize: 10 }} tickFormatter={fmtK} />
                 <Tooltip content={<TooltipLinha />} cursor={{ stroke: "rgba(201,149,58,0.25)" }} />
                 <Line type="monotone" dataKey="investimento" name="Verba investida" stroke={COR_VERBA} strokeWidth={1.8} dot={false} isAnimationActive={false} />
-                <Line type="monotone" dataKey="conversas" name="Conversas iniciadas" stroke={COR_CONVERSAS} strokeWidth={1.8} dot={false} isAnimationActive={false} />
+                <Line type="monotone" dataKey="conversasFormularios" name="Conversas / formulários" stroke={COR_CONVERSAS} strokeWidth={1.8} dot={false} isAnimationActive={false} />
                 <Line type="monotone" dataKey="faturamento" name="Faturamento" stroke={COR_FATURAMENTO} strokeWidth={1.8} dot={false} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -58,7 +58,7 @@ export default function GraficosTrafego({
         <Legenda
           itens={[
             { cor: COR_VERBA, label: "Verba investida" },
-            { cor: COR_CONVERSAS, label: "Conversas iniciadas" },
+            { cor: COR_CONVERSAS, label: "Conversas / formulários" },
             { cor: COR_FATURAMENTO, label: "Faturamento" },
           ]}
         />
@@ -158,7 +158,7 @@ function TooltipLinha({ active, payload }: TP) {
   return (
     <CaixaTooltip mes={p.mes}>
       <Linha cor={COR_VERBA} label="Verba" valor={formatBRL(p.investimento)} />
-      <Linha cor={COR_CONVERSAS} label="Conversas" valor={formatNumero(p.conversas)} />
+      <Linha cor={COR_CONVERSAS} label="Conversas/form." valor={formatNumero(p.conversasFormularios)} />
       <Linha cor={COR_FATURAMENTO} label="Faturamento" valor={formatBRL(p.faturamento)} />
     </CaixaTooltip>
   )

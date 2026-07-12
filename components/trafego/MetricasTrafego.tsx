@@ -104,9 +104,9 @@ export default function MetricasTrafego({
         <Cartao
           cor="green"
           icone={<IconeChat />}
-          titulo="Conversas iniciadas"
-          valor={formatNumero(resumo.conversas)}
-          sub="Via WhatsApp/Messenger"
+          titulo="Conversas / formulários"
+          valor={formatNumero(resumo.conversas + resumo.leads)}
+          sub="Mensagens + formulários"
         />
         <Cartao
           cor="green"
