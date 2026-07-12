@@ -27,6 +27,11 @@ import {
   baixarMidiaEvolution,
 } from "./evolution"
 import { uploadMidiaCrm } from "./crm-midia"
+import {
+  buscarEtapasAutomaticas,
+  sincronizarEtiquetaComEtapa,
+  avancarParaEmConversaSePrimeiraMsg,
+} from "./crm-etapas"
 
 interface ResultadoProcessamento {
   ok: boolean
@@ -499,13 +504,27 @@ export async function processarEventoWebhook(
       leadId = existente.id as string
       leadNome = (existente.nome as string) ?? null
     } else {
-      const { data: etapa } = await db
-        .from("crm_etapas")
-        .select("id")
-        .eq("ativo", true)
-        .order("ordem", { ascending: true })
-        .limit(1)
-        .maybeSingle()
+      // Etapa inicial: "Novo Contato" pelo nome (mesma resolução usada na
+      // criação manual — ver lib/crm-leads-actions.ts). Cai pra primeira
+      // etapa ativa por ordem se essa etapa padrão foi renomeada/excluída.
+      const { novoContato } = await buscarEtapasAutomaticas(db, usuarioId)
+      let etapaInicial: { id: string; nome: string; cor: string | null } | null = novoContato
+      if (!etapaInicial) {
+        const { data: etapaFallback } = await db
+          .from("crm_etapas")
+          .select("id, nome, cor")
+          .eq("ativo", true)
+          .order("ordem", { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        etapaInicial = etapaFallback
+          ? {
+              id: etapaFallback.id as string,
+              nome: etapaFallback.nome as string,
+              cor: (etapaFallback.cor as string) ?? null,
+            }
+          : null
+      }
       // Nome salvo no celular (crm_contatos) e mais autoritativo que o
       // pushName autodeclarado — prefere ele quando ja sincronizado. Num
       // fromMe o pushName e o MEU nome, entao nao serve de nome do contato.
@@ -533,7 +552,7 @@ export async function processarEventoWebhook(
           nome: nomeInicial,
           foto_url: fotoInicial,
           origem: "whatsapp",
-          etapa_id: etapa?.id ?? null,
+          etapa_id: etapaInicial?.id ?? null,
           status: "aberto",
           ultima_interacao_em: waTs ?? agora,
           ultima_msg_preview: previewMensagem(tipo, conteudo),
@@ -557,6 +576,9 @@ export async function processarEventoWebhook(
         leadNome = (req.nome as string) ?? null
       } else {
         leadId = novo.id as string
+        if (etapaInicial) {
+          await sincronizarEtiquetaComEtapa(db, usuarioId, leadId, etapaInicial)
+        }
       }
     }
 
@@ -633,6 +655,10 @@ export async function processarEventoWebhook(
     // veio DO cliente (num fromMe o pushName e o meu, nao serve).
     if (!leadNome && !fromMe && pushName) patchLead.nome = pushName
     await db.from("crm_leads").update(patchLead).eq("id", leadId as string)
+
+    // Fase 8: primeira mensagem no chat -> "Em conversa" (única transição
+    // automática além da criação; no-op se o lead já saiu de "Novo Contato").
+    await avancarParaEmConversaSePrimeiraMsg(db, usuarioId, leadId as string)
 
     await db
       .from("crm_realtime_ping")

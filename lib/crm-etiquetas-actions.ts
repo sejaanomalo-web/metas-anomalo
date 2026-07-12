@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
 import type { CrmEtiquetaResumo } from "./crm-leads"
-import { sincronizarEtiquetaDaEtapa } from "./crm-etapas"
+import { sincronizarEtiquetaDaEtapa, aplicarFaseAoLead } from "./crm-etapas"
 
 export interface ResultadoEtiqueta {
   ok: boolean
@@ -83,9 +83,35 @@ export async function atribuirEtiquetaAction(
   // um lead só pode ganhar etiquetas do MESMO dono).
   const [{ data: lead }, { data: etiqueta }] = await Promise.all([
     db.from("crm_leads").select("id").eq("id", leadId).eq("usuario_id", usuario.id).maybeSingle(),
-    db.from("crm_etiquetas").select("id").eq("id", etiquetaId).eq("usuario_id", usuario.id).maybeSingle(),
+    db
+      .from("crm_etiquetas")
+      .select("id, etapa_id")
+      .eq("id", etiquetaId)
+      .eq("usuario_id", usuario.id)
+      .maybeSingle(),
   ])
   if (!lead || !etiqueta) return { ok: false, erro: "Lead ou etiqueta não encontrado." }
+
+  // Fase 8: etiqueta espelha uma etapa do Kanban — atribuir aqui move o card
+  // pra coluna correspondente também (mesma troca, não acumula: remove
+  // qualquer outra etiqueta-de-etapa que o lead tivesse).
+  if (etiqueta.etapa_id) {
+    const { data: etapa } = await db
+      .from("crm_etapas")
+      .select("id, nome, tipo, cor")
+      .eq("id", etiqueta.etapa_id as string)
+      .maybeSingle()
+    if (etapa) {
+      await aplicarFaseAoLead(db, usuario.id, leadId, {
+        id: etapa.id as string,
+        nome: etapa.nome as string,
+        tipo: etapa.tipo as "aberta" | "ganho" | "perdido",
+        cor: (etapa.cor as string) ?? null,
+      })
+      revalidarCrm()
+      return { ok: true }
+    }
+  }
 
   const { error } = await db
     .from("crm_lead_etiquetas")

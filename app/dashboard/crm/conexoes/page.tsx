@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { requererPermissao } from "@/lib/auth"
 import { listarInstancias } from "@/lib/crm-instancias-actions"
 import { listarEmpresas } from "@/lib/empresas-actions"
@@ -23,12 +24,19 @@ export default async function CrmConexoesPage() {
     <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1120 }}>
       <CrmRealtime />
       <div>
+        <Link
+          href="/dashboard/crm"
+          style={{ fontSize: 12, color: "var(--gold, #C9953A)" }}
+        >
+          ‹ Voltar às conversas
+        </Link>
         <p
           style={{
             fontSize: 12,
             fontWeight: 500,
             color: "var(--text-3)",
             letterSpacing: "0.01em",
+            marginTop: 14,
           }}
         >
           CRM

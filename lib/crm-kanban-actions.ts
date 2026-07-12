@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
-import { listarEtapas, sincronizarEtiquetaDaEtapa } from "./crm-etapas"
+import {
+  listarEtapas,
+  sincronizarEtiquetaDaEtapa,
+  sincronizarEtiquetaComEtapa,
+} from "./crm-etapas"
 
 export interface ResultadoMoverLead {
   ok: boolean
@@ -36,7 +40,7 @@ export async function moverLeadAction(
 
   const { data: etapa } = await db
     .from("crm_etapas")
-    .select("id, tipo, usuario_id")
+    .select("id, nome, cor, tipo, usuario_id")
     .eq("id", etapaId)
     .maybeSingle()
   if (!etapa) return { ok: false, erro: "Etapa não encontrada." }
@@ -61,6 +65,14 @@ export async function moverLeadAction(
     .eq("id", leadId)
     .eq("usuario_id", usuario.id)
   if (error) return { ok: false, erro: error.message }
+
+  // Fase 8: arrastar o card também troca a etiqueta espelhada (mesma fonte
+  // de verdade da etapa nos dois lugares — Kanban e Conversas).
+  await sincronizarEtiquetaComEtapa(db, usuario.id, leadId, {
+    id: etapa.id as string,
+    nome: etapa.nome as string,
+    cor: (etapa.cor as string) ?? null,
+  })
 
   revalidatePath("/dashboard/crm")
   return { ok: true }

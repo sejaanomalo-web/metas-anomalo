@@ -177,7 +177,7 @@ export default function Kanban({
       onDragEnd={handleDragEnd}
     >
       <div
-        className="flex gap-3 overflow-x-auto scrollbar-thin"
+        className="flex gap-4 overflow-x-auto scrollbar-thin"
         style={{ height: "100%", paddingBottom: 8 }}
       >
         {etapas.map((etapa, index) => (
@@ -219,6 +219,7 @@ function Coluna({
   isLast: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: etapa.id })
+  const corEtapa = etapa.cor || "#8e7cc3"
 
   return (
     <div
@@ -228,30 +229,43 @@ function Coluna({
         width: 280,
         flexShrink: 0,
         height: "100%",
-        background: isOver ? "rgba(201,149,58,0.06)" : "transparent",
-        borderRadius: 10,
-        padding: 8,
+        background: isOver ? `${corEtapa}1a` : "rgba(255,255,255,0.015)",
+        borderRadius: 12,
         border: etapa.propria
-          ? "0.5px dashed rgba(201,149,58,0.3)"
-          : "0.5px solid rgba(255,255,255,0.06)",
+          ? "0.5px dashed rgba(201,149,58,0.35)"
+          : `1px solid ${corEtapa}33`,
+        overflow: "hidden",
+        transition: "background 0.15s ease",
       }}
     >
-      <div className="flex items-center justify-between px-1 mb-2" style={{ flexShrink: 0 }}>
+      {/* Faixa de topo com o fundo tingido na cor da etapa — separa
+          visualmente o cabeçalho (nome da fase) da área de cards, pra bater
+          o olho e entender o fluxo do funil sem precisar ler cada coluna. */}
+      <div
+        className="flex items-center justify-between"
+        style={{
+          flexShrink: 0,
+          padding: "10px 12px",
+          background: `${corEtapa}26`,
+          borderBottom: `1px solid ${corEtapa}4d`,
+        }}
+      >
         <div className="flex items-center gap-1.5 min-w-0">
           <span
             style={{
               width: 8,
               height: 8,
               borderRadius: "50%",
-              background: etapa.cor || "var(--text-4)",
+              background: corEtapa,
               flexShrink: 0,
             }}
           />
           <p
             style={{
               fontSize: 12,
-              fontWeight: 600,
-              color: etapa.cor || "var(--text-2, #ddd)",
+              fontWeight: 700,
+              color: corEtapa,
+              letterSpacing: "0.01em",
             }}
             className="truncate"
           >
@@ -268,7 +282,7 @@ function Coluna({
             inteira pra ele) e rola por dentro quando tem muitos leads. */}
         <div
           className="space-y-2 scrollbar-thin"
-          style={{ flex: 1, minHeight: 40, overflowY: "auto", paddingRight: 2 }}
+          style={{ flex: 1, minHeight: 40, overflowY: "auto", padding: 8 }}
         >
           {leads.map((lead) => (
             <CartaoArrastavel

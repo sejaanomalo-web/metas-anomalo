@@ -95,3 +95,149 @@ export async function sincronizarEtiquetaDaEtapa(
   }
   return (criada?.id as string) ?? null
 }
+
+/**
+ * Fase 8: espelho etapa -> etiqueta. Aplica no lead a etiqueta que espelha
+ * `etapa` e remove qualquer OUTRA etiqueta-de-etapa que ele tivesse — elas
+ * representam a fase ATUAL (mutuamente exclusivas), não um histórico
+ * acumulado. Etiquetas sem etapa_id (nenhuma deveria existir pós-Fase 6, mas
+ * por segurança) não são tocadas.
+ */
+export async function sincronizarEtiquetaComEtapa(
+  db: SupabaseClient,
+  usuarioId: string,
+  leadId: string,
+  etapa: { id: string; nome: string; cor: string | null }
+): Promise<void> {
+  const etiquetaId = await sincronizarEtiquetaDaEtapa(db, usuarioId, etapa)
+  if (!etiquetaId) return
+
+  const { data: etiquetasDeEtapa } = await db
+    .from("crm_etiquetas")
+    .select("id")
+    .eq("usuario_id", usuarioId)
+    .not("etapa_id", "is", null)
+    .neq("id", etiquetaId)
+  const idsParaRemover = (etiquetasDeEtapa ?? []).map((e) => e.id as string)
+  if (idsParaRemover.length > 0) {
+    await db
+      .from("crm_lead_etiquetas")
+      .delete()
+      .eq("lead_id", leadId)
+      .in("etiqueta_id", idsParaRemover)
+  }
+
+  const { error } = await db
+    .from("crm_lead_etiquetas")
+    .upsert({ lead_id: leadId, etiqueta_id: etiquetaId }, { onConflict: "lead_id,etiqueta_id" })
+  if (error) {
+    console.error("[crm_lead_etiquetas] sincronizarEtiquetaComEtapa falhou", error.message)
+  }
+}
+
+/**
+ * Move o lead pra `etapa` (fim da coluna) E sincroniza a etiqueta espelhada
+ * — é o mesmo efeito de arrastar o card no Kanban. Usado sempre que a
+ * mudança de fase é disparada de FORA do drag-and-drop (escolher etiqueta em
+ * Conversas, agendar com categoria = nome de etapa, transições automáticas).
+ */
+export async function aplicarFaseAoLead(
+  db: SupabaseClient,
+  usuarioId: string,
+  leadId: string,
+  etapa: { id: string; nome: string; tipo: CrmEtapaRow["tipo"]; cor: string | null }
+): Promise<void> {
+  const { data: ultimoNaColuna } = await db
+    .from("crm_leads")
+    .select("ordem_na_etapa")
+    .eq("etapa_id", etapa.id)
+    .order("ordem_na_etapa", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const novaOrdem = ((ultimoNaColuna?.ordem_na_etapa as number) ?? 0) + 1000
+
+  const patch: Record<string, unknown> = {
+    etapa_id: etapa.id,
+    ordem_na_etapa: novaOrdem,
+    updated_at: new Date().toISOString(),
+  }
+  if (etapa.tipo === "ganho") patch.status = "ganho"
+  else if (etapa.tipo === "perdido") patch.status = "perdido"
+  else patch.status = "aberto"
+
+  const { error } = await db
+    .from("crm_leads")
+    .update(patch)
+    .eq("id", leadId)
+    .eq("usuario_id", usuarioId)
+  if (error) {
+    console.error("[crm_leads] aplicarFaseAoLead falhou", error.message)
+    return
+  }
+
+  await sincronizarEtiquetaComEtapa(db, usuarioId, leadId, etapa)
+}
+
+function normalizarNomeEtapa(nome: string): string {
+  return nome.trim().toLowerCase()
+}
+
+/**
+ * Resolve as duas etapas usadas pelas ÚNICAS transições automáticas do
+ * funil (criação de lead e primeira mensagem) pelo NOME, entre as etapas
+ * visíveis ao usuário. Retorna null pra qualquer uma que não exista (ex: o
+ * usuário renomeou/excluiu a etapa padrão) — a automação correspondente
+ * simplesmente não dispara, sem quebrar o fluxo principal.
+ */
+export async function buscarEtapasAutomaticas(
+  db: SupabaseClient,
+  usuarioId: string
+): Promise<{ novoContato: CrmEtapaRow | null; emConversa: CrmEtapaRow | null }> {
+  const { data } = await db
+    .from("crm_etapas")
+    .select("id, nome, ordem, tipo, cor, usuario_id")
+    .eq("ativo", true)
+    .or(`usuario_id.is.null,usuario_id.eq.${usuarioId}`)
+  const etapas = (data ?? []) as Record<string, any>[]
+  const acha = (nomeAlvo: string): CrmEtapaRow | null => {
+    const row = etapas.find((e) => normalizarNomeEtapa(e.nome as string) === nomeAlvo)
+    if (!row) return null
+    return {
+      id: row.id as string,
+      nome: row.nome as string,
+      ordem: row.ordem as number,
+      tipo: row.tipo as CrmEtapaRow["tipo"],
+      cor: (row.cor as string) ?? null,
+      propria: row.usuario_id === usuarioId,
+    }
+  }
+  return { novoContato: acha("novo contato"), emConversa: acha("em conversa") }
+}
+
+/**
+ * As duas ÚNICAS transições automáticas do funil (o resto avança manualmente
+ * pela percepção do usuário com o lead): criação de lead -> "Novo Contato" é
+ * feita no próprio insert (webhook/manual); esta função cobre a segunda —
+ * primeira mensagem no chat -> "Em conversa". Chamada toda vez que uma
+ * mensagem nova é gravada (inbound OU outbound); só age se o lead ainda
+ * estiver exatamente em "Novo Contato" — se ele já foi movido (manualmente
+ * ou por essa mesma automação numa mensagem anterior), não mexe mais.
+ */
+export async function avancarParaEmConversaSePrimeiraMsg(
+  db: SupabaseClient,
+  usuarioId: string,
+  leadId: string
+): Promise<void> {
+  const { data: lead } = await db
+    .from("crm_leads")
+    .select("etapa_id")
+    .eq("id", leadId)
+    .maybeSingle()
+  if (!lead) return
+
+  const { novoContato, emConversa } = await buscarEtapasAutomaticas(db, usuarioId)
+  if (!novoContato || !emConversa) return
+  if (lead.etapa_id !== novoContato.id) return
+
+  await aplicarFaseAoLead(db, usuarioId, leadId, emConversa)
+}

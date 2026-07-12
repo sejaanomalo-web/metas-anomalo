@@ -8,6 +8,7 @@ import {
   verificarNumeroWhatsappEvolution,
   arquivarChatEvolution,
 } from "./evolution"
+import { buscarEtapasAutomaticas, sincronizarEtiquetaComEtapa } from "./crm-etapas"
 
 export interface ResultadoLead {
   ok: boolean
@@ -181,17 +182,27 @@ export async function criarLeadManualAction(
     .maybeSingle()
   const empresaNome = (emp?.nome as string) ?? (inst.empresa_slug as string)
 
-  // Primeira etapa VISÍVEL a este usuário (padrão + próprias) — sem o filtro
-  // de usuario_id, uma etapa PRIVADA de outro usuário (que ele reordenou pra
-  // ordem baixa) podia vazar como etapa_id de um lead que nem é dele.
-  const { data: etapasVisiveis } = await db
-    .from("crm_etapas")
-    .select("id")
-    .eq("ativo", true)
-    .or(`usuario_id.is.null,usuario_id.eq.${usuario.id}`)
-    .order("ordem", { ascending: true })
-    .limit(1)
-  const primeiraEtapaId = (etapasVisiveis?.[0]?.id as string) ?? null
+  // Etapa inicial: "Novo Contato" pelo nome (as duas transições automáticas
+  // do funil usam nome, não ordem — ver lib/crm-etapas.ts). Se o usuário
+  // renomeou/excluiu essa etapa padrão, cai pra primeira etapa VISÍVEL a ele
+  // (padrão + próprias) por ordem — sem o filtro de usuario_id, uma etapa
+  // PRIVADA de outro usuário (reordenada pra ordem baixa) podia vazar como
+  // etapa_id de um lead que nem é dele.
+  const { novoContato } = await buscarEtapasAutomaticas(db, usuario.id)
+  let etapaInicial: { id: string; nome: string; cor: string | null } | null = novoContato
+  if (!etapaInicial) {
+    const { data: etapasVisiveis } = await db
+      .from("crm_etapas")
+      .select("id, nome, cor")
+      .eq("ativo", true)
+      .or(`usuario_id.is.null,usuario_id.eq.${usuario.id}`)
+      .order("ordem", { ascending: true })
+      .limit(1)
+    const primeira = etapasVisiveis?.[0]
+    etapaInicial = primeira
+      ? { id: primeira.id as string, nome: primeira.nome as string, cor: (primeira.cor as string) ?? null }
+      : null
+  }
 
   const { data: novo, error } = await db
     .from("crm_leads")
@@ -205,7 +216,7 @@ export async function criarLeadManualAction(
       nome_manual: true,
       email,
       origem: "manual",
-      etapa_id: primeiraEtapaId,
+      etapa_id: etapaInicial?.id ?? null,
       status: "aberto",
       ultima_interacao_em: new Date().toISOString(),
     })
@@ -232,6 +243,10 @@ export async function criarLeadManualAction(
       return { ok: false, erro: "Não foi possível criar o contato." }
     }
     return { ok: false, erro: error.message }
+  }
+
+  if (etapaInicial) {
+    await sincronizarEtiquetaComEtapa(db, usuario.id, novo.id as string, etapaInicial)
   }
 
   const existeWhatsapp = await verificarNumeroWhatsappEvolution(

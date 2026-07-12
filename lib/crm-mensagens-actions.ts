@@ -10,6 +10,7 @@ import {
   type CrmMensagemRow,
   type PaginaMensagens,
 } from "./crm-leads"
+import { avancarParaEmConversaSePrimeiraMsg } from "./crm-etapas"
 
 export interface ResultadoEnvio {
   ok: boolean
@@ -131,6 +132,10 @@ export async function enviarMensagemAction(
     })
     .eq("id", leadId)
 
+  // Fase 8: primeira mensagem no chat -> "Em conversa" (mesma automação do
+  // lado inbound; no-op se o lead já saiu de "Novo Contato").
+  await avancarParaEmConversaSePrimeiraMsg(db, usuario.id, leadId)
+
   await db
     .from("crm_realtime_ping")
     .insert({ empresa_slug: lead.empresa_slug, lead_id: leadId, kind: "msg" })
@@ -227,6 +232,8 @@ export async function enviarAudioAction(
       updated_at: agora,
     })
     .eq("id", leadId)
+
+  await avancarParaEmConversaSePrimeiraMsg(db, usuario.id, leadId)
 
   await db
     .from("crm_realtime_ping")
