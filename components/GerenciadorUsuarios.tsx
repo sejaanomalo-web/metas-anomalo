@@ -91,6 +91,7 @@ export default function GerenciadorUsuarios({
   const [usuarios, setUsuarios] = useState(usuariosIniciais)
   const [formAberto, setFormAberto] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [aberto, setAberto] = useState(false)
 
   function fecharForm() {
     setFormAberto(false)
@@ -125,31 +126,64 @@ export default function GerenciadorUsuarios({
           flexWrap: "wrap",
         }}
       >
-        <div>
-          <p
+        <button
+          type="button"
+          onClick={() => setAberto((v) => !v)}
+          aria-expanded={aberto}
+          className="no-ds"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flex: 1,
+            minWidth: 0,
+            background: "transparent",
+            border: 0,
+            padding: 0,
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
+          <span
+            aria-hidden
             style={{
-              fontSize: 11,
-              letterSpacing: "1.5px",
+              fontSize: 12,
               color: "var(--text-3)",
-              textTransform: "uppercase",
-              fontWeight: 500,
+              transform: aberto ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.15s ease",
+              flexShrink: 0,
             }}
           >
-            Usuários do sistema
-          </p>
-          <h2
-            style={{
-              fontSize: 18,
-              fontWeight: 600,
-              color: "var(--text-1)",
-              marginTop: 4,
-            }}
-          >
-            {usuarios.length}{" "}
-            {usuarios.length === 1 ? "usuário cadastrado" : "usuários cadastrados"}
-          </h2>
-        </div>
-        {!formAberto && (
+            ▶
+          </span>
+          <span style={{ minWidth: 0 }}>
+            <span
+              style={{
+                display: "block",
+                fontSize: 11,
+                letterSpacing: "1.5px",
+                color: "var(--text-3)",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
+              Usuários do sistema
+            </span>
+            <span
+              style={{
+                display: "block",
+                fontSize: 18,
+                fontWeight: 600,
+                color: "var(--text-1)",
+                marginTop: 4,
+              }}
+            >
+              {usuarios.length}{" "}
+              {usuarios.length === 1 ? "usuário cadastrado" : "usuários cadastrados"}
+            </span>
+          </span>
+        </button>
+        {aberto && !formAberto && (
           <button
             type="button"
             onClick={() => {
@@ -163,7 +197,7 @@ export default function GerenciadorUsuarios({
         )}
       </div>
 
-      {formAberto && (
+      {aberto && formAberto && (
         <FormUsuario
           usuarioEditando={usuarioEditando}
           onCancelar={fecharForm}
@@ -174,6 +208,7 @@ export default function GerenciadorUsuarios({
         />
       )}
 
+      {aberto && (
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {usuarios.map((u) => (
           <li
@@ -242,6 +277,7 @@ export default function GerenciadorUsuarios({
           </li>
         ))}
       </ul>
+      )}
     </div>
   )
 }

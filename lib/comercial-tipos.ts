@@ -32,6 +32,13 @@ export interface RelatorioComercial {
   contratos_fechados: number
   faturamento_gerado: number
   observacoes: string | null
+  /** Origem do registro: 'manual' (formulário) ou 'crm' (sincronização
+   *  automática do funil do CRM). Ausente em bases antigas = 'manual'. */
+  origem_registro?: "manual" | "crm"
+  /** Lead do CRM que gerou o registro (só em linhas 'crm'). */
+  lead_id?: string | null
+  /** Evento do funil que a linha representa (só em linhas 'crm'). */
+  evento?: string | null
 }
 
 /** Uma anotacao (observacao) do time durante o processo, pra exibir no Time.

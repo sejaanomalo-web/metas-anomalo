@@ -35,7 +35,7 @@ async function executar() {
   const { data: pendentes, error } = await db
     .from("crm_atividades")
     .select(
-      "id, lead_id, usuario_id, titulo, lead:crm_leads(nome, telefone_e164, empresa_nome)"
+      "id, lead_id, usuario_id, titulo, categoria, agendado_para, lead:crm_leads(nome, telefone_e164, empresa_nome)"
     )
     .not("lembrete_em", "is", null)
     .lte("lembrete_em", agora)
@@ -65,15 +65,26 @@ async function executar() {
     const lead = Array.isArray(a.lead) ? a.lead[0] : a.lead
     const nomeLead = (lead?.nome as string) ?? (lead?.telefone_e164 as string) ?? "um lead"
     const empresa = (lead?.empresa_nome as string) ?? null
-    const titulo = (a.titulo as string) ?? null
+    // Rótulo do compromisso: a categoria escolhida (ex: "Reunião") com fallback
+    // pro título livre. Hora no fuso de Brasília, formatada "9:00".
+    const rotulo =
+      (a.categoria as string) ?? (a.titulo as string) ?? "Compromisso"
+    const hora = a.agendado_para
+      ? new Date(a.agendado_para as string).toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "America/Sao_Paulo",
+        })
+      : null
 
     await criarNotificacao({
       tipo: "crm_lembrete",
       empresa,
-      titulo: `Follow-up · ${nomeLead}`,
-      mensagem: titulo
-        ? `${titulo} — ${nomeLead}`
-        : `Follow-up marcado com ${nomeLead} pra hoje.`,
+      // Ex: "Reunião com o David às 9:00" — lembrete na manhã do dia.
+      titulo: hora ? `${rotulo} com ${nomeLead} às ${hora}` : `${rotulo} · ${nomeLead}`,
+      mensagem: hora
+        ? `${rotulo} com ${nomeLead} hoje às ${hora}.`
+        : `${rotulo} com ${nomeLead} marcado pra hoje.`,
       payload: { lead_id: a.lead_id, atividade_id: a.id },
       usuarioIds: [a.usuario_id as string],
     })

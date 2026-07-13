@@ -41,8 +41,9 @@ const ITENS: { chave: Tipo; rotulo: string; descricao: string }[] = [
   },
   {
     chave: "crm_lembrete",
-    rotulo: "Follow-up do CRM",
-    descricao: "No dia marcado pra retomar contato com um lead",
+    rotulo: "Lembretes de compromissos (CRM)",
+    descricao:
+      "Na manhã do dia de cada compromisso do calendário do CRM (ex: “Reunião com o David às 9:00”)",
   },
 ]
 
@@ -62,6 +63,7 @@ export default function PreferenciasNotificacoes({
   const [pending, startTransition] = useTransition()
   const [salvo, setSalvo] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [aberto, setAberto] = useState(false)
 
   function toggle(chave: Tipo) {
     setEstado((s) => ({ ...s, [chave]: !s[chave] }))
@@ -88,27 +90,64 @@ export default function PreferenciasNotificacoes({
     (i) => i.chave
   )
 
+  const ligados = itensVisiveis.filter((i) => estado[i.chave]).length
+
   return (
-    <section className="glass" style={{ padding: "24px 26px" }}>
-      <p
+    <section className="glass" style={{ padding: "20px 26px" }}>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+        className="no-ds"
         style={{
-          fontSize: 11,
-          letterSpacing: "1.5px",
-          color: "var(--text-3)",
-          textTransform: "uppercase",
-          fontWeight: 600,
-          marginBottom: 4,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          width: "100%",
+          background: "transparent",
+          border: 0,
+          padding: 0,
+          cursor: "pointer",
+          textAlign: "left",
         }}
       >
-        Preferências de notificação
-      </p>
-      <p style={{ fontSize: 13, color: "var(--text-3)", marginBottom: 16 }}>
-        Escolha o que você quer ser avisado (sino + push).
-      </p>
+        <span
+          aria-hidden
+          style={{
+            fontSize: 12,
+            color: "var(--text-3)",
+            transform: aberto ? "rotate(90deg)" : "rotate(0deg)",
+            transition: "transform 0.15s ease",
+            flexShrink: 0,
+          }}
+        >
+          ▶
+        </span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span
+            style={{
+              display: "block",
+              fontSize: 11,
+              letterSpacing: "1.5px",
+              color: "var(--text-3)",
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}
+          >
+            Preferências de notificação
+          </span>
+          <span style={{ fontSize: 12, color: "var(--text-4)" }}>
+            {aberto
+              ? "Escolha o que você quer ser avisado (sino + push)."
+              : `${ligados} de ${itensVisiveis.length} tipos ativos · toque pra ajustar`}
+          </span>
+        </span>
+      </button>
 
+      {!aberto ? null : (
       <form
         action={(fd) => startTransition(() => onSubmit(fd))}
-        style={{ display: "flex", flexDirection: "column", gap: 6 }}
+        style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 16 }}
       >
         {chavesOcultas.map((c) =>
           estado[c] ? (
@@ -190,6 +229,7 @@ export default function PreferenciasNotificacoes({
           )}
         </div>
       </form>
+      )}
     </section>
   )
 }

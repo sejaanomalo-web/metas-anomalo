@@ -14,12 +14,11 @@ import {
   listarProximasAtividades,
   listarTiposAtividade,
 } from "@/lib/crm-atividades-actions"
-import ListaConversas from "@/components/crm/ListaConversas"
+import ConversasFiltravel from "@/components/crm/ConversasFiltravel"
 import Thread from "@/components/crm/Thread"
 import CrmRealtime from "@/components/crm/CrmRealtime"
 import Kanban from "@/components/crm/Kanban"
 import Calendario from "@/components/crm/Calendario"
-import NovoContato from "@/components/crm/NovoContato"
 
 export const dynamic = "force-dynamic"
 
@@ -133,25 +132,14 @@ export default async function CrmPage({
                 WebkitOverflowScrolling: "touch",
               }}
             >
-              <div className="flex items-center justify-between gap-2" style={{ padding: "2px 4px 10px" }}>
-                <NovoContato instancias={instancias} />
-                {(verArquivados || totalArquivados > 0) && (
-                  <Link
-                    href={
-                      verArquivados
-                        ? "/dashboard/crm?view=conversas"
-                        : "/dashboard/crm?view=conversas&arquivados=1"
-                    }
-                    style={{ fontSize: 11, color: "var(--text-3)" }}
-                  >
-                    {verArquivados ? "‹ Voltar" : `Arquivados (${totalArquivados})`}
-                  </Link>
-                )}
-              </div>
-              <ListaConversas
+              <ConversasFiltravel
+                instancias={instancias}
                 leads={leadsConversas}
                 leadSelecionadoId={lead?.id}
                 corPorEmpresa={corPorEmpresa}
+                etiquetas={etiquetas}
+                verArquivados={verArquivados}
+                totalArquivados={totalArquivados}
               />
             </div>
 
