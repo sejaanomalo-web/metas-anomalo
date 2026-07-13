@@ -12,18 +12,12 @@ import {
   carregarMensagensAntigasAction,
 } from "@/lib/crm-mensagens-actions"
 import {
-  criarFollowUpAction,
-  criarTipoAtividadeAction,
-  excluirTipoAtividadeAction,
-} from "@/lib/crm-atividades-actions"
-import {
   renomearLeadAction,
   sincronizarContatoAction,
   editarLeadAction,
   excluirLeadAction,
   desarquivarLeadAction,
 } from "@/lib/crm-leads-actions"
-import { TIPOS_ATIVIDADE_PADRAO } from "@/lib/crm-tipos-atividade"
 import Avatar from "@/components/crm/Avatar"
 import EtiquetasPicker, { EtiquetaChip } from "@/components/crm/Etiquetas"
 
@@ -44,13 +38,6 @@ function formatarHora(iso: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   })
-}
-
-/** "agora" local no formato do input datetime-local (YYYY-MM-DDTHH:mm). */
-function agoraLocalInput(): string {
-  const d = new Date()
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
 }
 
 export default function Thread({
@@ -189,21 +176,24 @@ export default function Thread({
             <CabecalhoContato lead={lead} cor={cor} />
           </div>
           <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-            <AtribuirAtividade leadId={lead.id} tiposCustom={tiposCustom} />
+            <EtiquetasPicker
+              leadId={lead.id}
+              nomeContato={lead.nome || lead.telefone_e164 || "Lead sem nome"}
+              etiquetasDoLead={lead.etiquetas}
+              todasEtiquetas={todasEtiquetas}
+              tiposCustom={tiposCustom}
+            />
             <MenuContato lead={lead} />
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 mt-2">
-          {lead.etiquetas.map((e) => (
-            <EtiquetaChip key={e.id} nome={e.nome} cor={e.cor} />
-          ))}
-          <EtiquetasPicker
-            leadId={lead.id}
-            etiquetasDoLead={lead.etiquetas}
-            todasEtiquetas={todasEtiquetas}
-          />
-        </div>
+        {lead.etiquetas.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {lead.etiquetas.map((e) => (
+              <EtiquetaChip key={e.id} nome={e.nome} cor={e.cor} />
+            ))}
+          </div>
+        )}
       </div>
 
       <div
@@ -977,303 +967,3 @@ function GravadorAudio({
   )
 }
 
-// =============================================================================
-// Atribuir atividade — menu de tipos (Follow-up / Reunião / Fechamento / +) e
-// formulário com data. Substitui o antigo botão "Follow-up".
-// =============================================================================
-function AtribuirAtividade({
-  leadId,
-  tiposCustom,
-}: {
-  leadId: string
-  tiposCustom: CrmTipoAtividadeRow[]
-}) {
-  const [aberto, setAberto] = useState(false)
-  const [categoria, setCategoria] = useState<string | null>(null)
-
-  return (
-    <div style={{ position: "relative", flexShrink: 0 }}>
-      <button
-        type="button"
-        onClick={() => {
-          setAberto((v) => !v)
-          setCategoria(null)
-        }}
-        style={{
-          fontSize: 11,
-          color: "var(--text-2, #ddd)",
-          border: "0.5px solid rgba(255,255,255,0.15)",
-          borderRadius: 8,
-          padding: "6px 10px",
-          whiteSpace: "nowrap",
-        }}
-      >
-        ＋ Agendar
-      </button>
-
-      {aberto && (
-        <>
-          <button
-            type="button"
-            aria-label="Fechar"
-            onClick={() => setAberto(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 15, cursor: "default" }}
-          />
-          <div
-            className="glass"
-            style={{
-              position: "absolute",
-              top: "100%",
-              right: 0,
-              marginTop: 6,
-              padding: 12,
-              width: 280,
-              zIndex: 20,
-            }}
-          >
-            {categoria ? (
-              <FormAtividade
-                leadId={leadId}
-                categoria={categoria}
-                onVoltar={() => setCategoria(null)}
-                onClose={() => setAberto(false)}
-              />
-            ) : (
-              <MenuTipos
-                tiposCustom={tiposCustom}
-                onEscolher={setCategoria}
-              />
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function MenuTipos({
-  tiposCustom,
-  onEscolher,
-}: {
-  tiposCustom: CrmTipoAtividadeRow[]
-  onEscolher: (categoria: string) => void
-}) {
-  const [novoTipo, setNovoTipo] = useState("")
-  const [pending, startTransition] = useTransition()
-  const router = useRouter()
-
-  function criarTipo() {
-    const nome = novoTipo.trim()
-    if (!nome) return
-    startTransition(async () => {
-      const fd = new FormData()
-      fd.set("nome", nome)
-      await criarTipoAtividadeAction(fd)
-      setNovoTipo("")
-      router.refresh()
-    })
-  }
-
-  function excluirTipo(id: string) {
-    startTransition(async () => {
-      const fd = new FormData()
-      fd.set("id", id)
-      await excluirTipoAtividadeAction(fd)
-      router.refresh()
-    })
-  }
-
-  return (
-    <div>
-      <p
-        style={{
-          fontSize: 9,
-          letterSpacing: "1.5px",
-          textTransform: "uppercase",
-          color: "var(--text-4)",
-          fontWeight: 500,
-          marginBottom: 8,
-        }}
-      >
-        Registrar ponto de contato
-      </p>
-      <div className="flex flex-col gap-1">
-        {TIPOS_ATIVIDADE_PADRAO.map((t) => (
-          <button
-            key={t.nome}
-            type="button"
-            onClick={() => onEscolher(t.nome)}
-            className="flex items-center gap-2"
-            style={{
-              fontSize: 13,
-              padding: "7px 8px",
-              borderRadius: 8,
-              textAlign: "left",
-              background: "rgba(255,255,255,0.03)",
-            }}
-          >
-            <span>{t.emoji}</span>
-            {t.nome}
-          </button>
-        ))}
-        {tiposCustom.map((t) => (
-          <div key={t.id} className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => onEscolher(t.nome)}
-              className="flex items-center gap-2 flex-1"
-              style={{
-                fontSize: 13,
-                padding: "7px 8px",
-                borderRadius: 8,
-                textAlign: "left",
-                background: "rgba(255,255,255,0.03)",
-              }}
-            >
-              <span>🏷️</span>
-              {t.nome}
-            </button>
-            <button
-              type="button"
-              onClick={() => excluirTipo(t.id)}
-              disabled={pending}
-              title="Remover tipo"
-              style={{ fontSize: 13, color: "var(--text-4)", padding: "4px 6px" }}
-            >
-              ×
-            </button>
-          </div>
-        ))}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          gap: 4,
-          marginTop: 10,
-          borderTop: "0.5px solid rgba(255,255,255,0.08)",
-          paddingTop: 10,
-        }}
-      >
-        <input
-          value={novoTipo}
-          onChange={(e) => setNovoTipo(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault()
-              criarTipo()
-            }
-          }}
-          placeholder="Novo tipo de atividade..."
-          maxLength={60}
-          className="glass-input"
-          style={{ flex: 1, fontSize: 12, padding: "6px 8px" }}
-        />
-        <button
-          type="button"
-          onClick={criarTipo}
-          disabled={pending || !novoTipo.trim()}
-          className="btn-gold-filled"
-          style={{ fontSize: 13, padding: "6px 10px" }}
-        >
-          ＋
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function FormAtividade({
-  leadId,
-  categoria,
-  onVoltar,
-  onClose,
-}: {
-  leadId: string
-  categoria: string
-  onVoltar: () => void
-  onClose: () => void
-}) {
-  const [titulo, setTitulo] = useState("")
-  const [quando, setQuando] = useState(agoraLocalInput())
-  const [pending, startTransition] = useTransition()
-  const [status, setStatus] = useState<string | null>(null)
-  const router = useRouter()
-
-  async function salvar() {
-    if (!quando) {
-      setStatus("Escolha data e hora.")
-      return
-    }
-    const fd = new FormData()
-    fd.set("lead_id", leadId)
-    fd.set("categoria", categoria)
-    fd.set("titulo", titulo)
-    fd.set("agendado_para", quando)
-    const r = await criarFollowUpAction(fd)
-    if (r.ok) {
-      setStatus("Marcado ✓")
-      router.refresh()
-      setTimeout(onClose, 700)
-    } else {
-      setStatus(r.erro ?? "Erro")
-    }
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onVoltar}
-          style={{ fontSize: 13, color: "var(--text-3)" }}
-        >
-          ‹
-        </button>
-        <p style={{ fontSize: 13, fontWeight: 600 }}>{categoria}</p>
-      </div>
-      <input
-        value={titulo}
-        onChange={(e) => setTitulo(e.target.value)}
-        placeholder="Detalhe (opcional)"
-        maxLength={100}
-        className="glass-input"
-        style={{ fontSize: 12, padding: "6px 10px" }}
-      />
-      <input
-        type="datetime-local"
-        value={quando}
-        onChange={(e) => setQuando(e.target.value)}
-        className="glass-input"
-        style={{ fontSize: 12, padding: "6px 10px" }}
-      />
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => startTransition(() => salvar())}
-          disabled={pending}
-          className="btn-gold-filled"
-          style={{ fontSize: 11, padding: "6px 12px", opacity: pending ? 0.5 : 1 }}
-        >
-          {pending ? "Salvando..." : "Marcar"}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          style={{ fontSize: 11, color: "var(--text-3)" }}
-        >
-          Cancelar
-        </button>
-        {status && (
-          <span
-            style={{
-              fontSize: 11,
-              color: status.includes("✓") ? "var(--success)" : "var(--danger)",
-            }}
-          >
-            {status}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}

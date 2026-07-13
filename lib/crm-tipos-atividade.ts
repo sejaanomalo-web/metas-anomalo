@@ -33,3 +33,47 @@ export function tipoTecnicoDaCategoria(categoria: string): "tarefa" | "reuniao" 
   }
   return "tarefa"
 }
+
+function semAcentoMinusculo(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+}
+
+/** Etapas/tipos cujo nome indica um compromisso com hora marcada (reunião,
+ *  follow-up, fechamento) — pra essas o picker de etiqueta abre o formulário
+ *  de agendar em vez de só trocar a fase na hora. */
+export function precisaAgendar(nome: string): boolean {
+  const n = semAcentoMinusculo(nome)
+  return (
+    n.includes("reuni") ||
+    n.includes("agend") ||
+    n.includes("follow") ||
+    n.includes("fechamento")
+  )
+}
+
+/** Emoji por palavra-chave do nome da etapa — só estética, tolerante a
+ *  rename (cai no rótulo genérico 🏷️ quando não reconhece nada). */
+export function emojiDaEtapa(nome: string): string {
+  const n = semAcentoMinusculo(nome)
+  if (n.includes("novo")) return "👋"
+  if (n.includes("conversa")) return "💬"
+  if (n.includes("qualific")) return "🎯"
+  if (n.includes("reuni") || n.includes("agend")) return "📅"
+  if (n.includes("proposta")) return "📩"
+  if (n.includes("follow")) return "🔁"
+  if (n.includes("fechamento")) return "✅"
+  if (n.includes("cliente") || n.includes("ganho")) return "🏆"
+  if (n.includes("perdid")) return "❌"
+  return "🏷️"
+}
+
+/** "agora" local no formato do input datetime-local (YYYY-MM-DDTHH:mm). */
+export function agoraLocalInput(): string {
+  const d = new Date()
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}

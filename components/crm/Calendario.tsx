@@ -7,7 +7,6 @@ import type { CrmAtividadeRow } from "@/lib/crm-atividades-actions"
 import {
   concluirAtividadeAction,
   excluirAtividadeAction,
-  gerarLinkCalendarioAction,
 } from "@/lib/crm-atividades-actions"
 
 const DIAS_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"]
@@ -145,7 +144,6 @@ export default function Calendario({
   const [periodo, setPeriodo] = useState<PeriodoKey>("este_mes")
   const [diaFoco, setDiaFoco] = useState<string | null>(null)
   const [aberta, setAberta] = useState<CrmAtividadeRow | null>(null)
-  const [linkStatus, setLinkStatus] = useState<string | null>(null)
   const router = useRouter()
 
   const { inicio, fim } = useMemo(() => calcularRange(periodo, hoje), [periodo, hoje])
@@ -180,22 +178,6 @@ export default function Calendario({
 
   const periodoLabel = PERIODOS.find((p) => p.chave === periodo)?.label ?? ""
 
-  async function copiarLink() {
-    const r = await gerarLinkCalendarioAction()
-    if (r.ok && r.token) {
-      const url = `${window.location.origin}/api/crm/calendario/${r.token}/feed.ics`
-      try {
-        await navigator.clipboard.writeText(url)
-        setLinkStatus("Link copiado ✓")
-      } catch {
-        setLinkStatus(url)
-      }
-      setTimeout(() => setLinkStatus(null), 4000)
-    } else {
-      setLinkStatus(r.erro ?? "Erro ao gerar link")
-    }
-  }
-
   function trocarPeriodo(p: PeriodoKey) {
     setPeriodo(p)
     setDiaFoco(null)
@@ -203,7 +185,7 @@ export default function Calendario({
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* Toolbar: seletor de período + link do calendário */}
+      {/* Toolbar: seletor de período */}
       <div
         className="flex items-center justify-between flex-wrap gap-3"
         style={{ flexShrink: 0 }}
@@ -228,38 +210,16 @@ export default function Calendario({
             {totalNoPeriodo} compromisso{totalNoPeriodo === 1 ? "" : "s"}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          {linkStatus && (
-            <span
-              style={{
-                fontSize: 10,
-                color: linkStatus.includes("✓") ? "var(--success)" : "var(--text-3)",
-                maxWidth: 220,
-                wordBreak: "break-all",
-              }}
-            >
-              {linkStatus}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={copiarLink}
-            style={{
-              fontSize: 11,
-              color: "var(--text-3)",
-              border: "0.5px solid rgba(255,255,255,0.15)",
-              borderRadius: 8,
-              padding: "6px 10px",
-            }}
-          >
-            📋 Link do calendário
-          </button>
-        </div>
       </div>
 
-      {/* Conteúdo: calendário multi-mês + painel de compromissos */}
+      {/* Conteúdo: calendário multi-mês + painel de compromissos.
+          SEM flexWrap: com wrap, a "linha" do flex passa a se dimensionar
+          pelo conteúdo em vez de esticar pra altura do pai — é isso que
+          fazia o minHeight:0 + overflowY:auto de baixo nunca ter uma altura
+          fixa contra a qual rolar, e o container externo (overflow:hidden)
+          simplesmente cortava os meses excedentes. */}
       <div
-        style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, flexWrap: "wrap" }}
+        style={{ flex: 1, minHeight: 0, display: "flex", gap: 16 }}
       >
         {/* Calendário visual (um mini-mês por mês do período) */}
         <div
@@ -378,7 +338,7 @@ export default function Calendario({
             ) : (
               <div className="space-y-2">
                 {proximas.map((a) => (
-                  <CartaoCompromisso key={a.id} atividade={a} onAbrir={() => setAberta(a)} mostrarData />
+                  <CartaoCompromisso key={a.id} atividade={a} onAbrir={() => setAberta(a)} />
                 ))}
               </div>
             )}
@@ -514,56 +474,84 @@ function MiniMes({
   )
 }
 
-/** Cartão clicável de um compromisso (na lista do período e nos próximos). */
+/** Cartão clicável de um compromisso (na lista do período e nos próximos) —
+ *  a data vem em destaque num "selo" à esquerda (dia grande + mês/semana),
+ *  com o nome/objetivo do compromisso ao lado. */
 function CartaoCompromisso({
   atividade,
   onAbrir,
-  mostrarData,
 }: {
   atividade: CrmAtividadeRow
   onAbrir: () => void
-  mostrarData?: boolean
 }) {
   const nome = atividade.lead_nome || atividade.lead_telefone || "Lead sem nome"
   const quando = atividade.agendado_para ? new Date(atividade.agendado_para) : null
   const hora = quando
     ? quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     : ""
-  const dataCurta = quando
-    ? quando.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
+  const diaSemana = quando
+    ? quando.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")
     : ""
 
   return (
     <button
       type="button"
       onClick={onAbrir}
-      className="w-full"
+      className="w-full flex items-stretch"
       style={{
         textAlign: "left",
-        display: "block",
-        padding: 10,
-        borderRadius: 9,
+        gap: 10,
+        padding: 8,
+        borderRadius: 10,
         background: "var(--surface-2, rgba(255,255,255,0.04))",
         border: `1px solid ${ACCENT}2b`,
-        borderLeft: `3px solid ${ACCENT}`,
         opacity: atividade.concluido_em ? 0.55 : 1,
       }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p style={{ fontSize: 12, fontWeight: 600 }} className="truncate">
-          {atividade.categoria || atividade.titulo || "Follow-up"}
-        </p>
-        <span style={{ fontSize: 10, color: ACCENT, flexShrink: 0 }}>
-          {mostrarData ? `${dataCurta} · ${hora}` : hora}
+      <div
+        style={{
+          flexShrink: 0,
+          width: 44,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 8,
+          background: `${ACCENT}22`,
+          border: `1px solid ${ACCENT}55`,
+          color: ACCENT,
+          padding: "4px 2px",
+        }}
+      >
+        <span style={{ fontSize: 9, textTransform: "uppercase", fontWeight: 700, lineHeight: 1 }}>
+          {diaSemana}
+        </span>
+        <span style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.3 }}>
+          {quando ? String(quando.getDate()).padStart(2, "0") : "--"}
+        </span>
+        <span style={{ fontSize: 9, fontWeight: 700, lineHeight: 1 }}>
+          {quando ? MESES_CURTO[quando.getMonth()] : ""}
         </span>
       </div>
-      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }} className="truncate">
-        {nome}
-        {atividade.lead_empresa_nome ? ` · ${atividade.lead_empresa_nome}` : ""}
-      </p>
-      {atividade.concluido_em && (
-        <span style={{ fontSize: 9, color: "var(--success)" }}>✓ concluído</span>
-      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="flex items-center justify-between gap-2">
+          <p style={{ fontSize: 13, fontWeight: 700 }} className="truncate">
+            {atividade.categoria || atividade.titulo || "Follow-up"}
+          </p>
+          {hora && (
+            <span style={{ fontSize: 11, color: ACCENT, flexShrink: 0, fontWeight: 600 }}>
+              {hora}
+            </span>
+          )}
+        </div>
+        <p style={{ fontSize: 11.5, color: "var(--text-2, #ddd)", marginTop: 2 }} className="truncate">
+          {nome}
+          {atividade.lead_empresa_nome ? ` · ${atividade.lead_empresa_nome}` : ""}
+        </p>
+        {atividade.concluido_em && (
+          <span style={{ fontSize: 9, color: "var(--success)" }}>✓ concluído</span>
+        )}
+      </div>
     </button>
   )
 }
