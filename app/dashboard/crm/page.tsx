@@ -53,7 +53,10 @@ export default async function CrmPage({
   const verArquivados = searchParams.arquivados === "1"
 
   const agora = new Date()
-  const inicioJanela = new Date(agora.getFullYear(), agora.getMonth() - 2, 1).toISOString()
+  // Janela larga o bastante pra cobrir os filtros de período do calendário
+  // ("Últimos 365 dias", "Este Ano" etc.) — o volume de follow-ups de um CRM
+  // pessoal é pequeno, então busca-se de uma vez e filtra-se no client.
+  const inicioJanela = new Date(agora.getFullYear(), agora.getMonth() - 13, 1).toISOString()
   const fimJanela = new Date(agora.getFullYear(), agora.getMonth() + 7, 0).toISOString()
 
   const [leads, leadsArquivados, instancias, etapas, etiquetas, atividades, proximas, tipos, totalArquivados] =

@@ -448,6 +448,10 @@ export interface SerieMesTrafego {
   mes: string // rótulo curto (ex.: "Abr")
   investimento: number
   conversas: number
+  // "Conversas / formulários": conversas de mensagem (conversas_real) +
+  // resultados de formulário/lead (leads_real). Campanhas de formulário
+  // caem em leads_real, então este total cobre os dois tipos de campanha.
+  conversasFormularios: number
   faturamento: number
   agendamentos: number
 }
@@ -483,11 +487,14 @@ export function serieMensalDeLinhas(linhas: LinhaDoMes[]): SerieMesTrafego[] {
         mes: ROTULO_MES_CURTO[mesNum] ?? ym,
         investimento: 0,
         conversas: 0,
+        conversasFormularios: 0,
         faturamento: 0,
         agendamentos: 0,
       } satisfies SerieMesTrafego)
     atual.investimento += Number(l.investimento_real ?? 0)
     atual.conversas += Number(l.conversas_real ?? 0)
+    atual.conversasFormularios +=
+      Number(l.conversas_real ?? 0) + Number(l.leads_real ?? 0)
     atual.faturamento += Number(l.faturamento_real ?? 0)
     atual.agendamentos += Number(l.reunioes_real ?? 0)
     porMes.set(ym, atual)
