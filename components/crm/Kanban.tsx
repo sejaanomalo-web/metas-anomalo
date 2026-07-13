@@ -31,6 +31,7 @@ import {
   excluirEtapaAction,
 } from "@/lib/crm-kanban-actions"
 import { CORES_ETIQUETA } from "@/lib/crm-cores"
+import { casaBusca } from "@/lib/crm-busca"
 import Avatar from "@/components/crm/Avatar"
 import { EtiquetaChip } from "@/components/crm/Etiquetas"
 
@@ -95,6 +96,7 @@ export default function Kanban({
     agrupar(etapas, leads)
   )
   const [ativoId, setAtivoId] = useState<string | null>(null)
+  const [busca, setBusca] = useState("")
   const [, startTransition] = useTransition()
 
   // Ressincroniza quando o servidor manda leads/etapas atualizados
@@ -170,38 +172,52 @@ export default function Kanban({
     : null
 
   return (
-    <DndContext
-      sensors={sensors}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-    >
-      <div
-        className="flex gap-4 overflow-x-auto scrollbar-thin"
-        style={{ height: "100%", paddingBottom: 8 }}
-      >
-        {etapas.map((etapa, index) => (
-          <Coluna
-            key={etapa.id}
-            etapa={etapa}
-            leads={colunas[etapa.id] ?? []}
-            corPorEmpresa={corPorEmpresa}
-            isFirst={index === 0}
-            isLast={index === etapas.length - 1}
-          />
-        ))}
-        <NovaColuna />
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ flexShrink: 0 }}>
+        <input
+          type="text"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nome, telefone ou empresa…"
+          className="glass-input"
+          style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, minWidth: 260 }}
+        />
       </div>
-      <DragOverlay>
-        {leadAtivo && (
-          <Cartao
-            lead={leadAtivo}
-            cor={corPorEmpresa[leadAtivo.empresa_slug] ?? "#C9953A"}
-            arrastando
-          />
-        )}
-      </DragOverlay>
-    </DndContext>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div
+          className="flex gap-4 overflow-x-auto scrollbar-thin"
+          style={{ flex: 1, minHeight: 0, paddingBottom: 8 }}
+        >
+          {etapas.map((etapa, index) => (
+            <Coluna
+              key={etapa.id}
+              etapa={etapa}
+              leads={(colunas[etapa.id] ?? []).filter((l) =>
+                casaBusca(busca, l.nome, l.telefone_e164, l.empresa_nome)
+              )}
+              corPorEmpresa={corPorEmpresa}
+              isFirst={index === 0}
+              isLast={index === etapas.length - 1}
+            />
+          ))}
+          <NovaColuna />
+        </div>
+        <DragOverlay>
+          {leadAtivo && (
+            <Cartao
+              lead={leadAtivo}
+              cor={corPorEmpresa[leadAtivo.empresa_slug] ?? "#C9953A"}
+              arrastando
+            />
+          )}
+        </DragOverlay>
+      </DndContext>
+    </div>
   )
 }
 

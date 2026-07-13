@@ -8,6 +8,7 @@ import {
   concluirAtividadeAction,
   excluirAtividadeAction,
 } from "@/lib/crm-atividades-actions"
+import { casaBusca } from "@/lib/crm-busca"
 
 const DIAS_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"]
 const MESES = [
@@ -25,7 +26,7 @@ const ACCENT = "#C9953A"
 type PeriodoKey =
   | "hoje" | "ontem" | "esta_semana" | "ult_7" | "semana_passada" | "ult_14"
   | "ult_30" | "este_mes" | "mes_passado" | "ult_60" | "ult_90" | "ult_6m"
-  | "este_ano" | "ult_365"
+  | "este_ano" | "ult_365" | "personalizado"
 
 const PERIODOS: { chave: PeriodoKey; label: string }[] = [
   { chave: "hoje", label: "Hoje" },
@@ -42,6 +43,7 @@ const PERIODOS: { chave: PeriodoKey; label: string }[] = [
   { chave: "ult_6m", label: "Últimos 6 Meses" },
   { chave: "este_ano", label: "Este Ano" },
   { chave: "ult_365", label: "Últimos 365 dias" },
+  { chave: "personalizado", label: "Personalizado…" },
 ]
 
 function chaveDia(d: Date): string {
@@ -101,7 +103,15 @@ function calcularRange(chave: PeriodoKey, hoje: Date): { inicio: Date; fim: Date
       return { inicio: new Date(h.getFullYear(), 0, 1), fim: new Date(h.getFullYear(), 11, 31) }
     case "ult_365":
       return { inicio: addDias(h, -364), fim: h }
+    case "personalizado":
+      // Fallback antes do usuário escolher as duas datas — o componente
+      // sobrescreve com o intervalo real assim que "de"/"até" são preenchidos.
+      return { inicio: h, fim: h }
   }
+}
+
+function formatarDataBR(d: Date): string {
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
 /** Lista de meses (ano+mês) que o intervalo cobre, do primeiro ao último. */
@@ -144,24 +154,61 @@ export default function Calendario({
   const [periodo, setPeriodo] = useState<PeriodoKey>("este_mes")
   const [diaFoco, setDiaFoco] = useState<string | null>(null)
   const [aberta, setAberta] = useState<CrmAtividadeRow | null>(null)
+  const [de, setDe] = useState("")
+  const [ate, setAte] = useState("")
+  const [busca, setBusca] = useState("")
   const router = useRouter()
 
-  const { inicio, fim } = useMemo(() => calcularRange(periodo, hoje), [periodo, hoje])
+  // Período "Personalizado…": enquanto o usuário não preencheu as duas
+  // datas, cai no fallback hoje..hoje de calcularRange (evita quebrar o
+  // useMemo abaixo); assim que "de" e "até" existem, sobrescreve o range.
+  const rangeCustom = useMemo(() => {
+    if (periodo !== "personalizado" || !de || !ate) return null
+    const iniD = new Date(`${de}T00:00:00`)
+    const fimD = new Date(`${ate}T00:00:00`)
+    return iniD.getTime() <= fimD.getTime()
+      ? { inicio: iniD, fim: fimD }
+      : { inicio: fimD, fim: iniD }
+  }, [periodo, de, ate])
+
+  const { inicio, fim } = useMemo(
+    () => rangeCustom ?? calcularRange(periodo, hoje),
+    [rangeCustom, periodo, hoje]
+  )
   const inicioKey = chaveDia(inicio)
   const fimKey = chaveDia(fim)
   const meses = useMemo(() => listarMeses(inicio, fim), [inicio, fim])
   const compacto = meses.length > 3
 
+  const atividadesFiltradas = useMemo(
+    () =>
+      busca.trim()
+        ? atividades.filter((a) =>
+            casaBusca(busca, a.lead_nome, a.lead_telefone, a.lead_empresa_nome, a.titulo, a.categoria)
+          )
+        : atividades,
+    [atividades, busca]
+  )
+  const proximasFiltradas = useMemo(
+    () =>
+      busca.trim()
+        ? proximas.filter((a) =>
+            casaBusca(busca, a.lead_nome, a.lead_telefone, a.lead_empresa_nome, a.titulo, a.categoria)
+          )
+        : proximas,
+    [proximas, busca]
+  )
+
   const porDia = useMemo(() => {
     const map: Record<string, CrmAtividadeRow[]> = {}
-    for (const a of atividades) {
+    for (const a of atividadesFiltradas) {
       if (!a.agendado_para) continue
       const chave = a.agendado_para.slice(0, 10)
       if (!map[chave]) map[chave] = []
       map[chave].push(a)
     }
     return map
-  }, [atividades])
+  }, [atividadesFiltradas])
 
   // Dias do período que têm compromisso, em ordem.
   const diasComEventos = useMemo(
@@ -176,7 +223,10 @@ export default function Calendario({
     [diasComEventos, porDia]
   )
 
-  const periodoLabel = PERIODOS.find((p) => p.chave === periodo)?.label ?? ""
+  const periodoLabel =
+    periodo === "personalizado" && rangeCustom
+      ? `${formatarDataBR(inicio)} – ${formatarDataBR(fim)}`
+      : PERIODOS.find((p) => p.chave === periodo)?.label ?? ""
 
   function trocarPeriodo(p: PeriodoKey) {
     setPeriodo(p)
@@ -206,10 +256,37 @@ export default function Calendario({
               </option>
             ))}
           </select>
+          {periodo === "personalizado" && (
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={de}
+                onChange={(e) => setDe(e.target.value)}
+                className="glass-input"
+                style={{ fontSize: 12, padding: "6px 8px", borderRadius: 8 }}
+              />
+              <span style={{ fontSize: 11, color: "var(--text-4)" }}>até</span>
+              <input
+                type="date"
+                value={ate}
+                onChange={(e) => setAte(e.target.value)}
+                className="glass-input"
+                style={{ fontSize: 12, padding: "6px 8px", borderRadius: 8 }}
+              />
+            </div>
+          )}
           <span style={{ fontSize: 11, color: "var(--text-4)" }}>
             {totalNoPeriodo} compromisso{totalNoPeriodo === 1 ? "" : "s"}
           </span>
         </div>
+        <input
+          type="text"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nome, telefone ou empresa…"
+          className="glass-input"
+          style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, minWidth: 220 }}
+        />
       </div>
 
       {/* Conteúdo: calendário multi-mês + painel de compromissos.
@@ -288,7 +365,7 @@ export default function Calendario({
 
           {diaFoco ? (
             (porDia[diaFoco] ?? []).length === 0 ? (
-              <Vazio texto="Nenhum compromisso neste dia." />
+              <Vazio texto={busca.trim() ? "Nenhum compromisso neste dia bate com a busca." : "Nenhum compromisso neste dia."} />
             ) : (
               <div className="space-y-2">
                 {porDia[diaFoco].map((a) => (
@@ -297,7 +374,7 @@ export default function Calendario({
               </div>
             )
           ) : diasComEventos.length === 0 ? (
-            <Vazio texto="Nenhum compromisso no período selecionado." />
+            <Vazio texto={busca.trim() ? "Nenhum compromisso no período bate com a busca." : "Nenhum compromisso no período selecionado."} />
           ) : (
             <div className="space-y-3">
               {diasComEventos.map((k) => (
@@ -333,11 +410,13 @@ export default function Calendario({
             >
               Próximos compromissos
             </p>
-            {proximas.length === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--text-4)" }}>Nenhum compromisso futuro marcado.</p>
+            {proximasFiltradas.length === 0 ? (
+              <p style={{ fontSize: 12, color: "var(--text-4)" }}>
+                {busca.trim() ? "Nenhum compromisso futuro bate com a busca." : "Nenhum compromisso futuro marcado."}
+              </p>
             ) : (
               <div className="space-y-2">
-                {proximas.map((a) => (
+                {proximasFiltradas.map((a) => (
                   <CartaoCompromisso key={a.id} atividade={a} onAbrir={() => setAberta(a)} />
                 ))}
               </div>
