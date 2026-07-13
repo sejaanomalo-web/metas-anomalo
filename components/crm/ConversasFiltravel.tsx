@@ -9,6 +9,7 @@ import {
   calcularRangeConversa,
   type PeriodoConversaKey,
 } from "@/lib/crm-periodos"
+import { casaBusca } from "@/lib/crm-busca"
 import ListaConversas from "@/components/crm/ListaConversas"
 import NovoContato from "@/components/crm/NovoContato"
 
@@ -39,6 +40,7 @@ export default function ConversasFiltravel({
   const [aberto, setAberto] = useState(false)
   const [etiquetaId, setEtiquetaId] = useState<string | null>(null)
   const [periodo, setPeriodo] = useState<PeriodoConversaKey>("todos")
+  const [busca, setBusca] = useState("")
 
   const hoje = useMemo(() => new Date(), [])
   const range = useMemo(
@@ -56,11 +58,14 @@ export default function ConversasFiltravel({
         const t = new Date(lead.ultima_interacao_em).getTime()
         if (t < range.inicio.getTime() || t > range.fim.getTime()) return false
       }
+      if (!casaBusca(busca, lead.nome, lead.telefone_e164, lead.empresa_nome)) {
+        return false
+      }
       return true
     })
-  }, [leads, etiquetaId, range])
+  }, [leads, etiquetaId, range, busca])
 
-  const temFiltro = etiquetaId !== null || periodo !== "todos"
+  const temFiltro = etiquetaId !== null || periodo !== "todos" || busca.trim() !== ""
   const etiquetaAtiva = etiquetaId
     ? etiquetas.find((e) => e.id === etiquetaId)
     : null
@@ -69,6 +74,7 @@ export default function ConversasFiltravel({
   function limpar() {
     setEtiquetaId(null)
     setPeriodo("todos")
+    setBusca("")
   }
 
   return (
@@ -108,6 +114,17 @@ export default function ConversasFiltravel({
             {verArquivados ? "‹ Voltar" : `Arquivados (${totalArquivados})`}
           </Link>
         )}
+      </div>
+
+      <div style={{ padding: "0 4px 8px" }}>
+        <input
+          type="text"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nome, telefone ou empresa…"
+          className="glass-input"
+          style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, width: "100%" }}
+        />
       </div>
 
       {aberto && (
@@ -191,18 +208,18 @@ export default function ConversasFiltravel({
         </div>
       )}
 
-      {temFiltro && (
-        <div
-          className="flex items-center flex-wrap gap-1"
-          style={{ padding: "0 4px 8px", fontSize: 10, color: "var(--text-4)" }}
-        >
-          <span>
-            {leadsFiltrados.length} de {leads.length}
-          </span>
-          {etiquetaAtiva && <span>· {etiquetaAtiva.nome}</span>}
-          {periodo !== "todos" && <span>· {periodoLabel}</span>}
-        </div>
-      )}
+      <div
+        className="flex items-center flex-wrap gap-1"
+        style={{ padding: "0 4px 8px", fontSize: 10, color: "var(--text-4)" }}
+      >
+        <span>
+          {temFiltro
+            ? `${leadsFiltrados.length} de ${leads.length}`
+            : `${leads.length} conversa${leads.length === 1 ? "" : "s"}`}
+        </span>
+        {etiquetaAtiva && <span>· {etiquetaAtiva.nome}</span>}
+        {periodo !== "todos" && <span>· {periodoLabel}</span>}
+      </div>
 
       <ListaConversas
         leads={leadsFiltrados}
