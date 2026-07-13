@@ -154,7 +154,7 @@ export default function EtiquetasPicker({
               right: 0,
               marginTop: 6,
               padding: 12,
-              width: 300,
+              width: "min(300px, calc(100vw - 32px))",
               zIndex: 20,
             }}
           >

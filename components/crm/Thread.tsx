@@ -20,6 +20,7 @@ import {
 } from "@/lib/crm-leads-actions"
 import Avatar from "@/components/crm/Avatar"
 import EtiquetasPicker, { EtiquetaChip } from "@/components/crm/Etiquetas"
+import InformacoesContato from "@/components/crm/InformacoesContato"
 
 interface EtiquetaResumo {
   id: string
@@ -57,6 +58,7 @@ export default function Thread({
 }) {
   const [texto, setTexto] = useState("")
   const [erro, setErro] = useState<string | null>(null)
+  const [mostrarInfo, setMostrarInfo] = useState(false)
   const [pending, startTransition] = useTransition()
   const [mensagens, setMensagens] = useState(mensagensIniciais)
   const [temMaisAntigas, setTemMaisAntigas] = useState(temMaisAntigasInicial)
@@ -176,6 +178,24 @@ export default function Thread({
             <CabecalhoContato lead={lead} cor={cor} />
           </div>
           <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setMostrarInfo((v) => !v)}
+              title="Informações do contato"
+              aria-label="Informações do contato"
+              aria-pressed={mostrarInfo}
+              style={{
+                fontSize: 13,
+                color: mostrarInfo ? "#0a0a0a" : "var(--text-4)",
+                background: mostrarInfo ? cor : "transparent",
+                padding: "6px 8px",
+                border: "0.5px solid rgba(255,255,255,0.15)",
+                borderRadius: 8,
+                lineHeight: 1,
+              }}
+            >
+              ⓘ
+            </button>
             <EtiquetasPicker
               leadId={lead.id}
               nomeContato={lead.nome || lead.telefone_e164 || "Lead sem nome"}
@@ -196,6 +216,12 @@ export default function Thread({
         )}
       </div>
 
+      {mostrarInfo ? (
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <InformacoesContato lead={lead} cor={cor} onFechar={() => setMostrarInfo(false)} />
+        </div>
+      ) : (
+      <>
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto scrollbar-thin"
@@ -317,6 +343,8 @@ export default function Thread({
           </button>
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }
@@ -664,7 +692,7 @@ function MenuContato({ lead }: { lead: CrmLeadRow }) {
               right: 0,
               marginTop: 6,
               padding: 12,
-              width: 260,
+              width: "min(260px, calc(100vw - 32px))",
               zIndex: 20,
             }}
           >

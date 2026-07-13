@@ -682,6 +682,38 @@ table {
 @media (max-width: 1023px) {
   .crm-fullscreen {
     height: calc(100dvh - 56px);
+    /* Rede de segurança: nenhuma tela do CRM deve rolar na horizontal no
+     * celular — só o Kanban tem overflow-x intencional, e ele já fica
+     * contido dentro do próprio wrapper (overflow:hidden em page.tsx). */
+    overflow-x: hidden;
+  }
+}
+
+/* ============ Calendário: duas colunas no desktop, empilhado no mobile ============
+ * Desktop: mês(es) em miniatura ao lado do painel de compromissos (lado a
+ * lado, cada um com seu próprio scroll). No mobile (<=768px) os dois nunca
+ * cabem lado a lado (o card do mini-mês tem largura mínima própria) — viravam
+ * sobrepostos/cortados pelo overflow:hidden do wrapper. Aqui eles empilham:
+ * compromissos primeiro (via order, sem mudar a ordem no JSX), calendário
+ * depois, cada um com teto de altura e scroll interno.
+ */
+@media (max-width: 768px) {
+  .crm-calendario-grid {
+    flex-direction: column;
+  }
+  .crm-calendario-grid > * {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .crm-calendario-mes-pane {
+    order: 2;
+    max-height: 40vh;
+  }
+  .crm-calendario-compromissos-pane {
+    order: 1;
+    max-height: 46vh;
   }
 }
 

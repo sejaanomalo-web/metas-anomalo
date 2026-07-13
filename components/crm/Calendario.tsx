@@ -296,11 +296,12 @@ export default function Calendario({
           fixa contra a qual rolar, e o container externo (overflow:hidden)
           simplesmente cortava os meses excedentes. */}
       <div
+        className="crm-calendario-grid"
         style={{ flex: 1, minHeight: 0, display: "flex", gap: 16 }}
       >
         {/* Calendário visual (um mini-mês por mês do período) */}
         <div
-          className="scrollbar-thin"
+          className="crm-calendario-mes-pane scrollbar-thin"
           style={{
             flex: "1 1 440px",
             minWidth: 0,
@@ -332,7 +333,7 @@ export default function Calendario({
 
         {/* Painel de compromissos do período */}
         <div
-          className="scrollbar-thin glass"
+          className="crm-calendario-compromissos-pane scrollbar-thin glass"
           style={{
             flex: "1 1 300px",
             minWidth: 264,

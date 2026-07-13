@@ -272,7 +272,6 @@ function PainelNotificacoes({
             justifyContent: "space-between",
             padding: "20px 20px 14px",
             paddingTop: "max(20px, env(safe-area-inset-top))",
-            borderBottom: "0.5px solid rgba(255,255,255,0.06)",
             flexShrink: 0,
           }}
         >
@@ -302,75 +301,64 @@ function PainelNotificacoes({
                 : `${itens.length} ${itens.length === 1 ? "evento" : "eventos"}`}
             </h2>
           </div>
-          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={onFechar}
+            aria-label="Fechar"
+            className="no-ds hover:text-[var(--text-1)]"
+            style={{
+              width: 36,
+              height: 36,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(255,255,255,0.04)",
+              border: "none",
+              borderRadius: 8,
+              color: "var(--text-2)",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            <IconeFechar />
+          </button>
+        </header>
+
+        {/* Toolbar de ações em massa — separada do cabeçalho (título + X) pra
+            não competir por espaço no mobile: cada ação ganha um botão
+            ícone+rótulo próprio, numa faixa fina entre o header e a lista. */}
+        {itens.length > 0 && (
+          <div
+            className="flex items-center justify-end gap-2 flex-wrap"
+            style={{
+              padding: "0 16px 14px",
+              flexShrink: 0,
+            }}
+          >
             {temNaoLidas && (
               <button
                 type="button"
                 onClick={onMarcarTodas}
                 title="Marcar todas como lidas"
                 className="no-ds hover:text-[var(--accent)]"
-                style={{
-                  padding: "8px 12px",
-                  fontSize: 10,
-                  letterSpacing: "0.8px",
-                  textTransform: "uppercase",
-                  color: "var(--text-3)",
-                  background: "transparent",
-                  border: "0.5px solid rgba(255,255,255,0.15)",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  fontWeight: 500,
-                  whiteSpace: "nowrap",
-                }}
+                style={botaoAcaoEmMassaEstilo("rgba(255,255,255,0.15)")}
               >
-                Marcar todas
-              </button>
-            )}
-            {itens.length > 0 && (
-              <button
-                type="button"
-                onClick={onLimparTodas}
-                title="Limpar todas (excluir)"
-                className="no-ds hover:text-[#e24b4a]"
-                style={{
-                  padding: "8px 12px",
-                  fontSize: 10,
-                  letterSpacing: "0.8px",
-                  textTransform: "uppercase",
-                  color: "var(--text-3)",
-                  background: "transparent",
-                  border: "0.5px solid rgba(226,75,74,0.30)",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  fontWeight: 500,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Limpar todas
+                <IconeCheck />
+                Marcar lidas
               </button>
             )}
             <button
               type="button"
-              onClick={onFechar}
-              aria-label="Fechar"
-              className="no-ds hover:text-[var(--text-1)]"
-              style={{
-                width: 36,
-                height: 36,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "rgba(255,255,255,0.04)",
-                border: "none",
-                borderRadius: 8,
-                color: "var(--text-2)",
-                cursor: "pointer",
-              }}
+              onClick={onLimparTodas}
+              title="Limpar todas (excluir)"
+              className="no-ds hover:text-[#e24b4a]"
+              style={botaoAcaoEmMassaEstilo("rgba(226,75,74,0.30)")}
             >
-              <IconeFechar />
+              <IconeLixeira />
+              Limpar todas
             </button>
           </div>
-        </header>
+        )}
 
         <div
           style={{
@@ -379,6 +367,7 @@ function PainelNotificacoes({
             WebkitOverflowScrolling: "touch",
             padding: "12px 14px",
             paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+            borderTop: "0.5px solid rgba(255,255,255,0.06)",
           }}
         >
           {itens.length === 0 ? (
@@ -615,6 +604,47 @@ function ItemNotificacao({
         </button>
       </div>
     </div>
+  )
+}
+
+/** Estilo compartilhado dos botões da toolbar de ações em massa (Marcar
+ *  lidas / Limpar todas) — ícone + rótulo curto, mesma altura/raio pros dois
+ *  ficarem alinhados, só muda a cor da borda pra sinalizar risco (limpar). */
+function botaoAcaoEmMassaEstilo(corBorda: string): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "7px 12px",
+    fontSize: 10,
+    letterSpacing: "0.6px",
+    textTransform: "uppercase",
+    color: "var(--text-3)",
+    background: "transparent",
+    border: `0.5px solid ${corBorda}`,
+    borderRadius: 999,
+    cursor: "pointer",
+    fontWeight: 500,
+    whiteSpace: "nowrap",
+  }
+}
+
+function IconeCheck() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 8.5 8 13.5 20 3" />
+      <path d="M21 11v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11" />
+    </svg>
   )
 }
 
