@@ -2,7 +2,6 @@ import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import SectionHeader from "@/components/ui/SectionHeader"
 import FunilAtividadeComercial from "@/components/FunilAtividadeComercial"
 import ClientesComercial from "@/components/comercial/ClientesComercial"
-import AcoesResponderComercial from "@/components/comercial/AcoesResponderComercial"
 import AbasArea from "@/components/AbasArea"
 import { requererPermissao } from "@/lib/auth"
 import { formatBRL, formatNumero } from "@/lib/data"
@@ -87,9 +86,6 @@ export default async function ComercialPage({
                   resumo.contratos_fechados === 1 ? "contrato" : "contratos"
                 } · ${formatBRL(resumo.faturamento_gerado)} gerado`}
           </p>
-          <div style={{ marginTop: 16 }}>
-            <AcoesResponderComercial />
-          </div>
           <div style={{ marginTop: 18 }}>
             <AbasArea
               itens={[

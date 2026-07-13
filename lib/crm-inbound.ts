@@ -32,6 +32,7 @@ import {
   sincronizarEtiquetaComEtapa,
   avancarParaEmConversaSePrimeiraMsg,
 } from "./crm-etapas"
+import { registrarRetornoComercial } from "./crm-comercial-sync"
 
 interface ResultadoProcessamento {
   ok: boolean
@@ -659,6 +660,12 @@ export async function processarEventoWebhook(
     // Fase 8: primeira mensagem no chat -> "Em conversa" (única transição
     // automática além da criação; no-op se o lead já saiu de "Novo Contato").
     await avancarParaEmConversaSePrimeiraMsg(db, usuarioId, leadId as string)
+
+    // Sync comercial: cliente respondeu -> "retorno" (só conta se já mandamos
+    // uma mensagem pra ele; idempotente por lead).
+    if (!fromMe) {
+      await registrarRetornoComercial(db, leadId as string)
+    }
 
     await db
       .from("crm_realtime_ping")

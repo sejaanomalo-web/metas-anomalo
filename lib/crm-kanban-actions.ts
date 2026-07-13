@@ -8,6 +8,7 @@ import {
   sincronizarEtiquetaDaEtapa,
   sincronizarEtiquetaComEtapa,
 } from "./crm-etapas"
+import { registrarEventoDaEtapa } from "./crm-comercial-sync"
 
 export interface ResultadoMoverLead {
   ok: boolean
@@ -72,6 +73,13 @@ export async function moverLeadAction(
     id: etapa.id as string,
     nome: etapa.nome as string,
     cor: (etapa.cor as string) ?? null,
+  })
+
+  // Arrastar o card também sincroniza o funil comercial (mesmos eventos do
+  // caminho aplicarFaseAoLead). No-op quando a etapa não pontua.
+  await registrarEventoDaEtapa(db, leadId, {
+    nome: etapa.nome as string,
+    tipo: etapa.tipo as "aberta" | "ganho" | "perdido",
   })
 
   revalidatePath("/dashboard/crm")

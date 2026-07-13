@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
+import { registrarEventoDaEtapa } from "./crm-comercial-sync"
 
 export interface CrmEtapaRow {
   id: string
@@ -176,6 +177,10 @@ export async function aplicarFaseAoLead(
   }
 
   await sincronizarEtiquetaComEtapa(db, usuarioId, leadId, etapa)
+
+  // Sincroniza o funil comercial (mensagem/qualificado/reunião/proposta/
+  // contrato). No-op quando a etapa não pontua no comercial.
+  await registrarEventoDaEtapa(db, leadId, { nome: etapa.nome, tipo: etapa.tipo })
 }
 
 function normalizarNomeEtapa(nome: string): string {

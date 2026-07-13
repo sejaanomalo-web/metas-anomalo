@@ -51,6 +51,10 @@ export default async function ConfiguracoesPage({
   ) {
     chavesNotif.push("dados_comercial", "nova_venda")
   }
+  // Lembretes de compromissos do calendário do CRM (na manhã do dia).
+  if (temPermissao(usuario, "crm")) {
+    chavesNotif.push("crm_lembrete")
+  }
   const formsPermitidos: FormId[] = []
   if (temPermissao(usuario, "formulario_comercial"))
     formsPermitidos.push("comercial")

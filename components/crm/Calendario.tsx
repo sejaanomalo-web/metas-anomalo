@@ -264,7 +264,16 @@ export default function Calendario({
         {/* Calendário visual (um mini-mês por mês do período) */}
         <div
           className="scrollbar-thin"
-          style={{ flex: "1 1 440px", minWidth: 0, overflowY: "auto", paddingRight: 4 }}
+          style={{
+            flex: "1 1 440px",
+            minWidth: 0,
+            // minHeight:0 é o que faz o overflowY funcionar: sem ele o
+            // min-height:auto do flex item cresce com o conteúdo (muitos meses)
+            // e é cortado pelo overflow:hidden do container, em vez de rolar.
+            minHeight: 0,
+            overflowY: "auto",
+            paddingRight: 4,
+          }}
         >
           <div className="flex flex-wrap" style={{ gap: 14, alignContent: "flex-start" }}>
             {meses.map(({ ano, mes }) => (
@@ -291,6 +300,7 @@ export default function Calendario({
             flex: "1 1 300px",
             minWidth: 264,
             maxWidth: 420,
+            minHeight: 0,
             overflowY: "auto",
             padding: 14,
           }}
