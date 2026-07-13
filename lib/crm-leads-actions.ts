@@ -9,6 +9,7 @@ import {
   arquivarChatEvolution,
 } from "./evolution"
 import { buscarEtapasAutomaticas, sincronizarEtiquetaComEtapa } from "./crm-etapas"
+import type { CampoPersonalizado } from "./crm-leads"
 
 export interface ResultadoLead {
   ok: boolean
@@ -29,6 +30,61 @@ function emailValido(bruto: string): string | null {
   const limpo = bruto.trim()
   if (!limpo) return null
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpo) ? limpo : null
+}
+
+// Tags permitidas nas notas do contato — só o suficiente pro editor de
+// formatação básica (negrito/itálico/sublinhado/lista). Tudo mais (script,
+// style, atributos como onclick/style/href) é removido: o HTML vem do
+// contentEditable do navegador, então precisa ser tratado como input não
+// confiável antes de ir pro banco.
+const TAGS_PERMITIDAS_NOTAS = new Set([
+  "b", "strong", "i", "em", "u", "ul", "ol", "li", "br", "p", "div", "span",
+])
+
+// Casa uma tag inteira (com atributos) tratando valores entre aspas como
+// átomos — assim um atributo tipo title="a>b" não corta o match no '>' de
+// dentro da aspa (armadilha comum de sanitizador ingênuo baseado em regex).
+const TAG_COM_ATRIBUTOS =
+  /<\/?([a-zA-Z0-9]+)(?:\s+[a-zA-Z0-9:_-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*\s*\/?>/g
+
+function sanitizarHtmlContato(bruto: string): string {
+  let limpo = bruto.replace(/<!--[\s\S]*?-->/g, "")
+  // Blocos perigosos somem inteiros (tag + conteúdo) antes de tudo — o resto
+  // vira texto puro pela troca de tags abaixo, então script/style nunca
+  // chegam a executar nem a poluir a nota com CSS/JS cru.
+  limpo = limpo.replace(
+    /<(script|style|iframe|object|embed|link|meta|form|svg)[^>]*>[\s\S]*?<\/\1>/gi,
+    ""
+  )
+  limpo = limpo.replace(TAG_COM_ATRIBUTOS, (tagCompleta, nomeTag) => {
+    const nome = String(nomeTag).toLowerCase()
+    if (!TAGS_PERMITIDAS_NOTAS.has(nome)) return ""
+    const fechamento = tagCompleta.startsWith("</") ? "/" : ""
+    return `<${fechamento}${nome}>`
+  })
+  return limpo.slice(0, 20_000)
+}
+
+function normalizarCamposPersonalizados(bruto: string): CampoPersonalizado[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(bruto || "[]")
+  } catch {
+    return null
+  }
+  if (!Array.isArray(parsed)) return null
+  return parsed
+    .map((c): CampoPersonalizado => {
+      const item = (c ?? {}) as Record<string, unknown>
+      const id = String(item.id ?? "").slice(0, 60) || `campo_${Math.random().toString(36).slice(2)}`
+      return {
+        id,
+        nome: String(item.nome ?? "").trim().slice(0, 40),
+        valor: String(item.valor ?? "").trim().slice(0, 500),
+      }
+    })
+    .filter((c) => c.nome)
+    .slice(0, 20)
 }
 
 /**
@@ -292,6 +348,57 @@ export async function editarLeadAction(
       nome,
       nome_manual: true,
       email: emailBruto ? emailValido(emailBruto) : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", leadId)
+    .eq("usuario_id", usuario.id)
+    .select("id")
+    .maybeSingle()
+  if (error) return { ok: false, erro: error.message }
+  if (!atualizado) return { ok: false, erro: "Lead não encontrado." }
+
+  revalidatePath("/dashboard/crm")
+  return { ok: true }
+}
+
+/**
+ * Salva a ficha de informações do contato: nome/e-mail (igual editarLeadAction),
+ * notas com formatação básica (HTML sanitizado no servidor — vem do
+ * contentEditable do navegador, então é tratado como input não confiável) e
+ * os campos personalizados livres (nome+valor definidos pelo usuário).
+ * Telefone NÃO é editável aqui: é o vínculo com o WhatsApp, mudar exigiria
+ * trocar a conversa inteira de identidade.
+ */
+export async function editarInformacoesContatoAction(
+  formData: FormData
+): Promise<ResultadoLead> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const leadId = String(formData.get("lead_id") ?? "").trim()
+  const nome = String(formData.get("nome") ?? "").trim().slice(0, 80)
+  const emailBruto = String(formData.get("email") ?? "").trim()
+  const notasBruto = String(formData.get("notas_html") ?? "")
+  const camposBruto = String(formData.get("campos_personalizados") ?? "[]")
+  if (!leadId) return { ok: false, erro: "Lead inválido." }
+  if (!nome) return { ok: false, erro: "Nome obrigatório." }
+  if (emailBruto && !emailValido(emailBruto)) {
+    return { ok: false, erro: "E-mail inválido." }
+  }
+
+  const campos = normalizarCamposPersonalizados(camposBruto)
+  if (campos === null) return { ok: false, erro: "Campos personalizados inválidos." }
+
+  const { data: atualizado, error } = await db
+    .from("crm_leads")
+    .update({
+      nome,
+      nome_manual: true,
+      email: emailBruto ? emailValido(emailBruto) : null,
+      notas_html: sanitizarHtmlContato(notasBruto),
+      campos_personalizados: campos,
       updated_at: new Date().toISOString(),
     })
     .eq("id", leadId)

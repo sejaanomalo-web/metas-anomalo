@@ -34,6 +34,7 @@ import { CORES_ETIQUETA } from "@/lib/crm-cores"
 import { casaBusca } from "@/lib/crm-busca"
 import Avatar from "@/components/crm/Avatar"
 import { EtiquetaChip } from "@/components/crm/Etiquetas"
+import InformacoesContato from "@/components/crm/InformacoesContato"
 
 // Passo de espaçamento pra inserção por ponto médio (ordem_na_etapa foi
 // desenhada assim no schema pra não precisar renumerar a coluna inteira a
@@ -97,6 +98,7 @@ export default function Kanban({
   )
   const [ativoId, setAtivoId] = useState<string | null>(null)
   const [busca, setBusca] = useState("")
+  const [leadInfo, setLeadInfo] = useState<CrmLeadRow | null>(null)
   const [, startTransition] = useTransition()
 
   // Ressincroniza quando o servidor manda leads/etapas atualizados
@@ -180,7 +182,7 @@ export default function Kanban({
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar por nome, telefone ou empresa…"
           className="glass-input"
-          style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, minWidth: 260 }}
+          style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, width: "100%", maxWidth: 320 }}
         />
       </div>
       <DndContext
@@ -191,7 +193,13 @@ export default function Kanban({
       >
         <div
           className="flex gap-4 overflow-x-auto scrollbar-thin"
-          style={{ flex: 1, minHeight: 0, paddingBottom: 8 }}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            paddingBottom: 8,
+            WebkitOverflowScrolling: "touch",
+            overscrollBehaviorX: "contain",
+          }}
         >
           {etapas.map((etapa, index) => (
             <Coluna
@@ -203,6 +211,7 @@ export default function Kanban({
               corPorEmpresa={corPorEmpresa}
               isFirst={index === 0}
               isLast={index === etapas.length - 1}
+              onAbrirInfo={setLeadInfo}
             />
           ))}
           <NovaColuna />
@@ -217,7 +226,64 @@ export default function Kanban({
           )}
         </DragOverlay>
       </DndContext>
+
+      {leadInfo && (
+        <ModalInfoContato
+          lead={leadInfo}
+          cor={corPorEmpresa[leadInfo.empresa_slug] ?? "#C9953A"}
+          onFechar={() => setLeadInfo(null)}
+        />
+      )}
     </div>
+  )
+}
+
+/** Popup de informações do contato — mesma convenção de modal do resto do
+ *  CRM (backdrop fixed + painel .glass centralizado, ver DetalheCompromisso
+ *  em Calendario.tsx). */
+function ModalInfoContato({
+  lead,
+  cor,
+  onFechar,
+}: {
+  lead: CrmLeadRow
+  cor: string
+  onFechar: () => void
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Fechar"
+        onClick={onFechar}
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 60,
+          background: "rgba(0,0,0,0.55)",
+          cursor: "default",
+        }}
+      />
+      <div
+        className="glass"
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: "fixed",
+          zIndex: 61,
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: "min(560px, calc(100vw - 32px))",
+          maxHeight: "min(640px, calc(100dvh - 64px))",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <InformacoesContato lead={lead} cor={cor} onFechar={onFechar} />
+      </div>
+    </>
   )
 }
 
@@ -227,12 +293,14 @@ function Coluna({
   corPorEmpresa,
   isFirst,
   isLast,
+  onAbrirInfo,
 }: {
   etapa: CrmEtapaRow
   leads: CrmLeadRow[]
   corPorEmpresa: Record<string, string>
   isFirst: boolean
   isLast: boolean
+  onAbrirInfo: (lead: CrmLeadRow) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: etapa.id })
   const corEtapa = etapa.cor || "#8e7cc3"
@@ -305,6 +373,7 @@ function Coluna({
               key={lead.id}
               lead={lead}
               cor={corPorEmpresa[lead.empresa_slug] ?? "#C9953A"}
+              onAbrirInfo={onAbrirInfo}
             />
           ))}
         </div>
@@ -673,7 +742,15 @@ function NovaColuna() {
   )
 }
 
-function CartaoArrastavel({ lead, cor }: { lead: CrmLeadRow; cor: string }) {
+function CartaoArrastavel({
+  lead,
+  cor,
+  onAbrirInfo,
+}: {
+  lead: CrmLeadRow
+  cor: string
+  onAbrirInfo: (lead: CrmLeadRow) => void
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: lead.id })
   const style = {
@@ -687,7 +764,7 @@ function CartaoArrastavel({ lead, cor }: { lead: CrmLeadRow; cor: string }) {
   }
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Cartao lead={lead} cor={cor} />
+      <Cartao lead={lead} cor={cor} onAbrirInfo={onAbrirInfo} />
     </div>
   )
 }
@@ -696,10 +773,12 @@ function Cartao({
   lead,
   cor,
   arrastando,
+  onAbrirInfo,
 }: {
   lead: CrmLeadRow
   cor: string
   arrastando?: boolean
+  onAbrirInfo?: (lead: CrmLeadRow) => void
 }) {
   const nomeExibido = lead.nome || lead.telefone_e164 || "Lead sem nome"
   return (
@@ -707,6 +786,7 @@ function Cartao({
       href={`/dashboard/crm?view=conversas&lead=${lead.id}`}
       className="block"
       style={{
+        position: "relative",
         background: "var(--surface-2, rgba(255,255,255,0.04))",
         border: `1px solid ${cor}33`,
         borderLeft: `3px solid ${cor}`,
@@ -716,9 +796,43 @@ function Cartao({
         boxShadow: arrastando ? "0 8px 24px rgba(0,0,0,0.4)" : "none",
       }}
     >
+      {onAbrirInfo && (
+        <button
+          type="button"
+          // preventDefault+stopPropagation evita navegar pro Link e (via
+          // stopPropagation, que o React aplica na fase de bubbling do
+          // synthetic event antes de chegar no <Link>) evita disparar o
+          // drag do dnd-kit, cujos listeners ficam no wrapper acima.
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onAbrirInfo(lead)
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title="Informações do contato"
+          aria-label="Informações do contato"
+          style={{
+            position: "absolute",
+            top: 6,
+            right: 6,
+            width: 20,
+            height: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 6,
+            fontSize: 11,
+            lineHeight: 1,
+            color: "var(--text-4)",
+            background: "rgba(0,0,0,0.25)",
+          }}
+        >
+          ⓘ
+        </button>
+      )}
       <div className="flex items-center gap-2">
         <Avatar nome={nomeExibido} cor={cor} fotoUrl={lead.foto_url} size={26} />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1" style={{ paddingRight: onAbrirInfo ? 22 : 0 }}>
           <p style={{ fontSize: 12, fontWeight: 500 }} className="truncate">
             {nomeExibido}
           </p>

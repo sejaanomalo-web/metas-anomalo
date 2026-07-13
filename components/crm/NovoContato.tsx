@@ -103,7 +103,7 @@ export default function NovoContato({
               left: 0,
               marginTop: 6,
               padding: 12,
-              width: 260,
+              width: "min(260px, calc(100vw - 32px))",
               zIndex: 20,
               display: "flex",
               flexDirection: "column",

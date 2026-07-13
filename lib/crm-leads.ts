@@ -17,6 +17,14 @@ export interface CrmEtiquetaResumo {
   cor: string
 }
 
+/** Campo livre da ficha do contato — nome definido pelo usuário (ex: "CPF",
+ *  "Aniversário") + valor em texto simples. */
+export interface CampoPersonalizado {
+  id: string
+  nome: string
+  valor: string
+}
+
 export interface CrmLeadRow {
   id: string
   empresa_slug: string
@@ -42,6 +50,10 @@ export interface CrmLeadRow {
   arquivado: boolean
   created_at: string
   etiquetas: CrmEtiquetaResumo[]
+  /** Notas da ficha do contato, com formatação básica (negrito/itálico/
+   *  sublinhado/lista) — HTML já sanitizado no servidor antes de salvar. */
+  notas_html: string | null
+  campos_personalizados: CampoPersonalizado[]
 }
 
 export interface CrmMensagemRow {
