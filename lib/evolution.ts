@@ -386,14 +386,15 @@ async function extrairErroResposta(resp: Response): Promise<string> {
 }
 
 /**
- * Cria uma instancia nova na Evolution API. NAO retorna o QR aqui — o QR
- * chega pelo evento QRCODE_UPDATED do webhook (lib/crm-inbound.ts), que
- * persiste em crm_instancias.ultimo_qr. Chamar antes disso
- * crm_instancias.insert() com o mesmo instanceName.
+ * Cria uma instancia nova na Evolution API. A resposta do create já costuma
+ * trazer o QR junto (mesmo formato do connect, ver conectarInstanciaEvolution)
+ * — lê direto daqui pra já cair conectando sem precisar de um segundo clique
+ * em "Gerar QR". O evento QRCODE_UPDATED do webhook (lib/crm-inbound.ts)
+ * segue valendo como atualização em segundo plano.
  */
 export async function criarInstanciaEvolution(
   instanceName: string
-): Promise<ResultadoInstanciaEvolution> {
+): Promise<ConexaoEvolution> {
   const base = process.env.EVOLUTION_API_URL
   const apikey = process.env.EVOLUTION_API_KEY
   if (!base || !apikey) {
@@ -415,14 +416,24 @@ export async function criarInstanciaEvolution(
       signal: AbortSignal.timeout(15_000),
       cache: "no-store",
     })
+    const json: unknown = await resp.json().catch(() => null)
     if (!resp.ok) {
-      const msg = await extrairErroResposta(resp)
+      const obj = (json ?? {}) as Record<string, unknown>
+      const msg =
+        (typeof obj.message === "string" && obj.message) ||
+        (typeof obj.error === "string" && obj.error) ||
+        `HTTP ${resp.status}`
       console.error(
-        `[evolution] falha instance/create (${instanceName}): ${resp.status} ${msg}`
+        `[evolution] falha instance/create (${instanceName}): ${resp.status} ${JSON.stringify(json)}`
       )
-      return { ok: false, erro: msg, status: resp.status }
+      return { ok: false, erro: String(msg), status: resp.status }
     }
-    return { ok: true, status: resp.status }
+    // O QR do create vem aninhado em { qrcode: {...} } na maioria dos builds
+    // (diferente do connect, que às vezes vem achatado) — checa os dois.
+    const obj = (json ?? {}) as Record<string, any>
+    const qrObj = (obj.qrcode ?? obj) as Record<string, any>
+    const qrBase64 = typeof qrObj.base64 === "string" ? qrObj.base64 : undefined
+    return { ok: true, status: resp.status, qrBase64 }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error(
@@ -432,14 +443,33 @@ export async function criarInstanciaEvolution(
   }
 }
 
+export interface ConexaoEvolution extends ResultadoInstanciaEvolution {
+  /** Data URL (data:image/png;base64,...) do QR — vem no próprio corpo da
+   *  resposta do connect quando `numeroE164` NÃO é passado. */
+  qrBase64?: string
+  /** Código de pareamento (o usuário digita no WhatsApp em vez de escanear)
+   *  — vem no corpo da resposta quando `numeroE164` É passado. */
+  pairingCode?: string
+}
+
 /**
- * Dispara/renova a geracao do QR de uma instancia ja criada. A fonte de
- * verdade do QR continua sendo o evento QRCODE_UPDATED do webhook — esta
- * funcao so pede pra Evolution gerar um novo (ex: QR expirou).
+ * Dispara/renova a geracao do QR (ou, se `numeroE164` for passado, do CÓDIGO
+ * DE PAREAMENTO — login digitando o código no WhatsApp em vez de escanear)
+ * de uma instancia ja criada.
+ *
+ * O evento QRCODE_UPDATED do webhook (lib/crm-inbound.ts) segue valendo como
+ * atualização em segundo plano (ex: o QR expira e a Evolution manda um novo
+ * sozinha), mas NÃO é mais a única fonte: a própria resposta deste GET já
+ * costuma trazer o QR/código no corpo — antes essa função só conferia
+ * resp.ok e descartava o corpo, then dependia 100% do webhook chegar a
+ * tempo (e ele podia nunca chegar: webhook mal configurado na VPS, ou o
+ * Realtime do Supabase silenciosamente desligado no client). Ler direto
+ * daqui faz o botão funcionar mesmo se esse segundo canal falhar.
  */
 export async function conectarInstanciaEvolution(
-  instanceName: string
-): Promise<ResultadoInstanciaEvolution> {
+  instanceName: string,
+  numeroE164?: string
+): Promise<ConexaoEvolution> {
   const base = process.env.EVOLUTION_API_URL
   const apikey = process.env.EVOLUTION_API_KEY
   if (!base || !apikey) {
@@ -447,9 +477,10 @@ export async function conectarInstanciaEvolution(
     return { ok: false, erro: "credenciais_ausentes" }
   }
 
+  const query = numeroE164 ? `?number=${encodeURIComponent(numeroE164)}` : ""
   const url = `${base.replace(/\/$/, "")}/instance/connect/${encodeURIComponent(
     instanceName
-  )}`
+  )}${query}`
 
   try {
     const resp = await fetch(url, {
@@ -458,14 +489,29 @@ export async function conectarInstanciaEvolution(
       signal: AbortSignal.timeout(15_000),
       cache: "no-store",
     })
+    const json: unknown = await resp.json().catch(() => null)
     if (!resp.ok) {
-      const msg = await extrairErroResposta(resp)
+      const obj = (json ?? {}) as Record<string, unknown>
+      const msg =
+        (typeof obj.message === "string" && obj.message) ||
+        (typeof obj.error === "string" && obj.error) ||
+        `HTTP ${resp.status}`
       console.error(
-        `[evolution] falha instance/connect (${instanceName}): ${resp.status} ${msg}`
+        `[evolution] falha instance/connect (${instanceName}): ${resp.status} ${JSON.stringify(json)}`
       )
-      return { ok: false, erro: msg, status: resp.status }
+      return { ok: false, erro: String(msg), status: resp.status }
     }
-    return { ok: true, status: resp.status }
+
+    // Formato varia entre builds da Evolution: às vezes "achatado" (base64/
+    // pairingCode direto na raiz), às vezes aninhado em { qrcode: {...} } —
+    // mesma tolerância de extrairQrBase64 em lib/crm-inbound.ts.
+    const obj = (json ?? {}) as Record<string, any>
+    const qrObj = (obj.qrcode ?? obj) as Record<string, any>
+    const qrBase64 = typeof qrObj.base64 === "string" ? qrObj.base64 : undefined
+    const pairingCode =
+      typeof qrObj.pairingCode === "string" ? qrObj.pairingCode : undefined
+
+    return { ok: true, status: resp.status, qrBase64, pairingCode }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error(
