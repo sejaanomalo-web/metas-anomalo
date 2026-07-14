@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "./supabase"
 import { enviarTextoEvolution, enviarAudioEvolution } from "./evolution"
 import { uploadMidiaCrm } from "./crm-midia"
 import { corrigirNumeroEnvio } from "./crm-telefone"
+import { verificarLimiteEnvio } from "./crm-anti-ban"
 import { getUsuarioAtual } from "./auth"
 import {
   MENSAGENS_POR_PAGINA,
@@ -75,23 +76,30 @@ async function resolverNumeroEnvio(
 }
 
 /** Resolve a instancia CONECTADA da empresa do lead, do usuario logado.
- *  Retorna null com o motivo em `erro` quando nao ha uma. */
+ *  Retorna null com o motivo em `erro` quando nao ha uma. Traz conectado_em
+ *  pra checagem anti-ban saber se o número está em aquecimento. */
 async function resolverInstanciaConectada(
   db: ReturnType<typeof getSupabaseAdmin>,
   empresaSlug: string,
   usuarioId: string
-): Promise<{ id: string; instance_name: string } | null> {
+): Promise<{ id: string; instance_name: string; conectado_em: string | null } | null> {
   if (!db) return null
   const { data } = await db
     .from("crm_instancias")
-    .select("id, instance_name")
+    .select("id, instance_name, conectado_em")
     .eq("empresa_slug", empresaSlug)
     .eq("usuario_id", usuarioId)
     .eq("ativo", true)
     .eq("status_conexao", "conectado")
     .limit(1)
     .maybeSingle()
-  return data ? { id: data.id as string, instance_name: data.instance_name as string } : null
+  return data
+    ? {
+        id: data.id as string,
+        instance_name: data.instance_name as string,
+        conectado_em: (data.conectado_em as string) ?? null,
+      }
+    : null
 }
 
 /**
@@ -128,6 +136,17 @@ export async function enviarMensagemAction(
   if (!inst) {
     return { ok: false, erro: "Nenhuma instância conectada para esta empresa." }
   }
+
+  // Trava anti-bloqueio: barra o envio ANTES de chamar a Evolution se o padrão
+  // (rajada, mesma mensagem em massa, etc.) arriscar um ban do WhatsApp. Não
+  // grava mensagem nem chama a Evolution quando bloqueia — só devolve o motivo.
+  const limite = await verificarLimiteEnvio(db, {
+    instanciaId: inst.id,
+    leadId,
+    texto: textoLimpo,
+    conectadoEm: inst.conectado_em,
+  })
+  if (!limite.ok) return { ok: false, erro: limite.erro }
 
   const numero = await resolverNumeroEnvio(db, leadId, lead.telefone_e164 as string)
 
@@ -215,6 +234,16 @@ export async function enviarAudioAction(
   if (!inst) {
     return { ok: false, erro: "Nenhuma instância conectada para esta empresa." }
   }
+
+  // Trava anti-bloqueio (texto null: pula só a checagem de mensagem repetida;
+  // os tetos de volume/rajada valem pra áudio também).
+  const limite = await verificarLimiteEnvio(db, {
+    instanciaId: inst.id,
+    leadId,
+    texto: null,
+    conectadoEm: inst.conectado_em,
+  })
+  if (!limite.ok) return { ok: false, erro: limite.erro }
 
   // Sobe pro storage pra tocar de volta na thread. Se o storage falhar, só usa
   // o proprio data URL como fallback quando for PEQUENO (nota curta) — um
