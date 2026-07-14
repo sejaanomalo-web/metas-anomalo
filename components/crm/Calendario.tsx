@@ -9,6 +9,13 @@ import {
   excluirAtividadeAction,
 } from "@/lib/crm-atividades-actions"
 import { casaBusca } from "@/lib/crm-busca"
+import {
+  PERIODOS_FILTRO,
+  calcularRangeFiltro,
+  calcularRangePersonalizado,
+  formatarDataBR,
+  type PeriodoFiltroKey,
+} from "@/lib/crm-periodos"
 
 const DIAS_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"]
 const MESES = [
@@ -22,96 +29,17 @@ const MESES_CURTO = [
 
 const ACCENT = "#C9953A"
 
-// ── Períodos do filtro (todos ancorados em "hoje", calculados no client) ──
-type PeriodoKey =
-  | "hoje" | "ontem" | "esta_semana" | "ult_7" | "semana_passada" | "ult_14"
-  | "ult_30" | "este_mes" | "mes_passado" | "ult_60" | "ult_90" | "ult_6m"
-  | "este_ano" | "ult_365" | "personalizado"
-
-const PERIODOS: { chave: PeriodoKey; label: string }[] = [
-  { chave: "hoje", label: "Hoje" },
-  { chave: "ontem", label: "Ontem" },
-  { chave: "esta_semana", label: "Esta Semana" },
-  { chave: "ult_7", label: "Últimos 7 dias" },
-  { chave: "semana_passada", label: "Semana Passada" },
-  { chave: "ult_14", label: "Últimos 14 dias" },
-  { chave: "ult_30", label: "Últimos 30 dias" },
-  { chave: "este_mes", label: "Este Mês" },
-  { chave: "mes_passado", label: "Mês Passado" },
-  { chave: "ult_60", label: "Últimos 60 dias" },
-  { chave: "ult_90", label: "Últimos 90 dias" },
-  { chave: "ult_6m", label: "Últimos 6 Meses" },
-  { chave: "este_ano", label: "Este Ano" },
-  { chave: "ult_365", label: "Últimos 365 dias" },
-  { chave: "personalizado", label: "Personalizado…" },
-]
+// O Calendário nunca oferece "todos" (Qualquer data) no próprio seletor —
+// sempre precisa de um período ativo pra desenhar a grade de meses. Ver o
+// filter na hora de montar as <option>. Os períodos em si (chaves, labels,
+// ordem, cálculo do intervalo) vêm de lib/crm-periodos.ts — mesma fonte que
+// Conversas e Kanban usam, pra tudo ficar alinhado.
 
 function chaveDia(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, "0")
   const dia = String(d.getDate()).padStart(2, "0")
   return `${y}-${m}-${dia}`
-}
-function inicioDoDia(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
-}
-function addDias(d: Date, n: number): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
-}
-
-/** Intervalo [inicio, fim] (ambos em midnight local) do período escolhido. */
-function calcularRange(chave: PeriodoKey, hoje: Date): { inicio: Date; fim: Date } {
-  const h = inicioDoDia(hoje)
-  switch (chave) {
-    case "hoje":
-      return { inicio: h, fim: h }
-    case "ontem": {
-      const o = addDias(h, -1)
-      return { inicio: o, fim: o }
-    }
-    case "esta_semana": {
-      const ini = addDias(h, -h.getDay())
-      return { inicio: ini, fim: addDias(ini, 6) }
-    }
-    case "ult_7":
-      return { inicio: addDias(h, -6), fim: h }
-    case "semana_passada": {
-      const iniEsta = addDias(h, -h.getDay())
-      return { inicio: addDias(iniEsta, -7), fim: addDias(iniEsta, -1) }
-    }
-    case "ult_14":
-      return { inicio: addDias(h, -13), fim: h }
-    case "ult_30":
-      return { inicio: addDias(h, -29), fim: h }
-    case "este_mes":
-      return {
-        inicio: new Date(h.getFullYear(), h.getMonth(), 1),
-        fim: new Date(h.getFullYear(), h.getMonth() + 1, 0),
-      }
-    case "mes_passado":
-      return {
-        inicio: new Date(h.getFullYear(), h.getMonth() - 1, 1),
-        fim: new Date(h.getFullYear(), h.getMonth(), 0),
-      }
-    case "ult_60":
-      return { inicio: addDias(h, -59), fim: h }
-    case "ult_90":
-      return { inicio: addDias(h, -89), fim: h }
-    case "ult_6m":
-      return { inicio: new Date(h.getFullYear(), h.getMonth() - 6, h.getDate()), fim: h }
-    case "este_ano":
-      return { inicio: new Date(h.getFullYear(), 0, 1), fim: new Date(h.getFullYear(), 11, 31) }
-    case "ult_365":
-      return { inicio: addDias(h, -364), fim: h }
-    case "personalizado":
-      // Fallback antes do usuário escolher as duas datas — o componente
-      // sobrescreve com o intervalo real assim que "de"/"até" são preenchidos.
-      return { inicio: h, fim: h }
-  }
-}
-
-function formatarDataBR(d: Date): string {
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
 /** Lista de meses (ano+mês) que o intervalo cobre, do primeiro ao último. */
@@ -151,7 +79,7 @@ export default function Calendario({
   proximas: CrmAtividadeRow[]
 }) {
   const hoje = useMemo(() => new Date(), [])
-  const [periodo, setPeriodo] = useState<PeriodoKey>("este_mes")
+  const [periodo, setPeriodo] = useState<PeriodoFiltroKey>("este_mes")
   const [diaFoco, setDiaFoco] = useState<string | null>(null)
   const [aberta, setAberta] = useState<CrmAtividadeRow | null>(null)
   const [de, setDe] = useState("")
@@ -159,20 +87,15 @@ export default function Calendario({
   const [busca, setBusca] = useState("")
   const router = useRouter()
 
-  // Período "Personalizado…": enquanto o usuário não preencheu as duas
-  // datas, cai no fallback hoje..hoje de calcularRange (evita quebrar o
-  // useMemo abaixo); assim que "de" e "até" existem, sobrescreve o range.
-  const rangeCustom = useMemo(() => {
-    if (periodo !== "personalizado" || !de || !ate) return null
-    const iniD = new Date(`${de}T00:00:00`)
-    const fimD = new Date(`${ate}T00:00:00`)
-    return iniD.getTime() <= fimD.getTime()
-      ? { inicio: iniD, fim: fimD }
-      : { inicio: fimD, fim: iniD }
-  }, [periodo, de, ate])
+  // Período "Personalizado…": mesma função compartilhada com Conversas/
+  // Kanban (só "de" já filtra aquele dia único; "até" preenchido também
+  // estende pro intervalo). Enquanto nenhuma data foi escolhida ainda, cai
+  // no fallback de calcularRangeFiltro — "todos" nunca acontece aqui (não
+  // está entre as opções do próprio seletor), então o "!" é seguro.
+  const rangeCustom = useMemo(() => calcularRangePersonalizado(de, ate), [de, ate])
 
   const { inicio, fim } = useMemo(
-    () => rangeCustom ?? calcularRange(periodo, hoje),
+    () => rangeCustom ?? calcularRangeFiltro(periodo, hoje) ?? calcularRangeFiltro("hoje", hoje)!,
     [rangeCustom, periodo, hoje]
   )
   const inicioKey = chaveDia(inicio)
@@ -226,9 +149,9 @@ export default function Calendario({
   const periodoLabel =
     periodo === "personalizado" && rangeCustom
       ? `${formatarDataBR(inicio)} – ${formatarDataBR(fim)}`
-      : PERIODOS.find((p) => p.chave === periodo)?.label ?? ""
+      : PERIODOS_FILTRO.find((p) => p.chave === periodo)?.label ?? ""
 
-  function trocarPeriodo(p: PeriodoKey) {
+  function trocarPeriodo(p: PeriodoFiltroKey) {
     setPeriodo(p)
     setDiaFoco(null)
   }
@@ -246,11 +169,11 @@ export default function Calendario({
           </span>
           <select
             value={periodo}
-            onChange={(e) => trocarPeriodo(e.target.value as PeriodoKey)}
+            onChange={(e) => trocarPeriodo(e.target.value as PeriodoFiltroKey)}
             className="glass-input"
             style={{ fontSize: 13, padding: "7px 12px", borderRadius: 8, fontWeight: 600, color: ACCENT }}
           >
-            {PERIODOS.map((p) => (
+            {PERIODOS_FILTRO.filter((p) => p.chave !== "todos").map((p) => (
               <option key={p.chave} value={p.chave} style={{ color: "#111" }}>
                 {p.label}
               </option>

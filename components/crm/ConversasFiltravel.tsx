@@ -5,10 +5,11 @@ import Link from "next/link"
 import type { CrmLeadRow, CrmEtiquetaResumo } from "@/lib/crm-leads"
 import type { CrmInstanciaRow } from "@/lib/crm-instancias-actions"
 import {
-  PERIODOS_CONVERSA,
-  calcularRangeConversa,
+  PERIODOS_FILTRO,
+  calcularRangeFiltro,
+  calcularRangePersonalizado,
   formatarDataBR,
-  type PeriodoConversaKey,
+  type PeriodoFiltroKey,
 } from "@/lib/crm-periodos"
 import { casaBusca } from "@/lib/crm-busca"
 import ListaConversas from "@/components/crm/ListaConversas"
@@ -40,33 +41,25 @@ export default function ConversasFiltravel({
 }) {
   const [aberto, setAberto] = useState(false)
   const [etiquetaId, setEtiquetaId] = useState<string | null>(null)
-  const [periodo, setPeriodo] = useState<PeriodoConversaKey>("todos")
+  const [periodo, setPeriodo] = useState<PeriodoFiltroKey>("todos")
   const [dataDe, setDataDe] = useState("")
   const [dataAte, setDataAte] = useState("")
   const [busca, setBusca] = useState("")
 
   const hoje = useMemo(() => new Date(), [])
 
-  // "Personalizado…": o usuário escolhe as datas — só "de" já filtra aquele
-  // dia único; "até" preenchido também estende pro intervalo. Enquanto
-  // nenhuma data foi escolhida ainda, cai no fallback (sem filtro) do
-  // calcularRangeConversa, igual ao período "Personalizado" do Calendário.
-  const rangePersonalizado = useMemo(() => {
-    if (periodo !== "personalizado" || !dataDe) return null
-    const iniD = new Date(`${dataDe}T00:00:00`)
-    const fimD = dataAte
-      ? new Date(`${dataAte}T23:59:59.999`)
-      : new Date(`${dataDe}T23:59:59.999`)
-    return iniD.getTime() <= fimD.getTime()
-      ? { inicio: iniD, fim: fimD }
-      : { inicio: new Date(`${dataAte}T00:00:00`), fim: new Date(`${dataDe}T23:59:59.999`) }
-  }, [periodo, dataDe, dataAte])
+  // "Personalizado…": mesma função compartilhada com Kanban/Calendário (só
+  // "de" já filtra aquele dia único; "até" preenchido também estende pro
+  // intervalo). Enquanto nenhuma data foi escolhida ainda, cai no fallback
+  // (sem filtro) de calcularRangeFiltro.
+  const rangePersonalizado = useMemo(
+    () => calcularRangePersonalizado(dataDe, dataAte),
+    [dataDe, dataAte]
+  )
 
   const range = useMemo(
     () =>
-      periodo === "personalizado"
-        ? rangePersonalizado
-        : calcularRangeConversa(periodo, hoje),
+      periodo === "personalizado" ? rangePersonalizado : calcularRangeFiltro(periodo, hoje),
     [periodo, hoje, rangePersonalizado]
   )
 
@@ -94,7 +87,7 @@ export default function ConversasFiltravel({
   const periodoLabel =
     periodo === "personalizado" && rangePersonalizado
       ? `${formatarDataBR(rangePersonalizado.inicio)} – ${formatarDataBR(rangePersonalizado.fim)}`
-      : PERIODOS_CONVERSA.find((p) => p.chave === periodo)?.label
+      : PERIODOS_FILTRO.find((p) => p.chave === periodo)?.label
 
   function limpar() {
     setEtiquetaId(null)
@@ -205,12 +198,12 @@ export default function ConversasFiltravel({
             <select
               value={periodo}
               onChange={(ev) =>
-                setPeriodo(ev.target.value as PeriodoConversaKey)
+                setPeriodo(ev.target.value as PeriodoFiltroKey)
               }
               className="glass-input"
               style={{ fontSize: 12, padding: "6px 8px", width: "100%" }}
             >
-              {PERIODOS_CONVERSA.map((p) => (
+              {PERIODOS_FILTRO.map((p) => (
                 <option key={p.chave} value={p.chave} style={{ color: "#111" }}>
                   {p.label}
                 </option>
