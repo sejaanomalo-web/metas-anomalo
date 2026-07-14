@@ -15,6 +15,7 @@ export type PeriodoConversaKey =
   | "semana_passada"
   | "ult_90"
   | "ult_365"
+  | "personalizado"
 
 export const PERIODOS_CONVERSA: { chave: PeriodoConversaKey; label: string }[] = [
   { chave: "todos", label: "Qualquer data" },
@@ -28,7 +29,12 @@ export const PERIODOS_CONVERSA: { chave: PeriodoConversaKey; label: string }[] =
   { chave: "semana_passada", label: "Semana passada" },
   { chave: "ult_90", label: "Últimos 3 meses" },
   { chave: "ult_365", label: "Últimos 365 dias" },
+  { chave: "personalizado", label: "Personalizado…" },
 ]
+
+export function formatarDataBR(d: Date): string {
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+}
 
 function inicioDoDia(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -79,5 +85,10 @@ export function calcularRangeConversa(
       return { inicio: addDias(h, -89), fim: fimDoDia(h) }
     case "ult_365":
       return { inicio: addDias(h, -364), fim: fimDoDia(h) }
+    case "personalizado":
+      // O intervalo real vem de "de"/"até" escolhidos pelo usuário — quem
+      // chama isso (ConversasFiltravel) calcula esse range à parte e só cai
+      // aqui como fallback antes de ambas as datas serem preenchidas.
+      return null
   }
 }

@@ -7,6 +7,7 @@ import type { CrmInstanciaRow } from "@/lib/crm-instancias-actions"
 import {
   PERIODOS_CONVERSA,
   calcularRangeConversa,
+  formatarDataBR,
   type PeriodoConversaKey,
 } from "@/lib/crm-periodos"
 import { casaBusca } from "@/lib/crm-busca"
@@ -40,12 +41,33 @@ export default function ConversasFiltravel({
   const [aberto, setAberto] = useState(false)
   const [etiquetaId, setEtiquetaId] = useState<string | null>(null)
   const [periodo, setPeriodo] = useState<PeriodoConversaKey>("todos")
+  const [dataDe, setDataDe] = useState("")
+  const [dataAte, setDataAte] = useState("")
   const [busca, setBusca] = useState("")
 
   const hoje = useMemo(() => new Date(), [])
+
+  // "Personalizado…": o usuário escolhe as datas — só "de" já filtra aquele
+  // dia único; "até" preenchido também estende pro intervalo. Enquanto
+  // nenhuma data foi escolhida ainda, cai no fallback (sem filtro) do
+  // calcularRangeConversa, igual ao período "Personalizado" do Calendário.
+  const rangePersonalizado = useMemo(() => {
+    if (periodo !== "personalizado" || !dataDe) return null
+    const iniD = new Date(`${dataDe}T00:00:00`)
+    const fimD = dataAte
+      ? new Date(`${dataAte}T23:59:59.999`)
+      : new Date(`${dataDe}T23:59:59.999`)
+    return iniD.getTime() <= fimD.getTime()
+      ? { inicio: iniD, fim: fimD }
+      : { inicio: new Date(`${dataAte}T00:00:00`), fim: new Date(`${dataDe}T23:59:59.999`) }
+  }, [periodo, dataDe, dataAte])
+
   const range = useMemo(
-    () => calcularRangeConversa(periodo, hoje),
-    [periodo, hoje]
+    () =>
+      periodo === "personalizado"
+        ? rangePersonalizado
+        : calcularRangeConversa(periodo, hoje),
+    [periodo, hoje, rangePersonalizado]
   )
 
   const leadsFiltrados = useMemo(() => {
@@ -69,11 +91,16 @@ export default function ConversasFiltravel({
   const etiquetaAtiva = etiquetaId
     ? etiquetas.find((e) => e.id === etiquetaId)
     : null
-  const periodoLabel = PERIODOS_CONVERSA.find((p) => p.chave === periodo)?.label
+  const periodoLabel =
+    periodo === "personalizado" && rangePersonalizado
+      ? `${formatarDataBR(rangePersonalizado.inicio)} – ${formatarDataBR(rangePersonalizado.fim)}`
+      : PERIODOS_CONVERSA.find((p) => p.chave === periodo)?.label
 
   function limpar() {
     setEtiquetaId(null)
     setPeriodo("todos")
+    setDataDe("")
+    setDataAte("")
     setBusca("")
   }
 
@@ -189,6 +216,26 @@ export default function ConversasFiltravel({
                 </option>
               ))}
             </select>
+            {periodo === "personalizado" && (
+              <div className="flex items-center gap-1" style={{ marginTop: 8 }}>
+                <input
+                  type="date"
+                  value={dataDe}
+                  onChange={(e) => setDataDe(e.target.value)}
+                  className="glass-input"
+                  style={{ fontSize: 12, padding: "6px 8px", borderRadius: 8, flex: 1, minWidth: 0 }}
+                />
+                <span style={{ fontSize: 11, color: "var(--text-4)" }}>até</span>
+                <input
+                  type="date"
+                  value={dataAte}
+                  onChange={(e) => setDataAte(e.target.value)}
+                  placeholder="Opcional"
+                  className="glass-input"
+                  style={{ fontSize: 12, padding: "6px 8px", borderRadius: 8, flex: 1, minWidth: 0 }}
+                />
+              </div>
+            )}
           </div>
 
           {temFiltro && (
