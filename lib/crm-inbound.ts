@@ -162,6 +162,7 @@ async function processarQrcodeUpdate(
     .from("crm_instancias")
     .update({
       ultimo_qr: qr,
+      ultimo_pairing_code: null,
       status_conexao: "qrcode",
       updated_at: new Date().toISOString(),
     })
@@ -204,7 +205,8 @@ async function processarConnectionUpdate(
   }
   if (status === "conectado") {
     patch.conectado_em = agora
-    patch.ultimo_qr = null // QR ja foi usado, evita reexibir na UI
+    patch.ultimo_qr = null // QR/codigo ja foi usado, evita reexibir na UI
+    patch.ultimo_pairing_code = null
   }
 
   await db.from("crm_instancias").update(patch).eq("id", inst.id)

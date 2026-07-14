@@ -1,12 +1,15 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { EmpresaMeta } from "@/lib/data"
 import type { CrmInstanciaRow } from "@/lib/crm-instancias-actions"
 import {
   criarInstanciaAction,
   gerarQrAction,
+  gerarCodigoPareamentoAction,
+  reiniciarInstanciaAction,
+  buscarStatusInstanciaAction,
   desativarInstanciaAction,
   reativarInstanciaAction,
   atualizarCorInstanciaAction,
@@ -280,19 +283,121 @@ function LinhaInstancia({
 }) {
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
   const [corAberta, setCorAberta] = useState(false)
   const [confirmarExcluir, setConfirmarExcluir] = useState(false)
+  const [qrLocal, setQrLocal] = useState<string | null>(null)
+  const [pairingLocal, setPairingLocal] = useState<string | null>(null)
+  const [mostrarCodigo, setMostrarCodigo] = useState(false)
+  const [numeroCodigo, setNumeroCodigo] = useState(instancia.numero_e164 ?? "")
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
   const empresaNome =
     empresas.find((e) => e.slug === instancia.empresa_slug)?.nome ??
     instancia.empresa_slug
   const nomeExibido = instancia.display_nome || instancia.instance_name
+  const qrExibido = qrLocal ?? instancia.ultimo_qr
+  const pairingExibido = pairingLocal ?? instancia.ultimo_pairing_code
+
+  function pararPolling() {
+    if (pollRef.current) clearInterval(pollRef.current)
+    if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
+    pollRef.current = null
+    pollTimeoutRef.current = null
+  }
+
+  // Enquanto aguarda o usuário escanear/digitar o código, consulta o status
+  // a cada poucos segundos — não dá pra confiar só no Realtime do Supabase
+  // (silenciosamente desligado se faltar env var) nem num único
+  // router.refresh() logo após o clique (o QR muitas vezes só existe alguns
+  // instantes depois, quando o webhook da Evolution confirma).
+  function iniciarPolling() {
+    pararPolling()
+    pollRef.current = setInterval(async () => {
+      const status = await buscarStatusInstanciaAction(instancia.id)
+      if (!status) return
+      if (status.status_conexao === "conectado") {
+        pararPolling()
+        setQrLocal(null)
+        setPairingLocal(null)
+        setAviso(null)
+        router.refresh()
+        return
+      }
+      setQrLocal(status.ultimo_qr)
+      setPairingLocal(status.ultimo_pairing_code)
+    }, 2500)
+    pollTimeoutRef.current = setTimeout(pararPolling, 45_000)
+  }
+
+  useEffect(() => () => pararPolling(), [])
+
+  // Segurança extra: se a prop virar "conectado" por qualquer outro caminho
+  // (Realtime, ou o refresh de uma ação irmã), limpa o QR/código locais e
+  // para de sondar — sem isso a imagem antiga podia ficar presa na tela.
+  useEffect(() => {
+    if (instancia.status_conexao === "conectado") {
+      pararPolling()
+      setQrLocal(null)
+      setPairingLocal(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instancia.status_conexao])
+
+  function aplicarResultadoQr(r: {
+    ok: boolean
+    erro?: string
+    qrBase64?: string
+    pairingCode?: string
+  }) {
+    if (!r.ok) {
+      setErro(r.erro ?? "Erro")
+      setAviso(null)
+      return
+    }
+    setErro(null)
+    setAviso(r.erro ?? null)
+    if (r.qrBase64) {
+      setQrLocal(r.qrBase64)
+      setPairingLocal(null)
+    }
+    if (r.pairingCode) {
+      setPairingLocal(r.pairingCode)
+      setQrLocal(null)
+    }
+    if (r.qrBase64 || r.pairingCode) iniciarPolling()
+  }
 
   async function gerarQr() {
     const fd = new FormData()
     fd.set("id", instancia.id)
     const r = await gerarQrAction(fd)
-    setErro(r.ok ? null : r.erro ?? "Erro ao gerar QR")
+    aplicarResultadoQr(r)
+    router.refresh()
+  }
+
+  async function gerarCodigo() {
+    const digitos = numeroCodigo.replace(/\D/g, "")
+    if (digitos.length < 10) {
+      setErro("Informe o número com DDD (ex: 45999999999).")
+      return
+    }
+    const fd = new FormData()
+    fd.set("id", instancia.id)
+    fd.set("numero", digitos)
+    const r = await gerarCodigoPareamentoAction(fd)
+    aplicarResultadoQr(r)
+    router.refresh()
+  }
+
+  async function reiniciar() {
+    setQrLocal(null)
+    setPairingLocal(null)
+    const fd = new FormData()
+    fd.set("id", instancia.id)
+    const r = await reiniciarInstanciaAction(fd)
+    aplicarResultadoQr(r)
     router.refresh()
   }
 
@@ -403,15 +508,33 @@ function LinhaInstancia({
             {STATUS_LABEL[instancia.status_conexao]}
           </span>
           {!inativa && instancia.status_conexao !== "conectado" && (
-            <button
-              type="button"
-              onClick={() => startTransition(() => gerarQr())}
-              disabled={pending}
-              className="btn-gold-filled"
-              style={{ fontSize: 11, padding: "6px 10px", opacity: pending ? 0.5 : 1 }}
-            >
-              {pending ? "Gerando..." : "Gerar QR"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => startTransition(() => gerarQr())}
+                disabled={pending}
+                className="btn-gold-filled"
+                style={{ fontSize: 11, padding: "6px 10px", opacity: pending ? 0.5 : 1 }}
+              >
+                {pending ? "Gerando..." : "Gerar QR"}
+              </button>
+              <button
+                type="button"
+                onClick={() => startTransition(() => reiniciar())}
+                disabled={pending}
+                title="Desloga e recria a instância na Evolution do zero — use quando o QR trava e não sai do lugar"
+                style={{
+                  fontSize: 11,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: "0.5px solid rgba(255,255,255,0.18)",
+                  color: "var(--text-2, #ddd)",
+                  opacity: pending ? 0.5 : 1,
+                }}
+              >
+                {pending ? "..." : "↻ Recarregar/Reiniciar"}
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -495,10 +618,10 @@ function LinhaInstancia({
         </div>
       )}
 
-      {!inativa && instancia.status_conexao === "qrcode" && instancia.ultimo_qr && (
+      {!inativa && instancia.status_conexao !== "conectado" && qrExibido && (
         <div style={{ marginTop: 14, textAlign: "center" }}>
           <img
-            src={instancia.ultimo_qr}
+            src={qrExibido}
             alt={`QR code de ${instancia.instance_name}`}
             style={{ maxWidth: 240, margin: "0 auto", borderRadius: 8 }}
           />
@@ -509,6 +632,75 @@ function LinhaInstancia({
         </div>
       )}
 
+      {!inativa && instancia.status_conexao !== "conectado" && pairingExibido && (
+        <div style={{ marginTop: 14, textAlign: "center" }}>
+          <p
+            style={{
+              fontSize: 28,
+              fontWeight: 700,
+              letterSpacing: "4px",
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              color: "var(--gold, #C9953A)",
+            }}
+          >
+            {pairingExibido}
+          </p>
+          <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>
+            No WhatsApp do celular: Aparelhos conectados → Conectar aparelho →
+            Conectar com número de telefone → digite este código. Atualiza
+            sozinho quando conectar.
+          </p>
+        </div>
+      )}
+
+      {!inativa && instancia.status_conexao !== "conectado" && (
+        <div style={{ marginTop: 12 }}>
+          {!mostrarCodigo ? (
+            <button
+              type="button"
+              onClick={() => setMostrarCodigo(true)}
+              style={{ fontSize: 11, color: "var(--text-3)", textDecoration: "underline" }}
+            >
+              QR não funciona? Entrar com código no WhatsApp →
+            </button>
+          ) : (
+            <div
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                border: "0.5px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8 }}>
+                Informe o número (com DDD) que vai ser conectado — a Evolution gera
+                um código curto pra digitar no WhatsApp, sem precisar escanear nada.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  value={numeroCodigo}
+                  onChange={(e) => setNumeroCodigo(e.target.value)}
+                  placeholder="Ex: 45999999999"
+                  className="glass-input"
+                  style={{ fontSize: 12, padding: "6px 10px", flex: 1, minWidth: 0 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => startTransition(() => gerarCodigo())}
+                  disabled={pending}
+                  className="btn-gold-filled"
+                  style={{ fontSize: 11, padding: "6px 10px", opacity: pending ? 0.5 : 1, flexShrink: 0 }}
+                >
+                  {pending ? "..." : "Gerar código"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {aviso && (
+        <p style={{ fontSize: 11, color: "var(--text-4)", marginTop: 8 }}>{aviso}</p>
+      )}
       {erro && (
         <p style={{ fontSize: 11, color: "var(--danger)", marginTop: 8 }}>{erro}</p>
       )}

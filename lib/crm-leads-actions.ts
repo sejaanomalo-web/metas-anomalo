@@ -10,20 +10,11 @@ import {
 } from "./evolution"
 import { buscarEtapasAutomaticas, sincronizarEtiquetaComEtapa } from "./crm-etapas"
 import type { CampoPersonalizado } from "./crm-leads"
+import { normalizarTelefone } from "./crm-telefone"
 
 export interface ResultadoLead {
   ok: boolean
   erro?: string
-}
-
-/** Digitos puros; numero brasileiro sem DDI (10/11 digitos — fixo ou celular
- *  com o 9) ganha o 55 na frente, pro mesmo padrao dos leads que chegam pelo
- *  WhatsApp (telefoneDoJid em lib/crm-inbound.ts). */
-function normalizarTelefone(bruto: string): string | null {
-  const digitos = bruto.replace(/\D/g, "")
-  if (digitos.length < 8) return null
-  if (digitos.length <= 11) return `55${digitos}`
-  return digitos
 }
 
 function emailValido(bruto: string): string | null {
