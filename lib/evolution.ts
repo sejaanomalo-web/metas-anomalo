@@ -20,6 +20,25 @@ export interface ResultadoEvolution {
 }
 
 /**
+ * Extrai a mensagem de erro mais útil possível do corpo de uma resposta de
+ * falha da Evolution. O 400 dela costuma trazer o detalhe REAL em
+ * `response.message` (array de strings, ex: ["number 045... is not a valid
+ * whatsapp"]) — antes só líamos `message`/`error` e acabávamos exibindo o
+ * genérico "Bad Request", que não dizia nada ao usuário. Tenta, em ordem:
+ * response.message[] → message → error → "HTTP <status>".
+ */
+function erroDaRespostaEvolution(json: unknown, status: number): string {
+  const obj = (json ?? {}) as Record<string, any>
+  const respMsg = obj.response?.message ?? obj.message
+  if (Array.isArray(respMsg) && respMsg.length > 0) {
+    return respMsg.map((m) => (typeof m === "string" ? m : JSON.stringify(m))).join("; ")
+  }
+  if (typeof respMsg === "string" && respMsg.trim()) return respMsg
+  if (typeof obj.error === "string" && obj.error.trim()) return obj.error
+  return `HTTP ${status}`
+}
+
+/**
  * Envia uma mensagem de texto por uma instancia Evolution.
  *
  * @param instanceName  nome EXATO da instancia (crm_instancias.instance_name)
@@ -55,16 +74,12 @@ export async function enviarTextoEvolution(
     const json: unknown = await resp.json().catch(() => null)
 
     if (!resp.ok) {
-      const obj = (json ?? {}) as Record<string, unknown>
-      const msg =
-        (typeof obj.message === "string" && obj.message) ||
-        (typeof obj.error === "string" && obj.error) ||
-        `HTTP ${resp.status}`
+      const msg = erroDaRespostaEvolution(json, resp.status)
       console.error(
         `[evolution] falha sendText (${instanceName} -> ${telefoneE164}): ` +
           `${resp.status} ${JSON.stringify(json)}`
       )
-      return { ok: false, erro: String(msg), status: resp.status }
+      return { ok: false, erro: msg, status: resp.status }
     }
 
     // Evolution responde com { key: { id }, ... } no sucesso.
@@ -118,16 +133,12 @@ export async function enviarAudioEvolution(
     })
     const json: unknown = await resp.json().catch(() => null)
     if (!resp.ok) {
-      const obj = (json ?? {}) as Record<string, unknown>
-      const msg =
-        (typeof obj.message === "string" && obj.message) ||
-        (typeof obj.error === "string" && obj.error) ||
-        `HTTP ${resp.status}`
+      const msg = erroDaRespostaEvolution(json, resp.status)
       console.error(
         `[evolution] falha sendWhatsAppAudio (${instanceName} -> ${telefoneE164}): ` +
           `${resp.status} ${JSON.stringify(json)}`
       )
-      return { ok: false, erro: String(msg), status: resp.status }
+      return { ok: false, erro: msg, status: resp.status }
     }
     const obj = (json ?? {}) as {
       key?: { id?: string }
@@ -377,12 +388,7 @@ export interface ResultadoInstanciaEvolution {
 
 async function extrairErroResposta(resp: Response): Promise<string> {
   const json: unknown = await resp.json().catch(() => null)
-  const obj = (json ?? {}) as Record<string, unknown>
-  return (
-    (typeof obj.message === "string" && obj.message) ||
-    (typeof obj.error === "string" && obj.error) ||
-    `HTTP ${resp.status}`
-  )
+  return erroDaRespostaEvolution(json, resp.status)
 }
 
 /**

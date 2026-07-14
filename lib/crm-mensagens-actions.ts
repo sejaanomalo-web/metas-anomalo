@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { enviarTextoEvolution, enviarAudioEvolution } from "./evolution"
 import { uploadMidiaCrm } from "./crm-midia"
+import { corrigirNumeroEnvio } from "./crm-telefone"
 import { getUsuarioAtual } from "./auth"
 import {
   MENSAGENS_POR_PAGINA,
@@ -42,6 +43,35 @@ export async function carregarMensagensAntigasAction(
   }
   const linhas = ((data ?? []) as CrmMensagemRow[]).reverse()
   return { mensagens: linhas, temMaisAntigas: linhas.length === limite }
+}
+
+/**
+ * Auto-cura o telefone do lead antes de enviar: leads manuais antigos podem
+ * ter sido gravados com o número malformado (ex: "045991122829" — prefixo de
+ * tronco "0" e sem o país "55"), o que a Evolution rejeita com "Bad Request".
+ * corrigirNumeroEnvio só mexe no que é inequivocamente brasileiro-malformado
+ * (começa com 0); número já em E.164, inclusive estrangeiro (+44…), passa
+ * intocado. Quando corrige, persiste no lead pra não repetir todo envio (e
+ * pra a UI mostrar o número certo). Best-effort na persistência: se colidir
+ * com a UNIQUE(empresa_slug, telefone) — improvável — segue enviando com o
+ * número corrigido sem gravar.
+ */
+async function resolverNumeroEnvio(
+  db: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  leadId: string,
+  telefoneBruto: string
+): Promise<string> {
+  const corrigido = corrigirNumeroEnvio(telefoneBruto)
+  if (corrigido && corrigido !== telefoneBruto) {
+    const { error } = await db
+      .from("crm_leads")
+      .update({ telefone_e164: corrigido, updated_at: new Date().toISOString() })
+      .eq("id", leadId)
+    if (error) {
+      console.error("[crm_mensagens] falha ao auto-curar telefone do lead", error.message)
+    }
+  }
+  return corrigido || telefoneBruto
 }
 
 /** Resolve a instancia CONECTADA da empresa do lead, do usuario logado.
@@ -99,12 +129,10 @@ export async function enviarMensagemAction(
     return { ok: false, erro: "Nenhuma instância conectada para esta empresa." }
   }
 
+  const numero = await resolverNumeroEnvio(db, leadId, lead.telefone_e164 as string)
+
   const agora = new Date().toISOString()
-  const envio = await enviarTextoEvolution(
-    inst.instance_name,
-    lead.telefone_e164 as string,
-    textoLimpo
-  )
+  const envio = await enviarTextoEvolution(inst.instance_name, numero, textoLimpo)
 
   await db.from("crm_mensagens").insert({
     lead_id: leadId,
@@ -199,12 +227,10 @@ export async function enviarAudioAction(
   const midiaUrl =
     urlStorage ?? (audioBase64.length <= LIMITE_FALLBACK_INLINE ? audioBase64 : null)
 
+  const numero = await resolverNumeroEnvio(db, leadId, lead.telefone_e164 as string)
+
   const agora = new Date().toISOString()
-  const envio = await enviarAudioEvolution(
-    inst.instance_name,
-    lead.telefone_e164 as string,
-    audioBase64
-  )
+  const envio = await enviarAudioEvolution(inst.instance_name, numero, audioBase64)
 
   await db.from("crm_mensagens").insert({
     lead_id: leadId,

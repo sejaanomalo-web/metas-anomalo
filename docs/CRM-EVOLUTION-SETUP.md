@@ -71,6 +71,7 @@ services:
       WEBHOOK_GLOBAL_ENABLED: "true"
       WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
       WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+      WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"   # entrega/leitura (✓✓ / ✓✓ azul) — sem isso o status para em "enviada"
       WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
       WEBHOOK_EVENTS_QRCODE_UPDATED: "true"
       WEBHOOK_EVENTS_CONTACTS_UPSERT: "true"
@@ -181,8 +182,12 @@ O que mudou e o que exige ação sua:
   `/instance/delete`) e remove a linha local. O histórico de mensagens fica
   preservado.
 
-- **Opcional (recibos de leitura)** — pra ✓✓ no futuro, habilitar
-  `WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"` no compose. Não é necessário agora.
+- **Recibos de entrega/leitura (✓✓)** — o app já processa o evento
+  `messages.update` (marca a mensagem como entregue/lida e mostra os ticks na
+  thread). Pra isso funcionar, o compose precisa de
+  `WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"` (já incluído acima). Sem essa flag
+  a Evolution não manda o evento e o status para em "enviada" (aceita pela
+  Evolution, sem confirmação de que chegou no aparelho do contato).
 
 > **Resumo do que você precisa fazer:** (1) aplicar a migração `20260711`;
 > (2) confirmar que o app roda em HTTPS (Vercel já roda); (3) nada de env nova.

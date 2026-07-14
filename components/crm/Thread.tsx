@@ -292,12 +292,7 @@ export default function Thread({
                 }}
               >
                 {formatarHora(m.wa_timestamp)}
-                {m.status === "falha" && (
-                  <span style={{ color: "var(--danger)" }}>
-                    {" "}
-                    · falhou{m.erro ? `: ${m.erro}` : ""}
-                  </span>
-                )}
+                {meu && <StatusMensagem status={m.status} erro={m.erro} />}
               </p>
             </div>
           )
@@ -347,6 +342,36 @@ export default function Thread({
       )}
     </div>
   )
+}
+
+/** Indicador de status da mensagem enviada, estilo WhatsApp:
+ *   • enviando → relógio
+ *   • enviada  → ✓ (aceita pela Evolution / servidor)
+ *   • entregue → ✓✓ (chegou no aparelho do contato)
+ *   • lida     → ✓✓ azul (o contato abriu)
+ *   • falha    → · falhou: <motivo>
+ *  Só faz sentido nas mensagens que EU enviei (out). "entregue"/"lida"
+ *  dependem do webhook MESSAGES_UPDATE estar ligado na VPS — sem ele o status
+ *  para em "enviada" (ver processarMessageUpdate em lib/crm-inbound.ts). */
+function StatusMensagem({ status, erro }: { status: string; erro: string | null }) {
+  if (status === "falha") {
+    return (
+      <span style={{ color: "var(--danger)" }}>
+        {" "}· falhou{erro ? `: ${erro}` : ""}
+      </span>
+    )
+  }
+  if (status === "enviando") {
+    return <span style={{ color: "var(--text-4)" }}> 🕐</span>
+  }
+  if (status === "lida") {
+    return <span style={{ color: "#53bdeb", fontWeight: 700 }}> ✓✓</span>
+  }
+  if (status === "entregue") {
+    return <span style={{ color: "var(--text-3)", fontWeight: 700 }}> ✓✓</span>
+  }
+  // enviada (aceita pela Evolution, ainda sem confirmação de entrega)
+  return <span style={{ color: "var(--text-3)" }}> ✓</span>
 }
 
 /** Renderiza o conteúdo por tipo: áudio toca inline, imagem exibe, resto é
