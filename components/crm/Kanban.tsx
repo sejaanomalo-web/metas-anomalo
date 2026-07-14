@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
@@ -22,7 +22,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import type { CrmEtapaRow } from "@/lib/crm-etapas"
-import type { CrmLeadRow } from "@/lib/crm-leads"
+import type { CrmLeadRow, CrmEtiquetaResumo } from "@/lib/crm-leads"
 import {
   moverLeadAction,
   criarEtapaAction,
@@ -32,6 +32,12 @@ import {
 } from "@/lib/crm-kanban-actions"
 import { CORES_ETIQUETA } from "@/lib/crm-cores"
 import { casaBusca } from "@/lib/crm-busca"
+import {
+  PERIODOS_CONVERSA,
+  calcularRangeConversa,
+  formatarDataBR,
+  type PeriodoConversaKey,
+} from "@/lib/crm-periodos"
 import Avatar from "@/components/crm/Avatar"
 import { EtiquetaChip } from "@/components/crm/Etiquetas"
 import InformacoesContato from "@/components/crm/InformacoesContato"
@@ -83,14 +89,33 @@ function encontrarColuna(
   return null
 }
 
+/** Filtro combinado (busca + etiqueta + período) — mesma lógica de
+ *  ConversasFiltravel, aplicada por coluna antes de renderizar os cards. */
+function leadPassaFiltro(
+  lead: CrmLeadRow,
+  busca: string,
+  etiquetaId: string | null,
+  range: { inicio: Date; fim: Date } | null
+): boolean {
+  if (etiquetaId && !lead.etiquetas.some((e) => e.id === etiquetaId)) return false
+  if (range) {
+    if (!lead.ultima_interacao_em) return false
+    const t = new Date(lead.ultima_interacao_em).getTime()
+    if (t < range.inicio.getTime() || t > range.fim.getTime()) return false
+  }
+  return casaBusca(busca, lead.nome, lead.telefone_e164, lead.empresa_nome)
+}
+
 export default function Kanban({
   etapas,
   leads,
   corPorEmpresa,
+  etiquetas,
 }: {
   etapas: CrmEtapaRow[]
   leads: CrmLeadRow[]
   corPorEmpresa: Record<string, string>
+  etiquetas: CrmEtiquetaResumo[]
 }) {
   const router = useRouter()
   const [colunas, setColunas] = useState<Record<string, CrmLeadRow[]>>(() =>
@@ -98,7 +123,42 @@ export default function Kanban({
   )
   const [ativoId, setAtivoId] = useState<string | null>(null)
   const [busca, setBusca] = useState("")
+  const [filtroAberto, setFiltroAberto] = useState(false)
+  const [etiquetaId, setEtiquetaId] = useState<string | null>(null)
+  const [periodo, setPeriodo] = useState<PeriodoConversaKey>("todos")
+  const [dataDe, setDataDe] = useState("")
+  const [dataAte, setDataAte] = useState("")
   const [leadInfo, setLeadInfo] = useState<CrmLeadRow | null>(null)
+
+  const hoje = useMemo(() => new Date(), [])
+  const rangePersonalizado = useMemo(() => {
+    if (periodo !== "personalizado" || !dataDe) return null
+    const iniD = new Date(`${dataDe}T00:00:00`)
+    const fimD = dataAte
+      ? new Date(`${dataAte}T23:59:59.999`)
+      : new Date(`${dataDe}T23:59:59.999`)
+    return iniD.getTime() <= fimD.getTime()
+      ? { inicio: iniD, fim: fimD }
+      : { inicio: new Date(`${dataAte}T00:00:00`), fim: new Date(`${dataDe}T23:59:59.999`) }
+  }, [periodo, dataDe, dataAte])
+  const range = useMemo(
+    () =>
+      periodo === "personalizado" ? rangePersonalizado : calcularRangeConversa(periodo, hoje),
+    [periodo, hoje, rangePersonalizado]
+  )
+  const temFiltro = etiquetaId !== null || periodo !== "todos" || busca.trim() !== ""
+  const periodoLabel =
+    periodo === "personalizado" && rangePersonalizado
+      ? `${formatarDataBR(rangePersonalizado.inicio)} – ${formatarDataBR(rangePersonalizado.fim)}`
+      : PERIODOS_CONVERSA.find((p) => p.chave === periodo)?.label
+
+  function limparFiltro() {
+    setEtiquetaId(null)
+    setPeriodo("todos")
+    setDataDe("")
+    setDataAte("")
+    setBusca("")
+  }
   const [, startTransition] = useTransition()
 
   // Ressincroniza quando o servidor manda leads/etapas atualizados
@@ -176,14 +236,143 @@ export default function Kanban({
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ flexShrink: 0 }}>
-        <input
-          type="text"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por nome, telefone ou empresa…"
-          className="glass-input"
-          style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, width: "100%", maxWidth: 320 }}
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome, telefone ou empresa…"
+            className="glass-input"
+            style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, width: "100%", maxWidth: 320 }}
+          />
+          <button
+            type="button"
+            onClick={() => setFiltroAberto((v) => !v)}
+            aria-expanded={filtroAberto}
+            title="Filtrar por etiqueta ou data"
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: temFiltro ? "#0a0a0a" : "var(--gold, #C9953A)",
+              background: temFiltro ? "var(--gold, #C9953A)" : "transparent",
+              borderRadius: 8,
+              padding: "6px 10px",
+              flexShrink: 0,
+            }}
+          >
+            ⚙ Filtrar
+          </button>
+        </div>
+
+        {filtroAberto && (
+          <div
+            className="glass"
+            style={{
+              padding: 12,
+              marginTop: 8,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              maxWidth: 420,
+            }}
+          >
+            <div>
+              <p style={rotuloEstiloKanban}>Etiqueta</p>
+              {etiquetas.length === 0 ? (
+                <p style={{ fontSize: 11, color: "var(--text-4)" }}>
+                  Nenhuma etiqueta disponível.
+                </p>
+              ) : (
+                <div className="flex flex-wrap" style={{ gap: 6 }}>
+                  {etiquetas.map((e) => {
+                    const ativa = e.id === etiquetaId
+                    return (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => setEtiquetaId(ativa ? null : e.id)}
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: "3px 9px",
+                          borderRadius: 999,
+                          border: `1px solid ${e.cor}`,
+                          background: ativa ? e.cor : "transparent",
+                          color: ativa ? "#0a0a0a" : e.cor,
+                        }}
+                      >
+                        {e.nome}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p style={rotuloEstiloKanban}>Período (última interação)</p>
+              <select
+                value={periodo}
+                onChange={(ev) => setPeriodo(ev.target.value as PeriodoConversaKey)}
+                className="glass-input"
+                style={{ fontSize: 12, padding: "6px 8px", width: "100%" }}
+              >
+                {PERIODOS_CONVERSA.map((p) => (
+                  <option key={p.chave} value={p.chave} style={{ color: "#111" }}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              {periodo === "personalizado" && (
+                <div className="flex items-center gap-1" style={{ marginTop: 8 }}>
+                  <input
+                    type="date"
+                    value={dataDe}
+                    onChange={(e) => setDataDe(e.target.value)}
+                    className="glass-input"
+                    style={{ fontSize: 12, padding: "6px 8px", borderRadius: 8, flex: 1, minWidth: 0 }}
+                  />
+                  <span style={{ fontSize: 11, color: "var(--text-4)" }}>até</span>
+                  <input
+                    type="date"
+                    value={dataAte}
+                    onChange={(e) => setDataAte(e.target.value)}
+                    placeholder="Opcional"
+                    className="glass-input"
+                    style={{ fontSize: 12, padding: "6px 8px", borderRadius: 8, flex: 1, minWidth: 0 }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {temFiltro && (
+              <button
+                type="button"
+                onClick={limparFiltro}
+                style={{
+                  alignSelf: "flex-start",
+                  fontSize: 11,
+                  color: "var(--text-3)",
+                  textDecoration: "underline",
+                }}
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
+        )}
+
+        {temFiltro && !filtroAberto && (
+          <div
+            className="flex items-center flex-wrap gap-1"
+            style={{ marginTop: 6, fontSize: 10, color: "var(--text-4)" }}
+          >
+            {etiquetaId && (
+              <span>· {etiquetas.find((e) => e.id === etiquetaId)?.nome}</span>
+            )}
+            {periodo !== "todos" && <span>· {periodoLabel}</span>}
+          </div>
+        )}
       </div>
       <DndContext
         sensors={sensors}
@@ -206,7 +395,7 @@ export default function Kanban({
               key={etapa.id}
               etapa={etapa}
               leads={(colunas[etapa.id] ?? []).filter((l) =>
-                casaBusca(busca, l.nome, l.telefone_e164, l.empresa_nome)
+                leadPassaFiltro(l, busca, etiquetaId, range)
               )}
               corPorEmpresa={corPorEmpresa}
               isFirst={index === 0}
@@ -850,4 +1039,13 @@ function Cartao({
       )}
     </Link>
   )
+}
+
+const rotuloEstiloKanban: React.CSSProperties = {
+  fontSize: 9,
+  letterSpacing: "1.5px",
+  textTransform: "uppercase",
+  color: "var(--text-4)",
+  fontWeight: 600,
+  marginBottom: 6,
 }

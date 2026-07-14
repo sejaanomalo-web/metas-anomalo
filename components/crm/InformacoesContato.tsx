@@ -223,7 +223,7 @@ export default function InformacoesContato({
             </div>
             {campos.length === 0 ? (
               <p style={{ fontSize: 12, color: "var(--text-4)" }}>
-                Nenhum campo extra ainda — ex: CPF, aniversário, indicação…
+                Nenhum campo extra ainda. Ex: CPF, aniversário, indicação…
               </p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

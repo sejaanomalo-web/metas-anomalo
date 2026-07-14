@@ -123,6 +123,7 @@ export default async function CrmPage({
               style={{
                 borderRight: "0.5px solid rgba(255,255,255,0.08)",
                 overflowY: "auto",
+                minHeight: 0,
                 padding: 10,
                 // Isola a pintura e impede o scroll de "vazar" pra página —
                 // junto com content-visibility nas linhas, deixa o scroll
@@ -143,7 +144,7 @@ export default async function CrmPage({
               />
             </div>
 
-            <div className="crm-thread-pane" style={{ minWidth: 0 }}>
+            <div className="crm-thread-pane" style={{ minWidth: 0, minHeight: 0 }}>
               {lead ? (
                 <Thread
                   key={lead.id}
@@ -167,7 +168,7 @@ export default async function CrmPage({
 
         {aba === "kanban" && (
           <div className="glass" style={{ height: "100%", padding: 16, overflow: "hidden" }}>
-            <Kanban etapas={etapas} leads={leads} corPorEmpresa={corPorEmpresa} />
+            <Kanban etapas={etapas} leads={leads} corPorEmpresa={corPorEmpresa} etiquetas={etiquetas} />
           </div>
         )}
 
