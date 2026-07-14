@@ -33,10 +33,11 @@ import {
 import { CORES_ETIQUETA } from "@/lib/crm-cores"
 import { casaBusca } from "@/lib/crm-busca"
 import {
-  PERIODOS_CONVERSA,
-  calcularRangeConversa,
+  PERIODOS_FILTRO,
+  calcularRangeFiltro,
+  calcularRangePersonalizado,
   formatarDataBR,
-  type PeriodoConversaKey,
+  type PeriodoFiltroKey,
 } from "@/lib/crm-periodos"
 import Avatar from "@/components/crm/Avatar"
 import { EtiquetaChip } from "@/components/crm/Etiquetas"
@@ -125,32 +126,26 @@ export default function Kanban({
   const [busca, setBusca] = useState("")
   const [filtroAberto, setFiltroAberto] = useState(false)
   const [etiquetaId, setEtiquetaId] = useState<string | null>(null)
-  const [periodo, setPeriodo] = useState<PeriodoConversaKey>("todos")
+  const [periodo, setPeriodo] = useState<PeriodoFiltroKey>("todos")
   const [dataDe, setDataDe] = useState("")
   const [dataAte, setDataAte] = useState("")
   const [leadInfo, setLeadInfo] = useState<CrmLeadRow | null>(null)
 
   const hoje = useMemo(() => new Date(), [])
-  const rangePersonalizado = useMemo(() => {
-    if (periodo !== "personalizado" || !dataDe) return null
-    const iniD = new Date(`${dataDe}T00:00:00`)
-    const fimD = dataAte
-      ? new Date(`${dataAte}T23:59:59.999`)
-      : new Date(`${dataDe}T23:59:59.999`)
-    return iniD.getTime() <= fimD.getTime()
-      ? { inicio: iniD, fim: fimD }
-      : { inicio: new Date(`${dataAte}T00:00:00`), fim: new Date(`${dataDe}T23:59:59.999`) }
-  }, [periodo, dataDe, dataAte])
+  const rangePersonalizado = useMemo(
+    () => calcularRangePersonalizado(dataDe, dataAte),
+    [dataDe, dataAte]
+  )
   const range = useMemo(
     () =>
-      periodo === "personalizado" ? rangePersonalizado : calcularRangeConversa(periodo, hoje),
+      periodo === "personalizado" ? rangePersonalizado : calcularRangeFiltro(periodo, hoje),
     [periodo, hoje, rangePersonalizado]
   )
   const temFiltro = etiquetaId !== null || periodo !== "todos" || busca.trim() !== ""
   const periodoLabel =
     periodo === "personalizado" && rangePersonalizado
       ? `${formatarDataBR(rangePersonalizado.inicio)} – ${formatarDataBR(rangePersonalizado.fim)}`
-      : PERIODOS_CONVERSA.find((p) => p.chave === periodo)?.label
+      : PERIODOS_FILTRO.find((p) => p.chave === periodo)?.label
 
   function limparFiltro() {
     setEtiquetaId(null)
@@ -313,11 +308,11 @@ export default function Kanban({
               <p style={rotuloEstiloKanban}>Período (última interação)</p>
               <select
                 value={periodo}
-                onChange={(ev) => setPeriodo(ev.target.value as PeriodoConversaKey)}
+                onChange={(ev) => setPeriodo(ev.target.value as PeriodoFiltroKey)}
                 className="glass-input"
                 style={{ fontSize: 12, padding: "6px 8px", width: "100%" }}
               >
-                {PERIODOS_CONVERSA.map((p) => (
+                {PERIODOS_FILTRO.map((p) => (
                   <option key={p.chave} value={p.chave} style={{ color: "#111" }}>
                     {p.label}
                   </option>
