@@ -218,6 +218,101 @@ async function processarConnectionUpdate(
   return { ok: true, info: `conexao: ${status}` }
 }
 
+// Rank dos status de uma mensagem enviada, pro update de entrega/leitura
+// nunca fazer downgrade (ex: um ack de "enviada" que chega atrasado não pode
+// rebaixar uma mensagem que já está "lida"). 'falha' fica em -1: se um ack
+// real chega depois, a mensagem de fato saiu, então qualquer ack a promove.
+const RANK_STATUS_MSG: Record<string, number> = {
+  falha: -1,
+  enviando: 0,
+  enviada: 1,
+  entregue: 2,
+  lida: 3,
+}
+
+/** Mapeia o ACK da Evolution/Baileys pro nosso enum de status. A Evolution
+ *  manda ora string (SERVER_ACK/DELIVERY_ACK/READ/PLAYED), ora número
+ *  (Baileys: 2=enviada, 3=entregue, 4=lida, 5=tocado). Ignora PENDING/ERROR
+ *  e o que não reconhecer. */
+function statusDoAck(bruto: unknown): "enviada" | "entregue" | "lida" | null {
+  if (typeof bruto === "number") {
+    if (bruto === 2) return "enviada"
+    if (bruto === 3) return "entregue"
+    if (bruto >= 4) return "lida"
+    return null
+  }
+  if (typeof bruto === "string") {
+    const s = bruto.toUpperCase()
+    if (s === "SERVER_ACK") return "enviada"
+    if (s === "DELIVERY_ACK") return "entregue"
+    if (s === "READ" || s === "PLAYED") return "lida"
+    return null
+  }
+  return null
+}
+
+/**
+ * Processa messages.update — os ACKs de ENTREGA/LEITURA do WhatsApp (os ✓✓ /
+ * ✓✓ azul). Casa a mensagem pelo wa_message_id (só as OUT, que somos nós que
+ * enviamos), sobe o status respeitando o rank (nunca faz downgrade) e dispara
+ * o ping de realtime pra thread aberta atualizar os ticks na hora.
+ *
+ * Depende de o webhook da VPS estar com WEBHOOK_EVENTS_MESSAGES_UPDATE ligado
+ * (ver docs/CRM-EVOLUTION-SETUP.md) — sem isso a Evolution nunca manda esse
+ * evento e as mensagens ficam paradas em "enviada" (aceita pela Evolution),
+ * sem confirmação de que chegaram de fato no aparelho do contato.
+ */
+async function processarMessageUpdate(
+  instanceName: string | undefined,
+  data: unknown
+): Promise<ResultadoProcessamento> {
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "service_role_ausente" }
+  if (!instanceName) return { ok: false, erro: "instance ausente no payload" }
+
+  const itens = Array.isArray(data) ? data : data ? [data] : []
+  let atualizadas = 0
+  for (const it of itens) {
+    const item = (it ?? {}) as Record<string, any>
+    // id da mensagem: varia entre builds (keyId achatado, ou key.id aninhado).
+    const waId =
+      item.keyId ??
+      item.messageId ??
+      item.key?.id ??
+      item.message?.key?.id ??
+      item.update?.key?.id
+    // status: direto no item, ou aninhado em update.status.
+    const novoStatus = statusDoAck(item.status ?? item.update?.status)
+    if (!waId || !novoStatus) continue
+
+    const { data: msg } = await db
+      .from("crm_mensagens")
+      .select("id, status, empresa_slug, lead_id")
+      .eq("wa_message_id", waId)
+      .eq("direcao", "out")
+      .maybeSingle()
+    if (!msg) continue
+
+    const atual = RANK_STATUS_MSG[msg.status as string] ?? 0
+    const proximo = RANK_STATUS_MSG[novoStatus]
+    if (proximo <= atual) continue // nunca rebaixa
+
+    await db
+      .from("crm_mensagens")
+      .update({ status: novoStatus, erro: null })
+      .eq("id", msg.id)
+    atualizadas++
+
+    await db.from("crm_realtime_ping").insert({
+      empresa_slug: msg.empresa_slug as string,
+      lead_id: msg.lead_id as string,
+      kind: "msg",
+    })
+  }
+
+  return { ok: true, info: `messages.update: ${atualizadas} atualizada(s)` }
+}
+
 // Limite defensivo pro sync inicial de contatos (a Evolution manda o catalogo
 // inteiro do celular no primeiro CONTACTS_UPSERT apos conectar — pode ser
 // centenas). Processa os primeiros N por chamada; entregas seguintes (a
@@ -431,9 +526,12 @@ export async function processarEventoWebhook(
   if (evento === "chats.delete" || evento === "CHATS_DELETE") {
     return processarChatsDelete(instanceName, payload?.data)
   }
+  if (evento === "messages.update" || evento === "MESSAGES_UPDATE") {
+    return processarMessageUpdate(instanceName, payload?.data)
+  }
 
-  // Fase 1: mensagens recebidas + conexao/QR (acima). Demais eventos (status
-  // de entrega/leitura, etc.) seguem ignorados por ora.
+  // Mensagens recebidas (abaixo) + conexao/QR/entrega (acima). Qualquer outro
+  // evento é ignorado silenciosamente.
   const ehMsg = evento === "messages.upsert" || evento === "MESSAGES_UPSERT"
   if (!ehMsg) return { ok: true, info: `evento ignorado: ${evento}` }
 
