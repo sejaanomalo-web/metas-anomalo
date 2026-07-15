@@ -25,6 +25,15 @@ export interface CampoPersonalizado {
   valor: string
 }
 
+/** Anotação de uma reunião com o lead: data (YYYY-MM-DD) + texto livre do que
+ *  foi conversado. Repetível — cada reunião é uma linha nova na ficha, pra
+ *  virar o histórico de longo prazo do relacionamento. */
+export interface ReuniaoNota {
+  id: string
+  data: string
+  anotacao: string
+}
+
 export interface CrmLeadRow {
   id: string
   empresa_slug: string
@@ -54,6 +63,11 @@ export interface CrmLeadRow {
    *  sublinhado/lista) — HTML já sanitizado no servidor antes de salvar. */
   notas_html: string | null
   campos_personalizados: CampoPersonalizado[]
+  /** Links de redes sociais do lead (handle ou URL — normalizados no servidor). */
+  instagram: string | null
+  facebook: string | null
+  /** Histórico de reuniões (data + anotação), mais recentes primeiro. */
+  reunioes: ReuniaoNota[]
 }
 
 export interface CrmMensagemRow {

@@ -2,37 +2,50 @@
 
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { CrmLeadRow, CampoPersonalizado } from "@/lib/crm-leads"
+import type { CrmLeadRow, CampoPersonalizado, ReuniaoNota } from "@/lib/crm-leads"
 import { editarInformacoesContatoAction } from "@/lib/crm-leads-actions"
 import Avatar from "@/components/crm/Avatar"
 
-function gerarId(): string {
+function gerarId(prefixo: string): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
-    : `campo_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    : `${prefixo}_${Date.now()}_${Math.random().toString(36).slice(2)}`
+}
+
+function hojeIso(): string {
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, "0")
+  const dd = String(d.getDate()).padStart(2, "0")
+  return `${d.getFullYear()}-${mm}-${dd}`
 }
 
 /**
- * Ficha de informações do contato: nome, telefone (só leitura — é o vínculo
- * com a conversa do WhatsApp), e-mail, notas com formatação básica
- * (negrito/itálico/sublinhado/lista) e campos personalizados livres
- * (nome+valor definidos pelo usuário).
+ * Ficha de informações do contato (a "tela do lead" da Fase 8, que substituiu a
+ * conversa): nome, telefone (só leitura — é o vínculo com o WhatsApp), e-mail,
+ * redes sociais (Instagram/Facebook), histórico de reuniões (data + anotação,
+ * repetível), notas com formatação básica e campos personalizados livres.
  *
- * Não assume nada sobre onde é montado — o Kanban usa num popup centralizado,
- * Conversas embute na própria thread (ver `onFechar`, que em Conversas volta
- * pra tela de mensagens em vez de fechar um modal).
+ * `cabecalho=false` (modo embutido) esconde o cabeçalho interno E o campo Nome:
+ * é usado em Conversas (FichaContato), onde o nome é editado no cabeçalho de
+ * fora e a ficha não deve remarcar nome_manual. `cabecalho=true` (padrão) é o
+ * popup standalone do Kanban, que mostra tudo e é dono do nome.
  */
 export default function InformacoesContato({
   lead,
   cor,
   onFechar,
+  cabecalho = true,
 }: {
   lead: CrmLeadRow
   cor: string
   onFechar: () => void
+  cabecalho?: boolean
 }) {
   const [nome, setNome] = useState(lead.nome ?? "")
   const [email, setEmail] = useState(lead.email ?? "")
+  const [instagram, setInstagram] = useState(lead.instagram ?? "")
+  const [facebook, setFacebook] = useState(lead.facebook ?? "")
+  const [reunioes, setReunioes] = useState<ReuniaoNota[]>(lead.reunioes ?? [])
   const [campos, setCampos] = useState<CampoPersonalizado[]>(
     lead.campos_personalizados ?? []
   )
@@ -62,7 +75,7 @@ export default function InformacoesContato({
   }
 
   function adicionarCampo() {
-    setCampos((atual) => [...atual, { id: gerarId(), nome: "", valor: "" }])
+    setCampos((atual) => [...atual, { id: gerarId("campo"), nome: "", valor: "" }])
   }
   function removerCampo(id: string) {
     setCampos((atual) => atual.filter((c) => c.id !== id))
@@ -71,9 +84,26 @@ export default function InformacoesContato({
     setCampos((atual) => atual.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   }
 
+  // Novas reuniões entram no TOPO (a mais recente primeiro), já com a data de
+  // hoje preenchida — o fluxo típico é "acabei de reunir, quero anotar agora".
+  function adicionarReuniao() {
+    setReunioes((atual) => [
+      { id: gerarId("reuniao"), data: hojeIso(), anotacao: "" },
+      ...atual,
+    ])
+  }
+  function removerReuniao(id: string) {
+    setReunioes((atual) => atual.filter((r) => r.id !== id))
+  }
+  function mudarReuniao(id: string, patch: Partial<ReuniaoNota>) {
+    setReunioes((atual) => atual.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  }
+
   function salvar() {
-    const n = nome.trim()
-    if (!n) {
+    // No modo embutido o nome é editado no cabeçalho de fora — não mandamos
+    // aqui (pra não remarcar nome_manual). No modo standalone o nome é
+    // obrigatório e é daqui que ele sai.
+    if (cabecalho && !nome.trim()) {
       setErro("Nome obrigatório.")
       return
     }
@@ -81,14 +111,18 @@ export default function InformacoesContato({
     startTransition(async () => {
       const fd = new FormData()
       fd.set("lead_id", lead.id)
-      fd.set("nome", n)
+      if (cabecalho) fd.set("nome", nome.trim())
       fd.set("email", email.trim())
+      fd.set("instagram", instagram.trim())
+      fd.set("facebook", facebook.trim())
+      fd.set("reunioes", JSON.stringify(reunioes))
       fd.set("notas_html", notasRef.current?.innerHTML ?? "")
       fd.set("campos_personalizados", JSON.stringify(campos))
       const r = await editarInformacoesContatoAction(fd)
       if (r.ok) {
         router.refresh()
-        onFechar()
+        // No popup do Kanban, salvar fecha o modal; embutido, fica na ficha.
+        if (cabecalho) onFechar()
       } else {
         setErro(r.erro ?? "Erro ao salvar")
       }
@@ -97,58 +131,62 @@ export default function InformacoesContato({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div
-        className="flex items-center justify-between gap-3"
-        style={{
-          padding: "14px 18px",
-          borderBottom: "0.5px solid rgba(255,255,255,0.08)",
-          flexShrink: 0,
-        }}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <Avatar
-            nome={nome || lead.telefone_e164 || "Contato"}
-            cor={cor}
-            fotoUrl={lead.foto_url}
-            size={32}
-          />
-          <p style={{ fontSize: 14, fontWeight: 600 }} className="truncate">
-            Informações do contato
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onFechar}
-          aria-label="Fechar e voltar"
-          title="Voltar"
+      {cabecalho && (
+        <div
+          className="flex items-center justify-between gap-3"
           style={{
-            fontSize: 16,
-            color: "var(--text-3)",
-            width: 30,
-            height: 30,
-            borderRadius: 8,
+            padding: "14px 18px",
+            borderBottom: "0.5px solid rgba(255,255,255,0.08)",
             flexShrink: 0,
-            border: "0.5px solid rgba(255,255,255,0.12)",
           }}
         >
-          ✕
-        </button>
-      </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <Avatar
+              nome={nome || lead.telefone_e164 || "Contato"}
+              cor={cor}
+              fotoUrl={lead.foto_url}
+              size={32}
+            />
+            <p style={{ fontSize: 14, fontWeight: 600 }} className="truncate">
+              Informações do contato
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onFechar}
+            aria-label="Fechar e voltar"
+            title="Voltar"
+            style={{
+              fontSize: 16,
+              color: "var(--text-3)",
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              flexShrink: 0,
+              border: "0.5px solid rgba(255,255,255,0.12)",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div
         className="scrollbar-thin"
         style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 18 }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 480 }}>
-          <Campo label="Nome">
-            <input
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              maxLength={80}
-              className="glass-input"
-              style={{ fontSize: 13, padding: "7px 10px", width: "100%" }}
-            />
-          </Campo>
+          {cabecalho && (
+            <Campo label="Nome">
+              <input
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                maxLength={80}
+                className="glass-input"
+                style={{ fontSize: 13, padding: "7px 10px", width: "100%" }}
+              />
+            </Campo>
+          )}
 
           <Campo label="Telefone">
             <p style={{ fontSize: 13, color: "var(--text-2, #ddd)", padding: "7px 2px" }}>
@@ -167,6 +205,93 @@ export default function InformacoesContato({
               style={{ fontSize: 13, padding: "7px 10px", width: "100%" }}
             />
           </Campo>
+
+          {/* Redes sociais — link (ou @handle) do Instagram / Facebook. */}
+          <Campo label="Instagram">
+            <input
+              value={instagram}
+              onChange={(e) => setInstagram(e.target.value)}
+              maxLength={300}
+              placeholder="@usuario ou instagram.com/usuario"
+              className="glass-input"
+              style={{ fontSize: 13, padding: "7px 10px", width: "100%" }}
+            />
+          </Campo>
+
+          <Campo label="Facebook">
+            <input
+              value={facebook}
+              onChange={(e) => setFacebook(e.target.value)}
+              maxLength={300}
+              placeholder="Link ou nome do perfil"
+              className="glass-input"
+              style={{ fontSize: 13, padding: "7px 10px", width: "100%" }}
+            />
+          </Campo>
+
+          {/* Reuniões — histórico de longo prazo (data + o que foi conversado). */}
+          <div>
+            <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+              <p style={rotuloEstilo}>Reuniões</p>
+              <button
+                type="button"
+                onClick={adicionarReuniao}
+                style={{ fontSize: 11, color: cor, fontWeight: 600, flexShrink: 0 }}
+              >
+                + Adicionar reunião
+              </button>
+            </div>
+            {reunioes.length === 0 ? (
+              <p style={{ fontSize: 12, color: "var(--text-4)" }}>
+                Nenhuma reunião anotada ainda. Registre a data e o que foi
+                conversado pra lembrar nas próximas.
+              </p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {reunioes.map((r) => (
+                  <div
+                    key={r.id}
+                    style={{
+                      border: "0.5px solid rgba(255,255,255,0.1)",
+                      borderRadius: 10,
+                      padding: 10,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={r.data}
+                        onChange={(e) => mudarReuniao(r.id, { data: e.target.value })}
+                        className="glass-input"
+                        style={{ fontSize: 12, padding: "6px 8px", borderRadius: 8, flex: 1, minWidth: 0 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removerReuniao(r.id)}
+                        aria-label="Remover reunião"
+                        title="Remover reunião"
+                        style={{ fontSize: 13, color: "var(--danger)", flexShrink: 0, padding: "4px 6px" }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <textarea
+                      value={r.anotacao}
+                      onChange={(e) => mudarReuniao(r.id, { anotacao: e.target.value })}
+                      placeholder="O que foi conversado nessa reunião…"
+                      rows={3}
+                      maxLength={5000}
+                      className="glass-input"
+                      style={{ fontSize: 13, padding: "8px 10px", width: "100%", resize: "vertical", lineHeight: 1.5 }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <Campo label="Notas">
             <div
@@ -272,14 +397,16 @@ export default function InformacoesContato({
             >
               {pending ? "Salvando..." : "Salvar"}
             </button>
-            <button
-              type="button"
-              onClick={onFechar}
-              disabled={pending}
-              style={{ fontSize: 12, color: "var(--text-3)" }}
-            >
-              Cancelar
-            </button>
+            {cabecalho && (
+              <button
+                type="button"
+                onClick={onFechar}
+                disabled={pending}
+                style={{ fontSize: 12, color: "var(--text-3)" }}
+              >
+                Cancelar
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -3,7 +3,6 @@ import { requererPermissao } from "@/lib/auth"
 import {
   listarLeadsInbox,
   buscarLead,
-  listarMensagensDoLead,
   contarLeadsArquivados,
 } from "@/lib/crm-leads"
 import { listarInstancias } from "@/lib/crm-instancias-actions"
@@ -15,7 +14,7 @@ import {
   listarTiposAtividade,
 } from "@/lib/crm-atividades-actions"
 import ConversasFiltravel from "@/components/crm/ConversasFiltravel"
-import Thread from "@/components/crm/Thread"
+import FichaContato from "@/components/crm/FichaContato"
 import CrmRealtime from "@/components/crm/CrmRealtime"
 import Kanban from "@/components/crm/Kanban"
 import Calendario from "@/components/crm/Calendario"
@@ -78,9 +77,7 @@ export default async function CrmPage({
   for (const inst of instancias) corPorEmpresa[inst.empresa_slug] = inst.cor
 
   const leadId = aba === "conversas" ? searchParams.lead : undefined
-  const [lead, pagina] = leadId
-    ? await Promise.all([buscarLead(leadId), listarMensagensDoLead(leadId)])
-    : [null, { mensagens: [], temMaisAntigas: false }]
+  const lead = leadId ? await buscarLead(leadId) : null
 
   return (
     <main
@@ -146,11 +143,9 @@ export default async function CrmPage({
 
             <div className="crm-thread-pane" style={{ minWidth: 0, minHeight: 0 }}>
               {lead ? (
-                <Thread
+                <FichaContato
                   key={lead.id}
                   lead={lead}
-                  mensagensIniciais={pagina.mensagens}
-                  temMaisAntigasInicial={pagina.temMaisAntigas}
                   cor={corPorEmpresa[lead.empresa_slug] ?? "#C9953A"}
                   todasEtiquetas={etiquetas}
                   tiposCustom={tipos}
@@ -158,7 +153,7 @@ export default async function CrmPage({
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <p style={{ fontSize: 13, color: "var(--text-3)" }}>
-                    Selecione uma conversa à esquerda.
+                    Selecione um contato à esquerda.
                   </p>
                 </div>
               )}

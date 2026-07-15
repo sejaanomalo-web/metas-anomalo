@@ -20,13 +20,15 @@
 // por usuario). Status de entrega (mensagem lida/entregue) e outbound
 // continuam fora do escopo. NUNCA lanca excecao fatal pro webhook: retorna
 // { ok, info?, erro? }.
+// Fase 8 (viewer): o CRM nao envia mais mensagem e nao faz mais NENHUMA chamada
+// de API por mensagem recebida (nem download de midia, nem fetch de foto) — o
+// risco de banimento estava nesses requests. O webhook segue gravando a
+// mensagem recebida so pra alimentar a lista (ultima interacao/previa/badge);
+// nao ha mais tela de conversa. E CONTACTS_UPSERT passa a CRIAR o lead quando
+// voce adiciona um contato novo no celular (lotes pequenos fora da janela de
+// sync inicial — ver processarContatosEvento), pra o contato aparecer sozinho.
 
 import { getSupabaseAdmin } from "./supabase"
-import {
-  buscarFotoPerfilEvolution,
-  baixarMidiaEvolution,
-} from "./evolution"
-import { uploadMidiaCrm } from "./crm-midia"
 import {
   buscarEtapasAutomaticas,
   sincronizarEtiquetaComEtapa,
@@ -319,9 +321,23 @@ async function processarMessageUpdate(
 // Evolution reenvia em lotes) completam o resto.
 const MAX_CONTATOS_POR_EVENTO = 300
 
+// Fase 8 — auto-criacao de lead a partir de contato adicionado no celular.
+// O problema: ao conectar, a Evolution DESPEJA a agenda inteira (centenas) via
+// CONTACTS_UPSERT; criar lead pra cada uma inundaria o CRM. Dois guardas
+// combinados distinguem "adicionei 1 contato novo agora" do despejo inicial:
+//   1) LOTE PEQUENO — uma adicao manual chega com 1 (ou poucos) contatos; o
+//      despejo vem em lotes grandes.
+//   2) FORA DA JANELA DE SYNC INICIAL — o despejo acontece logo apos conectar;
+//      passado esse tempo desde conectado_em, eventos novos sao adicoes reais.
+// So cria em CONTACTS_UPSERT (contato novo), nunca em CONTACTS_UPDATE (so um
+// perfil que mudou).
+const LIMIAR_ADICAO_INCREMENTAL = 5
+const JANELA_SYNC_INICIAL_MS = 10 * 60 * 1000 // 10 min apos conectar = despejo
+
 async function processarContatosEvento(
   instanceName: string | undefined,
-  data: unknown
+  data: unknown,
+  podeCriar: boolean
 ): Promise<ResultadoProcessamento> {
   const db = getSupabaseAdmin()
   if (!db) return { ok: false, erro: "service_role_ausente" }
@@ -329,12 +345,14 @@ async function processarContatosEvento(
 
   const { data: inst } = await db
     .from("crm_instancias")
-    .select("id, empresa_slug")
+    .select("id, empresa_slug, usuario_id, usuario_nome, conectado_em")
     .eq("instance_name", instanceName)
     .maybeSingle()
   if (!inst) return { ok: true, info: `instancia desconhecida: ${instanceName}` }
   const instanciaId = inst.id as string
   const empresaSlug = inst.empresa_slug as string
+  const usuarioId = inst.usuario_id as string
+  const usuarioNome = (inst.usuario_nome as string) ?? null
 
   const bruto = data
   const lista = (Array.isArray(bruto) ? bruto : bruto ? [bruto] : []).slice(
@@ -422,7 +440,94 @@ async function processarContatosEvento(
     }
   }
 
-  return { ok: true, info: `contatos cacheados: ${linhas.length}` }
+  // Auto-criacao (Fase 8): contato NOVO adicionado no celular vira lead sozinho.
+  // So quando os dois guardas passam (lote pequeno + fora da janela de sync
+  // inicial) — ver LIMIAR_ADICAO_INCREMENTAL / JANELA_SYNC_INICIAL_MS.
+  const conectadoEm = inst.conectado_em
+    ? new Date(inst.conectado_em as string).getTime()
+    : null
+  const foraDaJanelaInicial =
+    conectadoEm === null || Date.now() - conectadoEm > JANELA_SYNC_INICIAL_MS
+  const ehAdicaoIncremental =
+    podeCriar && foraDaJanelaInicial && lista.length <= LIMIAR_ADICAO_INCREMENTAL
+
+  let criados = 0
+  if (ehAdicaoIncremental) {
+    // Empresa (denormalizada no lead) + etapa inicial "Novo Contato" — mesma
+    // resolucao do inbound de mensagem e da criacao manual.
+    const { data: emp } = await db
+      .from("empresas_config")
+      .select("nome")
+      .eq("slug", empresaSlug)
+      .maybeSingle()
+    const empresaNome = (emp?.nome as string) ?? empresaSlug
+    const { novoContato } = await buscarEtapasAutomaticas(db, usuarioId)
+    let etapaInicial: { id: string; nome: string; cor: string | null } | null =
+      novoContato
+    if (!etapaInicial) {
+      const { data: etapaFallback } = await db
+        .from("crm_etapas")
+        .select("id, nome, cor")
+        .eq("ativo", true)
+        .or(`usuario_id.is.null,usuario_id.eq.${usuarioId}`)
+        .order("ordem", { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      etapaInicial = etapaFallback
+        ? {
+            id: etapaFallback.id as string,
+            nome: etapaFallback.nome as string,
+            cor: (etapaFallback.cor as string) ?? null,
+          }
+        : null
+    }
+
+    for (const l of linhas) {
+      const { data: existente } = await db
+        .from("crm_leads")
+        .select("id")
+        .eq("empresa_slug", empresaSlug)
+        .eq("telefone_e164", l.telefone_e164)
+        .maybeSingle()
+      if (existente) continue // ja e lead (por mensagem ou criacao previa)
+
+      const { data: novo, error: errLead } = await db
+        .from("crm_leads")
+        .insert({
+          empresa_slug: empresaSlug,
+          empresa_nome: empresaNome,
+          usuario_id: usuarioId,
+          usuario_nome: usuarioNome,
+          telefone_e164: l.telefone_e164,
+          nome: l.nome,
+          // nome_manual=false: veio do WhatsApp, entao sync futuro pode
+          // atualizar (so o nome digitado no CRM vira manual).
+          nome_manual: false,
+          foto_url: l.foto_url,
+          origem: "whatsapp",
+          etapa_id: etapaInicial?.id ?? null,
+          status: "aberto",
+          ultima_interacao_em: agora,
+          nao_lidas: 0,
+        })
+        .select("id")
+        .single()
+      // 23505 = outra entrega criou em paralelo; ignora (idempotente).
+      if (errLead || !novo) continue
+      criados++
+      if (etapaInicial) {
+        await sincronizarEtiquetaComEtapa(db, usuarioId, novo.id as string, etapaInicial)
+      }
+      await db
+        .from("crm_realtime_ping")
+        .insert({ empresa_slug: empresaSlug, lead_id: novo.id as string, kind: "lead" })
+    }
+  }
+
+  return {
+    ok: true,
+    info: `contatos cacheados: ${linhas.length}${criados ? `, ${criados} lead(s) criado(s)` : ""}`,
+  }
 }
 
 /**
@@ -521,7 +626,10 @@ export async function processarEventoWebhook(
     evento === "contacts.update" ||
     evento === "CONTACTS_UPDATE"
   ) {
-    return processarContatosEvento(instanceName, payload?.data)
+    // So o UPSERT (contato novo) pode CRIAR lead; o UPDATE (perfil que mudou)
+    // apenas atualiza cache/leads existentes.
+    const ehUpsert = evento === "contacts.upsert" || evento === "CONTACTS_UPSERT"
+    return processarContatosEvento(instanceName, payload?.data, ehUpsert)
   }
   if (evento === "chats.delete" || evento === "CHATS_DELETE") {
     return processarChatsDelete(instanceName, payload?.data)
@@ -589,8 +697,6 @@ export async function processarEventoWebhook(
     const conteudo = extrairTexto(m?.message)
     const waTs = tsParaIso(m?.messageTimestamp)
     const agora = new Date().toISOString()
-    const ehMidia =
-      tipo === "audio" || tipo === "imagem" || tipo === "video" || tipo === "documento"
 
     // 1) Resolve/cria o lead (sem incrementar nao_lidas ainda).
     let leadId: string | null = null
@@ -637,11 +743,12 @@ export async function processarEventoWebhook(
         .maybeSingle()
       const nomeInicial =
         (contato?.nome as string) ?? (fromMe ? null : pushName)
-      // Foto de perfil (estilo WhatsApp): usa a do cache, senao busca na
-      // Evolution — best-effort, so na criacao do lead (1x por contato novo).
-      const fotoInicial =
-        (contato?.foto_url as string) ??
-        (await buscarFotoPerfilEvolution(instanceName, telefone))
+      // Foto de perfil (estilo WhatsApp): SO a do cache (crm_contatos, populado
+      // passivamente pelo CONTACTS_UPSERT). Fase 8 nao busca mais na Evolution
+      // por mensagem — era uma chamada de API por contato novo (risco de ban em
+      // rajada). Se ainda nao tem no cache, fica null e o cron diario
+      // (sincronizar-contatos) / abrir a ficha do lead preenchem depois.
+      const fotoInicial = (contato?.foto_url as string) ?? null
       const { data: novo, error: errLead } = await db
         .from("crm_leads")
         .insert({
@@ -724,19 +831,10 @@ export async function processarEventoWebhook(
     }
     novas++
 
-    // Midia (audio/imagem/video/documento): o webhook so traz metadados —
-    // baixa o binario da Evolution e sobe pro storage, SO pra mensagem nova.
-    // Best-effort: se falhar, a mensagem fica com o rotulo do tipo (a UI cai
-    // pra "🎤 Áudio"/"🖼️ Imagem").
-    if (ehMidia) {
-      const midia = await baixarMidiaEvolution(instanceName, m)
-      if (midia) {
-        const url = await uploadMidiaCrm(midia.base64, midia.mimetype, `in/${empresaSlug}`)
-        if (url) {
-          await db.from("crm_mensagens").update({ midia_url: url }).eq("id", novaMsgId)
-        }
-      }
-    }
+    // Fase 8: NAO baixa mais a midia da Evolution (era 1 chamada de API por
+    // mensagem de midia — risco de ban). A mensagem fica so com o rotulo do
+    // tipo na previa da lista ("🎤 Áudio"/"🖼️ Imagem"); nao ha mais tela de
+    // conversa que precise do binario. Conversar de fato e no proprio WhatsApp.
 
     // 3) Mensagem nova: atualiza o lead (+1 nao-lida so se veio do cliente) e
     //    emite o ping de realtime (sem PII).

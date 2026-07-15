@@ -6,10 +6,9 @@ import { getUsuarioAtual } from "./auth"
 import {
   buscarPerfilContatoEvolution,
   verificarNumeroWhatsappEvolution,
-  arquivarChatEvolution,
 } from "./evolution"
 import { buscarEtapasAutomaticas, sincronizarEtiquetaComEtapa } from "./crm-etapas"
-import type { CampoPersonalizado } from "./crm-leads"
+import type { CampoPersonalizado, ReuniaoNota } from "./crm-leads"
 import { normalizarTelefone } from "./crm-telefone"
 
 export interface ResultadoLead {
@@ -54,6 +53,42 @@ function sanitizarHtmlContato(bruto: string): string {
     return `<${fechamento}${nome}>`
   })
   return limpo.slice(0, 20_000)
+}
+
+/** Normaliza uma reunião (data YYYY-MM-DD + anotação). Descarta linhas sem
+ *  data nem anotação. Data inválida vira "" (a UI valida antes; o servidor só
+ *  não confia). Até 200 reuniões por lead — teto defensivo. */
+function normalizarReunioes(bruto: string): ReuniaoNota[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(bruto || "[]")
+  } catch {
+    return null
+  }
+  if (!Array.isArray(parsed)) return null
+  return parsed
+    .map((r): ReuniaoNota => {
+      const item = (r ?? {}) as Record<string, unknown>
+      const id =
+        String(item.id ?? "").slice(0, 60) ||
+        `reuniao_${Math.random().toString(36).slice(2)}`
+      const dataBruta = String(item.data ?? "").trim().slice(0, 10)
+      const data = /^\d{4}-\d{2}-\d{2}$/.test(dataBruta) ? dataBruta : ""
+      return {
+        id,
+        data,
+        anotacao: String(item.anotacao ?? "").trim().slice(0, 5000),
+      }
+    })
+    .filter((r) => r.data || r.anotacao)
+    .slice(0, 200)
+}
+
+/** Normaliza um link de rede social — aceita URL ou @handle e devolve texto
+ *  curto (a UI transforma em link clicável). null quando vazio. */
+function normalizarRedeSocial(bruto: string): string | null {
+  const limpo = bruto.trim().slice(0, 300)
+  return limpo || null
 }
 
 function normalizarCamposPersonalizados(bruto: string): CampoPersonalizado[] | null {
@@ -353,10 +388,17 @@ export async function editarLeadAction(
 }
 
 /**
- * Salva a ficha de informações do contato: nome/e-mail (igual editarLeadAction),
- * notas com formatação básica (HTML sanitizado no servidor — vem do
- * contentEditable do navegador, então é tratado como input não confiável) e
- * os campos personalizados livres (nome+valor definidos pelo usuário).
+ * Salva a ficha de informações do contato: e-mail, notas com formatação básica
+ * (HTML sanitizado no servidor — vem do contentEditable do navegador, então é
+ * input não confiável), campos personalizados livres, redes sociais
+ * (Instagram/Facebook) e o histórico de reuniões (data + anotação).
+ *
+ * O `nome` é OPCIONAL aqui: a ficha embutida em Conversas (FichaContato) edita
+ * o nome no próprio cabeçalho (via renomearLeadAction) e NÃO manda `nome`, pra
+ * não marcar nome_manual à toa e travar o sync automático de um nome que veio
+ * do WhatsApp. Já o popup do Kanban (InformacoesContato standalone) manda
+ * `nome` — aí ele é obrigatório e marca nome_manual=true, igual antes.
+ *
  * Telefone NÃO é editável aqui: é o vínculo com o WhatsApp, mudar exigiria
  * trocar a conversa inteira de identidade.
  */
@@ -369,29 +411,45 @@ export async function editarInformacoesContatoAction(
   if (!db) return { ok: false, erro: "Supabase indisponível." }
 
   const leadId = String(formData.get("lead_id") ?? "").trim()
-  const nome = String(formData.get("nome") ?? "").trim().slice(0, 80)
   const emailBruto = String(formData.get("email") ?? "").trim()
   const notasBruto = String(formData.get("notas_html") ?? "")
   const camposBruto = String(formData.get("campos_personalizados") ?? "[]")
+  const reunioesBruto = String(formData.get("reunioes") ?? "[]")
+  const instagramBruto = String(formData.get("instagram") ?? "")
+  const facebookBruto = String(formData.get("facebook") ?? "")
   if (!leadId) return { ok: false, erro: "Lead inválido." }
-  if (!nome) return { ok: false, erro: "Nome obrigatório." }
   if (emailBruto && !emailValido(emailBruto)) {
     return { ok: false, erro: "E-mail inválido." }
   }
 
+  // nome ausente (null) = não mexe no nome; presente e vazio = erro.
+  const nomeRaw = formData.get("nome")
+  const temNome = nomeRaw !== null
+  const nome = String(nomeRaw ?? "").trim().slice(0, 80)
+  if (temNome && !nome) return { ok: false, erro: "Nome obrigatório." }
+
   const campos = normalizarCamposPersonalizados(camposBruto)
   if (campos === null) return { ok: false, erro: "Campos personalizados inválidos." }
+  const reunioes = normalizarReunioes(reunioesBruto)
+  if (reunioes === null) return { ok: false, erro: "Reuniões inválidas." }
+
+  const patch: Record<string, unknown> = {
+    email: emailBruto ? emailValido(emailBruto) : null,
+    notas_html: sanitizarHtmlContato(notasBruto),
+    campos_personalizados: campos,
+    reunioes,
+    instagram: normalizarRedeSocial(instagramBruto),
+    facebook: normalizarRedeSocial(facebookBruto),
+    updated_at: new Date().toISOString(),
+  }
+  if (temNome) {
+    patch.nome = nome
+    patch.nome_manual = true
+  }
 
   const { data: atualizado, error } = await db
     .from("crm_leads")
-    .update({
-      nome,
-      nome_manual: true,
-      email: emailBruto ? emailValido(emailBruto) : null,
-      notas_html: sanitizarHtmlContato(notasBruto),
-      campos_personalizados: campos,
-      updated_at: new Date().toISOString(),
-    })
+    .update(patch)
     .eq("id", leadId)
     .eq("usuario_id", usuario.id)
     .select("id")
@@ -404,11 +462,10 @@ export async function editarInformacoesContatoAction(
 }
 
 /**
- * Exclui um contato/lead DE VEZ — mensagens, atividades e etiquetas
- * atribuídas somem junto (ON DELETE CASCADE). Opcionalmente arquiva a
- * conversa no WhatsApp do celular também (a coisa mais próxima de "excluir"
- * que a API expõe — não existe "apagar contato" remotamente). Arquivar é
- * best-effort: se falhar, a exclusão no CRM segue normalmente.
+ * Exclui um contato/lead DE VEZ do CRM — mensagens, atividades e etiquetas
+ * atribuídas somem junto (ON DELETE CASCADE). Fase 8: NÃO mexe mais no WhatsApp
+ * (o CRM virou viewer, não edita nada no celular) — a exclusão é só do lado do
+ * CRM. A conversa no WhatsApp do celular continua intacta.
  */
 export async function excluirLeadAction(
   formData: FormData
@@ -419,46 +476,7 @@ export async function excluirLeadAction(
   if (!db) return { ok: false, erro: "Supabase indisponível." }
 
   const leadId = String(formData.get("lead_id") ?? "").trim()
-  const arquivarNoWhatsapp = String(formData.get("arquivar_no_whatsapp") ?? "") === "true"
   if (!leadId) return { ok: false, erro: "Lead inválido." }
-
-  const { data: lead } = await db
-    .from("crm_leads")
-    .select("id, empresa_slug, telefone_e164")
-    .eq("id", leadId)
-    .eq("usuario_id", usuario.id)
-    .maybeSingle()
-  if (!lead) return { ok: false, erro: "Lead não encontrado." }
-
-  if (arquivarNoWhatsapp && lead.telefone_e164) {
-    const { data: ultimaMsg } = await db
-      .from("crm_mensagens")
-      .select("wa_message_id, from_me")
-      .eq("lead_id", leadId)
-      .not("wa_message_id", "is", null)
-      .order("wa_timestamp", { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle()
-    const { data: inst } = await db
-      .from("crm_instancias")
-      .select("instance_name")
-      .eq("empresa_slug", lead.empresa_slug as string)
-      .eq("usuario_id", usuario.id)
-      .eq("ativo", true)
-      .eq("status_conexao", "conectado")
-      .limit(1)
-      .maybeSingle()
-    if (ultimaMsg?.wa_message_id && inst) {
-      const r = await arquivarChatEvolution(
-        inst.instance_name as string,
-        lead.telefone_e164 as string,
-        { waMessageId: ultimaMsg.wa_message_id as string, fromMe: Boolean(ultimaMsg.from_me) }
-      )
-      if (!r.ok) {
-        console.error("[crm_leads] falha ao arquivar chat na Evolution", r.erro)
-      }
-    }
-  }
 
   const { error } = await db
     .from("crm_leads")
