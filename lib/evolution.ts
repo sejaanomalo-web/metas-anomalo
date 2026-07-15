@@ -1,9 +1,12 @@
 // =============================================================================
-// Cliente da Evolution API (WhatsApp via QR) — ENVIO de mensagens do CRM.
+// Cliente da Evolution API (WhatsApp via QR) — VIEWER do CRM.
 // =============================================================================
-// Espelha lib/whatsapp.ts (Meta Cloud API): NUNCA propaga excecao; cada envio
-// retorna { ok, ... }. NAMESPACE totalmente separado do Meta (META_WHATSAPP_*):
-// o CRM usa EVOLUTION_*; os dois coexistem e NAO se cruzam.
+// A partir da Fase 8 o CRM NAO envia nem recebe mensagem pela Evolution (era o
+// principal vetor de banimento do numero). Este cliente cobre so o que faz a
+// Evolution ser um "viewer": sincronizar nome/recado/foto do contato, conferir
+// se um numero existe no WhatsApp, e administrar a instancia (QR/conexao).
+// NUNCA propaga excecao; cada chamada retorna { ok, ... } ou null. NAMESPACE
+// separado do Meta (META_WHATSAPP_*): o CRM usa EVOLUTION_*.
 //
 //   EVOLUTION_API_URL  - base da instalacao Evolution (sem NEXT_PUBLIC, secreta)
 //   EVOLUTION_API_KEY  - apikey global (header 'apikey')
@@ -36,155 +39,6 @@ function erroDaRespostaEvolution(json: unknown, status: number): string {
   if (typeof respMsg === "string" && respMsg.trim()) return respMsg
   if (typeof obj.error === "string" && obj.error.trim()) return obj.error
   return `HTTP ${status}`
-}
-
-/**
- * Envia uma mensagem de texto por uma instancia Evolution.
- *
- * @param instanceName  nome EXATO da instancia (crm_instancias.instance_name)
- * @param telefoneE164  numero destino sem "+" (ex: 5545999999999)
- * @param texto         corpo da mensagem
- */
-export async function enviarTextoEvolution(
-  instanceName: string,
-  telefoneE164: string,
-  texto: string
-): Promise<ResultadoEvolution> {
-  const base = process.env.EVOLUTION_API_URL
-  const apikey = process.env.EVOLUTION_API_KEY
-  if (!base || !apikey) {
-    console.error("[evolution] EVOLUTION_API_URL ou EVOLUTION_API_KEY ausente")
-    return { ok: false, erro: "credenciais_ausentes" }
-  }
-
-  const url = `${base.replace(/\/$/, "")}/message/sendText/${encodeURIComponent(
-    instanceName
-  )}`
-
-  try {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { apikey, "Content-Type": "application/json" },
-      body: JSON.stringify({ number: telefoneE164, text: texto }),
-      // Timeout defensivo (mesma logica do lib/whatsapp.ts).
-      signal: AbortSignal.timeout(15_000),
-      cache: "no-store",
-    })
-
-    const json: unknown = await resp.json().catch(() => null)
-
-    if (!resp.ok) {
-      const msg = erroDaRespostaEvolution(json, resp.status)
-      console.error(
-        `[evolution] falha sendText (${instanceName} -> ${telefoneE164}): ` +
-          `${resp.status} ${JSON.stringify(json)}`
-      )
-      return { ok: false, erro: msg, status: resp.status }
-    }
-
-    // Evolution responde com { key: { id }, ... } no sucesso.
-    const obj = (json ?? {}) as {
-      key?: { id?: string }
-      message?: { key?: { id?: string } }
-    }
-    const messageId = obj.key?.id ?? obj.message?.key?.id
-    return { ok: true, messageId, status: resp.status }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[evolution] erro de rede sendText (${instanceName}): ${msg}`)
-    return { ok: false, erro: msg }
-  }
-}
-
-/**
- * Envia um audio (nota de voz) por uma instancia Evolution. Aceita base64
- * (com ou sem prefixo data:) — a Evolution transcodifica pro formato PTT do
- * WhatsApp via ffmpeg. Endpoint: /message/sendWhatsAppAudio/{instance}.
- */
-export async function enviarAudioEvolution(
-  instanceName: string,
-  telefoneE164: string,
-  audioBase64: string
-): Promise<ResultadoEvolution> {
-  const base = process.env.EVOLUTION_API_URL
-  const apikey = process.env.EVOLUTION_API_KEY
-  if (!base || !apikey) {
-    console.error("[evolution] EVOLUTION_API_URL ou EVOLUTION_API_KEY ausente")
-    return { ok: false, erro: "credenciais_ausentes" }
-  }
-
-  // A Evolution quer o base64 puro (sem o prefixo "data:audio/...;base64,").
-  const audioLimpo = audioBase64.includes(",")
-    ? audioBase64.slice(audioBase64.indexOf(",") + 1)
-    : audioBase64
-
-  const url = `${base.replace(/\/$/, "")}/message/sendWhatsAppAudio/${encodeURIComponent(
-    instanceName
-  )}`
-
-  try {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { apikey, "Content-Type": "application/json" },
-      body: JSON.stringify({ number: telefoneE164, audio: audioLimpo }),
-      // Audio e maior que texto — timeout mais folgado.
-      signal: AbortSignal.timeout(30_000),
-      cache: "no-store",
-    })
-    const json: unknown = await resp.json().catch(() => null)
-    if (!resp.ok) {
-      const msg = erroDaRespostaEvolution(json, resp.status)
-      console.error(
-        `[evolution] falha sendWhatsAppAudio (${instanceName} -> ${telefoneE164}): ` +
-          `${resp.status} ${JSON.stringify(json)}`
-      )
-      return { ok: false, erro: msg, status: resp.status }
-    }
-    const obj = (json ?? {}) as {
-      key?: { id?: string }
-      message?: { key?: { id?: string } }
-    }
-    const messageId = obj.key?.id ?? obj.message?.key?.id
-    return { ok: true, messageId, status: resp.status }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[evolution] erro de rede sendWhatsAppAudio (${instanceName}): ${msg}`)
-    return { ok: false, erro: msg }
-  }
-}
-
-/**
- * Busca a URL da foto de perfil de um numero (estilo WhatsApp). Retorna null
- * se o contato nao tem foto, e privada, ou a instancia esta offline — nunca
- * lanca (best-effort; a UI cai pro avatar de iniciais).
- * Endpoint: /chat/fetchProfilePictureUrl/{instance}.
- */
-export async function buscarFotoPerfilEvolution(
-  instanceName: string,
-  telefoneE164: string
-): Promise<string | null> {
-  const base = process.env.EVOLUTION_API_URL
-  const apikey = process.env.EVOLUTION_API_KEY
-  if (!base || !apikey) return null
-
-  const url = `${base.replace(/\/$/, "")}/chat/fetchProfilePictureUrl/${encodeURIComponent(
-    instanceName
-  )}`
-  try {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { apikey, "Content-Type": "application/json" },
-      body: JSON.stringify({ number: telefoneE164 }),
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
-    })
-    if (!resp.ok) return null
-    const json = (await resp.json().catch(() => null)) as Record<string, any> | null
-    const foto = json?.profilePictureUrl ?? json?.profilePicUrl ?? json?.url
-    return typeof foto === "string" && foto.startsWith("http") ? foto : null
-  } catch {
-    return null
-  }
 }
 
 export interface PerfilContatoEvolution {
@@ -245,45 +99,6 @@ export async function buscarPerfilContatoEvolution(
 }
 
 /**
- * Baixa o binario (base64) de uma mensagem de midia recebida — a Evolution
- * nao manda o conteudo no webhook por padrao, so os metadados. Best-effort:
- * retorna null em qualquer falha (a UI mostra "[audio]/[imagem]" como antes).
- * Endpoint: /chat/getBase64FromMediaMessage/{instance}.
- */
-export async function baixarMidiaEvolution(
-  instanceName: string,
-  waMessage: unknown
-): Promise<{ base64: string; mimetype: string | null } | null> {
-  const base = process.env.EVOLUTION_API_URL
-  const apikey = process.env.EVOLUTION_API_KEY
-  if (!base || !apikey) return null
-
-  const url = `${base.replace(/\/$/, "")}/chat/getBase64FromMediaMessage/${encodeURIComponent(
-    instanceName
-  )}`
-  try {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { apikey, "Content-Type": "application/json" },
-      body: JSON.stringify({ message: waMessage, convertToMp4: false }),
-      signal: AbortSignal.timeout(20_000),
-      cache: "no-store",
-    })
-    if (!resp.ok) return null
-    const json = (await resp.json().catch(() => null)) as Record<string, any> | null
-    const base64 = json?.base64 ?? json?.media ?? null
-    if (typeof base64 !== "string" || base64.length === 0) return null
-    const mimetype =
-      (typeof json?.mimetype === "string" && json.mimetype) ||
-      (typeof json?.mimeType === "string" && json.mimeType) ||
-      null
-    return { base64, mimetype }
-  } catch {
-    return null
-  }
-}
-
-/**
  * Confere se um numero existe no WhatsApp antes de criar um contato manual
  * no CRM — evita salvar leads com numero errado/inexistente. Best-effort:
  * null quando nao da pra determinar (instancia offline, API fora, formato
@@ -324,59 +139,6 @@ export async function verificarNumeroWhatsappEvolution(
     return null
   } catch {
     return null
-  }
-}
-
-/**
- * Arquiva (ou desarquiva) uma conversa na Evolution — a coisa mais proxima
- * de "excluir contato" que a API expoe (nao existe endpoint de apagar
- * chat/contato: WhatsApp nao suporta isso remotamente, so localmente no
- * celular). Precisa da ultima mensagem do chat (key.id/fromMe) — a Evolution
- * usa isso pra localizar a conversa. Best-effort: falha nao deve travar a
- * exclusao no CRM (o dado local ja e a fonte de verdade). Endpoint:
- * /chat/archiveChat/{instance}.
- */
-export async function arquivarChatEvolution(
-  instanceName: string,
-  telefoneE164: string,
-  ultimaMensagem: { waMessageId: string; fromMe: boolean }
-): Promise<ResultadoEvolution> {
-  const base = process.env.EVOLUTION_API_URL
-  const apikey = process.env.EVOLUTION_API_KEY
-  if (!base || !apikey) return { ok: false, erro: "credenciais_ausentes" }
-
-  const remoteJid = `${telefoneE164}@s.whatsapp.net`
-  const url = `${base.replace(/\/$/, "")}/chat/archiveChat/${encodeURIComponent(
-    instanceName
-  )}`
-  try {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { apikey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat: remoteJid,
-        archive: true,
-        lastMessage: {
-          key: {
-            remoteJid,
-            fromMe: ultimaMensagem.fromMe,
-            id: ultimaMensagem.waMessageId,
-          },
-        },
-      }),
-      signal: AbortSignal.timeout(15_000),
-      cache: "no-store",
-    })
-    if (!resp.ok) {
-      const msg = await extrairErroResposta(resp)
-      console.error(`[evolution] falha archiveChat (${instanceName}): ${resp.status} ${msg}`)
-      return { ok: false, erro: msg, status: resp.status }
-    }
-    return { ok: true, status: resp.status }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[evolution] erro de rede archiveChat (${instanceName}): ${msg}`)
-    return { ok: false, erro: msg }
   }
 }
 
