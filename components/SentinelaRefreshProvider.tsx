@@ -8,21 +8,17 @@ import {
   useState,
 } from "react"
 import { useRouter } from "next/navigation"
-import {
-  dispararRotinaMCP,
-  ultimaAtualizacaoMCP,
-} from "@/lib/sentinela-trigger"
+import { dispararSentinelaDia } from "@/lib/sentinela-trigger"
 
-/** Próximo horário da rotina MCP em BRT (mesma agenda do cron antigo:
- *  9h, 15h, 20h). Devolve string tipo "15h" ou "9h de amanhã". */
+/** Horário do cron automático da Sentinela em BRT (09:00, único — ver
+ *  migration 20260720_sentinela_cron_9h.sql). Devolve "09:00 de amanhã" se
+ *  já passou das 09:00 hoje, senão "09:00". */
 function proximaRotinaBRT(): string {
   const agoraUTC = new Date()
   const ms = agoraUTC.getTime() + agoraUTC.getTimezoneOffset() * 60_000
   const brt = new Date(ms - 3 * 60 * 60_000)
   const h = brt.getUTCHours()
-  const slots = [9, 15, 20]
-  const prox = slots.find((s) => s > h)
-  return prox ? `${prox}h` : "9h de amanhã"
+  return h < 9 ? "09:00" : "09:00 de amanhã"
 }
 
 /**
@@ -38,7 +34,8 @@ function proximaRotinaBRT(): string {
  *
  * Limite honesto: isto roda no navegador (no realm da SPA). Trocar de aba
  * mantém; FECHAR a aba do navegador / dar reload interrompe. Para a
- * atualização garantida sem ninguém aberto existem os crons (09/15/21h).
+ * atualização garantida sem ninguém aberto existe o cron automático das
+ * 09:00 BRT (ver migration 20260720_sentinela_cron_9h.sql).
  */
 type Estado =
   | { fase: "idle" }
@@ -78,80 +75,39 @@ export default function SentinelaRefreshProvider({
     if (rodandoRef.current) return
     rodandoRef.current = true
 
-    // Estratégia: tenta o MCP primeiro (fonte de dados ativa enquanto o app
-    // do Meta está fora). Se o token não estiver configurado no Vercel,
-    // cai pra Sentinela legacy (que vai falhar rápido e sinalizar "MCP").
-    setEstado({ fase: "rodando", pct: 3, etapa: "Disparando coleta…" })
+    // Chamada síncrona: a edge function processa ontem+hoje pra todas as
+    // empresas e devolve o resultado direto na resposta — sem polling.
+    setEstado({ fase: "rodando", pct: 20, etapa: "Chamando a Sentinela…" })
+    const inicio = Date.now()
 
-    const snapshotAntes = await ultimaAtualizacaoMCP()
-    const ultimaAntes = snapshotAntes.iso
+    const resultado = await dispararSentinelaDia()
 
-    const disparo = await dispararRotinaMCP()
-
-    // SEM token configurado → NÃO disparamos nada (a Sentinela legacy
-    // está morta e mentiria sucesso). Falamos a verdade pro usuário.
-    if (!disparo.ok && disparo.semToken) {
+    if (!resultado.ok && resultado.semSecret) {
       setEstado({
         fase: "erro",
-        msg: `Botão precisa do token MCP no Vercel. Próxima coleta automática: ${proximaRotinaBRT()} BRT.`,
+        msg: `Sentinela precisa do SENTINELA_SECRET no Vercel. Próxima coleta automática: ${proximaRotinaBRT()} BRT.`,
       })
       setTimeout(() => setEstado({ fase: "idle" }), 12000)
       rodandoRef.current = false
       return
     }
 
-    if (!disparo.ok) {
-      setEstado({ fase: "erro", msg: disparo.erro ?? "Falha ao disparar." })
+    if (!resultado.ok) {
+      setEstado({ fase: "erro", msg: resultado.erro ?? "Falha ao atualizar." })
       setTimeout(() => setEstado({ fase: "idle" }), 6000)
       rodandoRef.current = false
       return
     }
 
-    // Polling do banco até detectar timestamp MAIOR que o snapshot. A barra
-    // sobe pelo tempo decorrido vs. duração estimada (curva conservadora:
-    // chega só a 90% até o dado realmente aparecer — evita "fingir" 100%).
-    //
-    // Timeout generoso: o cold start do agente na nuvem (CCR) + conexão MCP +
-    // processamento de 14 contas pode levar 3-5 min na primeira execução do
-    // ciclo. Mantemos 8 min pra cobrir cenário pessimista sem travar o usuário.
-    const inicio = Date.now()
-    const estimadaMs = disparo.duracaoEstimadaSegundos * 1000
-    const timeoutMs = 480_000 // 8 min
-    const intervaloMs = 2500
-
-    while (Date.now() - inicio < timeoutMs) {
-      await new Promise((r) => setTimeout(r, intervaloMs))
-
-      const decorrido = Date.now() - inicio
-      const fracao = Math.min(1, decorrido / estimadaMs)
-      const pct = Math.max(3, Math.min(90, Math.round(fracao * 90)))
-      setEstado({
-        fase: "rodando",
-        pct,
-        etapa: `Coletando do Meta… ${Math.round(decorrido / 1000)}s`,
-      })
-
-      const snap = await ultimaAtualizacaoMCP()
-      if (snap.ok && snap.iso && snap.iso !== ultimaAntes) {
-        setEstado({ fase: "rodando", pct: 96, etapa: "Recarregando…" })
-        router.refresh()
-        const seg = Math.round((Date.now() - inicio) / 1000)
-        setEstado({ fase: "ok", resumo: `MCP · ${seg}s` })
-        setTimeout(() => setEstado({ fase: "idle" }), 4500)
-        rodandoRef.current = false
-        return
-      }
-    }
-
-    // Timeout: NÃO é falha — a rotina foi disparada com sucesso e está
-    // rodando na nuvem. Apenas demorou além do que esperamos esperar
-    // bloqueando o usuário. Usamos fase "ok" (verde) pra não alarmar.
+    setEstado({ fase: "rodando", pct: 96, etapa: "Recarregando…" })
     router.refresh()
-    setEstado({
-      fase: "ok",
-      resumo: "MCP rodando em segundo plano · recarregue em 2-3 min",
-    })
-    setTimeout(() => setEstado({ fase: "idle" }), 10000)
+    const seg = Math.round((Date.now() - inicio) / 1000)
+    const t = resultado.totais
+    const resumo = t
+      ? `${t.contas_processadas} contas · R$ ${t.investimento_total.toFixed(2)} · ${seg}s`
+      : `concluído · ${seg}s`
+    setEstado({ fase: "ok", resumo })
+    setTimeout(() => setEstado({ fase: "idle" }), 4500)
     rodandoRef.current = false
   }, [router])
 
