@@ -98,13 +98,15 @@ export function formatarMomentoBRT(
   return `${dataAlvo} ${horaAlvo}`
 }
 
-/** Horários (BRT) em que o cron do Sentinela roda, em ordem. Espelha os
- *  jobs pg_cron (sentinela_9h/15h/20h). Manter sincronizado com o banco. */
-const HORARIOS_SENTINELA_BRT = [9, 15, 20] as const
+/** Horários (BRT) em que o cron do Sentinela roda, em ordem. Espelha o job
+ *  pg_cron `sentinela_9h` (ver supabase/migrations/20260720_sentinela_cron_9h.sql)
+ *  — só 1 horário desde 2026-07-20 (antes eram 3: 9h/15h/20h). Manter
+ *  sincronizado com o banco. */
+const HORARIOS_SENTINELA_BRT = [9] as const
 
-/** Próxima execução do Sentinela em hora BRT (cron 09:00, 15:00 e 20:00).
- *  Devolve hora/minuto pra cálculos, label curto ("15:00 BRT") e
- *  labelCompleto com data ("hoje 15:00 BRT" / "amanhã 09:00 BRT"). */
+/** Próxima execução do Sentinela em hora BRT (cron único 09:00).
+ *  Devolve hora/minuto pra cálculos, label curto ("09:00 BRT") e
+ *  labelCompleto com data ("hoje 09:00 BRT" / "amanhã 09:00 BRT"). */
 export function proximaExecucao(agora: Date = new Date()): {
   hora: number
   minuto: number
