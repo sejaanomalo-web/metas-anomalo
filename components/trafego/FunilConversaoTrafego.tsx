@@ -33,7 +33,7 @@ export default function FunilConversaoTrafego({
   const etapas: Etapa[] = [
     { label: "Alcance", valor: resumo.alcance, cor: "#5b8cff" },
     { label: "Cliques", valor: resumo.cliques, cor: "#6c7bff" },
-    { label: "Conversas/form.", valor: resumo.conversas + resumo.leads, cor: "#a855f7" },
+    { label: "Conversas/form.", valor: resumo.resultados, cor: "#a855f7" },
     { label: "Agendamentos", valor: resumo.reunioesAgendadas, cor: "#f5b13d" },
     { label: "Realizados", valor: resumo.reunioes, cor: "#34c759" },
     { label: "Vendas", valor: resumo.contratos, cor: "#C9953A" },
