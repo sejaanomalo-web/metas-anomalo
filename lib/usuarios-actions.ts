@@ -77,6 +77,7 @@ const CHAVES: ChavePermissao[] = [
   "gerenciar_usuarios",
   "ver_notificacoes",
   "crm",
+  "workspace",
 ]
 
 function permissoesFromFormData(formData: FormData): Permissoes {

@@ -109,6 +109,7 @@ export type ChavePermissao =
   | "gerenciar_usuarios"
   | "ver_notificacoes"
   | "crm"
+  | "workspace"
 
 export type Permissoes = Record<ChavePermissao, boolean>
 
@@ -130,6 +131,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     gerenciar_usuarios: true,
     ver_notificacoes: true,
     crm: true,
+    workspace: true,
   },
   gestor_trafego: {
     dashboard_principal: false,
@@ -144,7 +146,10 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     configuracoes: true,
     gerenciar_usuarios: false,
     ver_notificacoes: true,
+    // Workspace nasce DESLIGADO pros papéis não-admin — é a feature flag do
+    // módulo (ver docs/WORKSPACE-PLANO.md §5.2). Liga no rollout.
     crm: false,
+    workspace: false,
   },
   comercial: {
     dashboard_principal: false,
@@ -160,6 +165,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     gerenciar_usuarios: false,
     ver_notificacoes: true,
     crm: true,
+    workspace: false,
   },
   custom: {
     dashboard_principal: false,
@@ -175,6 +181,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     gerenciar_usuarios: false,
     ver_notificacoes: false,
     crm: false,
+    workspace: false,
   },
 }
 

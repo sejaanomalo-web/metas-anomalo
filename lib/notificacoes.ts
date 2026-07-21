@@ -9,6 +9,10 @@ export type TipoNotificacao =
   | "meta_batida"
   | "dados_sentinela"
   | "crm_lembrete"
+  // Workspace: um tipo só cobre atribuição, prazo, comentário e menção. São
+  // eventos da MESMA tarefa — separar em quatro só daria ao usuário quatro
+  // checkboxes para tomar a mesma decisão ("quero saber das minhas tarefas?").
+  | "ws_tarefa"
 
 // Papéis que podem receber notificações (filtrados depois por
 // ver_notificacoes + preferência do usuário).
