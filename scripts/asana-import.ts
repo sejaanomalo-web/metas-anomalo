@@ -81,7 +81,13 @@ async function descoberta() {
     console.error("Nenhum workspace acessível com este token.")
     process.exit(1)
   }
-  const ws = workspaces[0]
+  if (workspaces.length > 1) {
+    log(`\nATENCAO: este token enxerga ${workspaces.length} workspaces:`)
+    for (const w of workspaces) log(`  ${w.gid}  ${w.name ?? "?"}`)
+    log("Defina ASANA_WORKSPACE_GID no .env.local para fixar qual sera migrado.")
+  }
+  const alvo = process.env.ASANA_WORKSPACE_GID || opcao("workspace")
+  const ws = alvo ? workspaces.find((w) => w.gid === alvo) ?? workspaces[0] : workspaces[0]
   log(`\nWorkspace: ${ws.name ?? ws.gid} (${ws.gid})`)
 
   const [usuarios, projetos] = await Promise.all([
@@ -181,7 +187,12 @@ async function executarDryRun() {
   log(`Execução ${execucao.id} (importador ${VERSAO_IMPORTADOR})\n`)
 
   try {
-    const extracao = await extrair(source, execucao.id, log)
+    const extracao = await extrair(
+      source,
+      execucao.id,
+      log,
+      process.env.ASANA_WORKSPACE_GID || opcao("workspace")
+    )
     if (!extracao) {
       await fecharExecucao(execucao.id, "falhou", {})
       process.exit(1)

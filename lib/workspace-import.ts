@@ -17,6 +17,7 @@ import type { AsanaSource } from "./asana/source"
 import { AsanaRest } from "./asana/source"
 import type {
   AsanaAnexo,
+  AsanaRecurso,
   AsanaComentario,
   AsanaCustomField,
   AsanaProjeto,
@@ -227,7 +228,8 @@ export interface ResultadoExtracao {
 export async function extrair(
   source: AsanaSource,
   execucaoId: string,
-  log: (m: string) => void = () => {}
+  log: (m: string) => void = () => {},
+  workspaceGidAlvo?: string
 ): Promise<ResultadoExtracao | null> {
   const workspaces = await source.workspaces()
   if (workspaces.length === 0) {
@@ -235,8 +237,34 @@ export async function extrair(
     return null
   }
   await gravarRaw(execucaoId, "workspace", workspaces)
-  const ws = workspaces[0]
-  log(`workspace: ${ws.name ?? ws.gid}`)
+
+  // Escolha do workspace é EXPLÍCITA de propósito. Pegar workspaces[0] parece
+  // funcionar até o dia em que a API devolve noutra ordem — aí a extração vem
+  // vazia, sem erro, e ninguém percebe até o corte. Este token enxerga dois
+  // ("My workspace" e "Minha empresa"), então a ambiguidade é real.
+  let ws: AsanaRecurso
+  if (workspaceGidAlvo) {
+    const achado = workspaces.find((w) => w.gid === workspaceGidAlvo)
+    if (!achado) {
+      const lista = workspaces.map((w) => `${w.gid} (${w.name ?? "?"})`).join(", ")
+      await registrarErro(
+        execucaoId, "extracao", "workspace_nao_encontrado",
+        `GID ${workspaceGidAlvo} não está entre os acessíveis: ${lista}`
+      )
+      return null
+    }
+    ws = achado
+  } else if (workspaces.length === 1) {
+    ws = workspaces[0]
+  } else {
+    const lista = workspaces.map((w) => `${w.gid} (${w.name ?? "?"})`).join(", ")
+    await registrarErro(
+      execucaoId, "extracao", "workspace_ambiguo",
+      `${workspaces.length} workspaces acessíveis: ${lista}. Defina ASANA_WORKSPACE_GID.`
+    )
+    return null
+  }
+  log(`workspace: ${ws.name ?? ws.gid} (${ws.gid})`)
 
   const [equipes, usuarios] = await Promise.all([
     source.equipes(ws.gid),
