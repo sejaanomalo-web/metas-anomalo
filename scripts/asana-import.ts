@@ -5,6 +5,8 @@
  *   npx tsx scripts/asana-import.ts dry-run
  *   npx tsx scripts/asana-import.ts dry-run --arquivo snapshot.json
  *   npx tsx scripts/asana-import.ts snapshot --saida snapshot.json
+ *   npx tsx scripts/asana-import.ts normalizar-base
+ *   npx tsx scripts/asana-import.ts carregar
  *
  * Modos:
  *   descoberta  Conta o que existe na origem. Não grava staging, não escreve
@@ -13,8 +15,11 @@
  *   dry-run     Extrai, grava o CRU em ws_import_raw e produz o relatório de
  *               blockers/avisos. NÃO cria nenhuma tarefa canônica.
  *
- * A carga canônica (modo `completa`) ainda não está implementada — por
- * desenho: o plano exige dry-run e reconciliação aprovados antes dela existir.
+ *   normalizar-base  Cria contextos, seções, identidades e definições de campo
+ *                    a partir do staging. NÃO cria tarefas. É o que dá conteúdo
+ *                    para a tela /dashboard/workspace/importar.
+ *   carregar         Cria as tarefas, vínculos, comentários e valores de campo.
+ *                    Rodar só DEPOIS de decidir tudo na tela de mapeamento.
  *
  * Requer em .env.local:
  *   ASANA_PAT                  token pessoal do Asana (só leitura é suficiente)
@@ -24,7 +29,7 @@
 
 import { config } from "dotenv"
 import { readFileSync, writeFileSync } from "fs"
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
 import { AsanaArquivo, AsanaRest, type AsanaSource } from "../lib/asana/source"
 import {
@@ -35,6 +40,10 @@ import {
   VERSAO_IMPORTADOR,
   type RelatorioDryRun,
 } from "../lib/workspace-import"
+import {
+  normalizarBase,
+  normalizarTarefas,
+} from "../lib/workspace-import-normalizar"
 
 config({ path: ".env.local" })
 
@@ -284,6 +293,75 @@ function imprimirRelatorio(r: RelatorioDryRun) {
   log("")
 }
 
+
+/** Última execução com staging preenchido. As duas etapas de normalização
+ *  leem do staging, não do Asana — então elas reaproveitam a extração já feita
+ *  em vez de gastar rate limit de novo. */
+async function ultimaExecucaoComStaging(db: SupabaseClient): Promise<string | null> {
+  const explicita = opcao("execucao")
+  if (explicita) return explicita
+  const { data } = await db
+    .from("ws_import_execucoes")
+    .select("id")
+    .in("estado", ["concluida", "parcial"])
+    .order("iniciada_em", { ascending: false })
+    .limit(1)
+  const linhas = (data ?? []) as { id: string }[]
+  return linhas[0]?.id ?? null
+}
+
+function conectar(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    console.error("NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes.")
+    process.exit(1)
+  }
+  return createClient(url, key, { auth: { persistSession: false } })
+}
+
+async function executarNormalizarBase() {
+  const db = conectar()
+  const execucaoId = await ultimaExecucaoComStaging(db)
+  if (!execucaoId) {
+    console.error("Nenhuma execução com staging. Rode `dry-run` antes.")
+    process.exit(1)
+  }
+  log(`Normalizando base a partir da execução ${execucaoId}\n`)
+  const r = await normalizarBase(db, execucaoId, log)
+  log("\nResultado:")
+  for (const [k, v] of Object.entries(r)) log(`  ${k.padEnd(24)} ${v}`)
+  log("\nAgora abra /dashboard/workspace/importar e decida os pendentes.")
+}
+
+async function executarCarga() {
+  const db = conectar()
+  const execucaoId = await ultimaExecucaoComStaging(db)
+  if (!execucaoId) {
+    console.error("Nenhuma execução com staging. Rode `dry-run` antes.")
+    process.exit(1)
+  }
+
+  // Trava: carregar 1.588 tarefas antes de decidir quem é quem produziria
+  // centenas de tarefas sem responsável visível e projetos sem cliente.
+  const { count: projetosPendentes } = await db
+    .from("ws_contextos").select("*", { count: "exact", head: true })
+    .eq("tipo", "desconhecido").is("arquivado_em", null)
+  if ((projetosPendentes ?? 0) > 0 && !args.includes("--forcar")) {
+    console.error(
+      `\n${projetosPendentes} projetos ainda sem decisão em /dashboard/workspace/importar.\n` +
+      "Decida antes de carregar, ou use --forcar se souber o que está fazendo.\n"
+    )
+    process.exit(2)
+  }
+
+  log(`Carregando tarefas da execução ${execucaoId}\n`)
+  const r = await normalizarTarefas(db, execucaoId, log)
+  log("\nResultado:")
+  for (const [k, v] of Object.entries(r)) log(`  ${k.padEnd(24)} ${v}`)
+  log("\nAbra /dashboard/workspace para conferir.")
+}
+
 // ============================================================
 
 async function main() {
@@ -292,9 +370,11 @@ async function main() {
     case "snapshot": await snapshot(); break
     case "dry-run":
     case "dry_run": await executarDryRun(); break
+    case "normalizar-base": await executarNormalizarBase(); break
+    case "carregar": await executarCarga(); break
     default:
       console.error(`Modo desconhecido: ${modo}`)
-      console.error("Use: descoberta | snapshot | dry-run")
+      console.error("Use: descoberta | snapshot | dry-run | normalizar-base | carregar")
       process.exit(1)
   }
 }

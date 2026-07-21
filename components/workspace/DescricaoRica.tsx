@@ -69,6 +69,12 @@ function TrechoView({ trecho }: { trecho: Trecho }) {
       return <>{trecho.valor}</>
     case "negrito":
       return <strong style={{ color: "var(--text-1)" }}>{trecho.valor}</strong>
+    case "italico":
+      return <em>{trecho.valor}</em>
+    case "riscado":
+      return (
+        <s style={{ color: "var(--text-4)" }}>{trecho.valor}</s>
+      )
     case "codigo":
       return (
         <code

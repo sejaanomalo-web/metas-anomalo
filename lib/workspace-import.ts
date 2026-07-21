@@ -602,8 +602,29 @@ export async function dryRun(
 // Helpers
 // ============================================================
 
+/**
+ * Letras estilizadas que o time usa no NOME dos projetos do Asana.
+ *
+ * "\ua4e5" (U+A4A5, Lisu) \u00e9 usado no lugar de "A": \ua4e5N\u00d4MALO HUB, T\ua4e5TO ESTOFADOS,
+ * H\ua4e5TO, ASSESSORIA LINH\ua4e5 NOV\ua4e5. Sem esta tradu\u00e7\u00e3o, o strip de n\u00e3o-alfanum\u00e9ricos
+ * transformaria "T\ua4e5TO ESTOFADOS" em "toestofados", que nunca casaria com o
+ * cliente "Tato Estofados" \u2014 e "\ua4e5N\u00d4MALO HUB" n\u00e3o adotaria o contexto
+ * "An\u00f4malo Hub" que j\u00e1 existe, criando pasta duplicada.
+ */
+const LETRAS_ESTILIZADAS: Record<string, string> = {
+  "\u{A4A5}": "a", // \ua4e5
+  "\u{2C6F}": "a", // \u2c6f
+  "\u{0245}": "a", // \u0245
+  "\u{039B}": "a", // \u039b (lambda grego, mesmo desenho)
+  "\u{0410}": "a", // \u0410 cir\u00edlico
+  "\u{041E}": "o", // \u041e cir\u00edlico
+  "\u{0415}": "e", // \u0415 cir\u00edlico
+}
+
 export function normalizar(s: string): string {
-  return s
+  let out = ""
+  for (const c of s) out += LETRAS_ESTILIZADAS[c] ?? c
+  return out
     .normalize("NFD")
     // Escape explicito do range de combining marks: escrever os caracteres
     // literais deixaria bytes invisiveis no fonte.

@@ -31,6 +31,8 @@ import {
   extrairMencoes,
   urlSegura,
 } from "../lib/workspace-markdown"
+import { converterHtmlAsana, normalizarUrl } from "../lib/workspace-html"
+import { normalizar, prazoDoAsana } from "../lib/workspace-import"
 
 config({ path: ".env.local" })
 
@@ -159,6 +161,77 @@ function testarMarkdown() {
   ok("descrição vazia não quebra", analisarDescricao(null).length === 0)
 }
 
+
+// =============================================================================
+// 2b) Conversao do HTML do Asana
+// =============================================================================
+function testarConversaoAsana() {
+  secao("2b) HTML do Asana -> markdown-lite")
+
+  const r1 = converterHtmlAsana(
+    '<body><strong>Gravar</strong> o reels e <em>revisar</em> depois. ' +
+    '<a href="https://drive.google.com/x">pasta</a></body>', null)
+  ok("negrito convertido", r1.texto.includes("**Gravar**"))
+  ok("italico convertido", r1.texto.includes("_revisar_"))
+  ok("link virou markdown", r1.texto.includes("[pasta](https://drive.google.com/x)"))
+  ok("link coletado", r1.links[0] === "https://drive.google.com/x")
+
+  const r2 = converterHtmlAsana('<body><a href="javascript:alert(1)">clique</a></body>', null)
+  ok("href javascript: descartado", r2.links.length === 0)
+  ok("mas o TEXTO do link sobrevive", r2.texto.includes("clique"))
+
+  const r3 = converterHtmlAsana('<body><ul><li>um</li><li>dois</li></ul></body>', null)
+  ok("lista vira hifen", (r3.texto.match(/^- /gm) ?? []).length === 2)
+
+  const r4 = converterHtmlAsana('<body>2 &lt; 3 &amp; 4 &gt; 1 &ndash; fim</body>', null)
+  ok("entidades decodificadas", r4.texto.includes("2 < 3 & 4 > 1"))
+
+  const r5 = converterHtmlAsana('<body>use **isto** literal</body>', null)
+  ok("marcador do usuario e escapado", r5.texto.includes("\\*\\*isto"))
+
+  const r6 = converterHtmlAsana(null, "so texto puro https://exemplo.com aqui")
+  ok("cai pro notes quando nao ha html", r6.texto.startsWith("so texto puro"))
+  ok("url extraida do texto puro", r6.links[0] === "https://exemplo.com")
+
+  const r7 = converterHtmlAsana('<body><blink>x</blink>ok</body>', null)
+  ok("tag desconhecida e reportada", r7.tagsIgnoradas.includes("blink"))
+
+  ok("normalizarUrl remove fragmento",
+    normalizarUrl("https://WWW.Exemplo.com/a#frag") === "https://exemplo.com/a")
+}
+
+// =============================================================================
+// 2c) Normalizacao de nome e prazo (casamento com clientes)
+// =============================================================================
+function testarNormalizacaoImport() {
+  secao("2c) Normalizacao de nomes e prazos")
+
+  // O time escreve "A" como "\u{A4A5}" nos projetos do Asana.
+  ok("TATO estilizado casa com Tato",
+    normalizar("T\u{A4A5}TO ESTOFADOS") === normalizar("Tato Estofados"))
+  ok("ANOMALO HUB estilizado casa",
+    normalizar("\u{A4A5}NOMALO HUB") === normalizar("Anomalo Hub"))
+  ok("acento ignorado", normalizar("MAE DIVINA") === normalizar("M\u00e3e Divina"))
+  ok("caixa ignorada", normalizar("ibb") === normalizar("IBB"))
+  ok("nomes diferentes NAO casam", normalizar("Job") !== normalizar("Job Nilton"))
+
+  // due_on: data pura, sem horario, sem deslocar dia
+  const p1 = prazoDoAsana("2026-07-21", null)
+  ok("due_on vira data pura", p1.data === "2026-07-21" && p1.hora === null)
+
+  // due_at 02:00Z = 23:00 BRT do dia ANTERIOR — o caso que quebra timestamptz
+  const p2 = prazoDoAsana(null, "2026-07-22T02:00:00.000Z")
+  ok("due_at convertido pra BRT (vira dia anterior)",
+    p2.data === "2026-07-21" && p2.hora === "23:00", `${p2.data} ${p2.hora}`)
+
+  const p3 = prazoDoAsana(null, "2026-07-21T15:30:00.000Z")
+  ok("due_at meio do dia", p3.data === "2026-07-21" && p3.hora === "12:30",
+    `${p3.data} ${p3.hora}`)
+
+  const p4 = prazoDoAsana(null, null)
+  ok("sem prazo", p4.data === null && p4.hora === null)
+}
+
 // =============================================================================
 // 3) Banco: constraints, idempotência, isolamento, concorrência
 // =============================================================================
@@ -188,11 +261,29 @@ async function testarBanco() {
   const contextosCriados: string[] = []
 
   try {
-    // --- CHECK: conclusão precisa dos dois campos juntos
-    const { error: e1 } = await db
-      .from("ws_tarefas")
-      .insert({ titulo: "[TESTE] conclusao incoerente", concluida_em: new Date().toISOString() })
-    ok("concluida_em sem concluida_por é rejeitado", Boolean(e1))
+    // --- CHECK de conclusão.
+    // A migration do Asana RELAXOU esta regra de propósito: antes exigia
+    // concluida_por junto com concluida_em, o que barraria as 1.500 tarefas
+    // concluídas cujo autor ainda é identidade externa. O que continua
+    // proibido é o inverso — dizer QUEM concluiu sem dizer QUANDO.
+    const idConcl = randomUUID()
+    const { error: e1ok } = await db.from("ws_tarefas").insert({
+      id: idConcl,
+      titulo: "[TESTE] concluida sem ator interno",
+      concluida_em: new Date().toISOString(),
+    })
+    criados.push(idConcl)
+    ok("concluida_em sozinho é ACEITO (caso da importação)", !e1ok, e1ok?.message)
+
+    const { data: algumUsuario } = await db
+      .from("usuarios").select("id").eq("ativo", true).limit(1).maybeSingle()
+    if (algumUsuario) {
+      const { error: e1bad } = await db.from("ws_tarefas").insert({
+        titulo: "[TESTE] concluida_por sem data",
+        concluida_por: (algumUsuario as { id: string }).id,
+      })
+      ok("concluida_por sem concluida_em é rejeitado", Boolean(e1bad))
+    }
 
     // --- CHECK: título vazio
     const { error: e2 } = await db.from("ws_tarefas").insert({ titulo: "   " })
@@ -377,6 +468,8 @@ async function main() {
   console.log("=== Verificação do Workspace ===")
   testarDatas()
   testarMarkdown()
+  testarConversaoAsana()
+  testarNormalizacaoImport()
   await testarBanco()
 
   console.log(`\n${passou} passaram, ${falhou} falharam`)

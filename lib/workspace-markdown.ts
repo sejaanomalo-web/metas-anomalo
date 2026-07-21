@@ -27,6 +27,8 @@
 export type Trecho =
   | { tipo: "texto"; valor: string }
   | { tipo: "negrito"; valor: string }
+  | { tipo: "italico"; valor: string }
+  | { tipo: "riscado"; valor: string }
   | { tipo: "codigo"; valor: string }
   | { tipo: "link"; href: string; rotulo: string }
   | { tipo: "mencao"; nome: string }
@@ -61,6 +63,11 @@ const RE_URL = /https?:\/\/[^\s<>"')\]]+/gi
 // [rótulo](url)
 const RE_LINK_MD = /\[([^\]\n]{1,200})\]\(([^)\s]{1,2048})\)/g
 const RE_NEGRITO = /\*\*([^*\n]{1,500})\*\*/g
+// Italico e riscado existem porque o Asana usa os dois nas descricoes (778
+// tarefas tem descricao). Sem eles, a conversao do HTML perderia formatacao
+// que o time escreveu de proposito.
+const RE_ITALICO = /(?<![*\w])_([^_\n]{1,500})_(?![*\w])/g
+const RE_RISCADO = /~([^~\n]{1,500})~/g
 const RE_CODIGO = /`([^`\n]{1,500})`/g
 // @nome — letras (com acento), números, ponto, hífen, underscore
 const RE_MENCAO = /@([\p{L}][\p{L}\p{N}._-]{1,40})/gu
@@ -103,6 +110,8 @@ function analisarInline(linha: string): Trecho[] {
     return { tipo: "link", href, rotulo: m[1] }
   })
   coletar(RE_NEGRITO, (m) => ({ tipo: "negrito", valor: m[1] }))
+  coletar(RE_RISCADO, (m) => ({ tipo: "riscado", valor: m[1] }))
+  coletar(RE_ITALICO, (m) => ({ tipo: "italico", valor: m[1] }))
   coletar(RE_URL, (m) => {
     const href = urlSegura(m[0])
     if (!href) return null
