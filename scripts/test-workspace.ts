@@ -206,11 +206,13 @@ function testarConversaoAsana() {
 function testarNormalizacaoImport() {
   secao("2c) Normalizacao de nomes e prazos")
 
-  // O time escreve "A" como "\u{A4A5}" nos projetos do Asana.
+  // U+A4E5 e o caractere REAL nos projetos, lido dos codepoints do staging.
+  // A primeira versao deste teste usava U+A4A5, que eu tinha suposto — passava
+  // verde com o codigo errado. Teste e codigo agora vem do dado, nao do chute.
   ok("TATO estilizado casa com Tato",
-    normalizar("T\u{A4A5}TO ESTOFADOS") === normalizar("Tato Estofados"))
+    normalizar("T\u{A4E5}TO ESTOFADOS") === normalizar("Tato Estofados"))
   ok("ANOMALO HUB estilizado casa",
-    normalizar("\u{A4A5}NOMALO HUB") === normalizar("Anomalo Hub"))
+    normalizar("\u{A4E5}NOMALO HUB") === normalizar("Anomalo Hub"))
   ok("acento ignorado", normalizar("MAE DIVINA") === normalizar("M\u00e3e Divina"))
   ok("caixa ignorada", normalizar("ibb") === normalizar("IBB"))
   ok("nomes diferentes NAO casam", normalizar("Job") !== normalizar("Job Nilton"))

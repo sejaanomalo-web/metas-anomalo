@@ -605,14 +605,19 @@ export async function dryRun(
 /**
  * Letras estilizadas que o time usa no NOME dos projetos do Asana.
  *
- * "\ua4e5" (U+A4A5, Lisu) \u00e9 usado no lugar de "A": \ua4e5N\u00d4MALO HUB, T\ua4e5TO ESTOFADOS,
+ * "\ua4e5" (U+A4E5, Lisu) \u00e9 usado no lugar de "A": \ua4e5N\u00d4MALO HUB, T\ua4e5TO ESTOFADOS,
  * H\ua4e5TO, ASSESSORIA LINH\ua4e5 NOV\ua4e5. Sem esta tradu\u00e7\u00e3o, o strip de n\u00e3o-alfanum\u00e9ricos
  * transformaria "T\ua4e5TO ESTOFADOS" em "toestofados", que nunca casaria com o
  * cliente "Tato Estofados" \u2014 e "\ua4e5N\u00d4MALO HUB" n\u00e3o adotaria o contexto
  * "An\u00f4malo Hub" que j\u00e1 existe, criando pasta duplicada.
  */
 const LETRAS_ESTILIZADAS: Record<string, string> = {
-  "\u{A4A5}": "a", // \ua4e5
+  // U+A4E5 \u00e9 o caractere REAL, lido dos codepoints do staging. A primeira
+  // vers\u00e3o usava U+A4A5, que eu tinha SUPOSTO \u2014 e o teste, escrito com a
+  // mesma suposi\u00e7\u00e3o, passava verde enquanto o c\u00f3digo n\u00e3o funcionava com o
+  // dado de verdade. Este valor e o do teste agora v\u00eam do dado.
+  "\u{A4E5}": "a", // \ua4e5
+  "\u{A4A5}": "a", // variante de desenho parecido, por seguran\u00e7a
   "\u{2C6F}": "a", // \u2c6f
   "\u{0245}": "a", // \u0245
   "\u{039B}": "a", // \u039b (lambda grego, mesmo desenho)

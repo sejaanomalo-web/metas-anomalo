@@ -203,10 +203,12 @@ export async function normalizarBase(
   // conteúdo" criaria uma SEGUNDA pasta com o mesmo nome.
   const { data: existentesData } = await db
     .from("ws_contextos")
-    .select("id, nome, source_gid")
+    .select("id, nome, source_gid, tipo, cliente_id")
     .is("source_gid", null)
     .is("arquivado_em", null)
-  const semGid = (existentesData ?? []) as { id: string; nome: string }[]
+  const semGid = (existentesData ?? []) as {
+    id: string; nome: string; tipo: string; cliente_id: string | null
+  }[]
 
   const contextoPorGid = new Map<string, string>()
 
@@ -232,8 +234,62 @@ export async function normalizarBase(
 
     let contextoId: string
     if (candidato) {
-      // ADOTA a linha existente em vez de criar outra.
-      const { error } = await db.from("ws_contextos").update(campos).eq("id", candidato.id)
+      // ADOTA a linha existente em vez de criar outra — E PRESERVA a
+      // classificação que já estava lá.
+      //
+      // Se alguém já disse "esta pasta é do cliente Ivone", sobrescrever com
+      // 'desconhecido' desfaria uma decisão humana. Pior: violaria o CHECK
+      // ws_contextos_cliente_coerente (tipo<>'cliente' exige cliente_id nulo),
+      // derrubando a adoção inteira. Foi exatamente o que aconteceu com
+      // IVONE CORRETORA na primeira execução.
+      const jaClassificado = candidato.tipo !== "desconhecido"
+      const camposAdocao = jaClassificado
+        ? { ...campos, tipo: candidato.tipo, cliente_id: candidato.cliente_id }
+        : campos
+
+      // Este projeto já pode ter contexto próprio de uma execução anterior
+      // (foi o que aconteceu quando a primeira rodada falhou pela metade).
+      // Nesse caso adotar daria violação de unique — e, pior, deixaria duas
+      // pastas com o mesmo nome. Em vez disso: transfere a classificação do
+      // duplicado manual para o importado e remove o manual, se estiver vazio.
+      const { data: jaImportado } = await db
+        .from("ws_contextos")
+        .select("id, tipo")
+        .eq("source_gid", p.gid)
+        .neq("id", candidato.id)
+        .maybeSingle()
+
+      if (jaImportado) {
+        const importadoId = (jaImportado as { id: string; tipo: string }).id
+        const { count: tarefasNoManual } = await db
+          .from("ws_tarefa_contextos")
+          .select("*", { count: "exact", head: true })
+          .eq("contexto_id", candidato.id)
+
+        if ((tarefasNoManual ?? 0) === 0) {
+          if (jaClassificado) {
+            await db
+              .from("ws_contextos")
+              .update({ tipo: candidato.tipo, cliente_id: candidato.cliente_id })
+              .eq("id", importadoId)
+          }
+          await db.from("ws_contextos").delete().eq("id", candidato.id)
+        } else {
+          // Tem tarefa dentro: nunca apagar. Fica pro humano resolver.
+          await registrarErro(execucaoId, "normalizacao", "contexto_duplicado_com_tarefas",
+            `"${nome}" existe manualmente e importado; o manual tem tarefas`,
+            { tipoObjeto: "project", sourceGid: p.gid })
+        }
+        r.contextos++
+        contextoPorGid.set(p.gid, importadoId)
+        await mapear(db, "project", p.gid, "ws_contextos", importadoId)
+        continue
+      }
+
+      const { error } = await db
+        .from("ws_contextos")
+        .update(camposAdocao)
+        .eq("id", candidato.id)
       if (error) {
         await registrarErro(execucaoId, "normalizacao", "contexto_adocao_falhou",
           error.message, { tipoObjeto: "project", sourceGid: p.gid })
