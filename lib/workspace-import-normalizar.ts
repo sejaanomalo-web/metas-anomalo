@@ -408,6 +408,10 @@ export async function normalizarBase(
 
 export interface ResultadoTarefas {
   tarefas: number
+  /** Tarefas dentro da janela: vieram com descrição, comentários, campos e links. */
+  completas: number
+  /** Fora da janela: só título, prazo, status, responsável e contextos. */
+  enxutas: number
   subtarefas: number
   vinculos: number
   comentarios: number
@@ -418,13 +422,50 @@ export interface ResultadoTarefas {
   ignoradasSemContexto: number
 }
 
+/**
+ * Janela de importação completa.
+ *
+ * Decisão do Bruno (2026-07-23): trazer tudo de 1.588 tarefas seria carregar
+ * seis meses de histórico com peso total. O acordo é:
+ *
+ *   • prazo >= corte (julho/2026)         -> COMPLETA
+ *   • sem prazo E ainda pendente          -> COMPLETA (é o backlog vivo: 57
+ *                                            tarefas em aberto que só não têm
+ *                                            data marcada)
+ *   • resto                               -> ENXUTA: título, prazo, status,
+ *                                            responsável e contextos. Aparece
+ *                                            no calendário e na pasta do
+ *                                            cliente, mas sem descrição,
+ *                                            comentários, campos nem links.
+ *
+ * O staging continua com TUDO. Mudar de ideia é rodar de novo com outro corte;
+ * nada precisa ser reextraído do Asana.
+ */
+export interface Janela {
+  /** 'YYYY-MM-DD'. Prazo a partir daqui entra completo. */
+  corte: string
+}
+
+export const JANELA_PADRAO: Janela = { corte: "2026-07-01" }
+
+/** Uma tarefa entra completa? Ver comentário de Janela. */
+export function entraCompleta(
+  prazoData: string | null,
+  concluida: boolean,
+  janela: Janela
+): boolean {
+  if (prazoData) return prazoData >= janela.corte
+  return !concluida
+}
+
 export async function normalizarTarefas(
   db: SupabaseClient,
   execucaoId: string,
-  log: (m: string) => void = () => {}
+  log: (m: string) => void = () => {},
+  janela: Janela = JANELA_PADRAO
 ): Promise<ResultadoTarefas> {
   const r: ResultadoTarefas = {
-    tarefas: 0, subtarefas: 0, vinculos: 0, comentarios: 0, seguidores: 0,
+    tarefas: 0, completas: 0, enxutas: 0, subtarefas: 0, vinculos: 0, comentarios: 0, seguidores: 0,
     seguidoresExternos: 0, valoresCampo: 0, links: 0, ignoradasSemContexto: 0,
   }
 
@@ -482,9 +523,14 @@ export async function normalizarTarefas(
   async function gravarTarefa(
     t: AsanaTarefa,
     gid: string,
-    paiId: string | null
+    paiId: string | null,
+    completa: boolean
   ): Promise<string | null> {
-    const conv = converterHtmlAsana(t.html_notes, t.notes)
+    // Enxuta não converte descrição: além de economizar, evita gravar HTML
+    // original de 1.357 tarefas que ninguém vai abrir.
+    const conv = completa
+      ? converterHtmlAsana(t.html_notes, t.notes)
+      : { texto: "", links: [] as string[], tagsIgnoradas: [] as string[] }
     const prazo = prazoDoAsana(t.due_on, t.due_at)
     const inicio = prazoDoAsana(t.start_on, t.start_at)
     const resp = pessoa(t.assignee?.gid)
@@ -503,8 +549,8 @@ export async function normalizarTarefas(
       .upsert(
         {
           titulo: (t.name ?? "(sem título)").slice(0, 300) || "(sem título)",
-          descricao: conv.texto || null,
-          descricao_html_original: t.html_notes ?? null,
+          descricao: completa ? conv.texto || null : null,
+          descricao_html_original: completa ? t.html_notes ?? null : null,
           tarefa_pai_id: paiId,
           responsavel_id: resp.usuarioId,
           responsavel_externo_id: resp.identidadeId,
@@ -535,6 +581,15 @@ export async function normalizarTarefas(
     }
     const tarefaId = data.id as string
     await mapear(db, paiId ? "subtask" : "task", gid, "ws_tarefas", tarefaId)
+
+    if (completa) r.completas++
+    else {
+      // Enxuta para aqui: nada de links, seguidores nem campos. O título, o
+      // prazo, o status, o responsável e (adiante) os vínculos já foram
+      // gravados — é o registro histórico que o Bruno pediu.
+      r.enxutas++
+      return tarefaId
+    }
 
     // --- links da descrição ---
     const urls = conv.links.length > 0 ? conv.links : extrairUrls(conv.texto)
@@ -640,13 +695,17 @@ export async function normalizarTarefas(
   }
 
   // tarefas de topo
+  const completaPorGid = new Map<string, boolean>()
   for (const t of tarefasRaw) {
-    const id = await gravarTarefa(t.payload, t.gid, null)
+    const p = prazoDoAsana(t.payload.due_on, t.payload.due_at)
+    const completa = entraCompleta(p.data, Boolean(t.payload.completed), janela)
+    completaPorGid.set(t.gid, completa)
+    const id = await gravarTarefa(t.payload, t.gid, null, completa)
     if (!id) continue
     idxTarefa.set(t.gid, id)
     r.tarefas++
   }
-  log(`tarefas: ${r.tarefas}`)
+  log(`tarefas: ${r.tarefas} (${r.completas} completas, ${r.enxutas} enxutas)`)
 
   // subtarefas (pai já existe)
   for (const s of subtarefasRaw) {
@@ -658,7 +717,12 @@ export async function normalizarTarefas(
         "pai não encontrado no snapshot", { tipoObjeto: "subtask", sourceGid: s.gid })
       continue
     }
-    const id = await gravarTarefa(s.payload, s.gid, paiId)
+    // Subtarefa herda a janela do pai: uma subtarefa de tarefa completa entra
+    // completa, mesmo sem prazo próprio. Separá-las daria pai rico com filho
+    // vazio, que confunde mais do que economiza.
+    const id = await gravarTarefa(
+      s.payload, s.gid, paiId, completaPorGid.get(paiGid!) ?? false
+    )
     if (!id) continue
     idxTarefa.set(s.gid, id)
     r.subtarefas++
@@ -693,6 +757,8 @@ export async function normalizarTarefas(
   for (const c of comentariosRaw) {
     const tarefaId = c.parent ? idxTarefa.get(c.parent) : undefined
     if (!tarefaId) continue
+    // Comentário só das completas — na enxuta a tarefa é só o registro.
+    if (!completaPorGid.get(c.parent!)) continue
     const conv = converterHtmlAsana(c.payload.html_text, c.payload.text)
     const autor = pessoa(c.payload.created_by?.gid)
     if (!autor.usuarioId && !autor.identidadeId) continue // CHECK exige um dos dois

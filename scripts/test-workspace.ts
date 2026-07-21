@@ -33,6 +33,7 @@ import {
 } from "../lib/workspace-markdown"
 import { converterHtmlAsana, normalizarUrl } from "../lib/workspace-html"
 import { normalizar, prazoDoAsana } from "../lib/workspace-import"
+import { entraCompleta, JANELA_PADRAO } from "../lib/workspace-import-normalizar"
 
 config({ path: ".env.local" })
 
@@ -232,6 +233,30 @@ function testarNormalizacaoImport() {
 
   const p4 = prazoDoAsana(null, null)
   ok("sem prazo", p4.data === null && p4.hora === null)
+}
+
+
+// =============================================================================
+// 2d) Janela de importacao completa
+// =============================================================================
+function testarJanela() {
+  secao("2d) Janela (julho+ ou pendente sem prazo)")
+  const J = JANELA_PADRAO
+
+  ok("prazo em julho entra completa", entraCompleta("2026-07-15", false, J))
+  ok("prazo em dezembro entra completa", entraCompleta("2026-12-01", true, J))
+  ok("prazo no 1o de julho entra (limite inclusivo)", entraCompleta("2026-07-01", true, J))
+  ok("prazo em 30/junho NAO entra", !entraCompleta("2026-06-30", true, J))
+  ok("prazo em janeiro NAO entra", !entraCompleta("2026-01-15", true, J))
+
+  // O backlog vivo: sem prazo mas ainda aberto. Sao as 57 tarefas que o
+  // Bruno confirmou que devem vir completas.
+  ok("sem prazo e PENDENTE entra completa", entraCompleta(null, false, J))
+  ok("sem prazo e CONCLUIDA nao entra", !entraCompleta(null, true, J))
+
+  // corte configuravel
+  ok("corte customizado respeitado",
+    entraCompleta("2026-05-10", true, { corte: "2026-05-01" }))
 }
 
 // =============================================================================
@@ -472,6 +497,7 @@ async function main() {
   testarMarkdown()
   testarConversaoAsana()
   testarNormalizacaoImport()
+  testarJanela()
   await testarBanco()
 
   console.log(`\n${passou} passaram, ${falhou} falharam`)

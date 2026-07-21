@@ -6,7 +6,7 @@
  *   npx tsx scripts/asana-import.ts dry-run --arquivo snapshot.json
  *   npx tsx scripts/asana-import.ts snapshot --saida snapshot.json
  *   npx tsx scripts/asana-import.ts normalizar-base
- *   npx tsx scripts/asana-import.ts carregar
+ *   npx tsx scripts/asana-import.ts carregar [--corte 2026-07-01]
  *
  * Modos:
  *   descoberta  Conta o que existe na origem. Não grava staging, não escreve
@@ -41,6 +41,7 @@ import {
   type RelatorioDryRun,
 } from "../lib/workspace-import"
 import {
+  JANELA_PADRAO,
   normalizarBase,
   normalizarTarefas,
 } from "../lib/workspace-import-normalizar"
@@ -355,8 +356,12 @@ async function executarCarga() {
     process.exit(2)
   }
 
-  log(`Carregando tarefas da execução ${execucaoId}\n`)
-  const r = await normalizarTarefas(db, execucaoId, log)
+  // Janela: prazo a partir do corte (ou pendente sem prazo) entra COMPLETA;
+  // o resto entra só com título, prazo, status, responsável e contextos.
+  const janela = { corte: opcao("corte") ?? JANELA_PADRAO.corte }
+  log(`Carregando tarefas da execução ${execucaoId}`)
+  log(`Janela completa: prazo >= ${janela.corte} ou pendente sem prazo\n`)
+  const r = await normalizarTarefas(db, execucaoId, log, janela)
   log("\nResultado:")
   for (const [k, v] of Object.entries(r)) log(`  ${k.padEnd(24)} ${v}`)
   log("\nAbra /dashboard/workspace para conferir.")
