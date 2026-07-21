@@ -13,6 +13,8 @@ export interface IdentidadeLinha {
   nome: string | null
   email: string | null
   usuario_id: string | null
+  /** Já passou pela decisão — inclusive "manter sem conta". */
+  revisado: boolean
   tarefas: number
 }
 
@@ -70,7 +72,7 @@ export default function MapeamentoImportacao({
   const projetosPendentes = projetos.filter(
     (p) => p.tipo === "desconhecido" && !p.arquivado
   ).length
-  const usuariosPendentes = identidades.filter((i) => !i.usuario_id).length
+  const usuariosPendentes = identidades.filter((i) => !i.revisado).length
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -214,7 +216,7 @@ function LinhaUsuario({
     })
   }
 
-  const decidido = Boolean(identidade.usuario_id)
+  const decidido = identidade.revisado
 
   return (
     <div
@@ -237,6 +239,7 @@ function LinhaUsuario({
         <span style={{ fontSize: 10, color: "var(--text-4)" }}>
           {identidade.email || "sem e-mail no Asana"}
           {identidade.tarefas > 0 && ` · ${identidade.tarefas} tarefas`}
+          {identidade.revisado && !identidade.usuario_id && " · sem conta (decidido)"}
         </span>
       </span>
 

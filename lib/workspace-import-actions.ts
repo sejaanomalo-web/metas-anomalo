@@ -67,9 +67,13 @@ export async function decidirProjetoAction(
 
   const clienteBruto = String(formData.get("cliente_id") ?? "").trim()
   const clienteId = ehUuid(clienteBruto) ? clienteBruto : null
+  const empresaNome = String(formData.get("empresa_nome") ?? "").trim() || null
 
   if (tipo === "cliente" && !clienteId) {
     return { ok: false, erro: "Escolha qual cliente." }
+  }
+  if (tipo === "empresa" && !empresaNome) {
+    return { ok: false, erro: "Escolha qual empresa." }
   }
 
   const { error } = await db
@@ -79,6 +83,9 @@ export async function decidirProjetoAction(
       // Trocar de 'cliente' para outro tipo tem que limpar o vínculo, senão o
       // CHECK rejeita a linha inteira.
       cliente_id: tipo === "cliente" ? clienteId : null,
+      // empresa_nome não tem CHECK, mas guardar empresa numa pasta que deixou
+      // de ser de empresa deixaria lixo confundindo quem for filtrar depois.
+      empresa_nome: tipo === "empresa" ? empresaNome : null,
       arquivado_em: null,
     })
     .eq("id", contextoId)
@@ -152,8 +159,11 @@ export async function decidirUsuarioAction(
     .from("ws_identidades_externas")
     .update({
       usuario_id: usuarioId,
-      mapeado_em: usuarioId ? new Date().toISOString() : null,
-      mapeado_por: usuarioId ? admin?.id ?? null : null,
+      // mapeado_em marca REVISADO, não "tem conta". "Manter sem conta" é uma
+      // decisão legítima — sem isto, as pessoas que ficam externas de
+      // propósito apareceriam como pendentes pra sempre na tela.
+      mapeado_em: new Date().toISOString(),
+      mapeado_por: admin?.id ?? null,
     })
     .eq("id", identidadeId)
   if (error) {
@@ -240,7 +250,7 @@ export async function contarPendenciasMapeamento(): Promise<{
     db.from("ws_contextos").select("*", { count: "exact", head: true })
       .eq("tipo", "desconhecido").is("arquivado_em", null),
     db.from("ws_identidades_externas").select("*", { count: "exact", head: true })
-      .is("usuario_id", null),
+      .is("usuario_id", null).is("mapeado_em", null),
   ])
   return { projetosPendentes: p ?? 0, usuariosPendentes: u ?? 0 }
 }

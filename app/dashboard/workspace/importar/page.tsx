@@ -28,7 +28,7 @@ export default async function ImportarPage() {
 
   const [identRes, ctxRes, usuariosRes, clientesRes] = await Promise.all([
     db.from("ws_identidades_externas")
-      .select("id, nome, email, usuario_id")
+      .select("id, nome, email, usuario_id, mapeado_em")
       .eq("sistema", "asana")
       .order("nome"),
     db.from("ws_contextos")
@@ -44,7 +44,8 @@ export default async function ImportarPage() {
   ])
 
   const identidadesBrutas = (identRes.data ?? []) as {
-    id: string; nome: string | null; email: string | null; usuario_id: string | null
+    id: string; nome: string | null; email: string | null
+    usuario_id: string | null; mapeado_em: string | null
   }[]
   const contextos = (ctxRes.data ?? []) as {
     id: string; nome: string; tipo: string; cliente_id: string | null; arquivado_em: string | null
@@ -91,6 +92,7 @@ export default async function ImportarPage() {
     nome: i.nome,
     email: i.email,
     usuario_id: i.usuario_id,
+    revisado: Boolean(i.mapeado_em),
     tarefas: contagemPorIdentidade.get(i.id) ?? 0,
   }))
 
