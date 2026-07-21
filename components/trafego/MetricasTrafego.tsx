@@ -105,7 +105,7 @@ export default function MetricasTrafego({
           cor="green"
           icone={<IconeChat />}
           titulo="Conversas / formulários"
-          valor={formatNumero(resumo.conversas + resumo.leads)}
+          valor={formatNumero(resumo.resultados)}
           sub="Mensagens + formulários"
         />
         <Cartao

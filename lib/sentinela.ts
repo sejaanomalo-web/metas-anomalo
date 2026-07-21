@@ -1,6 +1,6 @@
 // Helpers de leitura para o agente Sentinela Anomalo.
 //
-// O agente roda 2x/dia (09:00 e 15:00 BRT) lendo Meta Ads de cada
+// O agente roda 1x/dia (09:00 BRT, cron `sentinela_9h`) lendo Meta Ads de cada
 // empresa em tokens_meta e gravando o resultado em dados_diarios_log
 // com preenchedor_nome='Sentinela Anomalo'. Os campos manuais
 // (reuniões, contratos, faturamento, etc.) NÃO são tocados.
@@ -309,6 +309,11 @@ export interface ResumoTrafego {
   investimento: number
   leads: number
   conversas: number
+  /** "Conversas / formulários" = total de RESULTADOS. Somado dia a dia como
+   *  max(conversas_real, leads_real) — ver comentário em `conversasFormularios`.
+   *  Nunca use `conversas + leads`: numa campanha de mensagem o mesmo evento
+   *  está nos dois campos e a soma conta 2x. */
+  resultados: number
   cliques: number
   alcance: number
   impressoes: number
@@ -333,6 +338,7 @@ export function resumirTrafego(linhas: LinhaDoMes[]): ResumoTrafego {
   let investimento = 0,
     leads = 0,
     conversas = 0,
+    resultados = 0,
     cliques = 0,
     alcance = 0,
     impressoes = 0,
@@ -346,6 +352,10 @@ export function resumirTrafego(linhas: LinhaDoMes[]): ResumoTrafego {
     investimento += Number(l.investimento_real ?? 0)
     leads += Number(l.leads_real ?? 0)
     conversas += Number(l.conversas_real ?? 0)
+    resultados += Math.max(
+      Number(l.conversas_real ?? 0),
+      Number(l.leads_real ?? 0)
+    )
     cliques += Number(l.cliques_real ?? 0)
     alcance += Number(l.alcance_real ?? 0)
     impressoes += Number(l.impressoes_real ?? 0)
@@ -362,6 +372,7 @@ export function resumirTrafego(linhas: LinhaDoMes[]): ResumoTrafego {
     investimento,
     leads,
     conversas,
+    resultados,
     cliques,
     alcance,
     impressoes,
@@ -450,9 +461,14 @@ export interface SerieMesTrafego {
   mes: string // rótulo curto (ex.: "Abr")
   investimento: number
   conversas: number
-  // "Conversas / formulários": conversas de mensagem (conversas_real) +
-  // resultados de formulário/lead (leads_real). Campanhas de formulário
-  // caem em leads_real, então este total cobre os dois tipos de campanha.
+  // "Conversas / formulários": total de RESULTADOS do período, cobrindo os
+  // dois tipos de campanha (formulário → leads_real; mensagem → conversas_real).
+  //
+  // Usa MAX, não soma: numa campanha de mensagem o mesmo evento entra em
+  // leads_real (é o "Resultado" do Gerenciador) E em conversas_real — somar
+  // contava a mesma conversa 2x. Como leads_real já engloba as conversas
+  // quando elas são o resultado da campanha, o máximo entre os dois nunca
+  // duplica e nunca perde as conversas de campanhas cujo resultado é outro.
   conversasFormularios: number
   faturamento: number
   agendamentos: number
@@ -495,8 +511,10 @@ export function serieMensalDeLinhas(linhas: LinhaDoMes[]): SerieMesTrafego[] {
       } satisfies SerieMesTrafego)
     atual.investimento += Number(l.investimento_real ?? 0)
     atual.conversas += Number(l.conversas_real ?? 0)
-    atual.conversasFormularios +=
-      Number(l.conversas_real ?? 0) + Number(l.leads_real ?? 0)
+    atual.conversasFormularios += Math.max(
+      Number(l.conversas_real ?? 0),
+      Number(l.leads_real ?? 0)
+    )
     atual.faturamento += Number(l.faturamento_real ?? 0)
     atual.agendamentos += Number(l.reunioes_real ?? 0)
     porMes.set(ym, atual)

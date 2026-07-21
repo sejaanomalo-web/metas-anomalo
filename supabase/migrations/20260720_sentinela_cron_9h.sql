@@ -12,12 +12,34 @@
 -- demanda continua disponível pelo botão "Atualizar dados" no dashboard
 -- (chama a mesma edge function direto, ver lib/sentinela-trigger.ts).
 --
--- IMPORTANTE: substitua <SENTINELA_SECRET>, <SENTINELA_NOTIFY_SECRET> e
--- <DOMINIO_DE_PRODUCAO> pelos valores reais (os mesmos configurados nas env
--- vars do Vercel) antes de rodar este arquivo no SQL Editor do Supabase.
+-- =============================================================================
+-- ATENÇÃO — ARMADILHA QUE JÁ ACONTECEU (detectada e corrigida em 2026-07-20):
+-- =============================================================================
+-- Este arquivo foi executado SEM substituir os placeholders. Os literais
+-- `<SENTINELA_SECRET>`, `<SENTINELA_NOTIFY_SECRET>` e `<DOMINIO_DE_PRODUCAO>`
+-- foram parar dentro de `cron.job.command` como texto puro. O cron existia e
+-- aparecia como `active=true`, mas teria respondido 403 na primeira execução —
+-- a coleta automática nunca rodaria, e sem nenhum erro visível na UI.
+--
+-- CONFIRA depois de aplicar (tem que devolver 0 linhas):
+--   select jobname from cron.job where command like '%<%>%';
+--
+-- CONFIRA que executou de verdade (após o primeiro 09:00, status 'succeeded'):
+--   select jobid, status, start_time from cron.job_run_details
+--    where jobid in (select jobid from cron.job where jobname like 'sentinela%')
+--    order by start_time desc limit 10;
+-- =============================================================================
+--
+-- SECRET DA COLETA: o job usa `SENTINELA_CRON_SECRET`, e NÃO o
+-- `SENTINELA_SECRET` do app. São dois valores distintos, ambos aceitos pela
+-- mesma edge function (ver o handler em supabase/functions/sentinela/index.ts).
+-- O motivo é prático: o `SENTINELA_SECRET` do Vercel é sensível e não pode ser
+-- lido de volta pra ser replicado aqui. Com credenciais separadas, o cron e o
+-- botão "Atualizar dados" rotacionam de forma independente. Registre o valor em
+--   supabase secrets set SENTINELA_CRON_SECRET=<valor>
 
 -- 1) Coleta: roda 09:00 BRT (12:00 UTC), sem ?data= → processa "ontem" por
---    padrão (mesmo comportamento documentado no incidente anterior).
+--    padrão (dia já fechado no Meta).
 select cron.schedule(
   'sentinela_9h',
   '0 12 * * *',
@@ -26,10 +48,13 @@ select cron.schedule(
       url := 'https://cawwccbuejmvfemgdhvl.supabase.co/functions/v1/sentinela',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'x-sentinela-secret', '<SENTINELA_SECRET>'
+        'x-sentinela-secret', '<SENTINELA_CRON_SECRET>'
       ),
       body := '{}'::jsonb,
-      timeout_milliseconds := 60000
+      -- 60s não bastava: uma execução completa (14 empresas, nos níveis
+      -- campanha + conjunto + anúncio) leva ~30s e estoura isso quando a API
+      -- do Meta está lenta.
+      timeout_milliseconds := 120000
     );
   $cron$
 );
