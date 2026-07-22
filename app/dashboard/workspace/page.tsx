@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { requererPermissao } from "@/lib/auth"
 import {
+  listarAbas,
   listarContextos,
   listarTarefas,
   listarUsuariosAtivos,
@@ -68,10 +69,11 @@ export default async function WorkspacePage({
     offset: (pagina - 1) * POR_PAGINA,
   }
 
-  const [{ tarefas, temMais }, contextos, usuarios] = await Promise.all([
+  const [{ tarefas, temMais }, contextos, usuarios, abas] = await Promise.all([
     listarTarefas(filtro),
     listarContextos(),
     listarUsuariosAtivos(),
+    listarAbas(),
   ])
 
   const tarefaAberta = um(searchParams, "tarefa")
@@ -94,7 +96,7 @@ export default async function WorkspacePage({
       <WorkspaceRealtime />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <WorkspaceNav />
+        <WorkspaceNav abas={abas} />
 
         <CriacaoRapida
           contextos={contextos}

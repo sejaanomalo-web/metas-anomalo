@@ -13,10 +13,14 @@
 import { getSupabaseAdmin } from "./supabase"
 import { hojeISO, rangeDoMes, somarDiasISO } from "./workspace-datas"
 import type {
+  Aba,
   Comentario,
   Contexto,
+  EscopoNotas,
   EventoAtividade,
   FiltroTarefas,
+  Nota,
+  PreferenciaUsuario,
   Tarefa,
   TarefaComRelacoes,
 } from "./workspace-tipos"
@@ -27,11 +31,11 @@ export * from "./workspace-tipos"
 
 export const COLUNAS_TAREFA =
   "id, titulo, descricao, tarefa_pai_id, responsavel_id, criado_por, prazo_em, " +
-  "prazo_hora, inicio_em, prioridade, concluida_em, concluida_por, ordem, versao, " +
-  "arquivada_em, excluida_em, created_at, updated_at"
+  "prazo_hora, inicio_em, prioridade, concluida_em, concluida_por, recorrencia, " +
+  "ordem, versao, arquivada_em, excluida_em, created_at, updated_at"
 
 export const COLUNAS_CONTEXTO =
-  "id, nome, tipo, empresa_nome, cliente_id, cor, ordem, arquivado_em"
+  "id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, ordem, arquivado_em"
 
 // ============================================================
 // Contextos
@@ -101,6 +105,7 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
       ...t,
       contextos: [],
       responsavel_nome: null,
+      responsavel_foto: null,
       subtarefas_total: 0,
       subtarefas_concluidas: 0,
       comentarios_total: 0,
@@ -108,10 +113,10 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
   }
   const ids = tarefas.map((t) => t.id)
 
-  const [vinculos, usuarios, subtarefas, comentarios] = await Promise.all([
+  const [vinculos, usuarios, subtarefas, comentarios, prefs] = await Promise.all([
     supabase
       .from("ws_tarefa_contextos")
-      .select("tarefa_id, contexto_id, ws_contextos(id, nome, tipo, empresa_nome, cliente_id, cor, ordem, arquivado_em)")
+      .select("tarefa_id, contexto_id, ws_contextos(id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, ordem, arquivado_em)")
       .in("tarefa_id", ids),
     supabase.from("usuarios").select("id, nome"),
     supabase
@@ -120,6 +125,7 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
       .in("tarefa_pai_id", ids)
       .is("excluida_em", null),
     supabase.from("ws_comentarios").select("tarefa_id").in("tarefa_id", ids).is("excluido_em", null),
+    supabase.from("ws_preferencias").select("usuario_id, foto_url"),
   ])
 
   const porTarefa = new Map<string, Contexto[]>()
@@ -139,6 +145,11 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
   const nomePorUsuario = new Map<string, string>()
   for (const u of (usuarios.data ?? []) as { id: string; nome: string }[]) {
     nomePorUsuario.set(u.id, u.nome)
+  }
+
+  const fotoPorUsuario = new Map<string, string>()
+  for (const p of (prefs.data ?? []) as { usuario_id: string; foto_url: string | null }[]) {
+    if (p.foto_url) fotoPorUsuario.set(p.usuario_id, p.foto_url)
   }
 
   const progresso = new Map<string, { total: number; feitas: number }>()
@@ -164,6 +175,9 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
       contextos: (porTarefa.get(t.id) ?? []).sort((a, b) => a.ordem - b.ordem),
       responsavel_nome: t.responsavel_id
         ? nomePorUsuario.get(t.responsavel_id) ?? null
+        : null,
+      responsavel_foto: t.responsavel_id
+        ? fotoPorUsuario.get(t.responsavel_id) ?? null
         : null,
       subtarefas_total: p?.total ?? 0,
       subtarefas_concluidas: p?.feitas ?? 0,
@@ -631,4 +645,87 @@ export async function listarUsuariosAtivos(): Promise<
     return []
   }
   return (data ?? []) as { id: string; nome: string; email: string }[]
+}
+
+// ============================================================
+// Abas customizadas (Fase 2)
+// ============================================================
+
+const COLUNAS_ABA = "id, nome, tipo, contexto_id, ordem"
+
+export async function listarAbas(): Promise<Aba[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from("ws_abas")
+    .select(COLUNAS_ABA)
+    .is("excluida_em", null)
+    .order("ordem")
+    .order("created_at")
+  if (error) {
+    // Antes da migration da Fase 2 a tabela não existe — a régua só mostra
+    // as abas fixas, sem quebrar a página.
+    return []
+  }
+  return (data ?? []) as Aba[]
+}
+
+export async function getAba(id: string): Promise<Aba | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from("ws_abas")
+    .select(COLUNAS_ABA)
+    .eq("id", id)
+    .is("excluida_em", null)
+    .maybeSingle()
+  if (error || !data) return null
+  return data as Aba
+}
+
+// ============================================================
+// Notas (Fase 2)
+// ============================================================
+
+function filtroEscopo(escopo: EscopoNotas): { coluna: string; valor: string } {
+  if ("contextoId" in escopo) return { coluna: "contexto_id", valor: escopo.contextoId }
+  if ("abaId" in escopo) return { coluna: "aba_id", valor: escopo.abaId }
+  return { coluna: "fixa", valor: escopo.fixa }
+}
+
+export async function listarNotas(escopo: EscopoNotas): Promise<Nota[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+  const { coluna, valor } = filtroEscopo(escopo)
+  const { data, error } = await supabase
+    .from("ws_notas")
+    .select("id, titulo, corpo_html, updated_at")
+    .eq(coluna, valor)
+    .is("excluida_em", null)
+    .order("updated_at", { ascending: false })
+  if (error) return []
+  return (data ?? []) as Nota[]
+}
+
+// ============================================================
+// Preferências por usuário (Fase 2)
+// ============================================================
+
+export async function getPreferencia(
+  usuarioId: string
+): Promise<PreferenciaUsuario> {
+  const padrao: PreferenciaUsuario = {
+    usuario_id: usuarioId,
+    foto_url: null,
+    modo_cor: "colorido",
+  }
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return padrao
+  const { data, error } = await supabase
+    .from("ws_preferencias")
+    .select("usuario_id, foto_url, modo_cor")
+    .eq("usuario_id", usuarioId)
+    .maybeSingle()
+  if (error || !data) return padrao
+  return data as PreferenciaUsuario
 }

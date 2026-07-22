@@ -120,6 +120,47 @@ export function formatarDataCurtaBR(iso: string): string {
 }
 
 // ============================================================
+// Recorrência — próxima data de uma regra
+// ============================================================
+
+import type { Recorrencia } from "./workspace-tipos"
+
+/**
+ * Próxima ocorrência DEPOIS de `base` ('YYYY-MM-DD'), segundo a regra.
+ * Mensal/anual fixam o dia do mês da base e recuam pro último dia quando o
+ * mês alvo é mais curto (31/jan → 28/fev, nunca 03/mar).
+ */
+export function proximaOcorrencia(base: string, rec: Recorrencia): string {
+  const [a, m, d] = base.split("-").map(Number)
+  switch (rec.freq) {
+    case "diaria":
+      return somarDiasISO(base, 1)
+    case "semanal": {
+      const dias = rec.dias && rec.dias.length > 0 ? rec.dias : null
+      if (!dias) return somarDiasISO(base, 7)
+      const dowBase = new Date(Date.UTC(a, m - 1, d)).getUTCDay()
+      // Menor salto de 1..7 dias que cai num dia permitido.
+      for (let salto = 1; salto <= 7; salto++) {
+        if (dias.includes((dowBase + salto) % 7)) return somarDiasISO(base, salto)
+      }
+      return somarDiasISO(base, 7)
+    }
+    case "mensal": {
+      const alvoAno = m === 12 ? a + 1 : a
+      const alvoMes = m === 12 ? 1 : m + 1
+      const ultimo = new Date(Date.UTC(alvoAno, alvoMes, 0)).getUTCDate()
+      const dia = Math.min(d, ultimo)
+      return `${alvoAno}-${String(alvoMes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`
+    }
+    case "anual": {
+      const ultimo = new Date(Date.UTC(a + 1, m, 0)).getUTCDate()
+      const dia = Math.min(d, ultimo)
+      return `${a + 1}-${String(m).padStart(2, "0")}-${String(dia).padStart(2, "0")}`
+    }
+  }
+}
+
+// ============================================================
 // Grade do calendário mensal
 // ============================================================
 

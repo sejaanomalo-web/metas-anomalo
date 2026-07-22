@@ -1,19 +1,39 @@
+/* eslint-disable @next/next/no-img-element */
 import { corAvatar, iniciais, textoSobre } from "@/lib/workspace-cores"
 
 /**
- * Avatar de iniciais no estilo do Asana: círculo com cor estável por pessoa.
- * Não há upload de foto no sistema — as iniciais são a identidade visual,
- * exatamente como o Asana faz com quem não tem foto.
+ * Avatar no estilo do Asana: foto quando o usuário subiu uma (Configurações
+ * do Workspace), senão círculo de iniciais com cor estável por pessoa.
  */
 export default function Avatar({
   nome,
+  foto,
   tamanho = 24,
   title,
 }: {
   nome: string | null | undefined
+  foto?: string | null
   tamanho?: number
   title?: string
 }) {
+  if (foto) {
+    return (
+      <img
+        src={foto}
+        alt={nome ?? "Avatar"}
+        title={title ?? nome ?? undefined}
+        width={tamanho}
+        height={tamanho}
+        style={{
+          width: tamanho,
+          height: tamanho,
+          borderRadius: "50%",
+          objectFit: "cover",
+          flexShrink: 0,
+        }}
+      />
+    )
+  }
   if (!nome) {
     // Sem responsável: círculo tracejado vazio, como o "No assignee" do Asana.
     return (

@@ -1,5 +1,5 @@
 import { requererPermissao } from "@/lib/auth"
-import { getMinhasTarefas } from "@/lib/workspace"
+import { getMinhasTarefas, listarAbas } from "@/lib/workspace"
 import { hojeISO } from "@/lib/workspace-datas"
 import WorkspaceNav from "@/components/workspace/WorkspaceNav"
 import WorkspaceRealtime from "@/components/workspace/WorkspaceRealtime"
@@ -19,7 +19,7 @@ type SP = Record<string, string | string[] | undefined>
 export default async function MinhasPage({ searchParams }: { searchParams: SP }) {
   const usuario = await requererPermissao("workspace")
   const hoje = hojeISO()
-  const baldes = await getMinhasTarefas(usuario.id)
+  const [baldes, abas] = await Promise.all([getMinhasTarefas(usuario.id), listarAbas()])
 
   const tarefaParam = searchParams.tarefa
   const tarefaAberta = Array.isArray(tarefaParam) ? tarefaParam[0] : tarefaParam
@@ -39,7 +39,7 @@ export default async function MinhasPage({ searchParams }: { searchParams: SP })
       <WorkspaceRealtime />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        <WorkspaceNav />
+        <WorkspaceNav abas={abas} />
 
         {vazio && (
           <div

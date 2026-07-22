@@ -1,5 +1,7 @@
 import { requererPermissao } from "@/lib/auth"
 import {
+  getPreferencia,
+  listarAbas,
   listarContextos,
   listarTarefasDoIntervalo,
   listarTarefasDoMes,
@@ -61,13 +63,15 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
     situacao: situacao as "pendentes" | "todas",
   }
 
-  const [tarefas, semData, contextos, usuarios] = await Promise.all([
+  const [tarefas, semData, contextos, usuarios, abas, pref] = await Promise.all([
     modo === "semana"
       ? listarTarefasDoIntervalo(semana, somarDiasISO(semana, 6), filtro)
       : listarTarefasDoMes(ano, mes, filtro),
     listarTarefasSemPrazo(),
     listarContextos(),
     listarUsuariosAtivos(),
+    listarAbas(),
+    getPreferencia(usuario.id),
   ])
 
   const tarefaAberta = um(searchParams, "tarefa")
@@ -77,7 +81,7 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
       <WorkspaceRealtime />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <WorkspaceNav />
+        <WorkspaceNav abas={abas} />
         <FiltrosTarefas
           contextos={contextos}
           usuarios={usuarios}
@@ -94,6 +98,7 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
           semData={semData}
           hoje={hoje}
           meuUsuarioId={usuario.id}
+          modoCor={pref.modo_cor}
         />
       </div>
 

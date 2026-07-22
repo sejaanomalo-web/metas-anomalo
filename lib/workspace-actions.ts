@@ -13,9 +13,16 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual, type UsuarioSessao } from "./auth"
 import { criarNotificacao } from "./notificacoes"
-import { ehDataISOValida, normalizarHora } from "./workspace-datas"
+import { ehDataISOValida, normalizarHora, proximaOcorrencia } from "./workspace-datas"
 import { extrairMencoes } from "./workspace-markdown"
-import type { Prioridade, Tarefa, TipoContexto } from "./workspace-tipos"
+import { sanitizarHtmlNota } from "./workspace-notas"
+import { uploadFotoPerfil } from "./workspace-midia"
+import {
+  recorrenciaValida,
+  type Prioridade,
+  type Tarefa,
+  type TipoContexto,
+} from "./workspace-tipos"
 
 export interface ResultadoWorkspace {
   ok: boolean
@@ -188,10 +195,75 @@ async function buscarTarefa(id: string): Promise<Tarefa | null> {
   if (!db) return null
   const { data } = await db
     .from("ws_tarefas")
-    .select("id, titulo, descricao, tarefa_pai_id, responsavel_id, criado_por, prazo_em, prazo_hora, inicio_em, prioridade, concluida_em, concluida_por, ordem, versao, arquivada_em, excluida_em, created_at, updated_at")
+    .select("id, titulo, descricao, tarefa_pai_id, responsavel_id, criado_por, prazo_em, prazo_hora, inicio_em, prioridade, concluida_em, concluida_por, recorrencia, ordem, versao, arquivada_em, excluida_em, created_at, updated_at")
     .eq("id", id)
     .maybeSingle()
   return (data as Tarefa) ?? null
+}
+
+/**
+ * Recorrência lazy, no jeito do Asana: concluir uma tarefa recorrente CRIA a
+ * próxima ocorrência (mesmo título/responsável/contextos, prazo seguinte).
+ * ocorrencia_chave = serie:data + índice único parcial da Fase 1 = concluir
+ * duas vezes (retry, duplo clique) nunca gera duas tarefas.
+ */
+async function materializarRecorrencia(atual: Tarefa, atorId: string): Promise<void> {
+  const rec = recorrenciaValida(atual.recorrencia)
+  if (!rec || !atual.prazo_em) return
+  const db = getSupabaseAdmin()
+  if (!db) return
+
+  // A série é a tarefa-raiz: a primeira da cadeia usa o próprio id.
+  const { data: extras } = await db
+    .from("ws_tarefas")
+    .select("recorrencia_id")
+    .eq("id", atual.id)
+    .maybeSingle()
+  const serie = (extras?.recorrencia_id as string | null) ?? atual.id
+
+  const proxima = proximaOcorrencia(atual.prazo_em, rec)
+  const chave = `${serie}:${proxima}`
+
+  const { data: nova, error } = await db
+    .from("ws_tarefas")
+    .insert({
+      titulo: atual.titulo,
+      descricao: atual.descricao,
+      responsavel_id: atual.responsavel_id,
+      criado_por: atorId,
+      prazo_em: proxima,
+      prazo_hora: atual.prazo_hora,
+      prioridade: atual.prioridade,
+      recorrencia: rec,
+      recorrencia_id: serie,
+      ocorrencia_chave: chave,
+    })
+    .select("id")
+    .maybeSingle()
+  if (error) {
+    // 23505 = a ocorrência já existe (outro clique chegou antes). Sucesso.
+    if (!error.message.includes("duplicate") && !error.message.includes("unique")) {
+      console.error("[workspace] materializarRecorrencia error", error.message)
+    }
+    return
+  }
+  if (!nova) return
+
+  // A próxima ocorrência aparece nos MESMOS contextos (calendário do cliente
+  // incluído) — sem isso ela nasceria órfã, fora de todas as pastas.
+  const { data: vincs } = await db
+    .from("ws_tarefa_contextos")
+    .select("contexto_id")
+    .eq("tarefa_id", atual.id)
+  const contextos = (vincs ?? []) as { contexto_id: string }[]
+  if (contextos.length > 0) {
+    await db.from("ws_tarefa_contextos").insert(
+      contextos.map((v) => ({ tarefa_id: nova.id as string, contexto_id: v.contexto_id }))
+    )
+  }
+  await registrarAtividade(nova.id as string, atorId, "criada", {
+    recorrente_de: atual.id,
+  })
 }
 
 // ============================================================
@@ -493,6 +565,30 @@ export async function atualizarTarefaAction(
     }
   }
 
+  if (formData.has("recorrencia")) {
+    // "" = tirar a repetição; senão JSON validado por recorrenciaValida —
+    // nada além de {freq, dias[]} entra no jsonb.
+    const bruto = String(formData.get("recorrencia") ?? "").trim()
+    if (bruto === "") {
+      if (atual.recorrencia !== null) {
+        patch.recorrencia = null
+        eventos.push("recorrencia")
+      }
+    } else {
+      let rec: unknown
+      try {
+        rec = JSON.parse(bruto)
+      } catch {
+        return { ok: false, erro: "Repetição inválida." }
+      }
+      const valida = recorrenciaValida(rec)
+      if (!valida) return { ok: false, erro: "Repetição inválida." }
+      patch.recorrencia = valida
+      mudanca.recorrencia = valida as unknown as Record<string, unknown>
+      eventos.push("recorrencia")
+    }
+  }
+
   if (Object.keys(patch).length === 0) return { ok: true, id }
 
   patch.versao = atual.versao + 1
@@ -592,6 +688,55 @@ export async function moverPrazoAction(
   return { ok: true, id }
 }
 
+/**
+ * Move a tarefa no CALENDÁRIO: dia (prazo_em) e/ou posição vertical (ordem)
+ * numa só escrita. A ordem é numeric — o cliente manda o ponto médio entre os
+ * vizinhos de destino, então reordenar não reescreve o dia inteiro.
+ */
+export async function moverTarefaCalendarioAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!ehUuid(id)) return { ok: false, erro: "Tarefa inválida." }
+  const novo = dataOpcional(formData, "prazo_em")
+  if (novo === undefined) return { ok: false, erro: "Data inválida." }
+  const ordemBruta = Number(formData.get("ordem"))
+  const ordem = Number.isFinite(ordemBruta) ? ordemBruta : null
+
+  const atual = await buscarTarefa(id)
+  if (!atual) return { ok: false, erro: "Tarefa não encontrada." }
+  if (!podeEditar(usuario, atual)) {
+    return { ok: false, erro: "Você não pode editar esta tarefa." }
+  }
+
+  const patch: Record<string, unknown> = { versao: atual.versao + 1 }
+  if (novo !== atual.prazo_em) {
+    patch.prazo_em = novo
+    if (novo === null) patch.prazo_hora = null
+  }
+  if (ordem !== null) patch.ordem = ordem
+
+  const { error } = await db.from("ws_tarefas").update(patch).eq("id", id)
+  if (error) {
+    console.error("[workspace] moverTarefaCalendario error", error.message)
+    return { ok: false, erro: "Não foi possível mover a tarefa." }
+  }
+
+  if (novo !== atual.prazo_em) {
+    await registrarAtividade(id, usuario.id, "prazo", {
+      prazo: { de: atual.prazo_em, para: novo },
+    })
+  }
+  await ping(id, "tarefa")
+  revalidatePath(ROTA)
+  return { ok: true, id }
+}
+
 export async function alternarConclusaoAction(
   formData: FormData
 ): Promise<ResultadoWorkspace> {
@@ -626,6 +771,7 @@ export async function alternarConclusaoAction(
 
   await registrarAtividade(id, usuario.id, concluir ? "concluida" : "reaberta")
   await ping(id, "tarefa")
+  if (concluir) await materializarRecorrencia(atual, usuario.id)
   if (concluir) {
     await notificar({
       destinatarios: await seguidoresDe(id),
@@ -1046,4 +1192,454 @@ export async function alternarSeguidorAction(
   }
   revalidatePath(ROTA)
   return { ok: true, id: tarefaId }
+}
+
+// ============================================================
+// FASE 2 — CLIENTES DO WORKSPACE (área própria, foto, cor, empresa)
+// ============================================================
+
+const HEX_COR = /^#[0-9a-fA-F]{6}$/
+
+/**
+ * Cria um cliente DIRETO no Workspace (sem cadastro de tráfego): contexto
+ * tipo 'cliente' com cliente_id nulo. Nome, cor exata, empresa e foto —
+ * a área de trabalho dele (nota + calendário + lista) passa a existir na hora.
+ */
+export async function criarClienteWorkspaceAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const nome = texto(formData, "nome", 120)
+  if (!nome) return { ok: false, erro: "Informe o nome do cliente." }
+  const corBruta = opcional(formData, "cor")
+  const cor = corBruta && HEX_COR.test(corBruta) ? corBruta : null
+  const empresa = opcional(formData, "empresa_nome")
+
+  let fotoUrl: string | null = null
+  const fotoBase64 = opcional(formData, "foto_base64")
+  if (fotoBase64) fotoUrl = await uploadFotoPerfil(fotoBase64, "contexto")
+
+  const { data, error } = await db
+    .from("ws_contextos")
+    .insert({
+      nome,
+      tipo: "cliente",
+      cliente_id: null,
+      empresa_nome: empresa,
+      cor,
+      foto_url: fotoUrl,
+      criado_por: usuario.id,
+    })
+    .select("id")
+    .single()
+  if (error || !data) {
+    console.error("[workspace] criarClienteWorkspace error", error?.message)
+    return { ok: false, erro: "Não foi possível criar o cliente." }
+  }
+  revalidatePath(ROTA)
+  return { ok: true, id: data.id as string }
+}
+
+/**
+ * Edita um contexto (cliente ou aba-calendário): nome, cor da identidade
+ * visual, empresa, foto de perfil, arquivar/desarquivar. A cor reflete em
+ * TODOS os cartões de tarefa daquele contexto — é a identidade do cliente.
+ */
+export async function atualizarContextoAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!ehUuid(id)) return { ok: false, erro: "Contexto inválido." }
+
+  const patch: Record<string, unknown> = {}
+
+  if (formData.has("nome")) {
+    const nome = texto(formData, "nome", 120)
+    if (!nome) return { ok: false, erro: "O nome não pode ficar vazio." }
+    patch.nome = nome
+  }
+  if (formData.has("cor")) {
+    const cor = opcional(formData, "cor")
+    if (cor && !HEX_COR.test(cor)) return { ok: false, erro: "Cor inválida." }
+    patch.cor = cor
+  }
+  if (formData.has("empresa_nome")) {
+    patch.empresa_nome = opcional(formData, "empresa_nome")
+  }
+  const fotoBase64 = opcional(formData, "foto_base64")
+  if (fotoBase64) {
+    const url = await uploadFotoPerfil(fotoBase64, "contexto")
+    if (!url) return { ok: false, erro: "Não foi possível subir a foto." }
+    patch.foto_url = url
+  }
+  if (formData.get("remover_foto") === "1") patch.foto_url = null
+  if (formData.has("arquivar")) {
+    patch.arquivado_em =
+      String(formData.get("arquivar")) === "1" ? new Date().toISOString() : null
+  }
+
+  if (Object.keys(patch).length === 0) return { ok: true, id }
+  patch.updated_at = new Date().toISOString()
+
+  const { error } = await db.from("ws_contextos").update(patch).eq("id", id)
+  if (error) {
+    console.error("[workspace] atualizarContexto error", error.message)
+    return { ok: false, erro: "Não foi possível salvar." }
+  }
+  revalidatePath(ROTA)
+  return { ok: true, id }
+}
+
+/**
+ * Renomeia um grupo de empresa DENTRO do Workspace: atualiza empresa_nome de
+ * todos os contextos ativos do grupo. Não toca em cliente_trafego nem em
+ * empresas_config — o cadastro de tráfego é de outro módulo e renomear lá
+ * teria efeito em relatórios e metas.
+ */
+export async function renomearEmpresaWsAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const de = texto(formData, "de", 120)
+  const para = texto(formData, "para", 120)
+  if (!de || !para) return { ok: false, erro: "Informe o nome novo." }
+  if (de === para) return { ok: true }
+
+  const { error } = await db
+    .from("ws_contextos")
+    .update({ empresa_nome: para, updated_at: new Date().toISOString() })
+    .eq("empresa_nome", de)
+    .is("arquivado_em", null)
+  if (error) {
+    console.error("[workspace] renomearEmpresaWs error", error.message)
+    return { ok: false, erro: "Não foi possível renomear." }
+  }
+  revalidatePath(ROTA)
+  return { ok: true }
+}
+
+// ============================================================
+// FASE 2 — ABAS CUSTOMIZADAS (o "+" da régua)
+// ============================================================
+
+/**
+ * Cria uma aba nova: 'calendario' ganha um contexto interno próprio (as
+ * tarefas dela vivem ali); 'nota' vira uma coleção de notas. As abas fixas
+ * do sistema são código e não passam por aqui — por isso nunca somem.
+ */
+export async function criarAbaAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const nome = texto(formData, "nome", 60)
+  if (!nome) return { ok: false, erro: "Informe o nome da aba." }
+  const tipo = String(formData.get("tipo") ?? "nota") === "calendario" ? "calendario" : "nota"
+
+  let contextoId: string | null = null
+  if (tipo === "calendario") {
+    const { data: ctx, error: e1 } = await db
+      .from("ws_contextos")
+      .insert({ nome, tipo: "interno", criado_por: usuario.id })
+      .select("id")
+      .single()
+    if (e1 || !ctx) {
+      console.error("[workspace] criarAba contexto error", e1?.message)
+      return { ok: false, erro: "Não foi possível criar a aba." }
+    }
+    contextoId = ctx.id as string
+  }
+
+  const { data, error } = await db
+    .from("ws_abas")
+    .insert({ nome, tipo, contexto_id: contextoId, criado_por: usuario.id })
+    .select("id")
+    .single()
+  if (error || !data) {
+    console.error("[workspace] criarAba error", error?.message)
+    return { ok: false, erro: "Não foi possível criar a aba. A migration da Fase 2 já foi aplicada?" }
+  }
+  revalidatePath(ROTA)
+  return { ok: true, id: data.id as string }
+}
+
+export async function renomearAbaAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!ehUuid(id)) return { ok: false, erro: "Aba inválida." }
+  const nome = texto(formData, "nome", 60)
+  if (!nome) return { ok: false, erro: "Informe o nome." }
+
+  const { data, error } = await db
+    .from("ws_abas")
+    .update({ nome })
+    .eq("id", id)
+    .select("contexto_id")
+    .maybeSingle()
+  if (error) {
+    console.error("[workspace] renomearAba error", error.message)
+    return { ok: false, erro: "Não foi possível renomear." }
+  }
+  // O contexto interno acompanha o nome da aba (aparece nos chips da tarefa).
+  const ctxId = data?.contexto_id as string | null
+  if (ctxId) await db.from("ws_contextos").update({ nome }).eq("id", ctxId)
+  revalidatePath(ROTA)
+  return { ok: true, id }
+}
+
+/**
+ * Exclui (soft) uma aba criada. As TAREFAS de uma aba-calendário continuam no
+ * banco — só o contexto é arquivado; nada é apagado de verdade.
+ */
+export async function excluirAbaAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!ehUuid(id)) return { ok: false, erro: "Aba inválida." }
+
+  const { data, error } = await db
+    .from("ws_abas")
+    .update({ excluida_em: new Date().toISOString() })
+    .eq("id", id)
+    .select("contexto_id")
+    .maybeSingle()
+  if (error) {
+    console.error("[workspace] excluirAba error", error.message)
+    return { ok: false, erro: "Não foi possível excluir." }
+  }
+  const ctxId = data?.contexto_id as string | null
+  if (ctxId) {
+    await db
+      .from("ws_contextos")
+      .update({ arquivado_em: new Date().toISOString() })
+      .eq("id", ctxId)
+  }
+  revalidatePath(ROTA)
+  return { ok: true, id }
+}
+
+// ============================================================
+// FASE 2 — NOTAS (estilo iPhone Notes, HTML sanitizado)
+// ============================================================
+
+function escopoDoForm(fd: FormData): { contexto_id?: string; aba_id?: string; fixa?: string } | null {
+  const contextoId = String(fd.get("contexto_id") ?? "").trim()
+  const abaId = String(fd.get("aba_id") ?? "").trim()
+  const fixa = String(fd.get("fixa") ?? "").trim()
+  const definidos = [contextoId, abaId, fixa].filter(Boolean).length
+  if (definidos !== 1) return null
+  if (contextoId) return ehUuid(contextoId) ? { contexto_id: contextoId } : null
+  if (abaId) return ehUuid(abaId) ? { aba_id: abaId } : null
+  return fixa === "arquivos" || fixa === "estudos" ? { fixa } : null
+}
+
+export async function criarNotaAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const escopo = escopoDoForm(formData)
+  if (!escopo) return { ok: false, erro: "Escopo da nota inválido." }
+
+  const { data, error } = await db
+    .from("ws_notas")
+    .insert({ ...escopo, titulo: "", corpo_html: "", criado_por: usuario.id })
+    .select("id")
+    .single()
+  if (error || !data) {
+    console.error("[workspace] criarNota error", error?.message)
+    return { ok: false, erro: "Não foi possível criar a nota. A migration da Fase 2 já foi aplicada?" }
+  }
+  revalidatePath(ROTA)
+  return { ok: true, id: data.id as string }
+}
+
+/**
+ * Salva título e corpo. O corpo passa SEMPRE por sanitizarHtmlNota — o
+ * dangerouslySetInnerHTML da renderização só vê HTML que o servidor montou.
+ */
+export async function salvarNotaAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!ehUuid(id)) return { ok: false, erro: "Nota inválida." }
+
+  const patch: Record<string, unknown> = {
+    atualizado_por: usuario.id,
+    updated_at: new Date().toISOString(),
+  }
+  if (formData.has("titulo")) patch.titulo = texto(formData, "titulo", 200)
+  if (formData.has("corpo_html")) {
+    patch.corpo_html = sanitizarHtmlNota(String(formData.get("corpo_html") ?? ""))
+  }
+
+  const { error } = await db
+    .from("ws_notas")
+    .update(patch)
+    .eq("id", id)
+    .is("excluida_em", null)
+  if (error) {
+    console.error("[workspace] salvarNota error", error.message)
+    return { ok: false, erro: "Não foi possível salvar a nota." }
+  }
+  return { ok: true, id }
+}
+
+export async function excluirNotaAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!ehUuid(id)) return { ok: false, erro: "Nota inválida." }
+
+  const { error } = await db
+    .from("ws_notas")
+    .update({ excluida_em: new Date().toISOString(), atualizado_por: usuario.id })
+    .eq("id", id)
+  if (error) {
+    console.error("[workspace] excluirNota error", error.message)
+    return { ok: false, erro: "Não foi possível excluir." }
+  }
+  revalidatePath(ROTA)
+  return { ok: true, id }
+}
+
+// ============================================================
+// FASE 2 — PREFERÊNCIAS DO USUÁRIO (foto + modo de cor)
+// ============================================================
+
+export async function salvarPreferenciaAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const patch: Record<string, unknown> = {
+    usuario_id: usuario.id,
+    updated_at: new Date().toISOString(),
+  }
+  if (formData.has("modo_cor")) {
+    const modo = String(formData.get("modo_cor"))
+    if (modo !== "colorido" && modo !== "mono") {
+      return { ok: false, erro: "Modo de cor inválido." }
+    }
+    patch.modo_cor = modo
+  }
+  const fotoBase64 = opcional(formData, "foto_base64")
+  if (fotoBase64) {
+    const url = await uploadFotoPerfil(fotoBase64, "usuario")
+    if (!url) return { ok: false, erro: "Não foi possível subir a foto." }
+    patch.foto_url = url
+  }
+  if (formData.get("remover_foto") === "1") patch.foto_url = null
+
+  const { error } = await db
+    .from("ws_preferencias")
+    .upsert(patch, { onConflict: "usuario_id" })
+  if (error) {
+    console.error("[workspace] salvarPreferencia error", error.message)
+    return { ok: false, erro: "Não foi possível salvar. A migration da Fase 2 já foi aplicada?" }
+  }
+  revalidatePath(ROTA)
+  return { ok: true }
+}
+
+/**
+ * Reordena um DIA do calendário: recebe a lista completa de ids na nova ordem
+ * e renumera ordem = (i+1)*1000 — determinístico e cura os empates de ordem=0
+ * que vieram da importação. A tarefa movida também ganha o prazo do dia de
+ * destino (mover entre colunas e reordenar são o mesmo gesto no Asana).
+ */
+export async function reordenarDiaAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const movidaId = String(formData.get("movida_id") ?? "").trim()
+  if (!ehUuid(movidaId)) return { ok: false, erro: "Tarefa inválida." }
+  const prazo = dataOpcional(formData, "prazo_em")
+  if (prazo === undefined) return { ok: false, erro: "Data inválida." }
+
+  let ids: string[]
+  try {
+    const bruto = JSON.parse(String(formData.get("ids") ?? "[]"))
+    ids = Array.isArray(bruto) ? bruto.map(String).filter(ehUuid) : []
+  } catch {
+    return { ok: false, erro: "Ordem inválida." }
+  }
+  if (!ids.includes(movidaId)) return { ok: false, erro: "Ordem inválida." }
+  if (ids.length > 300) return { ok: false, erro: "Dia grande demais." }
+
+  const movida = await buscarTarefa(movidaId)
+  if (!movida) return { ok: false, erro: "Tarefa não encontrada." }
+  if (!podeEditar(usuario, movida)) {
+    return { ok: false, erro: "Você não pode mover esta tarefa." }
+  }
+
+  // Renumeração: poucas linhas (um dia), determinística, sem estado fracionado.
+  for (let i = 0; i < ids.length; i++) {
+    const patch: Record<string, unknown> = { ordem: (i + 1) * 1000 }
+    if (ids[i] === movidaId && prazo !== movida.prazo_em) {
+      patch.prazo_em = prazo
+      if (prazo === null) patch.prazo_hora = null
+    }
+    const { error } = await db.from("ws_tarefas").update(patch).eq("id", ids[i])
+    if (error) {
+      console.error("[workspace] reordenarDia error", error.message)
+      return { ok: false, erro: "Não foi possível reordenar." }
+    }
+  }
+
+  if (prazo !== movida.prazo_em) {
+    await registrarAtividade(movidaId, usuario.id, "prazo", {
+      prazo: { de: movida.prazo_em, para: prazo },
+    })
+  }
+  await ping(movidaId, "tarefa")
+  revalidatePath(ROTA)
+  return { ok: true, id: movidaId }
 }

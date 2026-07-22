@@ -22,8 +22,87 @@ export interface Contexto {
   empresa_nome: string | null
   cliente_id: string | null
   cor: string | null
+  foto_url: string | null
   ordem: number
   arquivado_em: string | null
+}
+
+// ============================================================
+// Recorrência — regra guardada na própria tarefa (jsonb)
+// ============================================================
+
+export type FreqRecorrencia = "diaria" | "semanal" | "mensal" | "anual"
+
+export interface Recorrencia {
+  freq: FreqRecorrencia
+  /** Só na semanal: dias da semana (0=domingo … 6=sábado). */
+  dias?: number[]
+}
+
+/** Valida o jsonb vindo do banco/formulário. Inválido → null (sem repetição). */
+export function recorrenciaValida(v: unknown): Recorrencia | null {
+  if (!v || typeof v !== "object") return null
+  const o = v as { freq?: unknown; dias?: unknown }
+  if (
+    o.freq !== "diaria" && o.freq !== "semanal" &&
+    o.freq !== "mensal" && o.freq !== "anual"
+  ) {
+    return null
+  }
+  const rec: Recorrencia = { freq: o.freq }
+  if (o.freq === "semanal" && Array.isArray(o.dias)) {
+    const dias = [...new Set(o.dias.filter(
+      (d): d is number => Number.isInteger(d) && d >= 0 && d <= 6
+    ))].sort()
+    if (dias.length > 0) rec.dias = dias
+  }
+  return rec
+}
+
+export function rotuloRecorrencia(r: Recorrencia): string {
+  switch (r.freq) {
+    case "diaria": return "Diariamente"
+    case "semanal": {
+      if (!r.dias || r.dias.length === 0) return "Semanalmente"
+      const nomes = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"]
+      return `Semanal: ${r.dias.map((d) => nomes[d]).join(", ")}`
+    }
+    case "mensal": return "Mensalmente"
+    case "anual": return "Anualmente"
+  }
+}
+
+// ============================================================
+// Abas customizadas e notas
+// ============================================================
+
+export type TipoAba = "calendario" | "nota"
+
+export interface Aba {
+  id: string
+  nome: string
+  tipo: TipoAba
+  contexto_id: string | null
+  ordem: number
+}
+
+/** Escopo de uma coleção de notas — exatamente um dos três. */
+export type EscopoNotas =
+  | { contextoId: string }
+  | { abaId: string }
+  | { fixa: "arquivos" | "estudos" }
+
+export interface Nota {
+  id: string
+  titulo: string
+  corpo_html: string
+  updated_at: string
+}
+
+export interface PreferenciaUsuario {
+  usuario_id: string
+  foto_url: string | null
+  modo_cor: "colorido" | "mono"
 }
 
 export interface Tarefa {
@@ -39,6 +118,7 @@ export interface Tarefa {
   prioridade: Prioridade
   concluida_em: string | null
   concluida_por: string | null
+  recorrencia: Recorrencia | null
   ordem: number
   versao: number
   arquivada_em: string | null
@@ -51,6 +131,8 @@ export interface Tarefa {
 export interface TarefaComRelacoes extends Tarefa {
   contextos: Contexto[]
   responsavel_nome: string | null
+  /** Foto de perfil do responsável (ws_preferencias), se houver. */
+  responsavel_foto: string | null
   /** Progresso das subtarefas — só preenchido em tarefas-pai. */
   subtarefas_total: number
   subtarefas_concluidas: number

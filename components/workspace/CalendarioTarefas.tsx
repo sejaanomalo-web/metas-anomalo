@@ -1,17 +1,24 @@
 "use client"
 
-import { useMemo, useRef, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import {
   DndContext,
   PointerSensor,
-  useDraggable,
+  closestCorners,
   useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
 } from "@dnd-kit/core"
-import { criarTarefaAction, moverPrazoAction } from "@/lib/workspace-actions"
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import {
+  criarTarefaAction,
+  moverTarefaCalendarioAction,
+  reordenarDiaAction,
+} from "@/lib/workspace-actions"
 import { type TarefaComRelacoes } from "@/lib/workspace-tipos"
 import { estiloCartao } from "@/lib/workspace-cores"
 import Avatar from "./Avatar"
@@ -28,17 +35,17 @@ import {
 } from "@/lib/workspace-datas"
 
 const BANDEJA = "sem-data"
+const PREFIXO_DIA = "dia:"
 
 /**
- * Calendário no desenho do Asana (pasta RefsAsana/): visão SEMANAL como
- * padrão — sete colunas DOM→SÁB, cartões-pill na cor do contexto, avatar de
- * quem faz, ✓ quando concluída e "+ Adicionar tarefa" no pé de cada coluna.
- * O zoom "Meses" mantém a grade mensal antiga, com os mesmos cartões.
+ * Calendário compartilhado no desenho do Asana. A visão semanal tem altura
+ * FIXA (a página não cresce): cada coluna rola sozinha, então um dia com 100
+ * tarefas continua navegável. Arrastar move entre dias E reordena dentro do
+ * dia — a ordem final da coluna vai inteira pro servidor (reordenarDiaAction),
+ * que renumera `ordem` de forma determinística.
  *
- * Continua sendo uma VISUALIZAÇÃO DERIVADA de prazo_em — arrastar um cartão
- * altera exatamente um campo (o prazo), de forma otimista e com reversão se
- * o Supabase recusar. Semana/mês/zoom vivem na URL: abrir e fechar o detalhe
- * de uma tarefa não perde a posição.
+ * Continua uma VISUALIZAÇÃO DERIVADA de prazo_em/ordem — otimista, com
+ * refresh do servidor confirmando (ou revertendo) cada gesto.
  */
 export default function CalendarioTarefas({
   modo,
@@ -49,6 +56,8 @@ export default function CalendarioTarefas({
   semData,
   hoje,
   meuUsuarioId,
+  contextoFixoId,
+  modoCor = "colorido",
 }: {
   modo: "semana" | "mes"
   /** Domingo da semana exibida (modo semana). */
@@ -59,35 +68,47 @@ export default function CalendarioTarefas({
   semData: TarefaComRelacoes[]
   hoje: string
   meuUsuarioId: string
+  /** Calendário de um cliente/aba: quick-add já vincula este contexto. */
+  contextoFixoId?: string
+  /** Preferência do usuário: 'mono' tira a cor dos cartões. */
+  modoCor?: "colorido" | "mono"
 }) {
   const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
   const [mostrarSemData, setMostrarSemData] = useState(false)
-  // Sobrescreve o prazo enquanto o servidor não confirma (update otimista).
-  const [otimista, setOtimista] = useState<Record<string, string | null>>({})
 
   const sensors = useSensors(
     // 6px de folga: sem isso, um clique pra abrir a tarefa viraria arraste.
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   )
 
-  const { porDia, bandeja } = useMemo(() => {
-    const mapa: Record<string, TarefaComRelacoes[]> = {}
-    const semPrazo: TarefaComRelacoes[] = []
-    const todas = [...tarefas, ...semData]
-    for (const t of todas) {
-      const prazo = t.id in otimista ? otimista[t.id] : t.prazo_em
-      if (!prazo) {
-        semPrazo.push(t)
-        continue
-      }
-      ;(mapa[prazo] ??= []).push(t)
+  const porId = useMemo(() => {
+    const m = new Map<string, TarefaComRelacoes>()
+    for (const t of [...tarefas, ...semData]) m.set(t.id, t)
+    return m
+  }, [tarefas, semData])
+
+  // Layout otimista: dia -> ids ordenados. Reconstrói quando o servidor manda
+  // dados novos; durante o arraste é a única fonte da verdade visual.
+  const layoutServidor = useMemo(() => {
+    const mapa: Record<string, string[]> = { [BANDEJA]: [] }
+    const ordenadas = [...tarefas].sort(
+      (a, b) =>
+        a.ordem - b.ordem ||
+        (a.prazo_hora ?? "").localeCompare(b.prazo_hora ?? "") ||
+        a.created_at.localeCompare(b.created_at)
+    )
+    for (const t of ordenadas) {
+      if (!t.prazo_em) continue
+      ;(mapa[t.prazo_em] ??= []).push(t.id)
     }
-    return { porDia: mapa, bandeja: semPrazo }
-  }, [tarefas, semData, otimista])
+    for (const t of semData) mapa[BANDEJA].push(t.id)
+    return mapa
+  }, [tarefas, semData])
+
+  const [layout, setLayout] = useState(layoutServidor)
+  useEffect(() => setLayout(layoutServidor), [layoutServidor])
 
   function navegar(mudancas: Record<string, string | null>) {
     const qs = new URLSearchParams(searchParams.toString())
@@ -99,34 +120,82 @@ export default function CalendarioTarefas({
     const s = qs.toString()
     router.push(s ? `${pathname}?${s}` : pathname, { scroll: false })
   }
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  /** Coluna (dia ISO ou BANDEJA) que contém o id — ou o próprio container. */
+  function colunaDe(id: string): string | null {
+    if (id === BANDEJA) return BANDEJA
+    if (id.startsWith(PREFIXO_DIA)) return id.slice(PREFIXO_DIA.length)
+    for (const [dia, ids] of Object.entries(layout)) {
+      if (ids.includes(id)) return dia
+    }
+    return null
+  }
+
+  function aoArrastarSobre(e: DragOverEvent) {
+    const ativo = String(e.active.id)
+    const sobre = e.over ? String(e.over.id) : null
+    if (!sobre) return
+    const de = colunaDe(ativo)
+    const para = colunaDe(sobre)
+    if (!de || !para || de === para) return
+
+    // Move o cartão pro novo dia em tempo real (preview suave do dnd-kit).
+    setLayout((l) => {
+      const origem = l[de]?.filter((x) => x !== ativo) ?? []
+      const destino = [...(l[para] ?? [])]
+      const idx = destino.indexOf(sobre)
+      if (idx >= 0) destino.splice(idx, 0, ativo)
+      else destino.push(ativo)
+      return { ...l, [de]: origem, [para]: destino }
+    })
+  }
 
   function aoSoltar(e: DragEndEvent) {
-    const tarefaId = String(e.active.id)
-    const destino = e.over ? String(e.over.id) : null
-    if (!destino) return
+    const ativo = String(e.active.id)
+    const sobre = e.over ? String(e.over.id) : null
+    if (!sobre) return
 
-    const novoPrazo = destino === BANDEJA ? null : destino
-    const atual =
-      tarefaId in otimista
-        ? otimista[tarefaId]
-        : [...tarefas, ...semData].find((t) => t.id === tarefaId)?.prazo_em ?? null
-    if (atual === novoPrazo) return
+    const para = colunaDe(sobre)
+    if (!para) return
+
+    // Reordena dentro da coluna final (o cross-coluna já aconteceu no over).
+    let idsFinais: string[] = []
+    setLayout((l) => {
+      const lista = [...(l[para] ?? [])]
+      const deIdx = lista.indexOf(ativo)
+      let alvoIdx = sobre.startsWith(PREFIXO_DIA) || sobre === BANDEJA
+        ? lista.length - 1
+        : lista.indexOf(sobre)
+      if (deIdx === -1 || alvoIdx === -1) {
+        idsFinais = lista
+        return l
+      }
+      lista.splice(deIdx, 1)
+      if (alvoIdx > deIdx) alvoIdx -= 1
+      lista.splice(alvoIdx, 0, ativo)
+      idsFinais = lista
+      return { ...l, [para]: lista }
+    })
 
     setErro(null)
-    setOtimista((o) => ({ ...o, [tarefaId]: novoPrazo }))
-
     startTransition(async () => {
-      const fd = new FormData()
-      fd.set("id", tarefaId)
-      fd.set("prazo_em", novoPrazo ?? "")
-      const r = await moverPrazoAction(fd)
+      let r: { ok: boolean; erro?: string }
+      if (para === BANDEJA) {
+        const fd = new FormData()
+        fd.set("id", ativo)
+        fd.set("prazo_em", "")
+        r = await moverTarefaCalendarioAction(fd)
+      } else {
+        const fd = new FormData()
+        fd.set("movida_id", ativo)
+        fd.set("prazo_em", para)
+        fd.set("ids", JSON.stringify(idsFinais.length ? idsFinais : [ativo]))
+        r = await reordenarDiaAction(fd)
+      }
       if (!r.ok) {
-        // Reverte: remove a sobrescrita otimista e o cartão volta pro lugar.
-        setOtimista((o) => {
-          const copia = { ...o }
-          delete copia[tarefaId]
-          return copia
-        })
+        setLayout(layoutServidor) // reverte o gesto inteiro
         setErro(r.erro ?? "Não foi possível mover a tarefa.")
         return
       }
@@ -134,7 +203,6 @@ export default function CalendarioTarefas({
     })
   }
 
-  // Navegação: semana anda de 7 em 7 dias; mês usa ano/mes.
   const ant = mesAnterior(ano, mes)
   const seg = mesSeguinte(ano, mes)
   const rotulo =
@@ -148,17 +216,20 @@ export default function CalendarioTarefas({
     if (modo === "semana") navegar({ semana: somarDiasISO(semana, 7) })
     else navegar({ ano: String(seg.ano), mes: String(seg.mes) })
   }
-  function irHoje() {
-    navegar({ semana: null, ano: null, mes: null })
-  }
 
   const dias = useMemo(() => diasDaSemana(semana), [semana])
   const celulasMes = useMemo(() => gradeDoMes(ano, mes), [ano, mes])
+  const bandejaIds = layout[BANDEJA] ?? []
 
   return (
-    <DndContext sensors={sensors} onDragEnd={aoSoltar}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragOver={aoArrastarSobre}
+      onDragEnd={aoSoltar}
+    >
       <div style={{ display: "flex", flexDirection: "column" }}>
-        {/* ---------- Barra de ferramentas (como a do Asana) ---------- */}
+        {/* ---------- Barra de ferramentas ---------- */}
         <div
           style={{
             display: "flex",
@@ -173,7 +244,7 @@ export default function CalendarioTarefas({
           </button>
           <button
             type="button"
-            onClick={irHoje}
+            onClick={() => navegar({ semana: null, ano: null, mes: null })}
             className="no-ds"
             style={{
               fontSize: 13,
@@ -198,7 +269,6 @@ export default function CalendarioTarefas({
 
           <span style={{ flex: 1 }} />
 
-          {/* Sem data (n) — igual ao "No date (2)" do topo do Asana */}
           <button
             type="button"
             onClick={() => setMostrarSemData((v) => !v)}
@@ -213,10 +283,9 @@ export default function CalendarioTarefas({
               cursor: "pointer",
             }}
           >
-            Sem data ({bandeja.length})
+            Sem data ({bandejaIds.length})
           </button>
 
-          {/* Zoom Semanas/Meses — o dropdown "Weeks | Months" do Asana */}
           <select
             value={modo}
             onChange={(e) =>
@@ -241,8 +310,11 @@ export default function CalendarioTarefas({
                     iso={iso}
                     rotuloDia={DIAS_SEMANA_LONGO[i]}
                     ehHoje={iso === hoje}
-                    tarefas={porDia[iso] ?? []}
+                    ids={layout[iso] ?? []}
+                    porId={porId}
+                    modoCor={modoCor}
                     meuUsuarioId={meuUsuarioId}
+                    contextoFixoId={contextoFixoId}
                   />
                 ))}
               </div>
@@ -273,7 +345,9 @@ export default function CalendarioTarefas({
                       dia={c.dia}
                       doMes={c.doMes}
                       ehHoje={c.iso === hoje}
-                      tarefas={porDia[c.iso] ?? []}
+                      ids={layout[c.iso] ?? []}
+                      porId={porId}
+                      modoCor={modoCor}
                     />
                   ))}
                 </div>
@@ -281,8 +355,9 @@ export default function CalendarioTarefas({
             )}
           </div>
 
-          {/* Bandeja "Sem data" — painel lateral, origem e destino de arraste */}
-          {mostrarSemData && <Bandeja tarefas={bandeja} />}
+          {mostrarSemData && (
+            <Bandeja ids={bandejaIds} porId={porId} modoCor={modoCor} />
+          )}
         </div>
       </div>
     </DndContext>
@@ -303,16 +378,22 @@ function ColunaDia({
   iso,
   rotuloDia,
   ehHoje,
-  tarefas,
+  ids,
+  porId,
+  modoCor,
   meuUsuarioId,
+  contextoFixoId,
 }: {
   iso: string
   rotuloDia: string
   ehHoje: boolean
-  tarefas: TarefaComRelacoes[]
+  ids: string[]
+  porId: Map<string, TarefaComRelacoes>
+  modoCor: "colorido" | "mono"
   meuUsuarioId: string
+  contextoFixoId?: string
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: iso })
+  const { setNodeRef, isOver } = useDroppable({ id: `${PREFIXO_DIA}${iso}` })
   const dia = Number(iso.slice(8, 10))
 
   return (
@@ -321,12 +402,11 @@ function ColunaDia({
       className="ws-cal-coluna"
       style={{ outline: isOver ? "1.5px solid #4573d2" : "none", outlineOffset: -1 }}
     >
-      <div style={{ padding: "8px 8px 4px" }}>
+      <div className="ws-cal-cabecalho-dia">
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", color: "var(--text-4)" }}>
           {rotuloDia}
         </div>
         <div style={{ marginTop: 4 }}>
-          {/* Hoje = número em selo azul, igual ao Asana */}
           <span
             style={{
               display: "inline-flex",
@@ -348,21 +428,33 @@ function ColunaDia({
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "2px 8px 10px", flex: 1 }}>
-        {tarefas.map((t) => (
-          <CartaoTarefa key={t.id} tarefa={t} />
-        ))}
-        <QuickAdd iso={iso} meuUsuarioId={meuUsuarioId} />
+      <div className="ws-cal-coluna-corpo">
+        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+          {ids.map((id) => {
+            const t = porId.get(id)
+            return t ? <CartaoTarefa key={id} tarefa={t} modoCor={modoCor} /> : null
+          })}
+        </SortableContext>
+        <QuickAdd iso={iso} meuUsuarioId={meuUsuarioId} contextoFixoId={contextoFixoId} />
       </div>
     </div>
   )
 }
 
 /**
- * "+ Adicionar tarefa" no pé da coluna, como no Asana: vira um cartão-input
- * inline; Enter cria a tarefa já com o prazo daquele dia.
+ * "Adicionar tarefa" no pé da coluna — sempre visível, opacidade baixa como
+ * pedido; vira um cartão-input inline e Enter cria já com o prazo do dia
+ * (e no contexto do cliente, quando o calendário é de um cliente).
  */
-function QuickAdd({ iso, meuUsuarioId }: { iso: string; meuUsuarioId: string }) {
+function QuickAdd({
+  iso,
+  meuUsuarioId,
+  contextoFixoId,
+}: {
+  iso: string
+  meuUsuarioId: string
+  contextoFixoId?: string
+}) {
   const router = useRouter()
   const [aberto, setAberto] = useState(false)
   const [titulo, setTitulo] = useState("")
@@ -391,6 +483,7 @@ function QuickAdd({ iso, meuUsuarioId }: { iso: string; meuUsuarioId: string }) 
       fd.set("titulo", t)
       fd.set("prazo_em", iso)
       fd.set("responsavel_id", meuUsuarioId)
+      if (contextoFixoId) fd.append("contexto_ids", contextoFixoId)
       const r = await criarTarefaAction(fd)
       if (!r.ok) {
         setErro(r.erro ?? "Não foi possível criar.")
@@ -404,11 +497,7 @@ function QuickAdd({ iso, meuUsuarioId }: { iso: string; meuUsuarioId: string }) 
 
   if (!aberto) {
     return (
-      <button
-        type="button"
-        onClick={() => setAberto(true)}
-        className="no-ds ws-add-task"
-      >
+      <button type="button" onClick={() => setAberto(true)} className="no-ds ws-add-task">
         + Adicionar tarefa
       </button>
     )
@@ -421,6 +510,7 @@ function QuickAdd({ iso, meuUsuarioId }: { iso: string; meuUsuarioId: string }) 
         borderRadius: 8,
         background: "var(--surface-1)",
         padding: "8px 10px",
+        flexShrink: 0,
       }}
     >
       <textarea
@@ -472,18 +562,22 @@ function DiaMes({
   dia,
   doMes,
   ehHoje,
-  tarefas,
+  ids,
+  porId,
+  modoCor,
 }: {
   iso: string
   dia: number
   doMes: boolean
   ehHoje: boolean
-  tarefas: TarefaComRelacoes[]
+  ids: string[]
+  porId: Map<string, TarefaComRelacoes>
+  modoCor: "colorido" | "mono"
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: iso })
+  const { setNodeRef, isOver } = useDroppable({ id: `${PREFIXO_DIA}${iso}` })
   const [expandido, setExpandido] = useState(false)
-  const visiveis = expandido ? tarefas : tarefas.slice(0, MAX_POR_DIA_MES)
-  const restantes = tarefas.length - visiveis.length
+  const visiveis = expandido ? ids : ids.slice(0, MAX_POR_DIA_MES)
+  const restantes = ids.length - visiveis.length
 
   return (
     <div
@@ -511,9 +605,12 @@ function DiaMes({
       >
         {dia}
       </span>
-      {visiveis.map((t) => (
-        <CartaoTarefa key={t.id} tarefa={t} compacto />
-      ))}
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {visiveis.map((id) => {
+          const t = porId.get(id)
+          return t ? <CartaoTarefa key={id} tarefa={t} modoCor={modoCor} compacto /> : null
+        })}
+      </SortableContext>
       {restantes > 0 && (
         <button
           type="button"
@@ -538,7 +635,15 @@ function DiaMes({
 
 /* =================== Bandeja "Sem data" =================== */
 
-function Bandeja({ tarefas }: { tarefas: TarefaComRelacoes[] }) {
+function Bandeja({
+  ids,
+  porId,
+  modoCor,
+}: {
+  ids: string[]
+  porId: Map<string, TarefaComRelacoes>
+  modoCor: "colorido" | "mono"
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: BANDEJA })
   return (
     <div
@@ -553,41 +658,47 @@ function Bandeja({ tarefas }: { tarefas: TarefaComRelacoes[] }) {
         display: "flex",
         flexDirection: "column",
         gap: 6,
-        background: "var(--surface-1)",
+        background: "var(--ws-cal-fundo, var(--surface-1))",
+        maxHeight: "70vh",
+        overflowY: "auto",
       }}
     >
       <h3 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)", margin: "0 0 4px" }}>
-        Sem data · {tarefas.length}
+        Sem data · {ids.length}
       </h3>
-      {tarefas.length === 0 && (
+      {ids.length === 0 && (
         <p style={{ fontSize: 10, color: "var(--text-4)", margin: 0 }}>
           Arraste uma tarefa para cá para tirar o prazo.
         </p>
       )}
-      {tarefas.map((t) => (
-        <CartaoTarefa key={t.id} tarefa={t} />
-      ))}
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {ids.map((id) => {
+          const t = porId.get(id)
+          return t ? <CartaoTarefa key={id} tarefa={t} modoCor={modoCor} /> : null
+        })}
+      </SortableContext>
     </div>
   )
 }
 
-/* =================== Cartão-pill (o coração visual do Asana) =================== */
+/* =================== Cartão-pill =================== */
 
 function CartaoTarefa({
   tarefa,
+  modoCor,
   compacto,
 }: {
   tarefa: TarefaComRelacoes
+  modoCor: "colorido" | "mono"
   compacto?: boolean
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: tarefa.id,
-  })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: tarefa.id })
   const concluida = Boolean(tarefa.concluida_em)
-  const cor = tarefa.contextos[0]?.cor ?? null
+  const cor = modoCor === "mono" ? null : tarefa.contextos[0]?.cor ?? null
   const estilo = estiloCartao(cor)
 
   function abrir() {
@@ -611,14 +722,16 @@ function CartaoTarefa({
         border: estilo.border,
         padding: compacto ? "3px 6px" : "6px 8px",
         cursor: isDragging ? "grabbing" : "grab",
-        opacity: isDragging ? 0.4 : 1,
-        transform: transform
-          ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-          : undefined,
+        opacity: isDragging ? 0.35 : 1,
+        transform: CSS.Transform.toString(transform),
+        transition,
         zIndex: isDragging ? 10 : undefined,
+        flexShrink: 0,
       }}
     >
-      {!compacto && <Avatar nome={tarefa.responsavel_nome} tamanho={18} />}
+      {!compacto && (
+        <Avatar nome={tarefa.responsavel_nome} foto={tarefa.responsavel_foto} tamanho={18} />
+      )}
       {concluida && (
         <svg
           width={compacto ? 10 : 12}

@@ -16,9 +16,13 @@ import {
   vincularContextoAction,
 } from "@/lib/workspace-actions"
 import {
+  recorrenciaValida,
+  rotuloRecorrencia,
   type Comentario,
   type Contexto,
   type EventoAtividade,
+  type FreqRecorrencia,
+  type Recorrencia,
   type Tarefa,
   type TarefaComRelacoes,
 } from "@/lib/workspace-tipos"
@@ -249,7 +253,7 @@ export default function TarefaDrawer(props: Props) {
           <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <CampoLinha rotulo="Responsável">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Avatar nome={tarefa.responsavel_nome} tamanho={26} />
+                <Avatar nome={tarefa.responsavel_nome} foto={tarefa.responsavel_foto} tamanho={26} />
                 <select
                   value={tarefa.responsavel_id ?? ""}
                   onChange={(e) => salvarCampo("responsavel_id", e.target.value)}
@@ -298,6 +302,17 @@ export default function TarefaDrawer(props: Props) {
                   aria-label="Horário"
                 />
               </div>
+            </CampoLinha>
+
+            <CampoLinha rotulo="Repetir">
+              <CampoRepeticao
+                recorrencia={recorrenciaValida(tarefa.recorrencia)}
+                temPrazo={Boolean(tarefa.prazo_em)}
+                disabled={pending}
+                onSalvar={(rec) =>
+                  salvarCampo("recorrencia", rec ? JSON.stringify(rec) : "")
+                }
+              />
             </CampoLinha>
 
             <CampoLinha rotulo="Prioridade">
@@ -728,6 +743,171 @@ function CampoLinha({ rotulo, children }: { rotulo: string; children: React.Reac
         {rotulo}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
+  )
+}
+
+/**
+ * Repetição no jeito do Asana: um rótulo clicável ("Não se repete" /
+ * "Semanal: seg, qua") que abre o seletor — frequência + dias da semana.
+ * Ao concluir a tarefa, a próxima ocorrência é criada automaticamente.
+ */
+function CampoRepeticao({
+  recorrencia,
+  temPrazo,
+  disabled,
+  onSalvar,
+}: {
+  recorrencia: Recorrencia | null
+  temPrazo: boolean
+  disabled: boolean
+  onSalvar: (rec: Recorrencia | null) => void
+}) {
+  const [aberto, setAberto] = useState(false)
+  const [freq, setFreq] = useState<FreqRecorrencia | "nunca">(recorrencia?.freq ?? "nunca")
+  const [dias, setDias] = useState<number[]>(recorrencia?.dias ?? [])
+
+  const NOMES = ["D", "S", "T", "Q", "Q", "S", "S"]
+  const NOMES_LONGO = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"]
+
+  function aplicar() {
+    if (freq === "nunca") {
+      onSalvar(null)
+    } else {
+      const rec: Recorrencia = { freq }
+      if (freq === "semanal" && dias.length > 0) rec.dias = [...dias].sort()
+      onSalvar(rec)
+    }
+    setAberto(false)
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        disabled={disabled}
+        className="no-ds"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          alignSelf: "flex-start",
+          fontSize: 13,
+          color: recorrencia ? "var(--text-1)" : "var(--text-3)",
+          background: "transparent",
+          border: "none",
+          borderRadius: 6,
+          padding: "5px 8px",
+          cursor: "pointer",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="17 1 21 5 17 9" />
+          <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+          <polyline points="7 23 3 19 7 15" />
+          <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+        </svg>
+        {recorrencia ? rotuloRecorrencia(recorrencia) : "Não se repete"}
+      </button>
+
+      {aberto && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: 10,
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: "var(--surface-2)",
+          }}
+        >
+          {!temPrazo && (
+            <p style={{ fontSize: 10, color: "#e0a458", margin: 0 }}>
+              Defina uma data de entrega — a repetição parte dela.
+            </p>
+          )}
+          <select
+            value={freq}
+            onChange={(e) => setFreq(e.target.value as FreqRecorrencia | "nunca")}
+            className="glass-input"
+            style={{ fontSize: 12, padding: "6px 9px", borderRadius: 6 }}
+          >
+            <option value="nunca" style={{ color: "#111" }}>Não se repete</option>
+            <option value="diaria" style={{ color: "#111" }}>Diariamente</option>
+            <option value="semanal" style={{ color: "#111" }}>Semanalmente</option>
+            <option value="mensal" style={{ color: "#111" }}>Mensalmente</option>
+            <option value="anual" style={{ color: "#111" }}>Anualmente</option>
+          </select>
+
+          {freq === "semanal" && (
+            <div style={{ display: "flex", gap: 4 }}>
+              {NOMES.map((n, i) => {
+                const ativo = dias.includes(i)
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-label={NOMES_LONGO[i]}
+                    aria-pressed={ativo}
+                    title={NOMES_LONGO[i]}
+                    onClick={() =>
+                      setDias((d) => (ativo ? d.filter((x) => x !== i) : [...d, i]))
+                    }
+                    className="no-ds"
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: "50%",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      border: "none",
+                      cursor: "pointer",
+                      background: ativo ? "#4573d2" : "var(--surface-3)",
+                      color: ativo ? "#fff" : "var(--text-3)",
+                    }}
+                  >
+                    {n}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={aplicar}
+              className="no-ds"
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                padding: "6px 14px",
+                borderRadius: 6,
+                background: AZUL_ASANA,
+                color: "#fff",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              Aplicar
+            </button>
+            <button
+              type="button"
+              onClick={() => setAberto(false)}
+              className="no-ds"
+              style={{ fontSize: 12, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}
+            >
+              Cancelar
+            </button>
+          </div>
+          <p style={{ fontSize: 10, color: "var(--text-4)", margin: 0 }}>
+            Ao concluir a tarefa, a próxima ocorrência é criada sozinha na data
+            seguinte da regra.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
