@@ -348,6 +348,51 @@ export async function listarTarefasDoMes(
   return enriquecer((data ?? []) as unknown as Tarefa[])
 }
 
+/**
+ * Tarefas com prazo dentro de um intervalo fechado [de, ate] — a consulta da
+ * visão semanal do calendário. Mesmas regras do mês: view derivada de
+ * prazo_em, concluídas entram (a UI decide o que fazer com elas).
+ */
+export async function listarTarefasDoIntervalo(
+  de: string,
+  ate: string,
+  filtro: Pick<FiltroTarefas, "responsavelId" | "contextoId" | "situacao"> = {}
+): Promise<TarefaComRelacoes[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+
+  let q = supabase
+    .from("ws_tarefas")
+    .select(COLUNAS_TAREFA)
+    .is("tarefa_pai_id", null)
+    .is("excluida_em", null)
+    .is("arquivada_em", null)
+    .gte("prazo_em", de)
+    .lte("prazo_em", ate)
+    .order("prazo_hora", { ascending: true, nullsFirst: true })
+    .order("ordem")
+
+  if (filtro.responsavelId) q = q.eq("responsavel_id", filtro.responsavelId)
+  if (filtro.situacao === "pendentes") q = q.is("concluida_em", null)
+
+  if (filtro.contextoId) {
+    const { data: vinc } = await supabase
+      .from("ws_tarefa_contextos")
+      .select("tarefa_id")
+      .eq("contexto_id", filtro.contextoId)
+    const ids = (vinc ?? []).map((v) => (v as { tarefa_id: string }).tarefa_id)
+    if (ids.length === 0) return []
+    q = q.in("id", ids)
+  }
+
+  const { data, error } = await q.limit(500)
+  if (error) {
+    console.error("[workspace] listarTarefasDoIntervalo error", error.message)
+    return []
+  }
+  return enriquecer((data ?? []) as unknown as Tarefa[])
+}
+
 /** Bandeja "Sem data" do calendário. */
 export async function listarTarefasSemPrazo(
   limite = 50

@@ -25,6 +25,7 @@ import type { AsanaComentario, AsanaCustomField, AsanaProjeto, AsanaSecao, Asana
 import { converterHtmlAsana, extrairUrls, normalizarUrl } from "./workspace-html"
 import { refinarNumero, tipoCampoDoAsana, type TipoCampo } from "./workspace-campos"
 import { normalizar, prazoDoAsana, registrarErro } from "./workspace-import"
+import { corDoAsana } from "./workspace-cores"
 import { dominioDe } from "./workspace-import"
 
 // ============================================================
@@ -225,7 +226,7 @@ export async function normalizarBase(
       visualizacao_padrao: p.payload.default_view ?? null,
       notas: p.payload.notes ?? null,
       notas_html: p.payload.html_notes ?? null,
-      cor: null as string | null,
+      cor: corDoAsana(p.payload.color),
       source_gid: p.gid,
       source_criado_em: p.payload.created_at ?? null,
       source_modificado_em: p.payload.modified_at ?? null,

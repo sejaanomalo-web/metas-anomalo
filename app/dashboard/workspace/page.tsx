@@ -90,18 +90,8 @@ export default async function WorkspacePage({
   }
 
   return (
-    <main style={{ padding: "20px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
+    <main style={{ padding: "16px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
       <WorkspaceRealtime />
-
-      <header style={{ marginBottom: 14 }}>
-        <h1 className="ds-headline" style={{ fontSize: 22, margin: "0 0 3px" }}>
-          Workspace
-        </h1>
-        <p style={{ fontSize: 12, color: "var(--text-4)", margin: 0 }}>
-          Tarefas da operação. Uma tarefa existe uma vez só e aparece em todos os
-          contextos em que estiver vinculada.
-        </p>
-      </header>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <WorkspaceNav />

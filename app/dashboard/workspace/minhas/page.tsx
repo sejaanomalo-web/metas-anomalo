@@ -35,17 +35,8 @@ export default async function MinhasPage({ searchParams }: { searchParams: SP })
   const vazio = secoes.every((s) => s.tarefas.length === 0)
 
   return (
-    <main style={{ padding: "20px 16px 48px", maxWidth: 900, margin: "0 auto" }}>
+    <main style={{ padding: "16px 16px 48px", maxWidth: 900, margin: "0 auto" }}>
       <WorkspaceRealtime />
-
-      <header style={{ marginBottom: 14 }}>
-        <h1 className="ds-headline" style={{ fontSize: 22, margin: "0 0 3px" }}>
-          Minhas tarefas
-        </h1>
-        <p style={{ fontSize: 12, color: "var(--text-4)", margin: 0 }}>
-          Onde você é o responsável, {usuario.nome.split(" ")[0]}.
-        </p>
-      </header>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         <WorkspaceNav />

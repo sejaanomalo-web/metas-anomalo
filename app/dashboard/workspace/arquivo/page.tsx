@@ -52,17 +52,7 @@ export default async function ArquivoPage({ searchParams }: { searchParams: SP }
   const tarefaAberta = um(searchParams, "tarefa")
 
   return (
-    <main style={{ padding: "20px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
-      <header style={{ marginBottom: 14 }}>
-        <h1 className="ds-headline" style={{ fontSize: 22, margin: "0 0 3px" }}>
-          Arquivo
-        </h1>
-        <p style={{ fontSize: 12, color: "var(--text-4)", margin: 0 }}>
-          Concluídas, arquivadas e lixeira. Abra a tarefa para reabrir ou
-          restaurar — nada aqui foi apagado do banco.
-        </p>
-      </header>
-
+    <main style={{ padding: "16px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <WorkspaceNav />
         <FiltrosTarefas

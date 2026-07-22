@@ -1,11 +1,17 @@
 import { requererPermissao } from "@/lib/auth"
 import {
   listarContextos,
+  listarTarefasDoIntervalo,
   listarTarefasDoMes,
   listarTarefasSemPrazo,
   listarUsuariosAtivos,
 } from "@/lib/workspace"
-import { hojeISO } from "@/lib/workspace-datas"
+import {
+  ehDataISOValida,
+  hojeISO,
+  inicioDaSemana,
+  somarDiasISO,
+} from "@/lib/workspace-datas"
 import WorkspaceNav from "@/components/workspace/WorkspaceNav"
 import WorkspaceRealtime from "@/components/workspace/WorkspaceRealtime"
 import FiltrosTarefas from "@/components/workspace/FiltrosTarefas"
@@ -22,14 +28,22 @@ function um(sp: SP, chave: string): string | undefined {
 }
 
 /**
- * Calendário mensal — visualização derivada de prazo_em.
+ * Calendário — visualização derivada de prazo_em, no desenho do Asana.
  *
- * Mês vive na URL (?ano=&mes=) para que abrir o detalhe de uma tarefa e
- * fechar não jogue o usuário de volta pro mês atual.
+ * Zoom padrão é a SEMANA (colunas DOM→SÁB, como nos prints de referência);
+ * ?zoom=mes liga a grade mensal. Semana/mês vivem na URL para que abrir o
+ * detalhe de uma tarefa e fechar não jogue o usuário de volta pra hoje.
  */
 export default async function CalendarioPage({ searchParams }: { searchParams: SP }) {
   const usuario = await requererPermissao("workspace")
   const hoje = hojeISO()
+
+  const modo = um(searchParams, "zoom") === "mes" ? ("mes" as const) : ("semana" as const)
+
+  const semanaParam = um(searchParams, "semana")
+  const semana = inicioDaSemana(
+    semanaParam && ehDataISOValida(semanaParam) ? semanaParam : hoje
+  )
 
   const anoParam = Number(um(searchParams, "ano"))
   const mesParam = Number(um(searchParams, "mes"))
@@ -39,14 +53,18 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
       ? mesParam
       : Number(hoje.slice(5, 7))
 
-  const situacao = um(searchParams, "situacao") === "todas" ? "todas" : "pendentes"
+  const situacao = um(searchParams, "situacao") === "pendentes" ? "pendentes" : "todas"
+
+  const filtro = {
+    responsavelId: um(searchParams, "responsavel"),
+    contextoId: um(searchParams, "contexto"),
+    situacao: situacao as "pendentes" | "todas",
+  }
 
   const [tarefas, semData, contextos, usuarios] = await Promise.all([
-    listarTarefasDoMes(ano, mes, {
-      responsavelId: um(searchParams, "responsavel"),
-      contextoId: um(searchParams, "contexto"),
-      situacao,
-    }),
+    modo === "semana"
+      ? listarTarefasDoIntervalo(semana, somarDiasISO(semana, 6), filtro)
+      : listarTarefasDoMes(ano, mes, filtro),
     listarTarefasSemPrazo(),
     listarContextos(),
     listarUsuariosAtivos(),
@@ -55,32 +73,27 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
   const tarefaAberta = um(searchParams, "tarefa")
 
   return (
-    <main style={{ padding: "20px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
+    <main style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
       <WorkspaceRealtime />
 
-      <header style={{ marginBottom: 14 }}>
-        <h1 className="ds-headline" style={{ fontSize: 22, margin: "0 0 3px" }}>
-          Calendário
-        </h1>
-        <p style={{ fontSize: 12, color: "var(--text-4)", margin: 0 }}>
-          Arraste uma tarefa para outro dia para mudar o prazo. Solte na bandeja
-          &ldquo;Sem data&rdquo; para tirar o prazo.
-        </p>
-      </header>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <WorkspaceNav />
         <FiltrosTarefas
           contextos={contextos}
           usuarios={usuarios}
           mostrarAgrupamento={false}
+          mostrarBusca={false}
+          situacaoPadrao="todas"
         />
         <CalendarioTarefas
+          modo={modo}
+          semana={semana}
           ano={ano}
           mes={mes}
           tarefas={tarefas}
           semData={semData}
           hoje={hoje}
+          meuUsuarioId={usuario.id}
         />
       </div>
 

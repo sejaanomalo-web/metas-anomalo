@@ -16,7 +16,6 @@ import {
   vincularContextoAction,
 } from "@/lib/workspace-actions"
 import {
-  corDoContexto,
   type Comentario,
   type Contexto,
   type EventoAtividade,
@@ -25,6 +24,7 @@ import {
 } from "@/lib/workspace-tipos"
 import { formatarDataBR, rotuloPrazo, situacaoPrazo } from "@/lib/workspace-datas"
 import DescricaoRica from "./DescricaoRica"
+import Avatar from "./Avatar"
 
 interface Props {
   tarefa: TarefaComRelacoes
@@ -37,15 +37,21 @@ interface Props {
   souAdmin: boolean
 }
 
+/** Verde do "Today/Completed" do Asana. */
+const VERDE_ASANA = "#5da283"
+const AZUL_ASANA = "#4573d2"
+
 /**
- * Painel de detalhe. Desktop: drawer lateral; mobile: tela cheia (a media
- * query vive em globals.css via .ws-drawer).
+ * Painel de detalhe no desenho do painel de tarefa do Asana (RefsAsana/):
+ * barra com "Marcar concluída", título grande, campos com rótulo à esquerda
+ * (Responsável com avatar, Data de entrega com rótulo verde "Hoje",
+ * Projetos como chips coloridos), descrição, subtarefas com círculo de
+ * conclusão e comentários com avatar + caixa "Adicionar um comentário" fixa
+ * no rodapé.
  *
  * Fechar é navegação — remove ?tarefa da URL e mantém filtros, página e mês
- * intactos. Nada de estado de client escondido que se perde no refresh.
- *
- * Salvamento: campo a campo, com feedback imediato. Nenhum "salvo!" aparece
- * antes do OK do Supabase; erro reverte e fica visível.
+ * intactos. Salvamento campo a campo: nenhum "salvo" aparece antes do OK do
+ * Supabase; erro reverte e fica visível.
  */
 export default function TarefaDrawer(props: Props) {
   const { tarefa, subtarefas, comentarios, atividade, contextos, usuarios, hoje, souAdmin } = props
@@ -62,6 +68,7 @@ export default function TarefaDrawer(props: Props) {
   const [novoComentario, setNovoComentario] = useState("")
   const [novaSubtarefa, setNovaSubtarefa] = useState("")
   const [confirmarApagar, setConfirmarApagar] = useState("")
+  const [mostrarHistorico, setMostrarHistorico] = useState(false)
 
   const concluida = Boolean(tarefa.concluida_em)
   const naLixeira = Boolean(tarefa.excluida_em)
@@ -106,6 +113,14 @@ export default function TarefaDrawer(props: Props) {
     (c) => !tarefa.contextos.some((tc) => tc.id === c.id)
   )
 
+  const situacao = situacaoPrazo(tarefa.prazo_em, hoje)
+  const corPrazo =
+    situacao === "atrasada" && !concluida
+      ? "#e24b4a"
+      : situacao === "hoje" || situacao === "amanha"
+        ? VERDE_ASANA
+        : "var(--text-2)"
+
   return (
     <>
       <button
@@ -114,15 +129,15 @@ export default function TarefaDrawer(props: Props) {
         aria-label="Fechar detalhes"
         className="ws-drawer-backdrop no-ds"
       />
-      <aside className="ws-drawer glass" aria-label="Detalhes da tarefa">
-        {/* ---------- Cabeçalho ---------- */}
+      <aside className="ws-drawer" aria-label="Detalhes da tarefa">
+        {/* ---------- Barra superior: Marcar concluída + fechar ---------- */}
         <header
           style={{
             display: "flex",
-            alignItems: "flex-start",
-            gap: 10,
-            padding: "14px 16px",
-            borderBottom: "0.5px solid rgba(255,255,255,0.07)",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 16px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
             position: "sticky",
             top: 0,
             background: "var(--surface-1)",
@@ -138,93 +153,56 @@ export default function TarefaDrawer(props: Props) {
               executar(alternarConclusaoAction, fd)
             }}
             disabled={pending}
-            aria-label={concluida ? "Reabrir tarefa" : "Concluir tarefa"}
             className="no-ds"
             style={{
-              flexShrink: 0,
-              width: 20,
-              height: 20,
-              marginTop: 3,
-              borderRadius: 6,
-              border: `1.5px solid ${concluida ? "var(--accent)" : "var(--text-4)"}`,
-              background: concluida ? "var(--accent)" : "transparent",
-              cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              justifyContent: "center",
-              padding: 0,
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 500,
+              padding: "5px 10px",
+              borderRadius: 6,
+              cursor: "pointer",
+              border: concluida ? `1px solid ${VERDE_ASANA}` : "1px solid rgba(255,255,255,0.25)",
+              background: concluida ? "rgba(93,162,131,0.18)" : "transparent",
+              color: concluida ? VERDE_ASANA : "var(--text-2)",
             }}
           >
-            {concluida && (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            {concluida ? "Concluída" : "Marcar concluída"}
           </button>
 
-          <textarea
-            value={titulo}
-            onChange={(e) => setTitulo(e.target.value)}
-            onBlur={() => {
-              if (titulo.trim() && titulo !== tarefa.titulo) {
-                salvarCampo("titulo", titulo.trim(), true)
-              } else if (!titulo.trim()) {
-                setTitulo(tarefa.titulo) // não deixa salvar vazio
-              }
-            }}
-            rows={1}
-            maxLength={300}
-            className="no-ds"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontSize: 15,
-              fontWeight: 700,
-              lineHeight: 1.35,
-              color: "var(--text-1)",
-              background: "transparent",
-              border: "none",
-              resize: "none",
-              padding: 0,
-              fontFamily: "inherit",
-              textDecoration: concluida ? "line-through" : "none",
-            }}
-          />
+          <span style={{ flex: 1 }} />
+
+          {(erro || salvo || pending) && (
+            <span
+              role="status"
+              style={{
+                fontSize: 11,
+                color: erro ? "#e24b4a" : pending ? "var(--text-4)" : VERDE_ASANA,
+              }}
+            >
+              {erro ?? (pending ? "Salvando…" : "Salvo")}
+            </span>
+          )}
 
           <button
             type="button"
             onClick={fechar}
             aria-label="Fechar"
-            className="no-ds"
-            style={{
-              flexShrink: 0,
-              background: "transparent",
-              border: "none",
-              color: "var(--text-3)",
-              cursor: "pointer",
-              fontSize: 20,
-              lineHeight: 1,
-              padding: 2,
-            }}
+            className="no-ds ws-btn-icone"
+            style={{ fontSize: 16 }}
           >
-            ×
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="13 5 20 12 13 19" />
+              <line x1="20" y1="12" x2="4" y2="12" />
+            </svg>
           </button>
         </header>
 
-        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 18 }}>
-          {(erro || salvo || pending) && (
-            <p
-              role="status"
-              style={{
-                fontSize: 11,
-                margin: 0,
-                color: erro ? "#e24b4a" : pending ? "var(--text-4)" : "#4caf50",
-              }}
-            >
-              {erro ?? (pending ? "Salvando…" : "Salvo")}
-            </p>
-          )}
-
+        <div style={{ padding: "16px 24px 120px", display: "flex", flexDirection: "column", gap: 18 }}>
           {naLixeira && (
             <div
               style={{
@@ -239,29 +217,66 @@ export default function TarefaDrawer(props: Props) {
             </div>
           )}
 
-          {/* ---------- Campos ---------- */}
-          <section style={{ display: "grid", gap: 10 }}>
-            <Campo rotulo="Responsável">
-              <select
-                value={tarefa.responsavel_id ?? ""}
-                onChange={(e) => salvarCampo("responsavel_id", e.target.value)}
-                disabled={pending}
-                className="glass-input"
-                style={campoStyle}
-              >
-                <option value="" style={{ color: "#111" }}>Sem responsável</option>
-                {usuarios.map((u) => (
-                  <option key={u.id} value={u.id} style={{ color: "#111" }}>{u.nome}</option>
-                ))}
-              </select>
-            </Campo>
+          {/* ---------- Título ---------- */}
+          <textarea
+            value={titulo}
+            onChange={(e) => setTitulo(e.target.value)}
+            onBlur={() => {
+              if (titulo.trim() && titulo !== tarefa.titulo) {
+                salvarCampo("titulo", titulo.trim(), true)
+              } else if (!titulo.trim()) {
+                setTitulo(tarefa.titulo) // não deixa salvar vazio
+              }
+            }}
+            rows={2}
+            maxLength={300}
+            className="no-ds"
+            style={{
+              width: "100%",
+              fontSize: 22,
+              fontWeight: 600,
+              lineHeight: 1.25,
+              color: "var(--text-1)",
+              background: "transparent",
+              border: "none",
+              resize: "none",
+              padding: 0,
+              fontFamily: "inherit",
+            }}
+          />
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Campo rotulo="Prazo">
+          {/* ---------- Campos (rótulo à esquerda, como no Asana) ---------- */}
+          <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <CampoLinha rotulo="Responsável">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Avatar nome={tarefa.responsavel_nome} tamanho={26} />
+                <select
+                  value={tarefa.responsavel_id ?? ""}
+                  onChange={(e) => salvarCampo("responsavel_id", e.target.value)}
+                  disabled={pending}
+                  className="no-ds ws-select"
+                >
+                  <option value="" style={{ color: "#111" }}>Sem responsável</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id} style={{ color: "#111" }}>{u.nome}</option>
+                  ))}
+                </select>
+              </div>
+            </CampoLinha>
+
+            <CampoLinha rotulo="Data de entrega">
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <IconeCalendario cor={corPrazo} />
+                {tarefa.prazo_em && (
+                  <span style={{ fontSize: 13, fontWeight: 500, color: corPrazo }}>
+                    {rotuloPrazo(tarefa.prazo_em, hoje) === formatarDataBR(tarefa.prazo_em)
+                      ? formatarDataBR(tarefa.prazo_em)
+                      : rotuloPrazo(tarefa.prazo_em, hoje)}
+                  </span>
+                )}
                 {/* key força remontar quando o servidor devolve um valor novo
                     (ex: alguém arrastou a tarefa no calendário enquanto este
-                    painel estava aberto). Sem isso, defaultValue só valeria na
-                    primeira renderização e o campo mostraria o prazo antigo. */}
+                    painel estava aberto). */}
                 <input
                   key={`prazo-${tarefa.prazo_em ?? ""}`}
                   type="date"
@@ -269,10 +284,9 @@ export default function TarefaDrawer(props: Props) {
                   onChange={(e) => salvarCampo("prazo_em", e.target.value)}
                   disabled={pending}
                   className="glass-input"
-                  style={campoStyle}
+                  style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6 }}
+                  aria-label="Data de entrega"
                 />
-              </Campo>
-              <Campo rotulo="Horário">
                 <input
                   key={`hora-${tarefa.prazo_hora ?? ""}`}
                   type="time"
@@ -280,107 +294,99 @@ export default function TarefaDrawer(props: Props) {
                   onChange={(e) => salvarCampo("prazo_hora", e.target.value)}
                   disabled={pending || !tarefa.prazo_em}
                   className="glass-input"
-                  style={campoStyle}
+                  style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6 }}
+                  aria-label="Horário"
                 />
-              </Campo>
-              <Campo rotulo="Prioridade">
-                <select
-                  value={tarefa.prioridade}
-                  onChange={(e) => salvarCampo("prioridade", e.target.value)}
-                  disabled={pending}
-                  className="glass-input"
-                  style={campoStyle}
-                >
-                  <option value="baixa" style={{ color: "#111" }}>Baixa</option>
-                  <option value="normal" style={{ color: "#111" }}>Normal</option>
-                  <option value="alta" style={{ color: "#111" }}>Alta</option>
-                </select>
-              </Campo>
-            </div>
+              </div>
+            </CampoLinha>
 
-            {tarefa.prazo_em && (
-              <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>
-                {formatarDataBR(tarefa.prazo_em)} ·{" "}
-                <span
-                  style={{
-                    color:
-                      situacaoPrazo(tarefa.prazo_em, hoje) === "atrasada" && !concluida
-                        ? "#e24b4a"
-                        : "var(--text-4)",
-                  }}
-                >
-                  {rotuloPrazo(tarefa.prazo_em, hoje)}
-                </span>
-              </p>
-            )}
-          </section>
+            <CampoLinha rotulo="Prioridade">
+              <select
+                value={tarefa.prioridade}
+                onChange={(e) => salvarCampo("prioridade", e.target.value)}
+                disabled={pending}
+                className="no-ds ws-select"
+              >
+                <option value="baixa" style={{ color: "#111" }}>Baixa</option>
+                <option value="normal" style={{ color: "#111" }}>Normal</option>
+                <option value="alta" style={{ color: "#111" }}>Alta</option>
+              </select>
+            </CampoLinha>
 
-          {/* ---------- Contextos ---------- */}
-          <Secao titulo="Contextos">
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              {tarefa.contextos.map((c) => (
-                <span
-                  key={c.id}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    fontSize: 11,
-                    padding: "3px 8px",
-                    borderRadius: 999,
-                    background: "var(--surface-3)",
-                    color: "var(--text-2)",
-                  }}
-                >
-                  <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 999, background: corDoContexto(c) }} />
-                  {c.nome}
-                  <button
-                    type="button"
-                    aria-label={`Remover de ${c.nome}`}
-                    title={`Remover de ${c.nome} (a tarefa continua existindo)`}
-                    disabled={pending}
-                    onClick={() => {
+            {/* Projetos = contextos, com o quadradinho colorido do Asana */}
+            <CampoLinha rotulo="Projetos">
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {tarefa.contextos.map((c) => (
+                  <span
+                    key={c.id}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12,
+                      padding: "3px 8px",
+                      borderRadius: 6,
+                      background: "var(--surface-3)",
+                      color: "var(--text-1)",
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 3,
+                        background: c.cor ?? "#6d6e6f",
+                        flexShrink: 0,
+                      }}
+                    />
+                    {c.nome}
+                    <button
+                      type="button"
+                      aria-label={`Remover de ${c.nome}`}
+                      title={`Remover de ${c.nome} (a tarefa continua existindo)`}
+                      disabled={pending}
+                      onClick={() => {
+                        const fd = new FormData()
+                        fd.set("tarefa_id", tarefa.id)
+                        fd.set("contexto_id", c.id)
+                        executar(desvincularContextoAction, fd)
+                      }}
+                      className="no-ds"
+                      style={{ background: "none", border: "none", color: "var(--text-4)", cursor: "pointer", padding: 0, fontSize: 13, lineHeight: 1 }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+
+                {contextosDisponiveis.length > 0 && (
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (!e.target.value) return
                       const fd = new FormData()
                       fd.set("tarefa_id", tarefa.id)
-                      fd.set("contexto_id", c.id)
-                      executar(desvincularContextoAction, fd)
+                      fd.set("contexto_id", e.target.value)
+                      executar(vincularContextoAction, fd)
                     }}
-                    className="no-ds"
-                    style={{ background: "none", border: "none", color: "var(--text-4)", cursor: "pointer", padding: 0, fontSize: 13, lineHeight: 1 }}
+                    disabled={pending}
+                    className="no-ds ws-select"
+                    aria-label="Adicionar a um projeto"
                   >
-                    ×
-                  </button>
-                </span>
-              ))}
-
-              {contextosDisponiveis.length > 0 && (
-                <select
-                  value=""
-                  onChange={(e) => {
-                    if (!e.target.value) return
-                    const fd = new FormData()
-                    fd.set("tarefa_id", tarefa.id)
-                    fd.set("contexto_id", e.target.value)
-                    executar(vincularContextoAction, fd)
-                  }}
-                  disabled={pending}
-                  className="glass-input"
-                  style={{ ...campoStyle, minWidth: 120 }}
-                >
-                  <option value="" style={{ color: "#111" }}>+ Vincular…</option>
-                  {contextosDisponiveis.map((c) => (
-                    <option key={c.id} value={c.id} style={{ color: "#111" }}>{c.nome}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-            <p style={{ fontSize: 10, color: "var(--text-4)", margin: "6px 0 0" }}>
-              Remover de um contexto apaga só o vínculo — a tarefa continua nos outros.
-            </p>
-          </Secao>
+                    <option value="" style={{ color: "#111" }}>+ Adicionar a um projeto</option>
+                    {contextosDisponiveis.map((c) => (
+                      <option key={c.id} value={c.id} style={{ color: "#111" }}>{c.nome}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </CampoLinha>
+          </section>
 
           {/* ---------- Descrição ---------- */}
-          <Secao titulo="Descrição">
+          <section>
+            <h3 style={rotuloSecao}>Descrição</h3>
             {editandoDescricao ? (
               <>
                 <textarea
@@ -388,9 +394,10 @@ export default function TarefaDrawer(props: Props) {
                   onChange={(e) => setDescricao(e.target.value)}
                   rows={6}
                   maxLength={20000}
-                  placeholder="**negrito**, - listas, e links https://… viram clicáveis"
+                  autoFocus
+                  placeholder="Sobre o que é esta tarefa?"
                   className="glass-input"
-                  style={{ ...campoStyle, width: "100%", resize: "vertical", lineHeight: 1.5 }}
+                  style={{ fontSize: 13, padding: "8px 10px", borderRadius: 8, width: "100%", resize: "vertical", lineHeight: 1.5 }}
                 />
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                   <button
@@ -400,8 +407,17 @@ export default function TarefaDrawer(props: Props) {
                       salvarCampo("descricao", descricao, true)
                       setEditandoDescricao(false)
                     }}
-                    className="btn-gold-filled"
-                    style={{ fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 8 }}
+                    className="no-ds"
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "6px 14px",
+                      borderRadius: 6,
+                      background: AZUL_ASANA,
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
                   >
                     Salvar
                   </button>
@@ -412,7 +428,7 @@ export default function TarefaDrawer(props: Props) {
                       setEditandoDescricao(false)
                     }}
                     className="no-ds"
-                    style={{ fontSize: 11, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}
+                    style={{ fontSize: 12, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}
                   >
                     Cancelar
                   </button>
@@ -425,10 +441,13 @@ export default function TarefaDrawer(props: Props) {
                 className="no-ds"
                 style={{
                   width: "100%",
+                  minHeight: 56,
                   textAlign: "left",
                   background: "transparent",
-                  border: "none",
-                  padding: 0,
+                  border: "1px solid transparent",
+                  borderRadius: 8,
+                  padding: "6px 8px",
+                  margin: "-6px -8px",
                   cursor: "text",
                   color: "inherit",
                 }}
@@ -436,28 +455,28 @@ export default function TarefaDrawer(props: Props) {
                 {tarefa.descricao ? (
                   <DescricaoRica texto={tarefa.descricao} />
                 ) : (
-                  <span style={{ fontSize: 12, color: "var(--text-4)" }}>
-                    Clique para adicionar uma descrição…
+                  <span style={{ fontSize: 13, color: "var(--text-4)" }}>
+                    Sobre o que é esta tarefa?
                   </span>
                 )}
               </button>
             )}
-          </Secao>
+          </section>
 
           {/* ---------- Subtarefas ---------- */}
-          <Secao
-            titulo={
-              subtarefas.length > 0
-                ? `Subtarefas · ${subtarefas.filter((s) => s.concluida_em).length}/${subtarefas.length}`
-                : "Subtarefas"
-            }
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <section>
+            <h3 style={rotuloSecao}>
+              Subtarefas
+              {subtarefas.length > 0 &&
+                ` · ${subtarefas.filter((s) => s.concluida_em).length}/${subtarefas.length}`}
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column" }}>
               {subtarefas.map((s) => (
                 <LinhaSubtarefa key={s.id} subtarefa={s} pendingPai={pending} onMudou={() => router.refresh()} />
               ))}
             </div>
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <CirculoCheck concluida={false} />
               <input
                 type="text"
                 value={novaSubtarefa}
@@ -472,83 +491,25 @@ export default function TarefaDrawer(props: Props) {
                   fd.set("tarefa_pai_id", tarefa.id)
                   executar(criarTarefaAction, fd, () => setNovaSubtarefa(""))
                 }}
-                placeholder="Nova subtarefa… (Enter)"
-                className="glass-input"
-                style={{ ...campoStyle, flex: 1 }}
+                placeholder="Adicionar subtarefa… (Enter)"
+                className="no-ds"
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  color: "var(--text-1)",
+                  background: "transparent",
+                  border: "none",
+                  padding: "6px 0",
+                  fontFamily: "inherit",
+                }}
                 disabled={pending}
                 maxLength={300}
               />
             </div>
-          </Secao>
-
-          {/* ---------- Comentários ---------- */}
-          <Secao titulo={`Comentários${comentarios.length ? ` · ${comentarios.length}` : ""}`}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {comentarios.map((c) => (
-                <div key={c.id}>
-                  <p style={{ fontSize: 10, color: "var(--text-4)", margin: "0 0 2px" }}>
-                    {c.autor_nome ?? "—"} · {new Date(c.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                  <DescricaoRica texto={c.corpo} />
-                </div>
-              ))}
-              {comentarios.length === 0 && (
-                <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>
-                  Nenhum comentário ainda.
-                </p>
-              )}
-            </div>
-            <textarea
-              value={novoComentario}
-              onChange={(e) => setNovoComentario(e.target.value)}
-              rows={2}
-              maxLength={10000}
-              placeholder="Escreva um comentário… use @nome para mencionar"
-              className="glass-input"
-              style={{ ...campoStyle, width: "100%", marginTop: 8, resize: "vertical" }}
-              disabled={pending}
-            />
-            <button
-              type="button"
-              disabled={pending || novoComentario.trim() === ""}
-              onClick={() => {
-                const fd = new FormData()
-                fd.set("tarefa_id", tarefa.id)
-                fd.set("corpo", novoComentario.trim())
-                executar(comentarAction, fd, () => setNovoComentario(""))
-              }}
-              className="btn-gold-outline"
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                padding: "6px 14px",
-                borderRadius: 8,
-                marginTop: 6,
-                opacity: novoComentario.trim() === "" ? 0.5 : 1,
-              }}
-            >
-              Comentar
-            </button>
-          </Secao>
-
-          {/* ---------- Histórico ---------- */}
-          <Secao titulo="Histórico">
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {atividade.map((e) => (
-                <p key={e.id} style={{ fontSize: 10, color: "var(--text-4)", margin: 0 }}>
-                  {new Date(e.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                  {" · "}
-                  {e.ator_nome ?? "—"} {rotuloEvento(e.evento)}
-                </p>
-              ))}
-              {atividade.length === 0 && (
-                <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>Sem eventos.</p>
-              )}
-            </div>
-          </Secao>
+          </section>
 
           {/* ---------- Ações ---------- */}
-          <Secao titulo="Ações">
+          <section>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <BotaoAcao
                 texto="Duplicar"
@@ -612,7 +573,7 @@ export default function TarefaDrawer(props: Props) {
                     onChange={(e) => setConfirmarApagar(e.target.value)}
                     placeholder={tarefa.titulo}
                     className="glass-input"
-                    style={{ ...campoStyle, flex: "1 1 180px" }}
+                    style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, flex: "1 1 180px" }}
                   />
                   <BotaoAcao
                     texto="Apagar de vez"
@@ -627,7 +588,117 @@ export default function TarefaDrawer(props: Props) {
                 </div>
               </div>
             )}
-          </Secao>
+          </section>
+
+          {/* ---------- Comentários + atividade ---------- */}
+          <section
+            style={{
+              margin: "0 -24px",
+              padding: "14px 24px 0",
+              borderTop: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.02)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              <h3 style={{ ...rotuloSecao, margin: 0 }}>Comentários</h3>
+              <button
+                type="button"
+                onClick={() => setMostrarHistorico((v) => !v)}
+                className="no-ds"
+                style={{
+                  fontSize: 11,
+                  color: mostrarHistorico ? "var(--text-1)" : "var(--text-4)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                {mostrarHistorico ? "Ocultar atividade" : "Toda a atividade"}
+              </button>
+            </div>
+
+            {mostrarHistorico && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+                {atividade.map((e) => (
+                  <p key={e.id} style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>
+                    <strong style={{ color: "var(--text-3)", fontWeight: 600 }}>{e.ator_nome ?? "—"}</strong>{" "}
+                    {rotuloEvento(e.evento)} ·{" "}
+                    {new Date(e.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                ))}
+                {atividade.length === 0 && (
+                  <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>Sem eventos.</p>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {comentarios.map((c) => (
+                <div key={c.id} style={{ display: "flex", gap: 10 }}>
+                  <Avatar nome={c.autor_nome} tamanho={28} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, margin: "0 0 2px" }}>
+                      <strong style={{ color: "var(--text-1)", fontWeight: 600 }}>
+                        {c.autor_nome ?? "—"}
+                      </strong>{" "}
+                      <span style={{ color: "var(--text-4)", fontSize: 11 }}>
+                        {new Date(c.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </p>
+                    <DescricaoRica texto={c.corpo} />
+                  </div>
+                </div>
+              ))}
+              {comentarios.length === 0 && (
+                <p style={{ fontSize: 12, color: "var(--text-4)", margin: 0 }}>
+                  Nenhum comentário ainda.
+                </p>
+              )}
+            </div>
+
+            {/* Caixa de comentário, como o rodapé do Asana */}
+            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+              <div style={{ flex: 1 }}>
+                <textarea
+                  value={novoComentario}
+                  onChange={(e) => setNovoComentario(e.target.value)}
+                  rows={2}
+                  maxLength={10000}
+                  placeholder="Adicionar um comentário"
+                  className="glass-input"
+                  style={{ fontSize: 13, padding: "9px 11px", borderRadius: 8, width: "100%", resize: "vertical" }}
+                  disabled={pending}
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+                  <button
+                    type="button"
+                    disabled={pending || novoComentario.trim() === ""}
+                    onClick={() => {
+                      const fd = new FormData()
+                      fd.set("tarefa_id", tarefa.id)
+                      fd.set("corpo", novoComentario.trim())
+                      executar(comentarAction, fd, () => setNovoComentario(""))
+                    }}
+                    className="no-ds"
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "6px 16px",
+                      borderRadius: 6,
+                      background: AZUL_ASANA,
+                      color: "#fff",
+                      border: "none",
+                      cursor: novoComentario.trim() === "" ? "default" : "pointer",
+                      opacity: novoComentario.trim() === "" ? 0.5 : 1,
+                    }}
+                  >
+                    Comentar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </aside>
     </>
@@ -636,35 +707,87 @@ export default function TarefaDrawer(props: Props) {
 
 /* =================== Subcomponentes =================== */
 
-const campoStyle = {
+const rotuloSecao = {
   fontSize: 12,
-  padding: "7px 10px",
-  borderRadius: 8,
-  minWidth: 120,
+  fontWeight: 600,
+  color: "var(--text-2)",
+  margin: "0 0 8px",
 } as const
 
-function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+/** Linha rótulo-à-esquerda / valor-à-direita, o layout de campos do Asana. */
+function CampoLinha({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <span style={{ fontSize: 10, color: "var(--text-4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span
+        style={{
+          flex: "0 0 110px",
+          fontSize: 12,
+          color: "var(--text-3)",
+        }}
+      >
         {rotulo}
       </span>
-      {children}
-    </label>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
   )
 }
 
-function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function IconeCalendario({ cor }: { cor: string }) {
   return (
-    <section>
-      <h3
-        className="ds-label"
-        style={{ fontSize: 10, color: "var(--text-3)", margin: "0 0 8px", fontWeight: 700 }}
-      >
-        {titulo}
-      </h3>
-      {children}
-    </section>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={cor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <rect x="3" y="4" width="18" height="18" rx="4" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  )
+}
+
+/** Círculo de conclusão do Asana (redondo, não quadrado). */
+function CirculoCheck({
+  concluida,
+  onClick,
+  disabled,
+}: {
+  concluida: boolean
+  onClick?: () => void
+  disabled?: boolean
+}) {
+  const conteudo = (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={concluida ? "#fff" : "var(--text-4)"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+  const estilo = {
+    flexShrink: 0,
+    width: 18,
+    height: 18,
+    borderRadius: "50%",
+    border: `1.5px solid ${concluida ? "#5da283" : "var(--text-4)"}`,
+    background: concluida ? "#5da283" : "transparent",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+  } as const
+  if (!onClick) {
+    return (
+      <span aria-hidden="true" style={estilo}>
+        {conteudo}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={concluida ? "Reabrir subtarefa" : "Concluir subtarefa"}
+      className="no-ds"
+      style={{ ...estilo, cursor: "pointer" }}
+    >
+      {conteudo}
+    </button>
   )
 }
 
@@ -716,11 +839,18 @@ function LinhaSubtarefa({
   const [erro, setErro] = useState<string | null>(null)
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <button
-        type="button"
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "5px 0",
+        borderBottom: "1px solid rgba(255,255,255,0.05)",
+      }}
+    >
+      <CirculoCheck
+        concluida={concluida}
         disabled={pending || pendingPai}
-        aria-label={concluida ? "Reabrir subtarefa" : "Concluir subtarefa"}
         onClick={() => {
           const alvo = !concluida
           setConcluida(alvo)
@@ -738,22 +868,11 @@ function LinhaSubtarefa({
             onMudou()
           })
         }}
-        className="no-ds"
-        style={{
-          flexShrink: 0,
-          width: 15,
-          height: 15,
-          borderRadius: 4,
-          border: `1.5px solid ${concluida ? "var(--accent)" : "var(--text-4)"}`,
-          background: concluida ? "var(--accent)" : "transparent",
-          cursor: "pointer",
-          padding: 0,
-        }}
       />
       <span
         style={{
-          fontSize: 12,
-          color: concluida ? "var(--text-4)" : "var(--text-2)",
+          fontSize: 13,
+          color: concluida ? "var(--text-4)" : "var(--text-1)",
           textDecoration: concluida ? "line-through" : "none",
         }}
       >

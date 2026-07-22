@@ -17,10 +17,19 @@ export default function FiltrosTarefas({
   contextos,
   usuarios,
   mostrarAgrupamento = true,
+  mostrarBusca = true,
+  situacaoPadrao = "pendentes",
 }: {
   contextos: Contexto[]
   usuarios: { id: string; nome: string }[]
   mostrarAgrupamento?: boolean
+  /** false no calendário: a consulta de lá não usa busca textual. */
+  mostrarBusca?: boolean
+  /** O que a página assume quando a URL não tem ?situacao. A lista assume
+   *  'pendentes'; o calendário assume 'todas' (concluídas aparecem com ✓,
+   *  como no Asana). O seletor precisa refletir o MESMO padrão da consulta,
+   *  senão ele mostra um valor e a página filtra por outro. */
+  situacaoPadrao?: "pendentes" | "todas"
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -53,7 +62,7 @@ export default function FiltrosTarefas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca])
 
-  const situacao = searchParams.get("situacao") ?? "pendentes"
+  const situacao = searchParams.get("situacao") ?? situacaoPadrao
   const responsavel = searchParams.get("responsavel") ?? ""
   const contexto = searchParams.get("contexto") ?? ""
   const agrupar = searchParams.get("agrupar") ?? "prazo"
@@ -68,27 +77,36 @@ export default function FiltrosTarefas({
         alignItems: "flex-end",
       }}
     >
-      <label style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 220px", minWidth: 0 }}>
-        <Rotulo texto="Buscar" />
-        <input
-          type="text"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Título ou descrição…"
-          className="glass-input"
-          style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, width: "100%" }}
-        />
-      </label>
+      {mostrarBusca && (
+        <label style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 220px", minWidth: 0 }}>
+          <Rotulo texto="Buscar" />
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Título ou descrição…"
+            className="glass-input"
+            style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, width: "100%" }}
+          />
+        </label>
+      )}
 
       <Seletor
         rotulo="Situação"
         valor={situacao}
-        onChange={(v) => aplicar({ situacao: v === "pendentes" ? "" : v })}
-        opcoes={[
-          { valor: "pendentes", texto: "Pendentes" },
-          { valor: "concluidas", texto: "Concluídas" },
-          { valor: "todas", texto: "Todas" },
-        ]}
+        onChange={(v) => aplicar({ situacao: v === situacaoPadrao ? "" : v })}
+        opcoes={
+          situacaoPadrao === "todas"
+            ? [
+                { valor: "todas", texto: "Todas" },
+                { valor: "pendentes", texto: "Pendentes" },
+              ]
+            : [
+                { valor: "pendentes", texto: "Pendentes" },
+                { valor: "concluidas", texto: "Concluídas" },
+                { valor: "todas", texto: "Todas" },
+              ]
+        }
       />
 
       <Seletor

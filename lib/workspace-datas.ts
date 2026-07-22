@@ -189,3 +189,47 @@ export function mesAnterior(ano: number, mes: number): { ano: number; mes: numbe
 export function mesSeguinte(ano: number, mes: number): { ano: number; mes: number } {
   return mes === 12 ? { ano: ano + 1, mes: 1 } : { ano, mes: mes + 1 }
 }
+
+// ============================================================
+// Semana — a visão padrão do calendário (zoom "Semanas" do Asana)
+// ============================================================
+
+/** Cabeçalhos das colunas da semana, como o Asana em pt: DOM…SÁB. */
+export const DIAS_SEMANA_LONGO = [
+  "DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB",
+] as const
+
+/** Domingo da semana que contém a data dada ('YYYY-MM-DD'). */
+export function inicioDaSemana(iso: string): string {
+  const [a, m, d] = iso.split("-").map(Number)
+  const dow = new Date(Date.UTC(a, m - 1, d)).getUTCDay()
+  return somarDiasISO(iso, -dow)
+}
+
+/** Os 7 dias (dom→sáb) a partir do domingo dado. */
+export function diasDaSemana(domingoIso: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => somarDiasISO(domingoIso, i))
+}
+
+/**
+ * Rótulo do topo do calendário semanal, ex.: "Julho 2026". Se a semana cruza
+ * a virada do mês, vale o mês que tem MAIS dias na semana (regra do Asana).
+ */
+export function rotuloMesDaSemana(domingoIso: string): string {
+  const dias = diasDaSemana(domingoIso)
+  const contagem = new Map<string, number>()
+  for (const d of dias) {
+    const chave = d.slice(0, 7)
+    contagem.set(chave, (contagem.get(chave) ?? 0) + 1)
+  }
+  let melhor = dias[0].slice(0, 7)
+  let max = 0
+  for (const [chave, n] of contagem) {
+    if (n > max) {
+      max = n
+      melhor = chave
+    }
+  }
+  const [ano, mes] = melhor.split("-").map(Number)
+  return `${NOMES_MES[mes - 1]} ${ano}`
+}

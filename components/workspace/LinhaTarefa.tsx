@@ -6,6 +6,7 @@ import { alternarConclusaoAction } from "@/lib/workspace-actions"
 import { corDoContexto, type TarefaComRelacoes } from "@/lib/workspace-tipos"
 import { descricaoResumida } from "@/lib/workspace-markdown"
 import { rotuloPrazo, situacaoPrazo } from "@/lib/workspace-datas"
+import Avatar from "./Avatar"
 
 /**
  * Uma linha da lista de tarefas.
@@ -83,13 +84,14 @@ export default function LinhaTarefa({
         aria-pressed={concluidaLocal}
         className="no-ds"
         style={{
+          // Círculo de conclusão do Asana: redondo, verde quando feito.
           flexShrink: 0,
           width: 18,
           height: 18,
           marginTop: 2,
-          borderRadius: 5,
-          border: `1.5px solid ${concluidaLocal ? "var(--accent)" : "var(--text-4)"}`,
-          background: concluidaLocal ? "var(--accent)" : "transparent",
+          borderRadius: "50%",
+          border: `1.5px solid ${concluidaLocal ? "#5da283" : "var(--text-4)"}`,
+          background: concluidaLocal ? "#5da283" : "transparent",
           cursor: pending ? "wait" : "pointer",
           display: "inline-flex",
           alignItems: "center",
@@ -97,11 +99,9 @@ export default function LinhaTarefa({
           padding: 0,
         }}
       >
-        {concluidaLocal && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        )}
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={concluidaLocal ? "#fff" : "var(--text-4)"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity: concluidaLocal ? 1 : 0.5 }}>
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
       </button>
 
       <button
@@ -169,7 +169,12 @@ export default function LinhaTarefa({
           ) : null}
 
           {tarefa.responsavel_nome && (
-            <Chip texto={tarefa.responsavel_nome} />
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Avatar nome={tarefa.responsavel_nome} tamanho={16} />
+              <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+                {tarefa.responsavel_nome}
+              </span>
+            </span>
           )}
 
           {tarefa.contextos.map((c) => (
@@ -215,9 +220,10 @@ function Chip({ texto, cor }: { texto: string; cor?: string }) {
       }}
     >
       {cor && (
+        // Quadradinho arredondado, como o chip de projeto do Asana.
         <span
           aria-hidden="true"
-          style={{ width: 6, height: 6, borderRadius: 999, background: cor, flexShrink: 0 }}
+          style={{ width: 8, height: 8, borderRadius: 2, background: cor, flexShrink: 0 }}
         />
       )}
       {texto}
