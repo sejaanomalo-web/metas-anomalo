@@ -76,7 +76,7 @@ export function rotuloRecorrencia(r: Recorrencia): string {
 // Abas customizadas e notas
 // ============================================================
 
-export type TipoAba = "calendario" | "nota"
+export type TipoAba = "calendario" | "nota" | "misto"
 
 export interface Aba {
   id: string

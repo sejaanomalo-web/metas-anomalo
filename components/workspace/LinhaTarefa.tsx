@@ -4,9 +4,16 @@ import { useState, useTransition } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { alternarConclusaoAction } from "@/lib/workspace-actions"
 import { corDoContexto, type TarefaComRelacoes } from "@/lib/workspace-tipos"
+import { corDaTarefa } from "@/lib/workspace-cores"
 import { descricaoResumida } from "@/lib/workspace-markdown"
 import { rotuloPrazo, situacaoPrazo } from "@/lib/workspace-datas"
 import Avatar from "./Avatar"
+
+/** #rrggbb → rgba com alpha — tinta de fundo da linha na cor do cliente. */
+function tinta(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
 
 /**
  * Uma linha da lista de tarefas.
@@ -38,6 +45,9 @@ export default function LinhaTarefa({
   const situacao = situacaoPrazo(tarefa.prazo_em, hoje)
   const atrasada = situacao === "atrasada" && !concluidaLocal
   const resumo = descricaoResumida(tarefa.descricao, 90)
+  // A linha carrega a cor do CLIENTE (tinta suave + barra à esquerda) — em
+  // Lista e Minhas a tarefa se identifica pela cor, não pelo preto genérico.
+  const corCliente = corDaTarefa(tarefa.contextos)
 
   function alternar() {
     const alvo = !concluidaLocal
@@ -74,6 +84,12 @@ export default function LinhaTarefa({
         borderRadius: 10,
         opacity: pending ? 0.6 : 1,
         transition: "opacity 0.15s ease",
+        ...(corCliente
+          ? {
+              background: tinta(corCliente, 0.16),
+              borderLeft: `3px solid ${corCliente}`,
+            }
+          : {}),
       }}
     >
       <button

@@ -35,11 +35,11 @@ export default async function MinhasPage({ searchParams }: { searchParams: SP })
   const vazio = secoes.every((s) => s.tarefas.length === 0)
 
   return (
-    <main style={{ padding: "16px 16px 48px", maxWidth: 900, margin: "0 auto" }}>
+    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 900, margin: "0 auto" }}>
       <WorkspaceRealtime />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        <WorkspaceNav abas={abas} />
+        <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome }} />
 
         {vazio && (
           <div

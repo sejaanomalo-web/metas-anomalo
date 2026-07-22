@@ -1350,10 +1350,12 @@ export async function criarAbaAction(
 
   const nome = texto(formData, "nome", 60)
   if (!nome) return { ok: false, erro: "Informe o nome da aba." }
-  const tipo = String(formData.get("tipo") ?? "nota") === "calendario" ? "calendario" : "nota"
+  const tipoBruto = String(formData.get("tipo") ?? "nota")
+  const tipo =
+    tipoBruto === "calendario" || tipoBruto === "misto" ? tipoBruto : "nota"
 
   let contextoId: string | null = null
-  if (tipo === "calendario") {
+  if (tipo === "calendario" || tipo === "misto") {
     const { data: ctx, error: e1 } = await db
       .from("ws_contextos")
       .insert({ nome, tipo: "interno", criado_por: usuario.id })
@@ -1642,4 +1644,94 @@ export async function reordenarDiaAction(
   await ping(movidaId, "tarefa")
   revalidatePath(ROTA)
   return { ok: true, id: movidaId }
+}
+
+/**
+ * Cria um GRUPO de empresa no Workspace sem precisar de cliente: um contexto
+ * tipo 'empresa' serve de âncora do grupo (aparece como seção na aba
+ * Clientes, participa da ordenação e do renomear). Não toca em
+ * empresas_config — é organização interna do Workspace.
+ */
+export async function criarEmpresaWsAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const nome = texto(formData, "nome", 120)
+  if (!nome) return { ok: false, erro: "Informe o nome da empresa." }
+
+  // Já existe grupo com esse nome? Não cria âncora duplicada.
+  const { data: existente } = await db
+    .from("ws_contextos")
+    .select("id")
+    .eq("tipo", "empresa")
+    .eq("empresa_nome", nome)
+    .is("arquivado_em", null)
+    .maybeSingle()
+  if (existente) return { ok: true, id: existente.id as string }
+
+  const { data, error } = await db
+    .from("ws_contextos")
+    .insert({ nome, tipo: "empresa", empresa_nome: nome, criado_por: usuario.id })
+    .select("id")
+    .single()
+  if (error || !data) {
+    console.error("[workspace] criarEmpresaWs error", error?.message)
+    return { ok: false, erro: "Não foi possível criar a empresa." }
+  }
+  revalidatePath(ROTA)
+  return { ok: true, id: data.id as string }
+}
+
+/**
+ * Persiste a ordem visual da aba Clientes: recebe TODOS os ids de contexto
+ * (âncoras de empresa e clientes) na ordem final e renumera ws_contextos.ordem
+ * — determinístico, mesma estratégia do reordenarDiaAction. Um item movido de
+ * grupo também troca de empresa_nome (vem no payload).
+ */
+export async function reordenarContextosAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  let itens: { id: string; empresa?: string }[]
+  try {
+    const bruto = JSON.parse(String(formData.get("itens") ?? "[]"))
+    itens = Array.isArray(bruto)
+      ? bruto
+          .map((x) => ({
+            id: String(x?.id ?? ""),
+            empresa: x?.empresa === undefined ? undefined : String(x.empresa),
+          }))
+          .filter((x) => ehUuid(x.id))
+      : []
+  } catch {
+    return { ok: false, erro: "Ordem inválida." }
+  }
+  if (itens.length === 0 || itens.length > 500) {
+    return { ok: false, erro: "Ordem inválida." }
+  }
+
+  for (let i = 0; i < itens.length; i++) {
+    const patch: Record<string, unknown> = { ordem: (i + 1) * 10 }
+    if (itens[i].empresa !== undefined) {
+      patch.empresa_nome = itens[i].empresa!.trim() || null
+    }
+    const { error } = await db
+      .from("ws_contextos")
+      .update(patch)
+      .eq("id", itens[i].id)
+    if (error) {
+      console.error("[workspace] reordenarContextos error", error.message)
+      return { ok: false, erro: "Não foi possível reordenar." }
+    }
+  }
+  revalidatePath(ROTA)
+  return { ok: true }
 }

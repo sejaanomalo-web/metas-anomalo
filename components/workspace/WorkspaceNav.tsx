@@ -4,7 +4,8 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { criarAbaAction, excluirAbaAction, renomearAbaAction } from "@/lib/workspace-actions"
-import type { Aba } from "@/lib/workspace-tipos"
+import type { Aba, TipoAba } from "@/lib/workspace-tipos"
+import PresencaWorkspace from "./PresencaWorkspace"
 
 const FIXAS: { rotulo: string; href: string; matchExact?: boolean }[] = [
   { rotulo: "Lista", href: "/dashboard/workspace", matchExact: true },
@@ -22,7 +23,14 @@ const FIXAS: { rotulo: string; href: string; matchExact?: boolean }[] = [
  * nova (calendário ou nota), o lápis que renomeia/exclui SÓ as criadas, e a
  * engrenagem de Configurações à direita.
  */
-export default function WorkspaceNav({ abas = [] }: { abas?: Aba[] }) {
+export default function WorkspaceNav({
+  abas = [],
+  presenca,
+}: {
+  abas?: Aba[]
+  /** Quem sou eu — liga as bolinhas de usuários ativos no canto direito. */
+  presenca?: { id: string; nome: string; foto?: string | null }
+}) {
   const pathname = usePathname()
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -30,7 +38,7 @@ export default function WorkspaceNav({ abas = [] }: { abas?: Aba[] }) {
   const [criando, setCriando] = useState(false)
   const [gerenciando, setGerenciando] = useState(false)
   const [nomeNova, setNomeNova] = useState("")
-  const [tipoNova, setTipoNova] = useState<"calendario" | "nota">("calendario")
+  const [tipoNova, setTipoNova] = useState<TipoAba>("misto")
 
   function criar() {
     const nome = nomeNova.trim()
@@ -79,6 +87,14 @@ export default function WorkspaceNav({ abas = [] }: { abas?: Aba[] }) {
           Workspace
         </h1>
         {erro && <span style={{ fontSize: 11, color: "#e24b4a" }}>{erro}</span>}
+        <span style={{ flex: 1 }} />
+        {presenca && (
+          <PresencaWorkspace
+            meuId={presenca.id}
+            meuNome={presenca.nome}
+            minhaFoto={presenca.foto}
+          />
+        )}
       </div>
 
       <nav
@@ -197,13 +213,17 @@ export default function WorkspaceNav({ abas = [] }: { abas?: Aba[] }) {
           />
           <select
             value={tipoNova}
-            onChange={(e) => setTipoNova(e.target.value === "nota" ? "nota" : "calendario")}
+            onChange={(e) => {
+              const v = e.target.value
+              setTipoNova(v === "nota" || v === "calendario" ? v : "misto")
+            }}
             className="glass-input"
             style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8 }}
             disabled={pending}
           >
-            <option value="calendario" style={{ color: "#111" }}>Com calendário</option>
-            <option value="nota" style={{ color: "#111" }}>Com notas</option>
+            <option value="misto" style={{ color: "#111" }}>Calendário + notas</option>
+            <option value="calendario" style={{ color: "#111" }}>Só calendário</option>
+            <option value="nota" style={{ color: "#111" }}>Só notas</option>
           </select>
           <button
             type="button"
@@ -300,8 +320,12 @@ function LinhaAba({ aba }: { aba: Aba }) {
 
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-      <span style={{ fontSize: 10, color: "var(--text-4)", width: 70 }}>
-        {aba.tipo === "calendario" ? "Calendário" : "Notas"}
+      <span style={{ fontSize: 10, color: "var(--text-4)", width: 90 }}>
+        {aba.tipo === "calendario"
+          ? "Calendário"
+          : aba.tipo === "misto"
+            ? "Calend.+notas"
+            : "Notas"}
       </span>
       <input
         type="text"

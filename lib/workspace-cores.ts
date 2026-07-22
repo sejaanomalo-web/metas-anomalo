@@ -129,6 +129,20 @@ export function estiloCartao(cor: string | null | undefined): {
 }
 
 /**
+ * Cor de UMA TAREFA em qualquer visão (calendário, lista, minhas): a cor do
+ * CLIENTE vence a de contexto genérico. Sem isso, toda tarefa importada
+ * ficava âmbar — o "Calendário de conteúdo" é o primeiro vínculo de quase
+ * todas, e a cor do cliente (Lidiane verde, Ivone rosa…) nunca aparecia.
+ */
+export function corDaTarefa(
+  contextos: { tipo: string; cor: string | null }[]
+): string | null {
+  const cliente = contextos.find((c) => c.tipo === "cliente" && c.cor)
+  if (cliente) return cliente.cor
+  return contextos.find((c) => c.cor)?.cor ?? null
+}
+
+/**
  * Cor de avatar por nome (iniciais), determinística — o Asana faz o mesmo
  * quando o usuário não tem foto: um círculo colorido estável por pessoa.
  */

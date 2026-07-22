@@ -77,11 +77,14 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
   const tarefaAberta = um(searchParams, "tarefa")
 
   return (
-    <main style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
+    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
       <WorkspaceRealtime />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <WorkspaceNav abas={abas} />
+        <WorkspaceNav
+          abas={abas}
+          presenca={{ id: usuario.id, nome: usuario.nome, foto: pref.foto_url }}
+        />
         <FiltrosTarefas
           contextos={contextos}
           usuarios={usuarios}

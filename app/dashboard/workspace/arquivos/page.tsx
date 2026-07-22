@@ -11,16 +11,16 @@ export const dynamic = "force-dynamic"
  * sistema: não pode ser renomeada nem excluída.
  */
 export default async function ArquivosPage() {
-  await requererPermissao("workspace")
+  const usuario = await requererPermissao("workspace")
   const [abas, notas] = await Promise.all([
     listarAbas(),
     listarNotas({ fixa: "arquivos" }),
   ])
 
   return (
-    <main style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
+    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <WorkspaceNav abas={abas} />
+        <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome }} />
         <NotasWorkspace notas={notas} escopo={{ fixa: "arquivos" }} />
       </div>
     </main>

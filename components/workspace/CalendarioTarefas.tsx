@@ -20,7 +20,7 @@ import {
   reordenarDiaAction,
 } from "@/lib/workspace-actions"
 import { type TarefaComRelacoes } from "@/lib/workspace-tipos"
-import { estiloCartao } from "@/lib/workspace-cores"
+import { corDaTarefa, estiloCartao } from "@/lib/workspace-cores"
 import Avatar from "./Avatar"
 import {
   DIAS_SEMANA_CURTO,
@@ -698,7 +698,8 @@ function CartaoTarefa({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: tarefa.id })
   const concluida = Boolean(tarefa.concluida_em)
-  const cor = modoCor === "mono" ? null : tarefa.contextos[0]?.cor ?? null
+  // Cor do CLIENTE vence a do contexto genérico (Calendário de conteúdo).
+  const cor = modoCor === "mono" ? null : corDaTarefa(tarefa.contextos)
   const estilo = estiloCartao(cor)
 
   function abrir() {

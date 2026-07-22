@@ -32,8 +32,8 @@ function um(sp: SP, chave: string): string | undefined {
 
 /**
  * Aba CUSTOMIZADA (criada no "+"): calendário próprio (tarefas no contexto
- * interno da aba) ou coleção de notas — o mesmo par de superfícies da área
- * do cliente, sem cliente.
+ * interno da aba), coleção de notas, ou os DOIS (tipo misto — sub-abas
+ * Calendário | Notas, como a área de um cliente).
  */
 export default async function AbaCustomPage({
   params,
@@ -50,9 +50,15 @@ export default async function AbaCustomPage({
   const hoje = hojeISO()
   const tarefaAberta = um(searchParams, "tarefa")
 
+  // Tipo misto: sub-aba via ?aba= (calendário é a inicial).
+  const subAba =
+    aba.tipo === "nota" || (aba.tipo === "misto" && um(searchParams, "aba") === "nota")
+      ? "nota"
+      : "calendario"
+
   let conteudo: React.ReactNode = null
 
-  if (aba.tipo === "nota") {
+  if (subAba === "nota") {
     const notas = await listarNotas({ abaId: aba.id })
     conteudo = <NotasWorkspace notas={notas} escopo={{ aba_id: aba.id }} />
   } else if (aba.contexto_id) {
@@ -97,13 +103,43 @@ export default async function AbaCustomPage({
   }
 
   return (
-    <main style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
+    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
       <WorkspaceRealtime />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <WorkspaceNav abas={abas} />
-        <h2 style={{ fontSize: 16, fontWeight: 600, margin: "4px 0 0", color: "var(--text-1)" }}>
-          {aba.nome}
-        </h2>
+        <WorkspaceNav
+          abas={abas}
+          presenca={{ id: usuario.id, nome: usuario.nome, foto: pref.foto_url }}
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "4px 0 0" }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "var(--text-1)" }}>
+            {aba.nome}
+          </h2>
+          {aba.tipo === "misto" && (
+            <nav style={{ display: "flex", gap: 2 }}>
+              {(
+                [
+                  { chave: "calendario", rotulo: "Calendário", href: `/dashboard/workspace/t/${aba.id}` },
+                  { chave: "nota", rotulo: "Notas", href: `/dashboard/workspace/t/${aba.id}?aba=nota` },
+                ] as const
+              ).map((s) => (
+                <a
+                  key={s.chave}
+                  href={s.href}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: subAba === s.chave ? 600 : 400,
+                    color: subAba === s.chave ? "var(--text-1)" : "var(--text-3)",
+                    textDecoration: "none",
+                    padding: "4px 8px",
+                    borderBottom: subAba === s.chave ? "2px solid var(--text-1)" : "2px solid transparent",
+                  }}
+                >
+                  {s.rotulo}
+                </a>
+              ))}
+            </nav>
+          )}
+        </div>
         {conteudo}
       </div>
 

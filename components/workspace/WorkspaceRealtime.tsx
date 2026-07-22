@@ -27,7 +27,16 @@ export default function WorkspaceRealtime() {
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     if (!url || !key) return
 
+    // Aba escondida não re-renderiza: guarda o ping e atualiza UMA vez na
+    // volta. Sem isso, deixar o Workspace aberto em segundo plano acumulava
+    // refreshes e a aba "travava" ao ser reaberta.
+    let pendenteOculto = false
+
     function agendarRefresh() {
+      if (document.hidden) {
+        pendenteOculto = true
+        return
+      }
       const agora = Date.now()
       const desde = agora - ultimoRef.current
       if (desde >= JANELA_MS) {
@@ -42,6 +51,15 @@ export default function WorkspaceRealtime() {
         router.refresh()
       }, JANELA_MS - desde)
     }
+
+    function aoVoltar() {
+      if (!document.hidden && pendenteOculto) {
+        pendenteOculto = false
+        ultimoRef.current = Date.now()
+        router.refresh()
+      }
+    }
+    document.addEventListener("visibilitychange", aoVoltar)
 
     const supabase = createClient(url, key, {
       auth: { persistSession: false },
@@ -58,6 +76,7 @@ export default function WorkspaceRealtime() {
       .subscribe()
 
     return () => {
+      document.removeEventListener("visibilitychange", aoVoltar)
       if (timerRef.current) clearTimeout(timerRef.current)
       supabase.removeChannel(channel)
     }

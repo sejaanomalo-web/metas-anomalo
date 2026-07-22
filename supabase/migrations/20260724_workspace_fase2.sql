@@ -39,13 +39,14 @@ alter table public.ws_contextos
 -- 3) ABAS CUSTOMIZADAS — o "+" da régua de navegação
 -- ============================================================
 -- Aba de tipo 'calendario' ganha um contexto próprio (tipo interno) para as
--- tarefas dela; aba 'nota' guarda notas em ws_notas. As abas fixas do
+-- tarefas dela; aba 'nota' guarda notas em ws_notas; 'misto' tem os dois
+-- (calendário + notas, como a área de um cliente). As abas fixas do
 -- sistema (Lista, Calendário, Clientes, Minhas, Arquivos, Estudos,
 -- Configurações) são código, não linhas — por isso não podem ser excluídas.
 create table if not exists public.ws_abas (
   id           uuid primary key default gen_random_uuid(),
   nome         text not null check (length(btrim(nome)) > 0),
-  tipo         text not null check (tipo in ('calendario','nota')),
+  tipo         text not null check (tipo in ('calendario','nota','misto')),
   contexto_id  uuid references public.ws_contextos(id) on delete set null,
   ordem        int not null default 0,
   criado_por   uuid references public.usuarios(id),

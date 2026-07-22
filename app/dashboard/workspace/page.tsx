@@ -92,11 +92,11 @@ export default async function WorkspacePage({
   }
 
   return (
-    <main style={{ padding: "16px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
+    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
       <WorkspaceRealtime />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <WorkspaceNav abas={abas} />
+        <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome }} />
 
         <CriacaoRapida
           contextos={contextos}

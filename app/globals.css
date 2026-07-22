@@ -1343,8 +1343,66 @@ table {
  * num dia = scroll dentro da coluna, cabeçalho do dia fixo no topo).
  * ============================================================ */
 :root {
-  --ws-cal-fundo: #232527;      /* cinza de área do Asana dark */
+  --ws-fundo: #1f2124;          /* cinza da ÁREA inteira do Workspace */
+  --ws-cal-fundo: #26282b;      /* cinza um tom acima, das superfícies */
   --ws-cal-borda: rgba(255, 255, 255, 0.10);
+}
+
+/* A área do Workspace INTEIRA (lista, clientes, minhas, notas…) fica no
+ * cinza do Asana — se diferencia do preto puro do resto do sistema e faz
+ * os cartões coloridos saltarem. */
+.ws-main {
+  background: var(--ws-fundo);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 10px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Alça de arraste (⋮⋮): a mãozinha de reordenar listas. */
+.ws-alca {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--text-4);
+  cursor: grab;
+  border-radius: 5px;
+  flex-shrink: 0;
+  touch-action: none; /* sem isso, o arraste vira scroll no touch */
+}
+.ws-alca:hover {
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.07);
+}
+.ws-alca:active {
+  cursor: grabbing;
+}
+
+/* Linha de cliente na aba Clientes — lista vertical, um por linha. */
+.ws-linha-cliente {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--ws-cal-fundo);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.ws-linha-cliente:hover {
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .ws-cal-semana {

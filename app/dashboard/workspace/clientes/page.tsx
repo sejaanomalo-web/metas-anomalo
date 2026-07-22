@@ -10,16 +10,16 @@ import ClientesPainel, {
 export const dynamic = "force-dynamic"
 
 /**
- * Aba Clientes — união de DUAS origens, sem duplicar cadastro:
- *   • contextos tipo 'cliente' (área de trabalho já existente — inclui os
- *     criados direto no Workspace, sem cadastro de tráfego);
- *   • clientes de tráfego ativos que ainda NÃO têm contexto (a pasta nasce
- *     no primeiro clique, como sempre foi).
- * O agrupamento usa a empresa do CONTEXTO quando há contexto (é o que o
- * lápis renomeia) e a do cadastro quando ainda não há.
+ * Aba Clientes — lista vertical reordenável. Três origens, sem duplicar:
+ *   • contextos tipo 'empresa' = ÂNCORAS de grupo (permitem grupo vazio e
+ *     dão ao grupo uma posição própria na ordenação);
+ *   • contextos tipo 'cliente' = as áreas de trabalho (reordenáveis);
+ *   • clientes de tráfego ativos ainda sem contexto (a pasta nasce no clique).
+ * A ORDEM visual é ws_contextos.ordem — grupos ordenados pela menor ordem
+ * entre seus contextos, itens pela própria.
  */
 export default async function ClientesPage() {
-  await requererPermissao("workspace")
+  const usuario = await requererPermissao("workspace")
 
   const [porEmpresa, contextos, contagens, abas] = await Promise.all([
     getClientesAtivosPorEmpresa(),
@@ -28,24 +28,42 @@ export default async function ClientesPage() {
     listarAbas(),
   ])
 
+  const ancoras = contextos.filter((c) => c.tipo === "empresa")
   const contextosCliente = contextos.filter((c) => c.tipo === "cliente")
   const contextoPorCliente = new Map<string, (typeof contextosCliente)[number]>()
   for (const c of contextosCliente) {
     if (c.cliente_id) contextoPorCliente.set(c.cliente_id, c)
   }
 
-  const grupos = new Map<string, ItemCliente[]>()
-  function empurrar(empresa: string, item: ItemCliente) {
-    const chave = empresa.trim() || "Sem empresa"
-    const lista = grupos.get(chave) ?? []
-    lista.push(item)
-    grupos.set(chave, lista)
+  interface GrupoAcc {
+    itens: (ItemCliente & { ordem: number })[]
+    ancoraId: string | null
+    menorOrdem: number
+  }
+  const grupos = new Map<string, GrupoAcc>()
+  function grupo(chaveBruta: string): GrupoAcc {
+    const chave = chaveBruta.trim() || "Sem empresa"
+    let g = grupos.get(chave)
+    if (!g) {
+      g = { itens: [], ancoraId: null, menorOrdem: Number.MAX_SAFE_INTEGER }
+      grupos.set(chave, g)
+    }
+    return g
   }
 
-  // 1) Contextos de cliente existentes (com ou sem cadastro de tráfego).
+  // Âncoras primeiro: criam o grupo (mesmo vazio) e definem posição.
+  for (const a of ancoras) {
+    const g = grupo(a.empresa_nome ?? a.nome)
+    g.ancoraId = a.id
+    g.menorOrdem = Math.min(g.menorOrdem, a.ordem)
+  }
+
+  // Contextos de cliente.
   for (const c of contextosCliente) {
+    const g = grupo(c.empresa_nome ?? "Sem empresa")
     const contagem = contagens.get(c.id)
-    empurrar(c.empresa_nome ?? "Sem empresa", {
+    g.menorOrdem = Math.min(g.menorOrdem, c.ordem)
+    g.itens.push({
       contextoId: c.id,
       clienteId: c.cliente_id,
       nome: c.nome,
@@ -53,14 +71,15 @@ export default async function ClientesPage() {
       fotoUrl: c.foto_url,
       pendentes: contagem?.pendentes ?? 0,
       atrasadas: contagem?.atrasadas ?? 0,
+      ordem: c.ordem,
     })
   }
 
-  // 2) Clientes do cadastro que ainda não têm pasta.
+  // Clientes do cadastro que ainda não têm pasta (vão pro fim do grupo).
   for (const [empresa, clientes] of Object.entries(porEmpresa)) {
     for (const cliente of clientes) {
       if (contextoPorCliente.has(cliente.id)) continue
-      empurrar(empresa, {
+      grupo(empresa).itens.push({
         contextoId: null,
         clienteId: cliente.id,
         nome: cliente.nome,
@@ -68,23 +87,30 @@ export default async function ClientesPage() {
         fotoUrl: null,
         pendentes: 0,
         atrasadas: 0,
+        ordem: Number.MAX_SAFE_INTEGER,
       })
     }
   }
 
   const gruposOrdenados: GrupoEmpresa[] = [...grupos.entries()]
-    .sort(([a], [b]) => a.localeCompare(b, "pt-BR"))
-    .map(([empresa, itens]) => ({
+    .sort(
+      ([a, ga], [b, gb]) =>
+        ga.menorOrdem - gb.menorOrdem || a.localeCompare(b, "pt-BR")
+    )
+    .map(([empresa, g]) => ({
       empresa,
-      itens: itens.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
+      ancoraId: g.ancoraId,
+      itens: g.itens
+        .sort((x, y) => x.ordem - y.ordem || x.nome.localeCompare(y.nome, "pt-BR"))
+        .map(({ ordem: _ordem, ...item }) => item),
     }))
 
   const empresas = gruposOrdenados.map((g) => g.empresa).filter((e) => e !== "Sem empresa")
 
   return (
-    <main style={{ padding: "16px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
+    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <WorkspaceNav abas={abas} />
+        <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome }} />
         <ClientesPainel grupos={gruposOrdenados} empresas={empresas} />
       </div>
     </main>
