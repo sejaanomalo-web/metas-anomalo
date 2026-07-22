@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities"
 import {
   criarClienteWorkspaceAction,
   criarEmpresaWsAction,
+  excluirClienteWorkspaceAction,
   excluirEmpresaWsAction,
   garantirContextoDoClienteAction,
   renomearEmpresaWsAction,
@@ -249,6 +250,10 @@ export default function ClientesPainel({
                 key={empresa}
                 empresa={empresa}
                 itens={itensPorGrupo[empresa] ?? []}
+                // Só grupo com ÂNCORA (contexto tipo 'empresa') pode ser
+                // excluído — os que vêm do cadastro de tráfego não têm linha
+                // própria aqui, e o botão só frustraria.
+                podeExcluir={Boolean(estadoServidor.ancoras[empresa])}
               />
             ))}
           </div>
@@ -291,7 +296,15 @@ function Alca(props: React.HTMLAttributes<HTMLButtonElement>) {
 
 /* =================== Grupo (empresa) =================== */
 
-function Grupo({ empresa, itens }: { empresa: string; itens: ItemCliente[] }) {
+function Grupo({
+  empresa,
+  itens,
+  podeExcluir,
+}: {
+  empresa: string
+  itens: ItemCliente[]
+  podeExcluir: boolean
+}) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [editando, setEditando] = useState(false)
@@ -388,7 +401,7 @@ function Grupo({ empresa, itens }: { empresa: string; itens: ItemCliente[] }) {
             <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
           </svg>
         </button>
-        {editando &&
+        {editando && podeExcluir &&
           (confirmandoExcluir ? (
             <>
               <button
@@ -507,15 +520,35 @@ function ConteudoLinha({ item }: { item: ItemCliente }) {
   )
 }
 
-/** Linha com contexto: sortable, alça à esquerda, clique abre a área. */
+/** Linha com contexto: sortable, alça à esquerda, clique abre a área e
+ *  lixeira à direita que só aparece no hover. */
 function LinhaCliente({ item }: { item: ItemCliente }) {
   const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [confirmando, setConfirmando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.contextoId as string })
+
+  function excluir() {
+    setErro(null)
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("id", item.contextoId as string)
+      const r = await excluirClienteWorkspaceAction(fd)
+      if (!r.ok) {
+        setErro(r.erro ?? "Não foi possível excluir.")
+        setConfirmando(false)
+        return
+      }
+      router.refresh()
+    })
+  }
 
   return (
     <div
       ref={setNodeRef}
+      className="ws-linha-wrap"
       style={{
         display: "flex",
         alignItems: "center",
@@ -534,8 +567,47 @@ function LinhaCliente({ item }: { item: ItemCliente }) {
         className="no-ds ws-linha-cliente"
       >
         <ConteudoLinha item={item} />
+        {erro && <span style={{ fontSize: 10, color: "#e24b4a" }}>{erro}</span>}
       </button>
+
+      {confirmando ? (
+        <span style={{ display: "inline-flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+          <button type="button" onClick={excluir} disabled={pending} className="no-ds" style={botaoExcluirGrupo}>
+            Confirmar
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmando(false)}
+            className="no-ds"
+            style={{ fontSize: 11, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}
+          >
+            Cancelar
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmando(true)}
+          disabled={pending}
+          aria-label={`Excluir ${item.nome}`}
+          title="Excluir este cliente do Workspace (as tarefas continuam no banco)"
+          className="no-ds ws-linha-lixeira"
+        >
+          <IconeLixeira />
+        </button>
+      )}
     </div>
+  )
+}
+
+function IconeLixeira() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
   )
 }
 

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { requererPermissao } from "@/lib/auth"
 import {
+  getPreferencia,
   listarAbas,
   listarContextos,
   listarTarefas,
@@ -69,15 +70,19 @@ export default async function WorkspacePage({
     offset: (pagina - 1) * POR_PAGINA,
   }
 
-  const [{ tarefas, temMais }, contextos, usuarios, abas] = await Promise.all([
+  const [{ tarefas, temMais }, contextos, usuarios, abas, pref] = await Promise.all([
     listarTarefas(filtro),
     listarContextos(),
     listarUsuariosAtivos(),
     listarAbas(),
+    getPreferencia(usuario.id),
   ])
 
   const tarefaAberta = um(searchParams, "tarefa")
   const hoje = hojeISO()
+  // O filtro é por CLIENTE: contexto genérico (ex: "Calendário de conteúdo")
+  // não é uma escolha útil na lista, e polui um seletor com 30 entradas.
+  const clientes = contextos.filter((c) => c.tipo === "cliente")
 
   const qsBase = new URLSearchParams()
   for (const [k, v] of Object.entries(searchParams)) {
@@ -96,16 +101,25 @@ export default async function WorkspacePage({
       <WorkspaceRealtime />
 
       <div className="ws-topo">
-        <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome }} />
-
-        <CriacaoRapida
-          contextos={contextos}
-          usuarios={usuarios}
-          contextoPadraoId={um(searchParams, "contexto")}
-          meuUsuarioId={usuario.id}
+        <WorkspaceNav
+          abas={abas}
+          presenca={{ id: usuario.id, nome: usuario.nome, foto: pref.foto_url }}
         />
 
-        <FiltrosTarefas contextos={contextos} usuarios={usuarios} />
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 420px", minWidth: 0 }}>
+            <FiltrosTarefas
+              contextos={clientes}
+              usuarios={usuarios}
+              rotuloContexto="Cliente"
+            />
+          </div>
+          <CriacaoRapida
+            contextos={contextos}
+            contextoPadraoId={um(searchParams, "contexto")}
+            meuUsuarioId={usuario.id}
+          />
+        </div>
       </div>
 
       <div className="ws-conteudo">

@@ -1,5 +1,5 @@
 import { requererPermissao } from "@/lib/auth"
-import { getMinhasTarefas, listarAbas } from "@/lib/workspace"
+import { getMinhasTarefas, getPreferencia, listarAbas } from "@/lib/workspace"
 import { hojeISO } from "@/lib/workspace-datas"
 import WorkspaceNav from "@/components/workspace/WorkspaceNav"
 import WorkspaceRealtime from "@/components/workspace/WorkspaceRealtime"
@@ -19,7 +19,11 @@ type SP = Record<string, string | string[] | undefined>
 export default async function MinhasPage({ searchParams }: { searchParams: SP }) {
   const usuario = await requererPermissao("workspace")
   const hoje = hojeISO()
-  const [baldes, abas] = await Promise.all([getMinhasTarefas(usuario.id), listarAbas()])
+  const [baldes, abas, pref] = await Promise.all([
+    getMinhasTarefas(usuario.id),
+    listarAbas(),
+    getPreferencia(usuario.id),
+  ])
 
   const tarefaParam = searchParams.tarefa
   const tarefaAberta = Array.isArray(tarefaParam) ? tarefaParam[0] : tarefaParam
@@ -39,7 +43,10 @@ export default async function MinhasPage({ searchParams }: { searchParams: SP })
       <WorkspaceRealtime />
 
       <div className="ws-topo">
-        <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome }} />
+        <WorkspaceNav
+          abas={abas}
+          presenca={{ id: usuario.id, nome: usuario.nome, foto: pref.foto_url }}
+        />
       </div>
 
       <div className="ws-conteudo" style={{ gap: 18 }}>
@@ -58,9 +65,41 @@ export default async function MinhasPage({ searchParams }: { searchParams: SP })
             <section key={s.titulo} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <h2
                 className="ds-label"
-                style={{ fontSize: 11, color: s.cor ?? "var(--text-3)", margin: 0, fontWeight: 700 }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 12,
+                  color: "var(--text-1)",
+                  margin: 0,
+                  fontWeight: 700,
+                  letterSpacing: "0.03em",
+                  paddingBottom: 6,
+                  borderBottom: "1px solid rgba(255,255,255,0.07)",
+                }}
               >
-                {s.titulo} · {s.tarefas.length}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 3,
+                    background: s.cor ?? "var(--text-4)",
+                  }}
+                />
+                {s.titulo}
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "var(--text-3)",
+                    background: "rgba(255,255,255,0.08)",
+                    padding: "1px 7px",
+                    borderRadius: 999,
+                  }}
+                >
+                  {s.tarefas.length}
+                </span>
               </h2>
               <ListaTarefas tarefas={s.tarefas} hoje={hoje} agrupar="nenhum" />
             </section>

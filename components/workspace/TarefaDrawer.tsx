@@ -651,7 +651,7 @@ export default function TarefaDrawer(props: Props) {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {comentarios.map((c) => (
                 <div key={c.id} style={{ display: "flex", gap: 10 }}>
-                  <Avatar nome={c.autor_nome} tamanho={28} />
+                  <Avatar nome={c.autor_nome} foto={c.autor_foto} tamanho={28} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 12, margin: "0 0 2px" }}>
                       <strong style={{ color: "var(--text-1)", fontWeight: 600 }}>

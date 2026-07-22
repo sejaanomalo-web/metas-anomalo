@@ -1766,16 +1766,67 @@ export async function excluirEmpresaWsAction(
     }
   }
 
-  const { error } = await db
+  // Só existe o que excluir se o grupo tiver ÂNCORA (contexto tipo 'empresa').
+  // Grupo que veio só do cadastro de tráfego não tem linha própria aqui — sem
+  // esta checagem o update afetava 0 linhas e a UI dizia "excluído" sem nada
+  // ter acontecido, e o grupo reaparecia no refresh.
+  const { data: ancoras, error } = await db
     .from("ws_contextos")
     .update({ arquivado_em: new Date().toISOString() })
     .eq("tipo", "empresa")
     .eq("empresa_nome", nome)
     .is("arquivado_em", null)
+    .select("id")
   if (error) {
     console.error("[workspace] excluirEmpresaWs error", error.message)
     return { ok: false, erro: "Não foi possível excluir." }
   }
+  if (!ancoras || ancoras.length === 0) {
+    return {
+      ok: false,
+      erro: "Este grupo vem do cadastro de clientes de tráfego e não pode ser excluído aqui.",
+    }
+  }
   revalidatePath(ROTA)
   return { ok: true }
+}
+
+/**
+ * Exclui (soft) a área de trabalho de um CLIENTE: arquiva o contexto.
+ *
+ * As TAREFAS não são apagadas — elas continuam no banco e nas outras pastas
+ * em que estiverem vinculadas. É o mesmo princípio do resto do módulo:
+ * nada some de verdade, some da visão.
+ */
+export async function excluirClienteWorkspaceAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!ehUuid(id)) return { ok: false, erro: "Cliente inválido." }
+
+  const { data: ctx } = await db
+    .from("ws_contextos")
+    .select("id, tipo")
+    .eq("id", id)
+    .maybeSingle()
+  if (!ctx) return { ok: false, erro: "Cliente não encontrado." }
+  if ((ctx as { tipo: string }).tipo !== "cliente") {
+    return { ok: false, erro: "Este contexto não é um cliente." }
+  }
+
+  const { error } = await db
+    .from("ws_contextos")
+    .update({ arquivado_em: new Date().toISOString() })
+    .eq("id", id)
+  if (error) {
+    console.error("[workspace] excluirClienteWorkspace error", error.message)
+    return { ok: false, erro: "Não foi possível excluir." }
+  }
+  revalidatePath(ROTA)
+  return { ok: true, id }
 }

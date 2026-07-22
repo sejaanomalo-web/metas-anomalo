@@ -1,14 +1,18 @@
 "use client"
 
 import { useRef, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { criarTarefaAction } from "@/lib/workspace-actions"
 import type { Contexto } from "@/lib/workspace-tipos"
 
 /**
- * Criação rápida — o fluxo mais usado do módulo, por isso mora no topo da
- * lista e exige o mínimo: título, responsável, prazo e (opcional) contexto.
- * Descrição, subtarefas e comentários ficam para o detalhe.
+ * Criação de tarefa — o fluxo mais usado do módulo.
+ *
+ * Botão em OURO (a cor de ação do sistema) que abre um campo só: o título.
+ * Enter cria e ABRE O PAINEL da tarefa (?tarefa=<id>), que é onde moram
+ * responsável, cliente, prazo, repetição, subtarefas e comentários. Assim
+ * não existem dois formulários concorrentes para os mesmos campos — o
+ * painel é sempre a fonte única de edição.
  *
  * IDEMPOTÊNCIA: o id da tarefa é gerado AQUI (crypto.randomUUID) e vai no
  * formulário. O insert no servidor é upsert com ignoreDuplicates, então duplo
@@ -17,25 +21,25 @@ import type { Contexto } from "@/lib/workspace-tipos"
  */
 export default function CriacaoRapida({
   contextos,
-  usuarios,
   contextoPadraoId,
   meuUsuarioId,
 }: {
+  /** Só usado pra pré-vincular o cliente quando a lista já está filtrada. */
   contextos: Contexto[]
-  usuarios: { id: string; nome: string }[]
   contextoPadraoId?: string
   meuUsuarioId: string
 }) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
-  const [expandido, setExpandido] = useState(false)
+  const [aberto, setAberto] = useState(false)
   const [titulo, setTitulo] = useState("")
-  const [responsavelId, setResponsavelId] = useState(meuUsuarioId)
-  const [prazoEm, setPrazoEm] = useState("")
-  const [contextoId, setContextoId] = useState(contextoPadraoId ?? "")
   const idRef = useRef<string>(novoId())
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const contextoPadrao = contextos.find((c) => c.id === contextoPadraoId)
 
   function novoId(): string {
     // randomUUID exige contexto seguro (https/localhost). O fallback cobre
@@ -59,12 +63,12 @@ export default function CriacaoRapida({
       const fd = new FormData()
       if (idRef.current) fd.set("id", idRef.current)
       fd.set("titulo", t)
-      if (responsavelId) fd.set("responsavel_id", responsavelId)
-      if (prazoEm) fd.set("prazo_em", prazoEm)
-      if (contextoId) fd.append("contexto_ids", contextoId)
+      // Responsável fica VAZIO de propósito: atribuir dispara notificação,
+      // e o dono da tarefa é escolhido no painel que abre em seguida.
+      if (contextoPadraoId) fd.append("contexto_ids", contextoPadraoId)
 
       const r = await criarTarefaAction(fd)
-      if (!r.ok) {
+      if (!r.ok || !r.id) {
         setErro(r.erro ?? "Não foi possível criar.")
         return
       }
@@ -72,139 +76,115 @@ export default function CriacaoRapida({
       // antes, um erro de rede deixaria o usuário achando que salvou.
       idRef.current = novoId()
       setTitulo("")
-      setPrazoEm("")
-      setExpandido(false)
+      setAberto(false)
+      // Abre o painel da tarefa recém-criada pra completar cliente,
+      // responsável, prazo e o resto sem trocar de tela.
+      const qs = new URLSearchParams(searchParams.toString())
+      qs.set("tarefa", r.id)
+      router.push(`${pathname}?${qs.toString()}`, { scroll: false })
       router.refresh()
-      inputRef.current?.focus()
     })
   }
 
-  return (
-    <div className="glass" style={{ padding: 12, borderRadius: 12 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <input
-          ref={inputRef}
-          type="text"
-          value={titulo}
-          onChange={(e) => setTitulo(e.target.value)}
-          onFocus={() => setExpandido(true)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault()
-              salvar()
-            }
-            if (e.key === "Escape") setExpandido(false)
-          }}
-          placeholder="Nova tarefa… (Enter para salvar)"
-          className="glass-input"
-          style={{ flex: "1 1 240px", minWidth: 0, fontSize: 13, padding: "9px 12px", borderRadius: 9 }}
-          disabled={pending}
-          maxLength={300}
-        />
+  if (!aberto) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <button
           type="button"
-          onClick={salvar}
-          disabled={pending || titulo.trim() === ""}
+          onClick={() => {
+            setAberto(true)
+            setTimeout(() => inputRef.current?.focus(), 0)
+          }}
           className="btn-gold-filled"
           style={{
-            fontSize: 12,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            fontSize: 12.5,
             fontWeight: 700,
             padding: "9px 18px",
             borderRadius: 9,
-            opacity: pending || titulo.trim() === "" ? 0.5 : 1,
-            cursor: pending ? "wait" : "pointer",
+            cursor: "pointer",
           }}
         >
-          {pending ? "Salvando…" : "Adicionar"}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Adicionar nova tarefa
         </button>
+        {contextoPadrao && (
+          <span style={{ fontSize: 11, color: "var(--text-4)" }}>
+            será criada em <strong style={{ color: "var(--text-3)" }}>{contextoPadrao.nome}</strong>
+          </span>
+        )}
+        {erro && <span style={{ fontSize: 11, color: "#e24b4a" }}>{erro}</span>}
       </div>
+    )
+  }
 
-      {expandido && (
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            marginTop: 10,
-            paddingTop: 10,
-            borderTop: "0.5px solid rgba(255,255,255,0.06)",
-          }}
-        >
-          <Campo rotulo="Responsável">
-            <select
-              value={responsavelId}
-              onChange={(e) => setResponsavelId(e.target.value)}
-              className="glass-input"
-              style={seletor}
-              disabled={pending}
-            >
-              <option value="" style={{ color: "#111" }}>Sem responsável</option>
-              {usuarios.map((u) => (
-                <option key={u.id} value={u.id} style={{ color: "#111" }}>
-                  {u.nome}
-                </option>
-              ))}
-            </select>
-          </Campo>
-
-          <Campo rotulo="Prazo">
-            <input
-              type="date"
-              value={prazoEm}
-              onChange={(e) => setPrazoEm(e.target.value)}
-              className="glass-input"
-              style={seletor}
-              disabled={pending}
-            />
-          </Campo>
-
-          <Campo rotulo="Contexto">
-            <select
-              value={contextoId}
-              onChange={(e) => setContextoId(e.target.value)}
-              className="glass-input"
-              style={seletor}
-              disabled={pending}
-            >
-              <option value="" style={{ color: "#111" }}>Nenhum</option>
-              {contextos.map((c) => (
-                <option key={c.id} value={c.id} style={{ color: "#111" }}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </Campo>
-        </div>
-      )}
-
-      {erro && (
-        <p style={{ fontSize: 11, color: "#e24b4a", marginTop: 8 }}>{erro}</p>
-      )}
-    </div>
-  )
-}
-
-const seletor = {
-  fontSize: 12,
-  padding: "7px 10px",
-  borderRadius: 8,
-  minWidth: 140,
-} as const
-
-function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <span
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        flexWrap: "wrap",
+        padding: 10,
+        borderRadius: 10,
+        background: "var(--ws-cal-fundo, var(--surface-1))",
+        border: "1px solid rgba(255,255,255,0.10)",
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        value={titulo}
+        onChange={(e) => setTitulo(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault()
+            salvar()
+          }
+          if (e.key === "Escape") {
+            setTitulo("")
+            setAberto(false)
+          }
+        }}
+        placeholder="Nome da tarefa… (Enter abre os detalhes)"
+        className="glass-input"
+        style={{ flex: "1 1 260px", minWidth: 0, fontSize: 13, padding: "9px 12px", borderRadius: 9 }}
+        disabled={pending}
+        maxLength={300}
+      />
+      <button
+        type="button"
+        onClick={salvar}
+        disabled={pending || titulo.trim() === ""}
+        className="btn-gold-filled"
         style={{
-          fontSize: 10,
-          color: "var(--text-4)",
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
+          fontSize: 12,
+          fontWeight: 700,
+          padding: "9px 18px",
+          borderRadius: 9,
+          opacity: pending || titulo.trim() === "" ? 0.5 : 1,
+          cursor: pending ? "wait" : "pointer",
         }}
       >
-        {rotulo}
-      </span>
-      {children}
-    </label>
+        {pending ? "Criando…" : "Criar e abrir"}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setTitulo("")
+          setAberto(false)
+        }}
+        className="no-ds"
+        style={{ fontSize: 12, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}
+      >
+        Cancelar
+      </button>
+      {erro && <span style={{ fontSize: 11, color: "#e24b4a" }}>{erro}</span>}
+    </div>
   )
 }

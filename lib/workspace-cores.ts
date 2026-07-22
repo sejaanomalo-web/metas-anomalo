@@ -2,40 +2,66 @@
 // Workspace — cores no padrão do Asana. PURO, seguro no browser.
 // =============================================================================
 //
-// A referência visual do módulo é o Asana em dark mode (pasta RefsAsana/).
-// Lá, cada projeto tem uma das 16 cores fixas do seletor "Set color & icon",
-// e o cartão da tarefa no calendário usa essa cor como FUNDO do pill inteiro
-// — não como bolinha decorativa. Este arquivo é a fonte única dessas cores.
+// A referência visual do módulo é o Asana (pastas RefsAsana/ e RefsClientAsana/
+// e o print do cartão vibrante). Cada projeto tem uma das 16 cores fixas do
+// seletor "Set color & icon", e o cartão da tarefa no calendário usa essa cor
+// como FUNDO do pill inteiro — não como bolinha decorativa. Este arquivo é a
+// fonte única dessas cores.
 //
-// O texto do cartão é escolhido por luminância: cartão claro (amarelo, verde-
-// claro) recebe texto escuro; cartão escuro recebe texto claro. É o mesmo
-// comportamento do Asana e evita pill ilegível quando alguém escolher a cor.
+// A paleta é a VIBRANTE (pastéis saturados, tipo o print de referência), não a
+// versão escurecida do dark mode: sobre o cinza do workspace elas saltam e o
+// texto preto por cima é o que dá o contraste máximo. Por isso estiloCartao()
+// sempre usa #1e1f21 no texto — todas as 16 cores são claras o bastante.
 
 export interface CorAsana {
   nome: string
-  /** Fundo do cartão no calendário (tom dark-mode do Asana). */
+  /** Fundo do cartão no calendário. */
   hex: string
 }
 
 /** As 16 cores do seletor do Asana, na MESMA ordem do popover "Set color". */
 export const PALETA_ASANA: CorAsana[] = [
-  { nome: "Nenhuma", hex: "#6d6e6f" },
-  { nome: "Vermelho", hex: "#d1615f" },
-  { nome: "Laranja", hex: "#d17c40" },
-  { nome: "Amarelo-laranja", hex: "#cf9338" },
-  { nome: "Amarelo", hex: "#c7a53b" },
-  { nome: "Verde-amarelo", hex: "#8ea63f" },
-  { nome: "Verde", hex: "#5da283" },
-  { nome: "Verde-azulado", hex: "#43a5a3" },
-  { nome: "Água", hex: "#4aa5c9" },
-  { nome: "Azul", hex: "#5a7fd6" },
-  { nome: "Índigo", hex: "#8578d8" },
-  { nome: "Roxo", hex: "#a170d4" },
-  { nome: "Magenta", hex: "#c65ca8" },
-  { nome: "Rosa-choque", hex: "#e072a4" },
-  { nome: "Rosa", hex: "#d98ca6" },
-  { nome: "Cinza", hex: "#8d9096" },
+  { nome: "Nenhuma", hex: "#b6b8bb" },
+  { nome: "Vermelho", hex: "#f28b82" },
+  { nome: "Laranja", hex: "#f0a06b" },
+  { nome: "Amarelo-laranja", hex: "#f5c164" },
+  { nome: "Amarelo", hex: "#f2da6e" },
+  { nome: "Verde-amarelo", hex: "#c6e585" },
+  { nome: "Verde", hex: "#96e0a1" },
+  { nome: "Verde-azulado", hex: "#7edcc8" },
+  { nome: "Água", hex: "#8ed7ef" },
+  { nome: "Azul", hex: "#93b6f5" },
+  { nome: "Índigo", hex: "#a8a4f2" },
+  { nome: "Roxo", hex: "#c3a2ef" },
+  { nome: "Magenta", hex: "#e5a1e4" },
+  { nome: "Rosa-choque", hex: "#f4a3dc" },
+  { nome: "Rosa", hex: "#f6b2c6" },
+  { nome: "Cinza", hex: "#c2c6cc" },
 ]
+
+/**
+ * Paleta ANTIGA (dark-mode escurecido) → paleta vibrante atual. Serve ao
+ * script scripts/ws-cores-vibrantes.ts: os contextos já gravados no banco
+ * têm os hexes antigos, e trocar só a constante deixaria o banco defasado.
+ */
+export const MIGRACAO_CORES: Record<string, string> = {
+  "#6d6e6f": "#b6b8bb",
+  "#d1615f": "#f28b82",
+  "#d17c40": "#f0a06b",
+  "#cf9338": "#f5c164",
+  "#c7a53b": "#f2da6e",
+  "#8ea63f": "#c6e585",
+  "#5da283": "#96e0a1",
+  "#43a5a3": "#7edcc8",
+  "#4aa5c9": "#8ed7ef",
+  "#5a7fd6": "#93b6f5",
+  "#8578d8": "#a8a4f2",
+  "#a170d4": "#c3a2ef",
+  "#c65ca8": "#e5a1e4",
+  "#e072a4": "#f4a3dc",
+  "#d98ca6": "#f6b2c6",
+  "#8d9096": "#c2c6cc",
+}
 
 /**
  * Nome de cor da API do Asana → hex da paleta. A API usa DOIS vocabulários
@@ -45,39 +71,39 @@ export const PALETA_ASANA: CorAsana[] = [
  */
 const COR_ASANA_POR_NOME: Record<string, string> = {
   // vocabulário novo
-  "red": "#d1615f",
-  "orange": "#d17c40",
-  "yellow-orange": "#cf9338",
-  "yellow": "#c7a53b",
-  "yellow-green": "#8ea63f",
-  "green": "#5da283",
-  "blue-green": "#43a5a3",
-  "aqua": "#4aa5c9",
-  "blue": "#5a7fd6",
-  "indigo": "#8578d8",
-  "purple": "#a170d4",
-  "magenta": "#c65ca8",
-  "hot-pink": "#e072a4",
-  "pink": "#d98ca6",
-  "cool-gray": "#8d9096",
+  "red": "#f28b82",
+  "orange": "#f0a06b",
+  "yellow-orange": "#f5c164",
+  "yellow": "#f2da6e",
+  "yellow-green": "#c6e585",
+  "green": "#96e0a1",
+  "blue-green": "#7edcc8",
+  "aqua": "#8ed7ef",
+  "blue": "#93b6f5",
+  "indigo": "#a8a4f2",
+  "purple": "#c3a2ef",
+  "magenta": "#e5a1e4",
+  "hot-pink": "#f4a3dc",
+  "pink": "#f6b2c6",
+  "cool-gray": "#c2c6cc",
   // vocabulário legado
-  "dark-red": "#d1615f",
-  "dark-orange": "#d17c40",
-  "light-orange": "#cf9338",
-  "dark-brown": "#c7a53b",
-  "light-brown": "#cf9338",
-  "light-green": "#8ea63f",
-  "dark-green": "#5da283",
-  "dark-teal": "#43a5a3",
-  "light-teal": "#4aa5c9",
-  "dark-blue": "#5a7fd6",
-  "light-blue": "#4aa5c9",
-  "dark-purple": "#8578d8",
-  "light-purple": "#a170d4",
-  "dark-pink": "#c65ca8",
-  "light-pink": "#e072a4",
-  "dark-warm-gray": "#8d9096",
-  "light-warm-gray": "#8d9096",
+  "dark-red": "#f28b82",
+  "dark-orange": "#f0a06b",
+  "light-orange": "#f5c164",
+  "dark-brown": "#f2da6e",
+  "light-brown": "#f5c164",
+  "light-green": "#c6e585",
+  "dark-green": "#96e0a1",
+  "dark-teal": "#7edcc8",
+  "light-teal": "#8ed7ef",
+  "dark-blue": "#93b6f5",
+  "light-blue": "#8ed7ef",
+  "dark-purple": "#a8a4f2",
+  "light-purple": "#c3a2ef",
+  "dark-pink": "#e5a1e4",
+  "light-pink": "#f4a3dc",
+  "dark-warm-gray": "#c2c6cc",
+  "light-warm-gray": "#c2c6cc",
 }
 
 /** Cor de projeto do Asana → hex. "none", vazio ou desconhecida → null. */
@@ -100,9 +126,17 @@ function luminancia(hex: string): number {
   )
 }
 
-/** Texto legível sobre a cor dada — escuro em fundo claro, claro em escuro. */
+/**
+ * Texto legível sobre a cor dada — escuro em fundo claro, claro em escuro.
+ *
+ * Limiar 0.28 (não 0.45): a paleta vibrante tem luminância entre ~0.39 (o
+ * vermelho #f28b82) e ~0.75 (o amarelo). Com o limiar antigo o vermelho e o
+ * roxo caíam do lado do BRANCO — texto claro sobre pastel claro, o pior
+ * contraste possível. Abaixo de 0.28 sobram só os tons realmente escuros
+ * (cinza médio pra baixo), onde o branco é a escolha certa.
+ */
 export function textoSobre(hex: string): string {
-  return luminancia(hex) > 0.45 ? "#1e1f21" : "#ffffff"
+  return luminancia(hex) > 0.28 ? "#1e1f21" : "#ffffff"
 }
 
 const HEX_VALIDO = /^#[0-9a-fA-F]{6}$/

@@ -15,6 +15,10 @@
     {
       "path": "/api/crm/sincronizar-contatos",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/workspace/atrasadas",
+      "schedule": "0 12 * * *"
     }
   ]
 }

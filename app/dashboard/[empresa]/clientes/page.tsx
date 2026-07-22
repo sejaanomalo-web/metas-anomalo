@@ -22,7 +22,6 @@ import { listarTokensDaEmpresa } from "@/lib/clientes-actions"
 import {
   getLinhasDoMes,
   getUltimoLogSentinela,
-  proximaExecucao,
   statusSentinela,
 } from "@/lib/sentinela"
 
@@ -70,7 +69,6 @@ export default async function ClientesPage({
       getLinhasDoMes(empresa.nome, inicio, fim),
     ])
   const stat = statusSentinela(ultimoLog)
-  const prox = proximaExecucao()
   const emModoMCP = linhasEmpresa.some((l) => l.coleta_status === "mcp")
   const statusBadge = emModoMCP
     ? { cor: "neutral" as const, rotulo: "MCP" }
@@ -141,7 +139,6 @@ export default async function ClientesPage({
                 statusCor={statusBadge.cor}
                 rotulo={statusBadge.rotulo}
                 ultimaExecucao={ultimoLog?.data_execucao ?? null}
-                proximaLabelCompleto={prox.labelCompleto}
               />
               <GerenciadorClientes
                 empresaNome={empresa.nome}

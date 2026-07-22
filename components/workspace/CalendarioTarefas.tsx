@@ -797,9 +797,9 @@ function CartaoTarefa({
         flexShrink: 0,
       }}
     >
-      {/* Bolinha de concluir: surge no hover (refs bolinha/bolinhaCheck) e
-          fica fixa quando concluída. pointerDown parado: clicar nela não
-          inicia arraste nem abre a tarefa. */}
+      {/* Círculo de concluir: nasce com largura 0 e se abre no hover (refs
+          bolinha/bolinhaCheck) — o título encolhe e a caixa não cresce.
+          pointerDown parado: clicar nele não inicia arraste nem abre a tarefa. */}
       <span
         role="button"
         tabIndex={0}
@@ -815,12 +815,12 @@ function CartaoTarefa({
           }
         }}
       >
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <polyline points="20 6 9 17 4 12" />
         </svg>
       </span>
       {!compacto && (
-        <Avatar nome={tarefa.responsavel_nome} foto={tarefa.responsavel_foto} tamanho={18} />
+        <Avatar nome={tarefa.responsavel_nome} foto={tarefa.responsavel_foto} tamanho={26} />
       )}
       <span className={compacto ? "ws-pill-titulo-1l" : "ws-pill-titulo"}>
         {tarefa.prazo_hora ? `${tarefa.prazo_hora.slice(0, 5)} ` : ""}

@@ -144,6 +144,8 @@ export interface Comentario {
   tarefa_id: string
   autor_id: string | null
   autor_nome: string | null
+  /** Foto de perfil do autor (ws_preferencias), se houver. */
+  autor_foto: string | null
   corpo: string
   created_at: string
   updated_at: string

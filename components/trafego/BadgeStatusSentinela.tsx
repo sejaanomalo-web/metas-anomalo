@@ -1,17 +1,20 @@
 import { formatarMomentoBRT, tempoDecorrido } from "@/lib/sentinela"
 
-/** Pílula compacta com status do Sentinela + última/próxima execução.
- *  Reutilizado em /dashboard/[empresa]/trafego, /clientes e /clientes/[cliente]. */
+/** Pílula compacta com status do Sentinela + quando os dados vieram.
+ *  Reutilizado em /dashboard/[empresa]/trafego, /clientes e /clientes/[cliente].
+ *
+ *  `proximaLabelCompleto` virou LEGADO: desde 20260725_workspace_fase3.sql não
+ *  existe mais horário fixo — a coleta dispara ao abrir a aba de Tráfego. A
+ *  prop continua aceita (as três páginas ainda passam) mas não é exibida. */
 export default function BadgeStatusSentinela({
   statusCor,
   rotulo,
   ultimaExecucao,
-  proximaLabelCompleto,
 }: {
   statusCor: "success" | "warning" | "danger" | "neutral"
   rotulo: string
   ultimaExecucao: string | null
-  proximaLabelCompleto: string
+  proximaLabelCompleto?: string
 }) {
   const corMap = {
     success: { fg: "var(--success)", bg: "var(--success-bg)", border: "rgba(22,163,74,0.25)" },
@@ -69,7 +72,7 @@ export default function BadgeStatusSentinela({
             ? `${formatarMomentoBRT(ultimaExecucao)} BRT`
             : "·"}
         </span>
-        <span>próxima execução: {proximaLabelCompleto}</span>
+        <span>atualiza ao abrir o Tráfego</span>
       </div>
     </div>
   )

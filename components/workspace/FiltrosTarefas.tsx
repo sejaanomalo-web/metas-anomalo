@@ -83,7 +83,7 @@ export default function FiltrosTarefas({
       }}
     >
       {mostrarBusca && (
-        <label style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 220px", minWidth: 0 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 150px", minWidth: 0 }}>
           <Rotulo texto="Buscar" />
           <input
             type="text"

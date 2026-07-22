@@ -3,6 +3,7 @@ import BotaoAtualizarTrafego from "@/components/BotaoAtualizarTrafego"
 import CardEmpresaTrafego from "@/components/CardEmpresaTrafego"
 import DrawerEmpresas from "@/components/DrawerEmpresas"
 import BadgeStatusSentinela from "@/components/trafego/BadgeStatusSentinela"
+import SentinelaAutoRefresh from "@/components/trafego/SentinelaAutoRefresh"
 import PainelKpisResumo, {
   fmtBRLResumo,
 } from "@/components/trafego/PainelKpisResumo"
@@ -12,7 +13,6 @@ import { periodoQS } from "@/lib/periodo-url"
 import {
   getResumoPorIntervaloPorEmpresa,
   getUltimoLogSentinela,
-  proximaExecucao,
   statusSentinela,
 } from "@/lib/sentinela"
 import {
@@ -70,7 +70,6 @@ export default async function TrafegoOverviewPage({
       getResumosClientesTodasAssessorias(periodo.de, periodo.ate),
     ])
   const stat = statusSentinela(ultimoLog)
-  const prox = proximaExecucao()
   const supabaseOk = supabaseConfigurado()
 
   // Ponte MCP: enquanto a Sentinela está fora (app do Meta) e a coleta vem
@@ -102,6 +101,8 @@ export default async function TrafegoOverviewPage({
 
   return (
     <>
+      {/* Abrir a aba já dispara a coleta (substitui o cron das 09:00). */}
+      <SentinelaAutoRefresh />
       <main
         className="mx-auto px-8 py-10 space-y-8"
         style={{ maxWidth: 1280 }}
@@ -147,7 +148,6 @@ export default async function TrafegoOverviewPage({
                 statusCor={statusBadge.cor}
                 rotulo={statusBadge.rotulo}
                 ultimaExecucao={ultimoLog?.data_execucao ?? null}
-                proximaLabelCompleto={prox.labelCompleto}
               />
               <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
             </div>

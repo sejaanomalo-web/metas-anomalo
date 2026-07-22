@@ -17,7 +17,6 @@ import { getEmpresaAsync } from "@/lib/empresas-actions"
 import {
   getUltimoLogSentinela,
   inicioJanela6Meses,
-  proximaExecucao,
   resumirTrafego,
   serieMensalDeLinhas,
   statusSentinela,
@@ -87,7 +86,6 @@ export default async function ClienteTrafegoPage({
   const serie = serieMensalDeLinhas(linhas6m)
   const nomeExibido = clienteDisplayName(cliente)
   const stat = statusSentinela(ultimoLog)
-  const prox = proximaExecucao()
   const emModoMCP = linhas.some((l) => l.coleta_status === "mcp")
   const statusBadge = emModoMCP
     ? { cor: "neutral" as const, rotulo: "MCP" }
@@ -175,7 +173,6 @@ export default async function ClienteTrafegoPage({
                 statusCor={statusBadge.cor}
                 rotulo={statusBadge.rotulo}
                 ultimaExecucao={ultimoLog?.data_execucao ?? null}
-                proximaLabelCompleto={prox.labelCompleto}
               />
             </div>
           </div>

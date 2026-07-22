@@ -559,15 +559,32 @@ export async function listarComentarios(tarefaId: string): Promise<Comentario[]>
     console.error("[workspace] listarComentarios error", error.message)
     return []
   }
-  return ((data ?? []) as unknown as (Comentario & {
+
+  // Foto de perfil do autor (ws_preferencias) — 1 query pro lote inteiro,
+  // pra o avatar do comentário ser o MESMO que aparece no calendário.
+  const linhas = (data ?? []) as unknown as (Comentario & {
     usuarios: { nome: string } | { nome: string }[] | null
-  })[]).map((c) => {
+  })[]
+  const autores = [...new Set(linhas.map((c) => c.autor_id).filter(Boolean))] as string[]
+  const fotoPorUsuario = new Map<string, string>()
+  if (autores.length > 0) {
+    const { data: prefs } = await supabase
+      .from("ws_preferencias")
+      .select("usuario_id, foto_url")
+      .in("usuario_id", autores)
+    for (const p of (prefs ?? []) as { usuario_id: string; foto_url: string | null }[]) {
+      if (p.foto_url) fotoPorUsuario.set(p.usuario_id, p.foto_url)
+    }
+  }
+
+  return linhas.map((c) => {
     const u = Array.isArray(c.usuarios) ? c.usuarios[0] : c.usuarios
     return {
       id: c.id,
       tarefa_id: c.tarefa_id,
       autor_id: c.autor_id,
       autor_nome: u?.nome ?? null,
+      autor_foto: c.autor_id ? fotoPorUsuario.get(c.autor_id) ?? null : null,
       corpo: c.corpo,
       created_at: c.created_at,
       updated_at: c.updated_at,

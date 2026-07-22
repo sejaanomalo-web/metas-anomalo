@@ -143,8 +143,9 @@ export default function LinhaTarefa({
         <span
           style={{
             display: "block",
-            fontSize: 13,
-            fontWeight: 600,
+            fontSize: 13.5,
+            fontWeight: 700,
+            letterSpacing: "0.005em",
             color: concluidaLocal ? "var(--text-4)" : "var(--text-1)",
             textDecoration: concluidaLocal ? "line-through" : "none",
             overflow: "hidden",
@@ -160,7 +161,7 @@ export default function LinhaTarefa({
             style={{
               display: "block",
               fontSize: 11,
-              color: "var(--text-4)",
+              color: "var(--text-3)",
               marginTop: 2,
               overflow: "hidden",
               textOverflow: "ellipsis",

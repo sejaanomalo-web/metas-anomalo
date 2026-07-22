@@ -51,16 +51,44 @@ export default function ListaTarefas({
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                padding: "0 2px 2px",
+                padding: "2px 2px 6px",
+                borderBottom: "1px solid rgba(255,255,255,0.07)",
+                marginBottom: 2,
               }}
             >
+              {/* Bolinha na cor do grupo: dá âncora visual ao bloco sem
+                  depender do título colorido (que some no fundo escuro). */}
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 3,
+                  flexShrink: 0,
+                  background: g.cor ?? "var(--text-4)",
+                }}
+              />
               <span
                 className="ds-label"
-                style={{ fontSize: 11, color: g.cor ?? "var(--text-3)", fontWeight: 700 }}
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-1)",
+                  fontWeight: 700,
+                  letterSpacing: "0.03em",
+                }}
               >
                 {g.titulo}
               </span>
-              <span style={{ fontSize: 10, color: "var(--text-4)" }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "var(--text-3)",
+                  background: "rgba(255,255,255,0.08)",
+                  padding: "1px 7px",
+                  borderRadius: 999,
+                }}
+              >
                 {g.tarefas.length}
               </span>
             </header>

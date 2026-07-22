@@ -121,7 +121,6 @@ export default async function ClienteWorkspacePage({
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <CriacaoRapida
           contextos={contextos}
-          usuarios={usuarios}
           contextoPadraoId={contexto.id}
           meuUsuarioId={usuario.id}
         />
