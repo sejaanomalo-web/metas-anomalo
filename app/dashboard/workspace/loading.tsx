@@ -1,29 +1,24 @@
 /**
- * Skeleton do Workspace. Todas as rotas do módulo são dinâmicas (dados do
- * servidor a cada navegação) — sem este boundary, trocar de aba deixava a
- * tela ANTIGA congelada até o servidor responder, que é o "travamento"
- * percebido. Com ele, a troca é instantânea e o esqueleto pulsa enquanto
- * os dados chegam.
+ * Skeleton do Workspace, na MESMA moldura fixa das páginas (.ws-main):
+ * trocar de aba renderiza esta casca na hora — o cinza não muda de tamanho
+ * e o esqueleto pulsa até os dados chegarem, sem corte seco.
  */
 export default function WorkspaceLoading() {
   return (
-    <main
-      className="ws-main"
-      style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}
-      aria-busy="true"
-      aria-label="Carregando o Workspace"
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <main className="ws-main" aria-busy="true" aria-label="Carregando o Workspace">
+      <div className="ws-topo">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 0 8px" }}>
           <span style={{ ...bloco, width: 34, height: 34, borderRadius: 8 }} />
           <span style={{ ...bloco, width: 160, height: 22 }} />
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, paddingBottom: 8 }}>
           {[70, 90, 76, 66, 80, 72].map((w, i) => (
             <span key={i} style={{ ...bloco, width: w, height: 14 }} />
           ))}
         </div>
-        <span style={{ ...bloco, width: "100%", height: "56vh", borderRadius: 12 }} />
+      </div>
+      <div className="ws-conteudo">
+        <span style={{ ...bloco, width: "100%", flex: 1, borderRadius: 12 }} />
       </div>
     </main>
   )

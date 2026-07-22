@@ -108,9 +108,11 @@ export default async function ClientesPage() {
   const empresas = gruposOrdenados.map((g) => g.empresa).filter((e) => e !== "Sem empresa")
 
   return (
-    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <main className="ws-main">
+      <div className="ws-topo">
         <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome }} />
+      </div>
+      <div className="ws-conteudo">
         <ClientesPainel grupos={gruposOrdenados} empresas={empresas} />
       </div>
     </main>

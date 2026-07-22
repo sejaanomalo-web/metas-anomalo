@@ -92,10 +92,10 @@ export default async function WorkspacePage({
   }
 
   return (
-    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1120, margin: "0 auto" }}>
+    <main className="ws-main">
       <WorkspaceRealtime />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="ws-topo">
         <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome }} />
 
         <CriacaoRapida
@@ -106,7 +106,9 @@ export default async function WorkspacePage({
         />
 
         <FiltrosTarefas contextos={contextos} usuarios={usuarios} />
+      </div>
 
+      <div className="ws-conteudo">
         <ListaTarefas
           tarefas={tarefas}
           hoje={hoje}

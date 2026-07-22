@@ -19,6 +19,8 @@ export default function FiltrosTarefas({
   mostrarAgrupamento = true,
   mostrarBusca = true,
   situacaoPadrao = "pendentes",
+  rotuloContexto = "Contexto",
+  placeholderBusca = "Título ou descrição…",
 }: {
   contextos: Contexto[]
   usuarios: { id: string; nome: string }[]
@@ -30,6 +32,9 @@ export default function FiltrosTarefas({
    *  como no Asana). O seletor precisa refletir o MESMO padrão da consulta,
    *  senão ele mostra um valor e a página filtra por outro. */
   situacaoPadrao?: "pendentes" | "todas"
+  /** Rótulo do seletor de contexto — o calendário chama de "Cliente". */
+  rotuloContexto?: string
+  placeholderBusca?: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -84,7 +89,7 @@ export default function FiltrosTarefas({
             type="text"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Título ou descrição…"
+            placeholder={placeholderBusca}
             className="glass-input"
             style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, width: "100%" }}
           />
@@ -120,7 +125,7 @@ export default function FiltrosTarefas({
       />
 
       <Seletor
-        rotulo="Contexto"
+        rotulo={rotuloContexto}
         valor={contexto}
         onChange={(v) => aplicar({ contexto: v })}
         opcoes={[

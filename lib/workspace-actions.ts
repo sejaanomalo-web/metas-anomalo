@@ -1735,3 +1735,47 @@ export async function reordenarContextosAction(
   revalidatePath(ROTA)
   return { ok: true }
 }
+
+/**
+ * Exclui um GRUPO de empresa do Workspace (soft): arquiva a âncora tipo
+ * 'empresa'. Só permite com o grupo VAZIO — se ainda há clientes nele, o
+ * caminho certo é arrastá-los pra outro grupo primeiro; excluir junto
+ * esconderia áreas de trabalho inteiras sem ninguém pedir.
+ */
+export async function excluirEmpresaWsAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const nome = texto(formData, "nome", 120)
+  if (!nome) return { ok: false, erro: "Empresa inválida." }
+
+  const { count } = await db
+    .from("ws_contextos")
+    .select("id", { count: "exact", head: true })
+    .eq("tipo", "cliente")
+    .eq("empresa_nome", nome)
+    .is("arquivado_em", null)
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      erro: "Mova ou exclua os clientes deste grupo antes de excluir a empresa.",
+    }
+  }
+
+  const { error } = await db
+    .from("ws_contextos")
+    .update({ arquivado_em: new Date().toISOString() })
+    .eq("tipo", "empresa")
+    .eq("empresa_nome", nome)
+    .is("arquivado_em", null)
+  if (error) {
+    console.error("[workspace] excluirEmpresaWs error", error.message)
+    return { ok: false, erro: "Não foi possível excluir." }
+  }
+  revalidatePath(ROTA)
+  return { ok: true }
+}

@@ -103,9 +103,9 @@ export default async function AbaCustomPage({
   }
 
   return (
-    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
+    <main className="ws-main">
       <WorkspaceRealtime />
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="ws-topo">
         <WorkspaceNav
           abas={abas}
           presenca={{ id: usuario.id, nome: usuario.nome, foto: pref.foto_url }}
@@ -140,8 +140,8 @@ export default async function AbaCustomPage({
             </nav>
           )}
         </div>
-        {conteudo}
       </div>
+      <div className="ws-conteudo">{conteudo}</div>
 
       {tarefaAberta && (
         <DrawerServidor tarefaId={tarefaAberta} souAdmin={usuario.papel === "admin"} />

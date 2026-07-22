@@ -1348,14 +1348,58 @@ table {
   --ws-cal-borda: rgba(255, 255, 255, 0.10);
 }
 
-/* A área do Workspace INTEIRA (lista, clientes, minhas, notas…) fica no
- * cinza do Asana — se diferencia do preto puro do resto do sistema e faz
- * os cartões coloridos saltarem. */
+/* A área do Workspace INTEIRA fica no cinza do Asana e tem TAMANHO FIXO:
+ * mesma largura e mesma altura em toda aba (lista, calendário, clientes…).
+ * A janela nunca rola — quem rola é o MIOLO (.ws-conteudo), com o cabeçalho
+ * e as abas sempre visíveis no topo. */
 .ws-main {
   background: var(--ws-fundo);
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  margin-top: 10px;
+  width: calc(100% - 24px);
+  max-width: 1280px;
+  height: calc(100dvh - 20px);
+  margin: 10px auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Cabeçalho fixo da área: título + abas (+ filtros, quando a página quiser). */
+.ws-topo {
+  flex-shrink: 0;
+  padding: 14px 18px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* O miolo é o ÚNICO scroll da área. Fade suave a cada troca de conteúdo. */
+.ws-conteudo {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  animation: wsFade 0.22s ease;
+}
+
+@keyframes wsFade {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 1023px) {
+  /* app-main ganha padding-top 56px no mobile (trigger do menu). */
+  .ws-main {
+    height: calc(100dvh - 76px);
+    width: calc(100% - 16px);
+  }
 }
 
 @keyframes pulse {
@@ -1405,6 +1449,15 @@ table {
   background: rgba(255, 255, 255, 0.07);
 }
 
+/* A raiz do calendário preenche o miolo — a grade herda a altura que sobra
+ * depois da barra de ferramentas, sem depender de contas com vh. */
+.ws-cal-raiz {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .ws-cal-semana {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -1412,8 +1465,8 @@ table {
   border-radius: 10px;
   overflow: hidden;
   background: var(--ws-cal-fundo);
-  height: calc(100vh - 250px);
-  min-height: 420px;
+  height: 100%;
+  min-height: 320px;
 }
 
 .ws-cal-coluna {
@@ -1458,7 +1511,6 @@ table {
     display: flex;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    height: calc(100dvh - 220px);
   }
   .ws-cal-coluna {
     flex: 0 0 210px;
@@ -1481,6 +1533,36 @@ table {
 }
 .ws-pill:hover {
   filter: brightness(1.08);
+}
+
+/* Bolinha de concluir no cartão (refs bolinha.png/bolinhaCheck.png):
+ * invisível até o hover do cartão; concluída fica sempre visível. */
+.ws-pill-bolinha {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.ws-pill:hover .ws-pill-bolinha,
+.ws-pill-bolinha:focus-visible,
+.ws-pill-bolinha[data-concluida="1"] {
+  opacity: 1;
+}
+.ws-pill-bolinha:hover,
+.ws-pill-bolinha[data-concluida="1"] {
+  background: #5da283;
+  border-color: #5da283;
+  color: #fff;
 }
 
 .ws-pill-titulo {
@@ -1548,8 +1630,8 @@ table {
   border-radius: 10px;
   overflow: hidden;
   background: var(--ws-cal-fundo);
-  height: calc(100vh - 250px);
-  min-height: 420px;
+  flex: 1;
+  min-height: 320px;
 }
 
 .ws-notas-lista {

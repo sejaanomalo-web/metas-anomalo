@@ -77,21 +77,25 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
   const tarefaAberta = um(searchParams, "tarefa")
 
   return (
-    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
+    <main className="ws-main">
       <WorkspaceRealtime />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="ws-topo">
         <WorkspaceNav
           abas={abas}
           presenca={{ id: usuario.id, nome: usuario.nome, foto: pref.foto_url }}
         />
         <FiltrosTarefas
-          contextos={contextos}
+          contextos={contextos.filter((c) => c.tipo === "cliente")}
           usuarios={usuarios}
           mostrarAgrupamento={false}
-          mostrarBusca={false}
           situacaoPadrao="todas"
+          rotuloContexto="Cliente"
+          placeholderBusca="Pesquisar tarefa, data, cliente, responsável…"
         />
+      </div>
+
+      <div className="ws-conteudo">
         <CalendarioTarefas
           modo={modo}
           semana={semana}
@@ -102,6 +106,7 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
           hoje={hoje}
           meuUsuarioId={usuario.id}
           modoCor={pref.modo_cor}
+          busca={um(searchParams, "q") ?? ""}
         />
       </div>
 

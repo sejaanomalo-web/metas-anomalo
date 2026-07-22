@@ -75,7 +75,7 @@ export default function LinhaTarefa({
 
   return (
     <div
-      className="glass glass-hover"
+      className="glass-hover"
       style={{
         display: "flex",
         alignItems: "flex-start",
@@ -84,12 +84,17 @@ export default function LinhaTarefa({
         borderRadius: 10,
         opacity: pending ? 0.6 : 1,
         transition: "opacity 0.15s ease",
+        // Fundo firme (superfície do calendário) + tinta e barra na cor do
+        // cliente — a linha ganha identidade sem virar um bloco ilegível.
+        border: "1px solid rgba(255,255,255,0.07)",
         ...(corCliente
           ? {
-              background: tinta(corCliente, 0.16),
-              borderLeft: `3px solid ${corCliente}`,
+              background: `linear-gradient(0deg, ${tinta(corCliente, 0.22)}, ${tinta(corCliente, 0.22)}), var(--ws-cal-fundo, var(--surface-1))`,
+              borderLeft: `4px solid ${corCliente}`,
             }
-          : {}),
+          : {
+              background: "var(--ws-cal-fundo, var(--surface-1))",
+            }),
       }}
     >
       <button
@@ -228,10 +233,13 @@ function Chip({ texto, cor }: { texto: string; cor?: string }) {
         alignItems: "center",
         gap: 4,
         fontSize: 10,
+        fontWeight: 600,
         padding: "2px 7px",
         borderRadius: 999,
-        background: "var(--surface-3)",
-        color: "var(--text-3)",
+        // Fundo escuro sólido: legível sobre QUALQUER tinta de linha —
+        // acabou o "vermelho dentro de vermelho".
+        background: "rgba(0,0,0,0.38)",
+        color: "var(--text-2)",
         whiteSpace: "nowrap",
       }}
     >
@@ -262,12 +270,10 @@ function ChipPrazo({
   atrasada: boolean
   hoje: boolean
 }) {
-  const cor = atrasada ? "#e24b4a" : hoje ? "var(--accent)" : "var(--text-3)"
-  const fundo = atrasada
-    ? "rgba(226,75,74,0.12)"
-    : hoje
-      ? "rgba(201,149,58,0.14)"
-      : "var(--surface-3)"
+  // Sólido com texto branco: contraste garantido mesmo sobre linha tingida
+  // da mesma cor (atrasada vermelha em linha vermelha, etc).
+  const cor = atrasada || hoje ? "#fff" : "var(--text-2)"
+  const fundo = atrasada ? "#c94b49" : hoje ? "#8a6420" : "rgba(0,0,0,0.38)"
   return (
     <span
       style={{
@@ -275,7 +281,7 @@ function ChipPrazo({
         alignItems: "center",
         gap: 4,
         fontSize: 10,
-        fontWeight: atrasada || hoje ? 700 : 500,
+        fontWeight: atrasada || hoje ? 700 : 600,
         padding: "2px 7px",
         borderRadius: 999,
         background: fundo,

@@ -32,8 +32,15 @@ export default function NotasWorkspace({
   const [erro, setErro] = useState<string | null>(null)
   const [salvo, setSalvo] = useState(false)
   const [ativaId, setAtivaId] = useState<string | null>(notas[0]?.id ?? null)
+  // Título digitado agora: reflete na lista da esquerda INSTANTANEAMENTE,
+  // sem esperar o autosave + refresh do servidor.
+  const [titulosLocais, setTitulosLocais] = useState<Record<string, string>>({})
 
   const ativa = notas.find((n) => n.id === ativaId) ?? notas[0] ?? null
+
+  function tituloDe(n: Nota): string {
+    return titulosLocais[n.id] ?? n.titulo
+  }
 
   function nova() {
     setErro(null)
@@ -115,7 +122,7 @@ export default function NotasWorkspace({
                 whiteSpace: "nowrap",
               }}
             >
-              {n.titulo || "Sem título"}
+              {tituloDe(n) || "Sem título"}
             </span>
             <span style={{ fontSize: 10, color: "var(--text-4)" }}>
               {new Date(n.updated_at).toLocaleDateString("pt-BR", {
@@ -136,6 +143,9 @@ export default function NotasWorkspace({
             nota={ativa}
             onErro={setErro}
             onSalvo={() => setSalvo(true)}
+            onTitulo={(t) =>
+              setTitulosLocais((m) => ({ ...m, [ativa.id]: t }))
+            }
             onExcluida={() => {
               setAtivaId(null)
               router.refresh()
@@ -170,11 +180,13 @@ function EditorNota({
   nota,
   onErro,
   onSalvo,
+  onTitulo,
   onExcluida,
 }: {
   nota: Nota
   onErro: (e: string | null) => void
   onSalvo: () => void
+  onTitulo: (titulo: string) => void
   onExcluida: () => void
 }) {
   const [titulo, setTitulo] = useState(nota.titulo)
@@ -289,6 +301,7 @@ function EditorNota({
         value={titulo}
         onChange={(e) => {
           setTitulo(e.target.value)
+          onTitulo(e.target.value) // lista da esquerda atualiza na hora
           agendarSalvar({ titulo: e.target.value })
         }}
         placeholder="Título da nota"

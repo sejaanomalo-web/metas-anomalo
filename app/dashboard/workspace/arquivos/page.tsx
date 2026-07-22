@@ -18,9 +18,11 @@ export default async function ArquivosPage() {
   ])
 
   return (
-    <main className="ws-main" style={{ padding: "16px 16px 48px", maxWidth: 1280, margin: "0 auto" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <main className="ws-main">
+      <div className="ws-topo">
         <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome }} />
+      </div>
+      <div className="ws-conteudo">
         <NotasWorkspace notas={notas} escopo={{ fixa: "arquivos" }} />
       </div>
     </main>

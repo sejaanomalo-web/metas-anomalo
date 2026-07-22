@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities"
 import {
   criarClienteWorkspaceAction,
   criarEmpresaWsAction,
+  excluirEmpresaWsAction,
   garantirContextoDoClienteAction,
   renomearEmpresaWsAction,
   reordenarContextosAction,
@@ -296,9 +297,25 @@ function Grupo({ empresa, itens }: { empresa: string; itens: ItemCliente[] }) {
   const [editando, setEditando] = useState(false)
   const [nome, setNome] = useState(empresa)
   const [erro, setErro] = useState<string | null>(null)
+  const [confirmandoExcluir, setConfirmandoExcluir] = useState(false)
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `${PREFIXO_GRUPO}${empresa}` })
+
+  function excluir() {
+    setErro(null)
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set("nome", empresa)
+      const r = await excluirEmpresaWsAction(fd)
+      if (!r.ok) {
+        setErro(r.erro ?? "Não foi possível excluir.")
+        setConfirmandoExcluir(false)
+        return
+      }
+      router.refresh()
+    })
+  }
 
   function renomear() {
     const n = nome.trim()
@@ -371,6 +388,39 @@ function Grupo({ empresa, itens }: { empresa: string; itens: ItemCliente[] }) {
             <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
           </svg>
         </button>
+        {editando &&
+          (confirmandoExcluir ? (
+            <>
+              <button
+                type="button"
+                onClick={excluir}
+                disabled={pending}
+                className="no-ds"
+                style={botaoExcluirGrupo}
+              >
+                Confirmar exclusão
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmandoExcluir(false)}
+                className="no-ds"
+                style={{ fontSize: 11, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}
+              >
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmandoExcluir(true)}
+              disabled={pending}
+              className="no-ds"
+              style={botaoExcluirGrupo}
+              title="Excluir empresa (só com o grupo vazio)"
+            >
+              Excluir
+            </button>
+          ))}
         <span style={{ fontSize: 10, color: "var(--text-4)" }}>{itens.length}</span>
         {erro && <span style={{ fontSize: 10, color: "#e24b4a" }}>{erro}</span>}
       </div>
@@ -739,6 +789,17 @@ function NovoCliente({ empresas, aoFechar }: { empresas: string[]; aoFechar: () 
 }
 
 /* =================== Estilos =================== */
+
+const botaoExcluirGrupo: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  padding: "4px 10px",
+  borderRadius: 6,
+  border: "1px solid rgba(226,75,74,0.4)",
+  background: "transparent",
+  color: "#e24b4a",
+  cursor: "pointer",
+}
 
 const botaoPrimario: React.CSSProperties = {
   display: "inline-flex",

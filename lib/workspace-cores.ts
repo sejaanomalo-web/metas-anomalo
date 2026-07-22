@@ -109,9 +109,9 @@ const HEX_VALIDO = /^#[0-9a-fA-F]{6}$/
 
 /**
  * Estilo do cartão de tarefa no calendário, fiel ao Asana:
- * com cor de contexto → pill sólido naquela cor; sem cor → pill neutro
- * (borda, fundo da superfície), como o "Criar Carrosséis" dos prints.
- * Concluída mantém a cor (o ✓ é quem comunica) — o Asana não apaga o cartão.
+ * com cor de contexto → pill sólido naquela cor com texto PRETO (pedido de
+ * legibilidade: as cores da paleta são médias e o escuro lê melhor em todas);
+ * sem cor → pill neutro (borda, fundo da superfície).
  */
 export function estiloCartao(cor: string | null | undefined): {
   background: string
@@ -119,7 +119,7 @@ export function estiloCartao(cor: string | null | undefined): {
   border: string
 } {
   if (cor && HEX_VALIDO.test(cor)) {
-    return { background: cor, color: textoSobre(cor), border: "none" }
+    return { background: cor, color: "#1e1f21", border: "none" }
   }
   return {
     background: "var(--surface-1)",

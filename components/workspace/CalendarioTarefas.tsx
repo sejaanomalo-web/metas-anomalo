@@ -15,6 +15,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import {
+  alternarConclusaoAction,
   criarTarefaAction,
   moverTarefaCalendarioAction,
   reordenarDiaAction,
@@ -58,6 +59,7 @@ export default function CalendarioTarefas({
   meuUsuarioId,
   contextoFixoId,
   modoCor = "colorido",
+  busca = "",
 }: {
   modo: "semana" | "mes"
   /** Domingo da semana exibida (modo semana). */
@@ -72,9 +74,14 @@ export default function CalendarioTarefas({
   contextoFixoId?: string
   /** Preferência do usuário: 'mono' tira a cor dos cartões. */
   modoCor?: "colorido" | "mono"
+  /** Pesquisa livre (?q=): filtra por título, data, cliente e responsável. */
+  busca?: string
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  // Transição de navegação separada: trocar de semana/mês mantém a grade
+  // atual na tela (sem flash de skeleton) até o servidor responder.
+  const [navPending, startNav] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
   const [mostrarSemData, setMostrarSemData] = useState(false)
 
@@ -83,17 +90,38 @@ export default function CalendarioTarefas({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   )
 
+  // Pesquisa geral: título, descrição, data (ISO e DD/MM), cliente/contexto
+  // e responsável — tudo client-side sobre o período já carregado.
+  const [tarefasVisiveis, semDataVisiveis] = useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    if (!q) return [tarefas, semData] as const
+    const bate = (t: TarefaComRelacoes) => {
+      if (t.titulo.toLowerCase().includes(q)) return true
+      if (t.descricao?.toLowerCase().includes(q)) return true
+      if (t.responsavel_nome?.toLowerCase().includes(q)) return true
+      if (t.contextos.some((c) => c.nome.toLowerCase().includes(q))) return true
+      if (t.prazo_em) {
+        const [a, m, d] = t.prazo_em.split("-")
+        if (t.prazo_em.includes(q) || `${d}/${m}`.includes(q) || `${d}/${m}/${a}`.includes(q)) {
+          return true
+        }
+      }
+      return false
+    }
+    return [tarefas.filter(bate), semData.filter(bate)] as const
+  }, [tarefas, semData, busca])
+
   const porId = useMemo(() => {
     const m = new Map<string, TarefaComRelacoes>()
-    for (const t of [...tarefas, ...semData]) m.set(t.id, t)
+    for (const t of [...tarefasVisiveis, ...semDataVisiveis]) m.set(t.id, t)
     return m
-  }, [tarefas, semData])
+  }, [tarefasVisiveis, semDataVisiveis])
 
   // Layout otimista: dia -> ids ordenados. Reconstrói quando o servidor manda
   // dados novos; durante o arraste é a única fonte da verdade visual.
   const layoutServidor = useMemo(() => {
     const mapa: Record<string, string[]> = { [BANDEJA]: [] }
-    const ordenadas = [...tarefas].sort(
+    const ordenadas = [...tarefasVisiveis].sort(
       (a, b) =>
         a.ordem - b.ordem ||
         (a.prazo_hora ?? "").localeCompare(b.prazo_hora ?? "") ||
@@ -103,9 +131,9 @@ export default function CalendarioTarefas({
       if (!t.prazo_em) continue
       ;(mapa[t.prazo_em] ??= []).push(t.id)
     }
-    for (const t of semData) mapa[BANDEJA].push(t.id)
+    for (const t of semDataVisiveis) mapa[BANDEJA].push(t.id)
     return mapa
-  }, [tarefas, semData])
+  }, [tarefasVisiveis, semDataVisiveis])
 
   const [layout, setLayout] = useState(layoutServidor)
   useEffect(() => setLayout(layoutServidor), [layoutServidor])
@@ -118,7 +146,11 @@ export default function CalendarioTarefas({
     }
     qs.delete("tarefa")
     const s = qs.toString()
-    router.push(s ? `${pathname}?${s}` : pathname, { scroll: false })
+    // startTransition: a grade atual permanece na tela enquanto a nova
+    // semana carrega — sem corte seco nem flash de skeleton.
+    startNav(() => {
+      router.push(s ? `${pathname}?${s}` : pathname, { scroll: false })
+    })
   }
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -228,7 +260,7 @@ export default function CalendarioTarefas({
       onDragOver={aoArrastarSobre}
       onDragEnd={aoSoltar}
     >
-      <div style={{ display: "flex", flexDirection: "column" }}>
+      <div className="ws-cal-raiz" style={{ opacity: navPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
         {/* ---------- Barra de ferramentas ---------- */}
         <div
           style={{
@@ -264,7 +296,11 @@ export default function CalendarioTarefas({
           </button>
           <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-2)" }}>{rotulo}</span>
 
-          {pending && <span style={{ fontSize: 11, color: "var(--text-4)" }}>Salvando…</span>}
+          {(pending || navPending) && (
+            <span style={{ fontSize: 11, color: "var(--text-4)" }}>
+              {navPending ? "Carregando…" : "Salvando…"}
+            </span>
+          )}
           {erro && <span style={{ fontSize: 11, color: "#e24b4a" }}>{erro}</span>}
 
           <span style={{ flex: 1 }} />
@@ -300,8 +336,8 @@ export default function CalendarioTarefas({
           </select>
         </div>
 
-        <div style={{ display: "flex", gap: 0, alignItems: "stretch" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 0, alignItems: "stretch", flex: 1, minHeight: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, height: "100%" }}>
             {modo === "semana" ? (
               <div className="ws-cal-semana">
                 {dias.map((iso, i) => (
@@ -659,7 +695,7 @@ function Bandeja({
         flexDirection: "column",
         gap: 6,
         background: "var(--ws-cal-fundo, var(--surface-1))",
-        maxHeight: "70vh",
+        height: "100%",
         overflowY: "auto",
       }}
     >
@@ -695,9 +731,15 @@ function CartaoTarefa({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const [pendingCheck, startCheck] = useTransition()
+  // Otimista: a bolinha marca/desmarca na hora; o servidor confirma depois.
+  const [concluidaLocal, setConcluidaLocal] = useState(Boolean(tarefa.concluida_em))
+  useEffect(() => {
+    setConcluidaLocal(Boolean(tarefa.concluida_em))
+  }, [tarefa.concluida_em])
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: tarefa.id })
-  const concluida = Boolean(tarefa.concluida_em)
   // Cor do CLIENTE vence a do contexto genérico (Calendário de conteúdo).
   const cor = modoCor === "mono" ? null : corDaTarefa(tarefa.contextos)
   const estilo = estiloCartao(cor)
@@ -708,11 +750,34 @@ function CartaoTarefa({
     router.push(`${pathname}?${qs.toString()}`, { scroll: false })
   }
 
+  function alternarConclusao(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (pendingCheck) return
+    const alvo = !concluidaLocal
+    setConcluidaLocal(alvo)
+    startCheck(async () => {
+      const fd = new FormData()
+      fd.set("id", tarefa.id)
+      fd.set("concluir", alvo ? "1" : "0")
+      const r = await alternarConclusaoAction(fd)
+      if (!r.ok) {
+        setConcluidaLocal(!alvo) // reverte
+        return
+      }
+      router.refresh()
+    })
+  }
+
   return (
-    <button
+    // div[role=button], não <button>: a bolinha interna também é interativa
+    // e botão dentro de botão é HTML inválido (foco e Enter quebram).
+    // attributes do dnd-kit já trazem role="button" e tabIndex.
+    <div
       ref={setNodeRef}
-      type="button"
       onClick={abrir}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") abrir()
+      }}
       {...listeners}
       {...attributes}
       title={tarefa.titulo}
@@ -722,37 +787,45 @@ function CartaoTarefa({
         color: estilo.color,
         border: estilo.border,
         padding: compacto ? "3px 6px" : "6px 8px",
-        cursor: isDragging ? "grabbing" : "grab",
-        opacity: isDragging ? 0.35 : 1,
+        // Mão de clicar por padrão; a de agarrar só DURANTE o arraste.
+        cursor: isDragging ? "grabbing" : "pointer",
+        // Concluída fica bem apagada (ref printTarefa.png).
+        opacity: isDragging ? 0.35 : concluidaLocal ? 0.38 : 1,
         transform: CSS.Transform.toString(transform),
         transition,
         zIndex: isDragging ? 10 : undefined,
         flexShrink: 0,
       }}
     >
-      {!compacto && (
-        <Avatar nome={tarefa.responsavel_nome} foto={tarefa.responsavel_foto} tamanho={18} />
-      )}
-      {concluida && (
-        <svg
-          width={compacto ? 10 : 12}
-          height={compacto ? 10 : 12}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-label="Concluída"
-          style={{ flexShrink: 0, opacity: 0.9 }}
-        >
+      {/* Bolinha de concluir: surge no hover (refs bolinha/bolinhaCheck) e
+          fica fixa quando concluída. pointerDown parado: clicar nela não
+          inicia arraste nem abre a tarefa. */}
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label={concluidaLocal ? "Reabrir tarefa" : "Concluir tarefa"}
+        data-concluida={concluidaLocal ? "1" : "0"}
+        className="ws-pill-bolinha"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={alternarConclusao}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            alternarConclusao(e as unknown as React.MouseEvent)
+          }
+        }}
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <polyline points="20 6 9 17 4 12" />
         </svg>
+      </span>
+      {!compacto && (
+        <Avatar nome={tarefa.responsavel_nome} foto={tarefa.responsavel_foto} tamanho={18} />
       )}
       <span className={compacto ? "ws-pill-titulo-1l" : "ws-pill-titulo"}>
         {tarefa.prazo_hora ? `${tarefa.prazo_hora.slice(0, 5)} ` : ""}
         {tarefa.titulo}
       </span>
-    </button>
+    </div>
   )
 }
