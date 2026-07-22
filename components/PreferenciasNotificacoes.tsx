@@ -45,6 +45,12 @@ const ITENS: { chave: Tipo; rotulo: string; descricao: string }[] = [
     descricao:
       "Na manhã do dia de cada compromisso do calendário do CRM (ex: “Reunião com o David às 9:00”)",
   },
+  {
+    chave: "ws_tarefa",
+    rotulo: "Tarefas do Workspace",
+    descricao:
+      "Quando te atribuem uma tarefa, mudam o prazo, comentam ou mencionam você",
+  },
 ]
 
 /**

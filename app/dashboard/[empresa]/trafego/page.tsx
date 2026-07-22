@@ -17,7 +17,6 @@ import {
   getLinhasDoMes,
   getUltimoLogSentinela,
   inicioJanela6Meses,
-  proximaExecucao,
   resumirTrafego,
   serieMensalDeLinhas,
   statusSentinela,
@@ -88,7 +87,6 @@ export default async function TrafegoPage({
   const serie = serieMensalDeLinhas(linhas6m)
   const trackeada = empresasTrackeadas.includes(empresa.nome)
   const stat = statusSentinela(ultimoLog)
-  const prox = proximaExecucao()
   // Ponte MCP: se há linhas via MCP no período exibido, badge mostra "MCP".
   const emModoMCP = linhas.some((l) => l.coleta_status === "mcp")
   const statusBadge = emModoMCP
@@ -175,7 +173,6 @@ export default async function TrafegoPage({
               statusCor={statusBadge.cor}
               rotulo={statusBadge.rotulo}
               ultimaExecucao={ultimoLog?.data_execucao ?? null}
-              proximaLabelCompleto={prox.labelCompleto}
             />
           </div>
           <div className="gold-divider" style={{ marginTop: 18 }} />

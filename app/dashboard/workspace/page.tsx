@@ -1,0 +1,169 @@
+import Link from "next/link"
+import { requererPermissao } from "@/lib/auth"
+import {
+  getPreferencia,
+  listarAbas,
+  listarContextos,
+  listarTarefas,
+  listarUsuariosAtivos,
+  type FiltroTarefas,
+} from "@/lib/workspace"
+import { hojeISO } from "@/lib/workspace-datas"
+import WorkspaceNav from "@/components/workspace/WorkspaceNav"
+import WorkspaceRealtime from "@/components/workspace/WorkspaceRealtime"
+import CriacaoRapida from "@/components/workspace/CriacaoRapida"
+import FiltrosTarefas from "@/components/workspace/FiltrosTarefas"
+import ListaTarefas, { type Agrupamento } from "@/components/workspace/ListaTarefas"
+import DrawerServidor from "@/components/workspace/DrawerServidor"
+
+export const dynamic = "force-dynamic"
+
+const POR_PAGINA = 50
+
+type SP = Record<string, string | string[] | undefined>
+
+function um(sp: SP, chave: string): string | undefined {
+  const v = sp[chave]
+  return Array.isArray(v) ? v[0] : v
+}
+
+/**
+ * Visão geral do Workspace — a lista.
+ *
+ * Todo filtro/paginação vem da URL e é aplicado no SERVIDOR; nada de baixar a
+ * tabela pro browser filtrar. O detalhe abre por ?tarefa=<id> na mesma página,
+ * preservando filtro e posição.
+ */
+export default async function WorkspacePage({
+  searchParams,
+}: {
+  searchParams: SP
+}) {
+  const usuario = await requererPermissao("workspace")
+
+  const pagina = Math.max(1, Number(um(searchParams, "pagina") ?? 1) || 1)
+
+  // Valores da URL são entrada do usuário: valida contra a lista fechada em
+  // vez de fazer cast. Um ?situacao=lixo cairia no "sem filtro" da consulta e
+  // mostraria concluídas junto com pendentes sem ninguém entender por quê.
+  const situacaoBruta = um(searchParams, "situacao")
+  const situacao: FiltroTarefas["situacao"] =
+    situacaoBruta === "concluidas" || situacaoBruta === "todas"
+      ? situacaoBruta
+      : "pendentes"
+
+  const agruparBruto = um(searchParams, "agrupar")
+  const agrupar: Agrupamento =
+    agruparBruto === "responsavel" ||
+    agruparBruto === "contexto" ||
+    agruparBruto === "nenhum"
+      ? agruparBruto
+      : "prazo"
+
+  const filtro: FiltroTarefas = {
+    busca: um(searchParams, "q"),
+    responsavelId: um(searchParams, "responsavel"),
+    contextoId: um(searchParams, "contexto"),
+    situacao,
+    apenasAtrasadas: um(searchParams, "atrasadas") === "1",
+    limite: POR_PAGINA,
+    offset: (pagina - 1) * POR_PAGINA,
+  }
+
+  const [{ tarefas, temMais }, contextos, usuarios, abas, pref] = await Promise.all([
+    listarTarefas(filtro),
+    listarContextos(),
+    listarUsuariosAtivos(),
+    listarAbas(),
+    getPreferencia(usuario.id),
+  ])
+
+  const tarefaAberta = um(searchParams, "tarefa")
+  const hoje = hojeISO()
+  // O filtro é por CLIENTE: contexto genérico (ex: "Calendário de conteúdo")
+  // não é uma escolha útil na lista, e polui um seletor com 30 entradas.
+  const clientes = contextos.filter((c) => c.tipo === "cliente")
+
+  const qsBase = new URLSearchParams()
+  for (const [k, v] of Object.entries(searchParams)) {
+    const valor = Array.isArray(v) ? v[0] : v
+    if (valor && k !== "pagina" && k !== "tarefa") qsBase.set(k, valor)
+  }
+  function urlPagina(n: number): string {
+    const qs = new URLSearchParams(qsBase.toString())
+    if (n > 1) qs.set("pagina", String(n))
+    const s = qs.toString()
+    return s ? `/dashboard/workspace?${s}` : "/dashboard/workspace"
+  }
+
+  return (
+    <main className="ws-main">
+      <WorkspaceRealtime />
+
+      <div className="ws-topo">
+        <WorkspaceNav
+          abas={abas}
+          presenca={{ id: usuario.id, nome: usuario.nome, foto: pref.foto_url }}
+        />
+
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 420px", minWidth: 0 }}>
+            <FiltrosTarefas
+              contextos={clientes}
+              usuarios={usuarios}
+              rotuloContexto="Cliente"
+            />
+          </div>
+          <CriacaoRapida
+            contextos={contextos}
+            contextoPadraoId={um(searchParams, "contexto")}
+            meuUsuarioId={usuario.id}
+          />
+        </div>
+      </div>
+
+      <div className="ws-conteudo">
+        <ListaTarefas
+          tarefas={tarefas}
+          hoje={hoje}
+          agrupar={agrupar}
+          vazio={
+            um(searchParams, "q")
+              ? "Nada encontrado com esses filtros."
+              : "Nenhuma tarefa pendente. Crie a primeira acima."
+          }
+        />
+
+        {(pagina > 1 || temMais) && (
+          <nav style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center" }}>
+            {pagina > 1 && (
+              <Link href={urlPagina(pagina - 1)} scroll={false} style={botaoPagina}>
+                ‹ Anterior
+              </Link>
+            )}
+            <span style={{ fontSize: 11, color: "var(--text-4)" }}>Página {pagina}</span>
+            {temMais && (
+              <Link href={urlPagina(pagina + 1)} scroll={false} style={botaoPagina}>
+                Próxima ›
+              </Link>
+            )}
+          </nav>
+        )}
+      </div>
+
+      {tarefaAberta && (
+        <DrawerServidor tarefaId={tarefaAberta} souAdmin={usuario.papel === "admin"} />
+      )}
+    </main>
+  )
+}
+
+const botaoPagina = {
+  fontSize: 11,
+  fontWeight: 600,
+  padding: "7px 14px",
+  borderRadius: 8,
+  background: "var(--surface-2)",
+  color: "var(--text-2)",
+  textDecoration: "none",
+} as const

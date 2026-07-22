@@ -1199,7 +1199,26 @@ Deno.serve(async (req) => {
     else tokensPorEmpresa.set(t.empresa, [t]);
   }
 
-  for (const [empresa, tokensDaEmpresa] of tokensPorEmpresa) {
+  // ORDEM DE PROCESSAMENTO = a ordem que o time definiu em "Gerenciar
+  // empresas" (empresas_config.ordem). As contas são processadas uma a uma;
+  // com a ordem alfabética anterior, a empresa mais importante podia ser a
+  // última a atualizar. Empresa sem linha em empresas_config (ou se a leitura
+  // falhar) vai pro fim, em ordem alfabética — nunca deixa de ser processada.
+  const { data: ordemEmpresas } = await supabase
+    .from("empresas_config")
+    .select("nome, ordem")
+    .order("ordem");
+  const posicao = new Map<string, number>();
+  for (const e of (ordemEmpresas ?? []) as { nome: string; ordem: number }[]) {
+    posicao.set(e.nome, e.ordem);
+  }
+  const empresasOrdenadas = [...tokensPorEmpresa.entries()].sort((a, b) => {
+    const pa = posicao.get(a[0]) ?? Number.MAX_SAFE_INTEGER;
+    const pb = posicao.get(b[0]) ?? Number.MAX_SAFE_INTEGER;
+    return pa - pb || a[0].localeCompare(b[0]);
+  });
+
+  for (const [empresa, tokensDaEmpresa] of empresasOrdenadas) {
     const parciais: ClientResult[] = [];
     for (const token of tokensDaEmpresa) {
       const exclusionFilters = token.campaign_filter

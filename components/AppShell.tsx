@@ -74,6 +74,7 @@ const ROTAS_NAO_EMPRESA = new Set([
   "/dashboard/financeiro",
   "/dashboard/formularios",
   "/dashboard/configuracoes",
+  "/dashboard/workspace",
 ])
 
 function ehRotaEmpresa(pathname: string): boolean {
@@ -229,6 +230,7 @@ function SidebarRail({
     pathname === "/dashboard/comercial" || pathname.endsWith("/comercial")
   const crmAtivo =
     pathname === "/dashboard/crm" || pathname.startsWith("/dashboard/crm/")
+  const workspaceAtivo = pathname.startsWith("/dashboard/workspace")
   // Metas (antigo Empresas) só ativa quando NÃO estamos em tráfego,
   // comercial nem financeiro — evita destacar dois items ao mesmo tempo
   // em rotas aninhadas. Cobre /dashboard/metas e o detalhe de empresa
@@ -239,6 +241,7 @@ function SidebarRail({
     !financeiroAtivo &&
     !comercialAtivo &&
     !crmAtivo &&
+    !workspaceAtivo &&
     ehRotaEmpresa(pathname)
   const configAtivo = pathname === "/dashboard/configuracoes"
 
@@ -250,6 +253,9 @@ function SidebarRail({
   const podeComercial = temPermissao(usuarioAtual, "dashboard_comercial")
   const podeCrm = temPermissao(usuarioAtual, "crm")
   const podeFinanceiro = temPermissao(usuarioAtual, "dashboard_financeiro")
+  // Workspace é gateado pela chave 'workspace', que hoje só o admin tem —
+  // é assim que o módulo fica desligado até o rollout (ver WORKSPACE-PLANO §5.2).
+  const podeWorkspace = temPermissao(usuarioAtual, "workspace")
   const podeConfig = temPermissao(usuarioAtual, "configuracoes")
 
   return (
@@ -328,6 +334,15 @@ function SidebarRail({
             href="/dashboard/financeiro"
             expandido={expandido}
             ativo={financeiroAtivo}
+          />
+        )}
+        {podeWorkspace && (
+          <ItemMenu
+            icon={<IconeWorkspace />}
+            rotulo="Workspace"
+            href="/dashboard/workspace"
+            expandido={expandido}
+            ativo={workspaceAtivo}
           />
         )}
       </nav>
@@ -664,6 +679,30 @@ function IconeCrm() {
       aria-hidden="true"
     >
       <path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z" />
+    </svg>
+  )
+}
+
+function IconeWorkspace() {
+  // Checklist — tarefas da operação (o que substitui o Asana).
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="3 6 4.5 7.5 7.5 4.5" />
+      <polyline points="3 12 4.5 13.5 7.5 10.5" />
+      <polyline points="3 18 4.5 19.5 7.5 16.5" />
+      <line x1="11" y1="6" x2="21" y2="6" />
+      <line x1="11" y1="12" x2="21" y2="12" />
+      <line x1="11" y1="18" x2="21" y2="18" />
     </svg>
   )
 }

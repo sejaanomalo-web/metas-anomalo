@@ -10,17 +10,6 @@ import {
 import { useRouter } from "next/navigation"
 import { dispararSentinelaDia } from "@/lib/sentinela-trigger"
 
-/** Horário do cron automático da Sentinela em BRT (09:00, único — ver
- *  migration 20260720_sentinela_cron_9h.sql). Devolve "09:00 de amanhã" se
- *  já passou das 09:00 hoje, senão "09:00". */
-function proximaRotinaBRT(): string {
-  const agoraUTC = new Date()
-  const ms = agoraUTC.getTime() + agoraUTC.getTimezoneOffset() * 60_000
-  const brt = new Date(ms - 3 * 60 * 60_000)
-  const h = brt.getUTCHours()
-  return h < 9 ? "09:00" : "09:00 de amanhã"
-}
-
 /**
  * Provider do "Atualizar dados" do Tráfego que roda em SEGUNDO PLANO.
  *
@@ -29,13 +18,14 @@ function proximaRotinaBRT(): string {
  * saia da aba de Tráfego pago para Metas/Financeiro/etc. — e um indicador
  * flutuante mostra o progresso em qualquer aba.
  *
- * O botão (BotaoAtualizarTrafego) é só um consumidor deste contexto: ele
- * chama `iniciar()` e reflete o mesmo estado global.
+ * Dois consumidores: o botão "Atualizar dados" (BotaoAtualizarTrafego) chama
+ * `iniciar()` — força na hora; e o SentinelaAutoRefresh, montado na aba de
+ * Tráfego, chama `iniciarAuto()` — respeita a janela de silêncio.
  *
- * Limite honesto: isto roda no navegador (no realm da SPA). Trocar de aba
- * mantém; FECHAR a aba do navegador / dar reload interrompe. Para a
- * atualização garantida sem ninguém aberto existe o cron automático das
- * 09:00 BRT (ver migration 20260720_sentinela_cron_9h.sql).
+ * Limite honesto: isto roda no navegador (no realm da SPA). Trocar de aba do
+ * app mantém; FECHAR a aba do navegador / dar reload interrompe. Desde
+ * 20260725_workspace_fase3.sql não existe mais cron de madrugada: a coleta
+ * acontece quando alguém abre o Tráfego, que é quando alguém vai olhar.
  */
 type Estado =
   | { fase: "idle" }
@@ -47,7 +37,15 @@ interface Ctx {
   estado: Estado
   rodando: boolean
   iniciar: () => void
+  /** Disparo automático ao abrir o Tráfego — respeita a janela de silêncio. */
+  iniciarAuto: () => void
 }
+
+/** Janela mínima entre disparos AUTOMÁTICOS, por sessão do navegador.
+ *  Sem ela, ir e voltar da aba de Tráfego chamaria o Meta a cada clique —
+ *  a API tem rate limit e a coleta inteira leva ~30s. O botão "Atualizar
+ *  dados" ignora esta janela: quando o usuário pede, roda na hora. */
+const JANELA_AUTO_MS = 15 * 60_000
 
 const SentinelaRefreshContext = createContext<Ctx | null>(null)
 
@@ -70,10 +68,12 @@ export default function SentinelaRefreshProvider({
   const [estado, setEstado] = useState<Estado>({ fase: "idle" })
   // Ref pra travar reentrância de forma síncrona (o state é assíncrono).
   const rodandoRef = useRef(false)
+  const ultimoDisparoRef = useRef(0)
 
   const iniciar = useCallback(async () => {
     if (rodandoRef.current) return
     rodandoRef.current = true
+    ultimoDisparoRef.current = Date.now()
 
     // Chamada síncrona: a edge function processa ontem+hoje pra todas as
     // empresas e devolve o resultado direto na resposta — sem polling.
@@ -85,7 +85,7 @@ export default function SentinelaRefreshProvider({
     if (!resultado.ok && resultado.semSecret) {
       setEstado({
         fase: "erro",
-        msg: `Sentinela precisa do SENTINELA_SECRET no Vercel. Próxima coleta automática: ${proximaRotinaBRT()} BRT.`,
+        msg: "Sentinela precisa do SENTINELA_SECRET no Vercel para coletar os dados.",
       })
       setTimeout(() => setEstado({ fase: "idle" }), 12000)
       rodandoRef.current = false
@@ -111,10 +111,22 @@ export default function SentinelaRefreshProvider({
     rodandoRef.current = false
   }, [router])
 
+  /**
+   * Disparo automático ao abrir a aba de Tráfego. Só roda se ninguém já
+   * estiver atualizando e se o último disparo desta sessão for mais velho
+   * que JANELA_AUTO_MS — navegar entre as telas de tráfego não deve
+   * bombardear a API do Meta.
+   */
+  const iniciarAuto = useCallback(() => {
+    if (rodandoRef.current) return
+    if (Date.now() - ultimoDisparoRef.current < JANELA_AUTO_MS) return
+    void iniciar()
+  }, [iniciar])
+
   const rodando = estado.fase === "rodando"
 
   return (
-    <SentinelaRefreshContext.Provider value={{ estado, rodando, iniciar }}>
+    <SentinelaRefreshContext.Provider value={{ estado, rodando, iniciar, iniciarAuto }}>
       {children}
       <IndicadorFlutuante estado={estado} />
     </SentinelaRefreshContext.Provider>

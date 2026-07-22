@@ -98,44 +98,11 @@ export function formatarMomentoBRT(
   return `${dataAlvo} ${horaAlvo}`
 }
 
-/** Horários (BRT) em que o cron do Sentinela roda, em ordem. Espelha o job
- *  pg_cron `sentinela_9h` (ver supabase/migrations/20260720_sentinela_cron_9h.sql)
- *  — só 1 horário desde 2026-07-20 (antes eram 3: 9h/15h/20h). Manter
- *  sincronizado com o banco. */
-const HORARIOS_SENTINELA_BRT = [9] as const
-
-/** Próxima execução do Sentinela em hora BRT (cron único 09:00).
- *  Devolve hora/minuto pra cálculos, label curto ("09:00 BRT") e
- *  labelCompleto com data ("hoje 09:00 BRT" / "amanhã 09:00 BRT"). */
-export function proximaExecucao(agora: Date = new Date()): {
-  hora: number
-  minuto: number
-  label: string
-  iso: string
-  labelCompleto: string
-} {
-  // Hora atual em BRT (UTC-3, sem DST).
-  const utcMs = agora.getTime() + agora.getTimezoneOffset() * 60_000
-  const brt = new Date(utcMs - 3 * 60 * 60_000)
-  const h = brt.getHours()
-  // Próximo horário ainda hoje; se todos já passaram, é o 1º de amanhã.
-  const aindaHoje = HORARIOS_SENTINELA_BRT.find((hh) => h < hh)
-  const proximaHora = aindaHoje ?? HORARIOS_SENTINELA_BRT[0]
-  const ehAmanha = aindaHoje === undefined
-  // Constrói data/hora exata da próxima execução, em BRT, e volta pra
-  // ISO UTC (somando o offset BRT de -3h → -(-3) = +3h pra ir pra UTC).
-  const proxBrt = new Date(brt)
-  proxBrt.setHours(proximaHora, 0, 0, 0)
-  if (ehAmanha) proxBrt.setDate(proxBrt.getDate() + 1)
-  const proxIso = new Date(proxBrt.getTime() + 3 * 60 * 60_000).toISOString()
-  return {
-    hora: proximaHora,
-    minuto: 0,
-    label: `${String(proximaHora).padStart(2, "0")}:00 BRT`,
-    iso: proxIso,
-    labelCompleto: `${formatarMomentoBRT(proxIso, agora)} BRT`,
-  }
-}
+// NÃO existe mais "próxima execução" do Sentinela: o cron pg_cron das 09:00
+// foi removido em 20260725_workspace_fase3.sql. A coleta dispara quando
+// alguém abre a aba de Tráfego (components/trafego/SentinelaAutoRefresh.tsx),
+// com janela de silêncio de 15 min, e o botão "Atualizar dados" força na hora.
+// Por isso proximaExecucao()/HORARIOS_SENTINELA_BRT saíram daqui.
 
 /** Quanto tempo passou desde uma timestamp ISO, em formato humano curto. */
 export function tempoDecorrido(iso: string | null | undefined): string {
