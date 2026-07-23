@@ -35,7 +35,7 @@ export const COLUNAS_TAREFA =
   "ordem, versao, arquivada_em, excluida_em, created_at, updated_at"
 
 export const COLUNAS_CONTEXTO =
-  "id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, ordem, arquivado_em"
+  "id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, grupo_id, ordem, arquivado_em"
 
 // ============================================================
 // Contextos
@@ -116,7 +116,7 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
   const [vinculos, usuarios, subtarefas, comentarios, prefs] = await Promise.all([
     supabase
       .from("ws_tarefa_contextos")
-      .select("tarefa_id, contexto_id, ws_contextos(id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, ordem, arquivado_em)")
+      .select("tarefa_id, contexto_id, ws_contextos(id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, grupo_id, ordem, arquivado_em)")
       .in("tarefa_id", ids),
     supabase.from("usuarios").select("id, nome"),
     supabase

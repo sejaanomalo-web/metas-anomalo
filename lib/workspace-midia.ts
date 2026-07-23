@@ -1,14 +1,19 @@
 // =============================================================================
 // Workspace — upload de fotos de perfil (cliente e usuário). Server-only.
 // =============================================================================
-// Reusa o bucket público 'ws-anexos' criado na migração da Fase 1 do Asana —
-// nenhum bucket novo. Caminhos: perfil/contexto/<uuid>.<ext> e
-// perfil/usuario/<uuid>.<ext>; a URL é pública mas não-adivinhável.
+// Bucket PÚBLICO 'ws-perfil' (criado em 20260726_workspace_fase4.sql).
+//
+// NÃO usar 'ws-anexos': aquele bucket é privado de propósito (documento de
+// cliente) e foi exatamente o bug das fotos quebradas — o upload dava certo,
+// getPublicUrl devolvia uma URL, e a imagem respondia 400. Avatar precisa de
+// URL estável e eterna; signed URL expira e quebraria a foto já gravada.
+// Caminhos: perfil/contexto/<uuid>.<ext> e perfil/usuario/<uuid>.<ext> —
+// públicos, mas não-adivinháveis.
 
 import { randomUUID } from "crypto"
 import { getSupabaseAdmin } from "./supabase"
 
-const BUCKET = "ws-anexos"
+export const BUCKET_PERFIL = "ws-perfil"
 const MAX_BYTES = 3 * 1024 * 1024 // 3MB é MUITO para um avatar
 
 const EXT_POR_MIME: Record<string, string> = {
@@ -48,7 +53,7 @@ export async function uploadFotoPerfil(
   if (buffer.length === 0 || buffer.length > MAX_BYTES) return null
 
   const caminho = `perfil/${prefixo}/${randomUUID()}.${EXT_POR_MIME[mime]}`
-  const { error } = await db.storage.from(BUCKET).upload(caminho, buffer, {
+  const { error } = await db.storage.from(BUCKET_PERFIL).upload(caminho, buffer, {
     contentType: mime,
     upsert: false,
   })
@@ -56,6 +61,10 @@ export async function uploadFotoPerfil(
     console.error("[workspace-midia] falha no upload", error.message)
     return null
   }
-  const { data } = db.storage.from(BUCKET).getPublicUrl(caminho)
-  return data?.publicUrl ?? null
+  const { data } = db.storage.from(BUCKET_PERFIL).getPublicUrl(caminho)
+  const url = data?.publicUrl ?? null
+  if (!url) {
+    console.error("[workspace-midia] bucket ws-perfil sem URL pública — a migração 20260726 foi aplicada?")
+  }
+  return url
 }

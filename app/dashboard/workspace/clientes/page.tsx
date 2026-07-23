@@ -14,14 +14,22 @@ import ClientesPainel, {
 
 export const dynamic = "force-dynamic"
 
+/** Normaliza nome de empresa pra casar grupo sem tropeçar em caixa/espaço. */
+function chaveEmpresa(nome: string): string {
+  return nome.trim().toLowerCase()
+}
+
 /**
- * Aba Clientes — lista vertical reordenável. Três origens, sem duplicar:
- *   • contextos tipo 'empresa' = ÂNCORAS de grupo (permitem grupo vazio e
- *     dão ao grupo uma posição própria na ordenação);
- *   • contextos tipo 'cliente' = as áreas de trabalho (reordenáveis);
- *   • clientes de tráfego ativos ainda sem contexto (a pasta nasce no clique).
- * A ORDEM visual é ws_contextos.ordem — grupos ordenados pela menor ordem
- * entre seus contextos, itens pela própria.
+ * Aba Clientes — lista vertical reordenável, agrupada por ÂNCORA (contexto
+ * tipo 'empresa'), não por texto.
+ *
+ * ORDEM É SAGRADA: a posição do grupo é `ordem` da âncora e a do cliente é a
+ * própria `ordem` dentro do grupo. Nada é recalculado a partir do conteúdo,
+ * então criar/excluir cliente não mexe em nada de lugar — só o arrasto muda
+ * a ordem (reordenarContextosAction).
+ *
+ * Clientes de tráfego ainda sem pasta aparecem no fim do grupo da empresa
+ * deles (a pasta nasce no primeiro clique).
  */
 export default async function ClientesPage() {
   const usuario = await requererPermissao("workspace")
@@ -34,42 +42,36 @@ export default async function ClientesPage() {
     getPreferencia(usuario.id),
   ])
 
-  const ancoras = contextos.filter((c) => c.tipo === "empresa")
+  const ancoras = contextos
+    .filter((c) => c.tipo === "empresa")
+    .sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"))
+
+  const ancoraPorId = new Map(ancoras.map((a) => [a.id, a]))
+  const ancoraPorNome = new Map(
+    ancoras.map((a) => [chaveEmpresa(a.empresa_nome ?? a.nome), a])
+  )
+
+  const itensPorAncora = new Map<string, (ItemCliente & { ordem: number })[]>()
+  for (const a of ancoras) itensPorAncora.set(a.id, [])
+  const semGrupo: (ItemCliente & { ordem: number })[] = []
+
+  function destino(ancoraId: string | null | undefined) {
+    if (ancoraId && itensPorAncora.has(ancoraId)) return itensPorAncora.get(ancoraId)!
+    return semGrupo
+  }
+
+  // 1) Contextos de cliente já existentes.
   const contextosCliente = contextos.filter((c) => c.tipo === "cliente")
-  const contextoPorCliente = new Map<string, (typeof contextosCliente)[number]>()
+  const contextoPorClienteTrafego = new Map<string, string>()
   for (const c of contextosCliente) {
-    if (c.cliente_id) contextoPorCliente.set(c.cliente_id, c)
-  }
-
-  interface GrupoAcc {
-    itens: (ItemCliente & { ordem: number })[]
-    ancoraId: string | null
-    menorOrdem: number
-  }
-  const grupos = new Map<string, GrupoAcc>()
-  function grupo(chaveBruta: string): GrupoAcc {
-    const chave = chaveBruta.trim() || "Sem empresa"
-    let g = grupos.get(chave)
-    if (!g) {
-      g = { itens: [], ancoraId: null, menorOrdem: Number.MAX_SAFE_INTEGER }
-      grupos.set(chave, g)
-    }
-    return g
-  }
-
-  // Âncoras primeiro: criam o grupo (mesmo vazio) e definem posição.
-  for (const a of ancoras) {
-    const g = grupo(a.empresa_nome ?? a.nome)
-    g.ancoraId = a.id
-    g.menorOrdem = Math.min(g.menorOrdem, a.ordem)
-  }
-
-  // Contextos de cliente.
-  for (const c of contextosCliente) {
-    const g = grupo(c.empresa_nome ?? "Sem empresa")
+    if (c.cliente_id) contextoPorClienteTrafego.set(c.cliente_id, c.id)
     const contagem = contagens.get(c.id)
-    g.menorOrdem = Math.min(g.menorOrdem, c.ordem)
-    g.itens.push({
+    // grupo_id é a fonte; o nome só entra como resgate pra linha que ainda
+    // não passou pela migração da fase 4.
+    const ancora =
+      (c.grupo_id ? ancoraPorId.get(c.grupo_id) : undefined) ??
+      (c.empresa_nome ? ancoraPorNome.get(chaveEmpresa(c.empresa_nome)) : undefined)
+    destino(ancora?.id).push({
       contextoId: c.id,
       clienteId: c.cliente_id,
       nome: c.nome,
@@ -81,11 +83,13 @@ export default async function ClientesPage() {
     })
   }
 
-  // Clientes do cadastro que ainda não têm pasta (vão pro fim do grupo).
+  // 2) Clientes do cadastro de tráfego que ainda não têm pasta. Vão pro fim
+  //    do grupo (ordem alta) porque ainda não têm posição escolhida.
   for (const [empresa, clientes] of Object.entries(porEmpresa)) {
+    const ancora = ancoraPorNome.get(chaveEmpresa(empresa))
     for (const cliente of clientes) {
-      if (contextoPorCliente.has(cliente.id)) continue
-      grupo(empresa).itens.push({
+      if (contextoPorClienteTrafego.has(cliente.id)) continue
+      destino(ancora?.id).push({
         contextoId: null,
         clienteId: cliente.id,
         nome: cliente.nome,
@@ -98,20 +102,23 @@ export default async function ClientesPage() {
     }
   }
 
-  const gruposOrdenados: GrupoEmpresa[] = [...grupos.entries()]
-    .sort(
-      ([a, ga], [b, gb]) =>
-        ga.menorOrdem - gb.menorOrdem || a.localeCompare(b, "pt-BR")
-    )
-    .map(([empresa, g]) => ({
-      empresa,
-      ancoraId: g.ancoraId,
-      itens: g.itens
-        .sort((x, y) => x.ordem - y.ordem || x.nome.localeCompare(y.nome, "pt-BR"))
-        .map(({ ordem: _ordem, ...item }) => item),
-    }))
+  function ordenar(lista: (ItemCliente & { ordem: number })[]): ItemCliente[] {
+    return lista
+      .sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"))
+      .map(({ ordem: _ordem, ...item }) => item)
+  }
 
-  const empresas = gruposOrdenados.map((g) => g.empresa).filter((e) => e !== "Sem empresa")
+  const grupos: GrupoEmpresa[] = ancoras.map((a) => ({
+    ancoraId: a.id,
+    empresa: a.empresa_nome ?? a.nome,
+    itens: ordenar(itensPorAncora.get(a.id) ?? []),
+  }))
+
+  // Sem empresa fica por último e não é arrastável como grupo (não tem
+  // âncora pra guardar posição) — some assim que alguém der uma empresa.
+  const soltos = ordenar(semGrupo)
+
+  const empresas = grupos.map((g) => g.empresa)
 
   return (
     <main className="ws-main">
@@ -122,7 +129,7 @@ export default async function ClientesPage() {
         />
       </div>
       <div className="ws-conteudo">
-        <ClientesPainel grupos={gruposOrdenados} empresas={empresas} />
+        <ClientesPainel grupos={grupos} soltos={soltos} empresas={empresas} />
       </div>
     </main>
   )

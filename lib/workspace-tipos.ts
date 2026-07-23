@@ -23,6 +23,13 @@ export interface Contexto {
   cliente_id: string | null
   cor: string | null
   foto_url: string | null
+  /**
+   * Âncora do grupo de empresa a que este contexto pertence (tipo 'empresa'
+   * aponta pra si mesmo). É a RELAÇÃO que define o grupo — empresa_nome virou
+   * espelho. Antes o agrupamento casava a string e "ASSESSORIA SUN" vs
+   * "Assessoria Sun" viravam dois grupos, um deles vazio.
+   */
+  grupo_id: string | null
   ordem: number
   arquivado_em: string | null
 }
