@@ -74,26 +74,34 @@ export default function FiltrosTarefas({
   const soAtrasadas = searchParams.get("atrasadas") === "1"
 
   return (
+    // Uma faixa só, alinhada ao centro: o rótulo mora DENTRO do seletor
+    // ("Cliente: Todos"), o que economiza a linha inteira que a label
+    // empilhada ocupava — mais altura sobra pra lista de tarefas.
     <div
       style={{
         display: "flex",
-        gap: 8,
+        gap: 6,
         flexWrap: "wrap",
-        alignItems: "flex-end",
+        alignItems: "center",
       }}
     >
       {mostrarBusca && (
-        <label style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 150px", minWidth: 0 }}>
-          <Rotulo texto="Buscar" />
-          <input
-            type="text"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder={placeholderBusca}
-            className="glass-input"
-            style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, width: "100%" }}
-          />
-        </label>
+        <input
+          type="search"
+          aria-label="Buscar"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder={placeholderBusca}
+          className="glass-input"
+          style={{
+            fontSize: 12,
+            padding: "6px 10px",
+            borderRadius: 7,
+            flex: "1 1 170px",
+            minWidth: 0,
+            maxWidth: 280,
+          }}
+        />
       )}
 
       <Seletor
@@ -155,8 +163,8 @@ export default function FiltrosTarefas({
         style={{
           fontSize: 11,
           fontWeight: 600,
-          padding: "8px 12px",
-          borderRadius: 8,
+          padding: "6px 11px",
+          borderRadius: 7,
           border: `1px solid ${soAtrasadas ? "#e24b4a" : "rgba(255,255,255,0.1)"}`,
           background: soAtrasadas ? "rgba(226,75,74,0.12)" : "transparent",
           color: soAtrasadas ? "#e24b4a" : "var(--text-3)",
@@ -169,21 +177,11 @@ export default function FiltrosTarefas({
   )
 }
 
-function Rotulo({ texto }: { texto: string }) {
-  return (
-    <span
-      style={{
-        fontSize: 10,
-        color: "var(--text-4)",
-        textTransform: "uppercase",
-        letterSpacing: "0.06em",
-      }}
-    >
-      {texto}
-    </span>
-  )
-}
-
+/**
+ * Seletor compacto: o rótulo vai DENTRO do texto da opção ("Cliente: Todos"),
+ * então não existe label empilhada e a faixa de filtros tem uma linha só.
+ * aria-label mantém o nome do campo para leitor de tela.
+ */
 function Seletor({
   rotulo,
   valor,
@@ -196,20 +194,24 @@ function Seletor({
   opcoes: { valor: string; texto: string }[]
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <Rotulo texto={rotulo} />
-      <select
-        value={valor}
-        onChange={(e) => onChange(e.target.value)}
-        className="glass-input"
-        style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, minWidth: 130 }}
-      >
-        {opcoes.map((o) => (
-          <option key={o.valor} value={o.valor} style={{ color: "#111" }}>
-            {o.texto}
-          </option>
-        ))}
-      </select>
-    </label>
+    <select
+      aria-label={rotulo}
+      title={rotulo}
+      value={valor}
+      onChange={(e) => onChange(e.target.value)}
+      className="glass-input"
+      style={{
+        fontSize: 12,
+        padding: "6px 8px",
+        borderRadius: 7,
+        maxWidth: 190,
+      }}
+    >
+      {opcoes.map((o) => (
+        <option key={o.valor} value={o.valor} style={{ color: "#111" }}>
+          {rotulo}: {o.texto}
+        </option>
+      ))}
+    </select>
   )
 }

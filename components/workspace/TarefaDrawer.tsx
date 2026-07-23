@@ -134,20 +134,42 @@ export default function TarefaDrawer(props: Props) {
         className="ws-drawer-backdrop no-ds"
       />
       <aside className="ws-drawer" aria-label="Detalhes da tarefa">
-        {/* ---------- Barra superior: Marcar concluída + fechar ---------- */}
-        <header
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 16px",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-            position: "sticky",
-            top: 0,
-            background: "var(--surface-1)",
-            zIndex: 2,
-          }}
-        >
+        {/* ---------- Barra superior ----------
+            VOLTAR à esquerda, CONCLUIR à direita: é a convenção de app —
+            e no celular o canto superior direito é ocupado pelo sino e pelo
+            menu, então a ação principal não pode morar embaixo deles. */}
+        <header className="ws-drawer-topo">
+          <button
+            type="button"
+            onClick={fechar}
+            aria-label="Voltar"
+            title="Voltar"
+            className="no-ds ws-btn-icone"
+            style={{ flexShrink: 0 }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="20" y1="12" x2="4" y2="12" />
+              <polyline points="11 19 4 12 11 5" />
+            </svg>
+          </button>
+
+          {(erro || salvo || pending) && (
+            <span
+              role="status"
+              style={{
+                fontSize: 11,
+                color: erro ? "#e24b4a" : pending ? "var(--text-4)" : VERDE_ASANA,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {erro ?? (pending ? "Salvando…" : "Salvo")}
+            </span>
+          )}
+
+          <span style={{ flex: 1 }} />
+
           <button
             type="button"
             onClick={() => {
@@ -167,6 +189,7 @@ export default function TarefaDrawer(props: Props) {
               padding: "5px 10px",
               borderRadius: 6,
               cursor: "pointer",
+              flexShrink: 0,
               border: concluida ? `1px solid ${VERDE_ASANA}` : "1px solid rgba(255,255,255,0.25)",
               background: concluida ? "rgba(93,162,131,0.18)" : "transparent",
               color: concluida ? VERDE_ASANA : "var(--text-2)",
@@ -176,33 +199,6 @@ export default function TarefaDrawer(props: Props) {
               <polyline points="20 6 9 17 4 12" />
             </svg>
             {concluida ? "Concluída" : "Marcar concluída"}
-          </button>
-
-          <span style={{ flex: 1 }} />
-
-          {(erro || salvo || pending) && (
-            <span
-              role="status"
-              style={{
-                fontSize: 11,
-                color: erro ? "#e24b4a" : pending ? "var(--text-4)" : VERDE_ASANA,
-              }}
-            >
-              {erro ?? (pending ? "Salvando…" : "Salvo")}
-            </span>
-          )}
-
-          <button
-            type="button"
-            onClick={fechar}
-            aria-label="Fechar"
-            className="no-ds ws-btn-icone"
-            style={{ fontSize: 16 }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="13 5 20 12 13 19" />
-              <line x1="20" y1="12" x2="4" y2="12" />
-            </svg>
           </button>
         </header>
 

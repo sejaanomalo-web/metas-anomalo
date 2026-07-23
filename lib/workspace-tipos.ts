@@ -97,7 +97,7 @@ export interface Aba {
 export type EscopoNotas =
   | { contextoId: string }
   | { abaId: string }
-  | { fixa: "arquivos" | "estudos" }
+  | { fixa: "arquivos" }
 
 export interface Nota {
   id: string

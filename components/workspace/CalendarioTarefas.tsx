@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { forwardRef, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import {
   DndContext,
@@ -96,6 +96,21 @@ export default function CalendarioTarefas({
     // 6px de folga: sem isso, um clique pra abrir a tarefa viraria arraste.
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   )
+
+  // No celular a grade rola na horizontal e cabe UM dia por vez — abrir a
+  // semana mostrando domingo obrigaria a arrastar até hoje toda vez. Aqui a
+  // coluna de hoje já entra centralizada. No desktop os 7 dias cabem juntos,
+  // então não há o que rolar e o efeito não faz nada.
+  const gradeRef = useRef<HTMLDivElement>(null)
+  const colunaHojeRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const grade = gradeRef.current
+    const coluna = colunaHojeRef.current
+    if (!grade || !coluna) return
+    if (grade.scrollWidth <= grade.clientWidth) return // desktop: cabe tudo
+    grade.scrollLeft =
+      coluna.offsetLeft - (grade.clientWidth - coluna.clientWidth) / 2
+  }, [semana, modo])
 
   // Pesquisa geral: título, descrição, data (ISO e DD/MM), cliente/contexto
   // e responsável — tudo client-side sobre o período já carregado.
@@ -390,10 +405,11 @@ export default function CalendarioTarefas({
         <div style={{ display: "flex", gap: 0, alignItems: "stretch", flex: 1, minHeight: 0 }}>
           <div style={{ flex: 1, minWidth: 0, height: "100%" }}>
             {modo === "semana" ? (
-              <div className="ws-cal-semana">
+              <div className="ws-cal-semana" ref={gradeRef}>
                 {dias.map((iso, i) => (
                   <ColunaDia
                     key={iso}
+                    ref={iso === hoje ? colunaHojeRef : undefined}
                     iso={iso}
                     rotuloDia={DIAS_SEMANA_LONGO[i]}
                     ehHoje={iso === hoje}
@@ -472,19 +488,7 @@ function Seta({ dir }: { dir: "esq" | "dir" }) {
 
 /* =================== Visão semanal =================== */
 
-function ColunaDia({
-  iso,
-  rotuloDia,
-  ehHoje,
-  ids,
-  porId,
-  modoCor,
-  meuUsuarioId,
-  contextoFixoId,
-  animar,
-  estaConcluida,
-  onConcluir,
-}: {
+const ColunaDia = forwardRef<HTMLDivElement, {
   iso: string
   rotuloDia: string
   ehHoje: boolean
@@ -496,7 +500,19 @@ function ColunaDia({
   animar: boolean
   estaConcluida: (id: string) => boolean
   onConcluir: (id: string, valor: boolean) => void
-}) {
+}>(function ColunaDia({
+  iso,
+  rotuloDia,
+  ehHoje,
+  ids,
+  porId,
+  modoCor,
+  meuUsuarioId,
+  contextoFixoId,
+  animar,
+  estaConcluida,
+  onConcluir,
+}, refExterna) {
   const { setNodeRef, isOver } = useDroppable({ id: `${PREFIXO_DIA}${iso}` })
   const dia = Number(iso.slice(8, 10))
   // FLIP: quando uma tarefa é concluída ela desce pro fim da coluna, e as
@@ -506,7 +522,13 @@ function ColunaDia({
 
   return (
     <div
-      ref={setNodeRef}
+      // Dois donos do mesmo nó: o dnd-kit (alvo de soltura) e o pai, que
+      // precisa medir esta coluna pra centralizar "hoje" no celular.
+      ref={(node) => {
+        setNodeRef(node)
+        if (typeof refExterna === "function") refExterna(node)
+        else if (refExterna) refExterna.current = node
+      }}
       className="ws-cal-coluna"
       style={{ outline: isOver ? "1.5px solid #4573d2" : "none", outlineOffset: -1 }}
     >
@@ -555,7 +577,7 @@ function ColunaDia({
       </div>
     </div>
   )
-}
+})
 
 /**
  * "Adicionar tarefa" no pé da coluna — sempre visível, opacidade baixa como
@@ -620,13 +642,15 @@ function QuickAdd({
   }
 
   return (
+    // Sem caixa e sem fundo próprio: enquanto se digita, é só texto sobre a
+    // coluna. Só ao salvar aquilo VIRA um cartão de tarefa de verdade.
     <div
       style={{
-        border: "1px solid #4573d2",
         borderRadius: 8,
-        background: "var(--surface-1)",
-        padding: "8px 10px",
+        background: "transparent",
+        padding: "6px 8px",
         flexShrink: 0,
+        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.10)",
       }}
     >
       <textarea

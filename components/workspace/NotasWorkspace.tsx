@@ -9,7 +9,7 @@ import type { Nota } from "@/lib/workspace-tipos"
 interface EscopoForm {
   contexto_id?: string
   aba_id?: string
-  fixa?: "arquivos" | "estudos"
+  fixa?: "arquivos"
 }
 
 /**

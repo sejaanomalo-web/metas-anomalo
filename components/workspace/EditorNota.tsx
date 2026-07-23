@@ -20,11 +20,18 @@ import type { Nota } from "@/lib/workspace-tipos"
  * depende dela: TODO corpo é re-sanitizado no servidor
  * (lib/workspace-notas.ts) antes de tocar o banco.
  *
- * Duas correções que o execCommand exige:
+ * Três correções que o execCommand exige:
  *  • styleWithCSS(true): sem isso ele emite <font> e tags legadas que o
  *    sanitizador descarta — a formatação "sumia" ao salvar.
  *  • fontSize só aceita 1..7; aplicamos e trocamos o <font size> resultante
  *    por um <span style="font-size:Npx"> logo em seguida.
+ *  • SELEÇÃO SALVA: abrir um <select> (fonte/tamanho/cor) tira o foco do
+ *    contentEditable e o navegador COLAPSA a seleção. O comando então caía
+ *    no vazio e "mudar o tamanho do texto selecionado" não fazia nada.
+ *    Guardamos o Range enquanto o cursor está no editor e o devolvemos
+ *    antes de cada comando. (Nos botões dá pra evitar o blur com
+ *    preventDefault no mousedown; num <select> não — isso impediria o menu
+ *    de abrir.)
  */
 export default function EditorNota({
   nota,
@@ -44,6 +51,9 @@ export default function EditorNota({
   const corpoRef = useRef<HTMLDivElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [, startTransition] = useTransition()
+  // Último trecho selecionado DENTRO do editor. Ver o comentário do topo:
+  // é o que sobrevive ao <select> roubar o foco.
+  const selecaoRef = useRef<Range | null>(null)
 
   // Conteúdo inicial: o HTML já veio SANITIZADO do servidor (toda gravação
   // passa por sanitizarHtmlNota) — é seguro injetar no contentEditable.
@@ -59,6 +69,36 @@ export default function EditorNota({
       if (timerRef.current) clearTimeout(timerRef.current)
     }
   }, [])
+
+  // Memoriza a seleção enquanto ela está dentro do editor. selectionchange é
+  // o único evento que cobre teclado, mouse e toque de uma vez.
+  useEffect(() => {
+    function aoMudarSelecao() {
+      const el = corpoRef.current
+      const sel = window.getSelection()
+      if (!el || !sel || sel.rangeCount === 0) return
+      const range = sel.getRangeAt(0)
+      if (el.contains(range.commonAncestorContainer)) {
+        selecaoRef.current = range.cloneRange()
+      }
+    }
+    document.addEventListener("selectionchange", aoMudarSelecao)
+    return () => document.removeEventListener("selectionchange", aoMudarSelecao)
+  }, [])
+
+  /** Devolve o cursor/seleção ao editor antes de aplicar um comando. */
+  function restaurarSelecao(): boolean {
+    const el = corpoRef.current
+    if (!el) return false
+    el.focus()
+    const range = selecaoRef.current
+    if (!range) return false
+    const sel = window.getSelection()
+    if (!sel) return false
+    sel.removeAllRanges()
+    sel.addRange(range)
+    return true
+  }
 
   function agendarSalvar(campos: { titulo?: string; corpo?: string }) {
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -80,11 +120,18 @@ export default function EditorNota({
     if (corpoRef.current) agendarSalvar({ corpo: corpoRef.current.innerHTML })
   }
 
-  /** Executa um comando mantendo o foco no texto e agendando o autosave. */
+  /**
+   * Executa um comando na seleção guardada e agenda o autosave.
+   *
+   * undo/redo são exceção: têm pilha própria no navegador e devolvem o
+   * cursor sozinhos. Reinjetar um Range velho antes deles faria o cursor
+   * pular pra onde o texto nem existe mais.
+   */
   function comando(cmd: string, valor?: string) {
     const el = corpoRef.current
     if (!el) return
-    el.focus()
+    if (cmd === "undo" || cmd === "redo") el.focus()
+    else restaurarSelecao()
     // CSS em vez de <font>/<b>: o sanitizador guarda style, não tag legada.
     try {
       document.execCommand("styleWithCSS", false, "true")
@@ -99,7 +146,7 @@ export default function EditorNota({
   function aplicarTamanho(px: number) {
     const el = corpoRef.current
     if (!el) return
-    el.focus()
+    restaurarSelecao()
     try {
       document.execCommand("styleWithCSS", false, "false")
     } catch {}
@@ -123,7 +170,7 @@ export default function EditorNota({
   function aplicarCaixa(modo: "maiuscula" | "minuscula" | "capitalizada") {
     const el = corpoRef.current
     if (!el) return
-    el.focus()
+    restaurarSelecao()
     const sel = window.getSelection()
     const texto = sel?.toString() ?? ""
     if (!texto) {
@@ -266,8 +313,27 @@ export default function EditorNota({
 
         <span className="ws-nota-sep" aria-hidden="true" />
 
-        <Botao rotulo="⟲" aria="Desfazer" onAplicar={() => comando("undo")} />
-        <Botao rotulo="⟳" aria="Refazer" onAplicar={() => comando("redo")} />
+        {/* Setas curvas de verdade (o ⟲ do texto some em algumas fontes). */}
+        <Botao
+          aria="Desfazer"
+          onAplicar={() => comando("undo")}
+          icone={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 7v6h6" />
+              <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.7 3L3 13" />
+            </svg>
+          }
+        />
+        <Botao
+          aria="Refazer"
+          onAplicar={() => comando("redo")}
+          icone={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 7v6h-6" />
+              <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3L21 13" />
+            </svg>
+          }
+        />
         <Botao rotulo="⌫" aria="Limpar formatação" onAplicar={() => comando("removeFormat")} />
 
         <span style={{ flex: 1 }} />
@@ -354,11 +420,13 @@ export default function EditorNota({
  */
 function Botao({
   rotulo,
+  icone,
   aria,
   onAplicar,
   estilo,
 }: {
-  rotulo: string
+  rotulo?: string
+  icone?: React.ReactNode
   aria: string
   onAplicar: () => void
   estilo?: React.CSSProperties
@@ -373,9 +441,9 @@ function Botao({
         onAplicar()
       }}
       className="no-ds ws-btn-icone"
-      style={{ width: 28, height: 26, fontSize: 12, ...estilo }}
+      style={{ width: 28, height: 26, fontSize: 12, flexShrink: 0, ...estilo }}
     >
-      {rotulo}
+      {icone ?? rotulo}
     </button>
   )
 }
