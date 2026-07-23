@@ -1577,7 +1577,8 @@ function escopoDoForm(fd: FormData): { contexto_id?: string; aba_id?: string; fi
   if (definidos !== 1) return null
   if (contextoId) return ehUuid(contextoId) ? { contexto_id: contextoId } : null
   if (abaId) return ehUuid(abaId) ? { aba_id: abaId } : null
-  return fixa === "arquivos" || fixa === "estudos" ? { fixa } : null
+  // Só existe uma aba fixa de notas (Estudos saiu na fase 5).
+  return fixa === "arquivos" ? { fixa } : null
 }
 
 export async function criarNotaAction(

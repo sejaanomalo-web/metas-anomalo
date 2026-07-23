@@ -13,12 +13,11 @@ const FIXAS: { rotulo: string; href: string; matchExact?: boolean }[] = [
   { rotulo: "Clientes", href: "/dashboard/workspace/clientes" },
   { rotulo: "Minhas", href: "/dashboard/workspace/minhas" },
   { rotulo: "Arquivos", href: "/dashboard/workspace/arquivos" },
-  { rotulo: "Estudos", href: "/dashboard/workspace/estudos" },
 ]
 
 /**
  * Cabeçalho do Workspace no desenho do Asana: ícone do projeto, título e a
- * régua de abas sublinhadas. As seis primeiras abas são FIXAS (código — não
+ * régua de abas sublinhadas. As cinco primeiras abas são FIXAS (código — não
  * há como excluir); depois vêm as abas criadas pelo time, o "+" que cria aba
  * nova (calendário ou nota), o lápis que renomeia/exclui SÓ as criadas, e a
  * engrenagem de Configurações à direita.
@@ -259,7 +258,7 @@ export default function WorkspaceNav({
           }}
         >
           <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>
-            As abas Lista, Calendário, Clientes, Minhas, Arquivos e Estudos são
+            As abas Lista, Calendário, Clientes, Minhas e Arquivos são
             fixas do sistema. Aqui você edita só as criadas pelo time.
           </p>
           {abas.map((a) => (

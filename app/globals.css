@@ -1306,7 +1306,10 @@ table {
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
-  z-index: 38;
+  /* ACIMA do sino e do hambúrguer (ambos z-index 60). Com 38 eles flutuavam
+   * por cima do topo do painel e cobriam os botões — no celular, onde o
+   * painel é tela cheia, tapavam justamente "concluir" e "fechar". */
+  z-index: 69;
   border: none;
   cursor: pointer;
   padding: 0;
@@ -1321,7 +1324,7 @@ table {
   max-width: 100vw;
   overflow-y: auto;
   overscroll-behavior: contain;
-  z-index: 39;
+  z-index: 70;
   border-radius: 0;
   border-left: 0.5px solid rgba(255, 255, 255, 0.08);
   background: var(--surface-1);
@@ -1332,6 +1335,22 @@ table {
     width: 100vw;
     border-left: none;
   }
+}
+
+/* Topo do painel de tarefa: fixo, com respiro pro notch/barra de status do
+ * celular (env(safe-area-inset-top)) — sem isso o primeiro botão encosta na
+ * borda de cima em iPhone. */
+.ws-drawer-topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: sticky;
+  top: 0;
+  background: var(--surface-1);
+  z-index: 2;
 }
 
 /* ============================================================
@@ -1368,10 +1387,15 @@ table {
 /* Cabeçalho fixo da área: título + abas (+ filtros, quando a página quiser). */
 .ws-topo {
   flex-shrink: 0;
-  padding: 14px 18px 0;
+  padding: 14px 18px 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  /* Linha fina + sombra: separa o cabeçalho fixo do conteúdo que rola, pra
+   * a primeira tarefa não parecer colada no botão "Adicionar nova tarefa". */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 6px 12px -10px rgba(0, 0, 0, 0.9);
+  z-index: 1;
 }
 
 /* O miolo é o ÚNICO scroll da área. Fade suave a cada troca de conteúdo. */
@@ -1380,7 +1404,8 @@ table {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 12px 18px 24px;
+  /* 18px no topo = o respiro que faltava entre o cabeçalho e a lista. */
+  padding: 18px 18px 28px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1542,9 +1567,14 @@ table {
     display: flex;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    /* snap: o dedo solta e a coluna encaixa inteira na tela, em vez de
+     * parar no meio de dois dias. */
+    scroll-snap-type: x mandatory;
   }
   .ws-cal-coluna {
-    flex: 0 0 210px;
+    /* Quase a largura da tela: um dia por vez, como o usuário pediu. */
+    flex: 0 0 min(88vw, 320px);
+    scroll-snap-align: center;
   }
 }
 
