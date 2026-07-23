@@ -336,6 +336,12 @@ export async function garantirContextoDoClienteAction(
   const nome =
     (cliente.display_name as string | null)?.trim() || (cliente.nome as string)
 
+  const empresaCliente = (cliente.empresa_nome as string | null) ?? ""
+  const grupoId = empresaCliente
+    ? await garantirAncora(db, empresaCliente, usuario.id)
+    : null
+  const ordemNoGrupo = await proximaOrdemNoGrupo(db, grupoId)
+
   const { data, error } = await db
     .from("ws_contextos")
     .insert({
@@ -343,6 +349,10 @@ export async function garantirContextoDoClienteAction(
       tipo: "cliente",
       cliente_id: clienteId,
       empresa_nome: cliente.empresa_nome as string,
+      // Entra no grupo certo e no FIM dele — abrir a pasta de um cliente do
+      // cadastro não pode empurrar a organização que o time já fez.
+      grupo_id: grupoId,
+      ordem: ordemNoGrupo,
       criado_por: usuario.id,
     })
     .select("id")
@@ -1201,9 +1211,88 @@ export async function alternarSeguidorAction(
 const HEX_COR = /^#[0-9a-fA-F]{6}$/
 
 /**
+ * Âncora (contexto tipo 'empresa') de um grupo, criando se ainda não existir.
+ * A comparação é case-insensitive DE PROPÓSITO: os dados do Asana vieram com
+ * caixas diferentes pro mesmo grupo, e casar string exata era o que criava
+ * grupo duplicado (um com os clientes, outro vazio).
+ */
+async function garantirAncora(
+  db: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  nomeEmpresa: string,
+  criadoPor: string
+): Promise<string | null> {
+  const nome = nomeEmpresa.trim()
+  if (!nome) return null
+
+  const { data: existentes } = await db
+    .from("ws_contextos")
+    .select("id, nome, empresa_nome")
+    .eq("tipo", "empresa")
+    .is("arquivado_em", null)
+  const alvo = nome.toLowerCase()
+  const achou = (existentes ?? []).find(
+    (a) =>
+      String((a as { empresa_nome: string | null; nome: string }).empresa_nome ??
+        (a as { nome: string }).nome)
+        .trim()
+        .toLowerCase() === alvo
+  )
+  if (achou) return (achou as { id: string }).id
+
+  // Nasce no FIM da lista de grupos — criar empresa nunca empurra as outras.
+  const { data: ultima } = await db
+    .from("ws_contextos")
+    .select("ordem")
+    .eq("tipo", "empresa")
+    .is("arquivado_em", null)
+    .order("ordem", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const ordem = ((ultima?.ordem as number | undefined) ?? 0) + 10
+
+  const { data, error } = await db
+    .from("ws_contextos")
+    .insert({
+      nome,
+      tipo: "empresa",
+      empresa_nome: nome,
+      ordem,
+      criado_por: criadoPor,
+    })
+    .select("id")
+    .single()
+  if (error || !data) {
+    console.error("[workspace] garantirAncora error", error?.message)
+    return null
+  }
+  // Âncora aponta pra si mesma: todo contexto do grupo compartilha grupo_id.
+  await db.from("ws_contextos").update({ grupo_id: data.id }).eq("id", data.id)
+  return data.id as string
+}
+
+/** Próxima posição livre DENTRO de um grupo — item novo entra no fim. */
+async function proximaOrdemNoGrupo(
+  db: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  grupoId: string | null
+): Promise<number> {
+  let q = db
+    .from("ws_contextos")
+    .select("ordem")
+    .neq("tipo", "empresa")
+    .is("arquivado_em", null)
+    .order("ordem", { ascending: false })
+    .limit(1)
+  q = grupoId ? q.eq("grupo_id", grupoId) : q.is("grupo_id", null)
+  const { data } = await q.maybeSingle()
+  return ((data?.ordem as number | undefined) ?? 0) + 10
+}
+
+/**
  * Cria um cliente DIRETO no Workspace (sem cadastro de tráfego): contexto
  * tipo 'cliente' com cliente_id nulo. Nome, cor exata, empresa e foto —
  * a área de trabalho dele (nota + calendário + lista) passa a existir na hora.
+ *
+ * Entra no FIM do grupo: criar cliente não reordena o que o time já organizou.
  */
 export async function criarClienteWorkspaceAction(
   formData: FormData
@@ -1219,6 +1308,9 @@ export async function criarClienteWorkspaceAction(
   const cor = corBruta && HEX_COR.test(corBruta) ? corBruta : null
   const empresa = opcional(formData, "empresa_nome")
 
+  const grupoId = empresa ? await garantirAncora(db, empresa, usuario.id) : null
+  const ordem = await proximaOrdemNoGrupo(db, grupoId)
+
   let fotoUrl: string | null = null
   const fotoBase64 = opcional(formData, "foto_base64")
   if (fotoBase64) fotoUrl = await uploadFotoPerfil(fotoBase64, "contexto")
@@ -1230,6 +1322,8 @@ export async function criarClienteWorkspaceAction(
       tipo: "cliente",
       cliente_id: null,
       empresa_nome: empresa,
+      grupo_id: grupoId,
+      ordem,
       cor,
       foto_url: fotoUrl,
       criado_por: usuario.id,
@@ -1273,7 +1367,14 @@ export async function atualizarContextoAction(
     patch.cor = cor
   }
   if (formData.has("empresa_nome")) {
-    patch.empresa_nome = opcional(formData, "empresa_nome")
+    const empresa = opcional(formData, "empresa_nome")
+    patch.empresa_nome = empresa
+    // Trocar a empresa move o contexto de GRUPO — o vínculo é o grupo_id, e
+    // deixar só o texto mudar faria o cliente sumir do grupo antigo sem
+    // aparecer no novo. Entra no fim do grupo de destino.
+    const grupoId = empresa ? await garantirAncora(db, empresa, usuario.id) : null
+    patch.grupo_id = grupoId
+    patch.ordem = await proximaOrdemNoGrupo(db, grupoId)
   }
   const fotoBase64 = opcional(formData, "foto_base64")
   if (fotoBase64) {
@@ -1300,10 +1401,13 @@ export async function atualizarContextoAction(
 }
 
 /**
- * Renomeia um grupo de empresa DENTRO do Workspace: atualiza empresa_nome de
- * todos os contextos ativos do grupo. Não toca em cliente_trafego nem em
- * empresas_config — o cadastro de tráfego é de outro módulo e renomear lá
- * teria efeito em relatórios e metas.
+ * Renomeia um grupo de empresa DENTRO do Workspace, pelo ID DA ÂNCORA.
+ *
+ * Identificar o grupo pelo id (e não pelo nome antigo, como antes) é o que
+ * torna a operação confiável: o nome digitado na tela podia divergir do
+ * empresa_nome gravado por diferença de caixa, e o update não pegava linha
+ * nenhuma. Não toca em cliente_trafego nem em empresas_config — o cadastro de
+ * tráfego é de outro módulo e renomear lá afetaria relatórios e metas.
  */
 export async function renomearEmpresaWsAction(
   formData: FormData
@@ -1313,22 +1417,36 @@ export async function renomearEmpresaWsAction(
   const db = getSupabaseAdmin()
   if (!db) return { ok: false, erro: "Supabase indisponível." }
 
-  const de = texto(formData, "de", 120)
+  const ancoraId = String(formData.get("ancora_id") ?? "").trim()
+  if (!ehUuid(ancoraId)) return { ok: false, erro: "Empresa inválida." }
   const para = texto(formData, "para", 120)
-  if (!de || !para) return { ok: false, erro: "Informe o nome novo." }
-  if (de === para) return { ok: true }
+  if (!para) return { ok: false, erro: "Informe o nome novo." }
 
-  const { error } = await db
+  const agora = new Date().toISOString()
+  const { data, error } = await db
     .from("ws_contextos")
-    .update({ empresa_nome: para, updated_at: new Date().toISOString() })
-    .eq("empresa_nome", de)
-    .is("arquivado_em", null)
+    .update({ nome: para, empresa_nome: para, updated_at: agora })
+    .eq("id", ancoraId)
+    .eq("tipo", "empresa")
+    .select("id")
+    .maybeSingle()
   if (error) {
     console.error("[workspace] renomearEmpresaWs error", error.message)
     return { ok: false, erro: "Não foi possível renomear." }
   }
+  if (!data) return { ok: false, erro: "Empresa não encontrada." }
+
+  // empresa_nome dos filhos é espelho do nome da âncora (compatibilidade
+  // com consultas antigas que ainda leem o texto).
+  await db
+    .from("ws_contextos")
+    .update({ empresa_nome: para, updated_at: agora })
+    .eq("grupo_id", ancoraId)
+    .neq("tipo", "empresa")
+    .is("arquivado_em", null)
+
   revalidatePath(ROTA)
-  return { ok: true }
+  return { ok: true, id: ancoraId }
 }
 
 // ============================================================
@@ -1663,34 +1781,27 @@ export async function criarEmpresaWsAction(
   const nome = texto(formData, "nome", 120)
   if (!nome) return { ok: false, erro: "Informe o nome da empresa." }
 
-  // Já existe grupo com esse nome? Não cria âncora duplicada.
-  const { data: existente } = await db
-    .from("ws_contextos")
-    .select("id")
-    .eq("tipo", "empresa")
-    .eq("empresa_nome", nome)
-    .is("arquivado_em", null)
-    .maybeSingle()
-  if (existente) return { ok: true, id: existente.id as string }
-
-  const { data, error } = await db
-    .from("ws_contextos")
-    .insert({ nome, tipo: "empresa", empresa_nome: nome, criado_por: usuario.id })
-    .select("id")
-    .single()
-  if (error || !data) {
-    console.error("[workspace] criarEmpresaWs error", error?.message)
-    return { ok: false, erro: "Não foi possível criar a empresa." }
-  }
+  // garantirAncora reaproveita grupo existente comparando SEM caixa e cria o
+  // novo no fim da lista — nenhuma empresa muda de lugar por causa disto.
+  const id = await garantirAncora(db, nome, usuario.id)
+  if (!id) return { ok: false, erro: "Não foi possível criar a empresa." }
   revalidatePath(ROTA)
-  return { ok: true, id: data.id as string }
+  return { ok: true, id }
 }
 
 /**
- * Persiste a ordem visual da aba Clientes: recebe TODOS os ids de contexto
- * (âncoras de empresa e clientes) na ordem final e renumera ws_contextos.ordem
- * — determinístico, mesma estratégia do reordenarDiaAction. Um item movido de
- * grupo também troca de empresa_nome (vem no payload).
+ * Persiste a ordem visual da aba Clientes.
+ *
+ * Recebe os GRUPOS na ordem final, cada um com sua âncora e a lista de
+ * clientes. Grava:
+ *   • âncora.ordem = posição do grupo  (10, 20, 30…)
+ *   • cliente.ordem = posição no grupo (10, 20, 30…)
+ *   • cliente.grupo_id/empresa_nome = grupo onde ele parou
+ *
+ * Ordem POSICIONAL e explícita: como toda linha tem um valor próprio, a tela
+ * só reordena quando alguém arrasta. Antes a posição do grupo era o min(ordem)
+ * dos seus contextos, então adicionar ou tirar um cliente movia o grupo
+ * inteiro de lugar sozinho.
  */
 export async function reordenarContextosAction(
   formData: FormData
@@ -1700,36 +1811,54 @@ export async function reordenarContextosAction(
   const db = getSupabaseAdmin()
   if (!db) return { ok: false, erro: "Supabase indisponível." }
 
-  let itens: { id: string; empresa?: string }[]
+  let grupos: { ancoraId: string; nome: string; clientes: string[] }[]
   try {
-    const bruto = JSON.parse(String(formData.get("itens") ?? "[]"))
-    itens = Array.isArray(bruto)
+    const bruto = JSON.parse(String(formData.get("grupos") ?? "[]"))
+    grupos = Array.isArray(bruto)
       ? bruto
-          .map((x) => ({
-            id: String(x?.id ?? ""),
-            empresa: x?.empresa === undefined ? undefined : String(x.empresa),
+          .map((g) => ({
+            ancoraId: String(g?.ancoraId ?? ""),
+            nome: String(g?.nome ?? "").slice(0, 120),
+            clientes: Array.isArray(g?.clientes)
+              ? g.clientes.map(String).filter(ehUuid)
+              : [],
           }))
-          .filter((x) => ehUuid(x.id))
+          .filter((g) => ehUuid(g.ancoraId))
       : []
   } catch {
     return { ok: false, erro: "Ordem inválida." }
   }
-  if (itens.length === 0 || itens.length > 500) {
+  if (grupos.length === 0 || grupos.length > 200) {
     return { ok: false, erro: "Ordem inválida." }
   }
+  const totalClientes = grupos.reduce((n, g) => n + g.clientes.length, 0)
+  if (totalClientes > 1000) return { ok: false, erro: "Lista grande demais." }
 
-  for (let i = 0; i < itens.length; i++) {
-    const patch: Record<string, unknown> = { ordem: (i + 1) * 10 }
-    if (itens[i].empresa !== undefined) {
-      patch.empresa_nome = itens[i].empresa!.trim() || null
-    }
-    const { error } = await db
+  for (let i = 0; i < grupos.length; i++) {
+    const g = grupos[i]
+    const { error: errAncora } = await db
       .from("ws_contextos")
-      .update(patch)
-      .eq("id", itens[i].id)
-    if (error) {
-      console.error("[workspace] reordenarContextos error", error.message)
+      .update({ ordem: (i + 1) * 10 })
+      .eq("id", g.ancoraId)
+      .eq("tipo", "empresa")
+    if (errAncora) {
+      console.error("[workspace] reordenarContextos ancora", errAncora.message)
       return { ok: false, erro: "Não foi possível reordenar." }
+    }
+
+    for (let j = 0; j < g.clientes.length; j++) {
+      const { error } = await db
+        .from("ws_contextos")
+        .update({
+          ordem: (j + 1) * 10,
+          grupo_id: g.ancoraId,
+          empresa_nome: g.nome || null,
+        })
+        .eq("id", g.clientes[j])
+      if (error) {
+        console.error("[workspace] reordenarContextos cliente", error.message)
+        return { ok: false, erro: "Não foi possível reordenar." }
+      }
     }
   }
   revalidatePath(ROTA)
@@ -1750,14 +1879,17 @@ export async function excluirEmpresaWsAction(
   const db = getSupabaseAdmin()
   if (!db) return { ok: false, erro: "Supabase indisponível." }
 
-  const nome = texto(formData, "nome", 120)
-  if (!nome) return { ok: false, erro: "Empresa inválida." }
+  // Pelo ID da âncora, não pelo nome: casar a string era frágil (caixa
+  // diferente entre a âncora e o que a tela mostrava) e o update podia não
+  // pegar linha nenhuma, com a UI dizendo "excluído" sem nada ter acontecido.
+  const ancoraId = String(formData.get("ancora_id") ?? "").trim()
+  if (!ehUuid(ancoraId)) return { ok: false, erro: "Empresa inválida." }
 
   const { count } = await db
     .from("ws_contextos")
     .select("id", { count: "exact", head: true })
-    .eq("tipo", "cliente")
-    .eq("empresa_nome", nome)
+    .eq("grupo_id", ancoraId)
+    .neq("tipo", "empresa")
     .is("arquivado_em", null)
   if ((count ?? 0) > 0) {
     return {
@@ -1766,29 +1898,21 @@ export async function excluirEmpresaWsAction(
     }
   }
 
-  // Só existe o que excluir se o grupo tiver ÂNCORA (contexto tipo 'empresa').
-  // Grupo que veio só do cadastro de tráfego não tem linha própria aqui — sem
-  // esta checagem o update afetava 0 linhas e a UI dizia "excluído" sem nada
-  // ter acontecido, e o grupo reaparecia no refresh.
-  const { data: ancoras, error } = await db
+  const { data, error } = await db
     .from("ws_contextos")
     .update({ arquivado_em: new Date().toISOString() })
+    .eq("id", ancoraId)
     .eq("tipo", "empresa")
-    .eq("empresa_nome", nome)
     .is("arquivado_em", null)
     .select("id")
+    .maybeSingle()
   if (error) {
     console.error("[workspace] excluirEmpresaWs error", error.message)
     return { ok: false, erro: "Não foi possível excluir." }
   }
-  if (!ancoras || ancoras.length === 0) {
-    return {
-      ok: false,
-      erro: "Este grupo vem do cadastro de clientes de tráfego e não pode ser excluído aqui.",
-    }
-  }
+  if (!data) return { ok: false, erro: "Empresa não encontrada (já excluída?)." }
   revalidatePath(ROTA)
-  return { ok: true }
+  return { ok: true, id: ancoraId }
 }
 
 /**

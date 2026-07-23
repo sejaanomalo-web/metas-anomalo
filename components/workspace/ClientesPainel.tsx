@@ -39,26 +39,34 @@ export interface ItemCliente {
 }
 
 export interface GrupoEmpresa {
+  /** Contexto tipo 'empresa' — a identidade do grupo. */
+  ancoraId: string
   empresa: string
-  /** Contexto tipo 'empresa' que ancora o grupo (permite grupo vazio). */
-  ancoraId: string | null
   itens: ItemCliente[]
 }
 
 const PREFIXO_GRUPO = "grupo:"
 
 /**
- * Aba Clientes em LISTA vertical (um cliente por linha), com a alça de
- * arraste (⋮⋮) que o dia a dia pede: arrastar cliente pra cima/baixo dentro
- * do grupo, arrastar pra OUTRO grupo (muda a empresa), e arrastar o grupo
- * inteiro pela alça do cabeçalho. A ordem final persiste em
- * ws_contextos.ordem via reordenarContextosAction — otimista, com reversão.
+ * Aba Clientes em LISTA vertical, com alça de arraste (⋮⋮): cliente sobe e
+ * desce dentro do grupo, atravessa pra outro grupo, e o grupo inteiro anda
+ * pela alça do cabeçalho.
+ *
+ * O grupo é identificado pelo ID DA ÂNCORA, nunca pelo nome: os dados do
+ * Asana vieram com caixas diferentes ("ASSESSORIA SUN" nos clientes,
+ * "Assessoria Sun" na âncora) e casar string criava dois grupos, um vazio.
+ *
+ * A ordem é POSICIONAL e persistida (reordenarContextosAction) — a tela só
+ * reordena quando alguém arrasta.
  */
 export default function ClientesPainel({
   grupos,
+  soltos,
   empresas,
 }: {
   grupos: GrupoEmpresa[]
+  /** Clientes sem empresa — listados no fim, fora do arrasto de grupos. */
+  soltos: ItemCliente[]
   empresas: string[]
 }) {
   const router = useRouter()
@@ -67,16 +75,16 @@ export default function ClientesPainel({
   const [criandoCliente, setCriandoCliente] = useState(false)
   const [criandoEmpresa, setCriandoEmpresa] = useState(false)
 
-  // Estado otimista do arraste: ordem dos grupos + itens por grupo.
+  // Estado otimista do arraste: ordem das âncoras + itens por âncora.
   const estadoServidor = useMemo(() => {
-    const ordem = grupos.map((g) => g.empresa)
+    const ordem = grupos.map((g) => g.ancoraId)
     const itens: Record<string, ItemCliente[]> = {}
-    const ancoras: Record<string, string | null> = {}
+    const nomes: Record<string, string> = {}
     for (const g of grupos) {
-      itens[g.empresa] = g.itens
-      ancoras[g.empresa] = g.ancoraId
+      itens[g.ancoraId] = g.itens
+      nomes[g.ancoraId] = g.empresa
     }
-    return { ordem, itens, ancoras }
+    return { ordem, itens, nomes }
   }, [grupos])
 
   const [ordemGrupos, setOrdemGrupos] = useState(estadoServidor.ordem)
@@ -92,30 +100,26 @@ export default function ClientesPainel({
 
   function grupoDe(id: string): string | null {
     if (id.startsWith(PREFIXO_GRUPO)) return id.slice(PREFIXO_GRUPO.length)
-    for (const [empresa, itens] of Object.entries(itensPorGrupo)) {
-      if (itens.some((i) => i.contextoId === id)) return empresa
+    for (const [ancoraId, itens] of Object.entries(itensPorGrupo)) {
+      if (itens.some((i) => i.contextoId === id)) return ancoraId
     }
     return null
   }
 
-  /** Persiste a ordem atual inteira (âncoras + clientes, grupo a grupo). */
-  function persistir(
-    ordem: string[],
-    itens: Record<string, ItemCliente[]>
-  ) {
-    const payload: { id: string; empresa?: string }[] = []
-    for (const empresa of ordem) {
-      const ancora = estadoServidor.ancoras[empresa]
-      if (ancora) payload.push({ id: ancora })
-      for (const item of itens[empresa] ?? []) {
-        if (item.contextoId) payload.push({ id: item.contextoId, empresa })
-      }
-    }
+  /** Persiste a organização inteira: grupos na ordem + clientes de cada um. */
+  function persistir(ordem: string[], itens: Record<string, ItemCliente[]>) {
+    const payload = ordem.map((ancoraId) => ({
+      ancoraId,
+      nome: estadoServidor.nomes[ancoraId] ?? "",
+      clientes: (itens[ancoraId] ?? [])
+        .map((i) => i.contextoId)
+        .filter((x): x is string => Boolean(x)),
+    }))
     if (payload.length === 0) return
     setErro(null)
     startTransition(async () => {
       const fd = new FormData()
-      fd.set("itens", JSON.stringify(payload))
+      fd.set("grupos", JSON.stringify(payload))
       const r = await reordenarContextosAction(fd)
       if (!r.ok) {
         setOrdemGrupos(estadoServidor.ordem)
@@ -135,7 +139,6 @@ export default function ClientesPainel({
     const para = grupoDe(sobre)
     if (!de || !para || de === para) return
 
-    // Cliente atravessando de grupo: preview em tempo real.
     setItensPorGrupo((m) => {
       const item = m[de]?.find((i) => i.contextoId === ativo)
       if (!item) return m
@@ -171,9 +174,6 @@ export default function ClientesPainel({
     }
 
     // ---- Cliente arrastado ----
-    // Calcula o estado final a partir do snapshot ATUAL (o cross-grupo já
-    // aconteceu no onDragOver), aplica e persiste o mesmo objeto — nada de
-    // depender do timing do setState.
     const para = grupoDe(sobre)
     if (!para) return
     const lista = [...(itensPorGrupo[para] ?? [])]
@@ -225,7 +225,7 @@ export default function ClientesPainel({
       )}
       {criandoEmpresa && <NovaEmpresa aoFechar={() => setCriandoEmpresa(false)} />}
 
-      {ordemGrupos.length === 0 && (
+      {ordemGrupos.length === 0 && soltos.length === 0 && (
         <div
           className="glass"
           style={{ padding: "28px 16px", borderRadius: 12, textAlign: "center", fontSize: 12, color: "var(--text-4)" }}
@@ -245,20 +245,33 @@ export default function ClientesPainel({
           strategy={verticalListSortingStrategy}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {ordemGrupos.map((empresa) => (
+            {ordemGrupos.map((ancoraId) => (
               <Grupo
-                key={empresa}
-                empresa={empresa}
-                itens={itensPorGrupo[empresa] ?? []}
-                // Só grupo com ÂNCORA (contexto tipo 'empresa') pode ser
-                // excluído — os que vêm do cadastro de tráfego não têm linha
-                // própria aqui, e o botão só frustraria.
-                podeExcluir={Boolean(estadoServidor.ancoras[empresa])}
+                key={ancoraId}
+                ancoraId={ancoraId}
+                empresa={estadoServidor.nomes[ancoraId] ?? ""}
+                itens={itensPorGrupo[ancoraId] ?? []}
               />
             ))}
           </div>
         </SortableContext>
       </DndContext>
+
+      {soltos.length > 0 && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-3)", margin: 0 }}>
+            Sem empresa
+          </h2>
+          <p style={{ fontSize: 11, color: "var(--text-4)", margin: "0 0 2px" }}>
+            Abra o cliente e escolha a empresa dele para ele entrar num grupo.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {soltos.map((item) => (
+              <LinhaSemGrupo key={item.contextoId ?? item.clienteId ?? item.nome} item={item} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -272,8 +285,7 @@ function MaisIcone() {
   )
 }
 
-/** Alça de arraste (⋮⋮) — a "mãozinha" do pedido. Os listeners do dnd-kit
- *  vêm por spread; sem ref (o nó raiz sortable já está registrado). */
+/** Alça de arraste (⋮⋮) — a "mãozinha". Listeners do dnd-kit vêm por spread. */
 function Alca(props: React.HTMLAttributes<HTMLButtonElement>) {
   return (
     <button
@@ -297,13 +309,13 @@ function Alca(props: React.HTMLAttributes<HTMLButtonElement>) {
 /* =================== Grupo (empresa) =================== */
 
 function Grupo({
+  ancoraId,
   empresa,
   itens,
-  podeExcluir,
 }: {
+  ancoraId: string
   empresa: string
   itens: ItemCliente[]
-  podeExcluir: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -312,38 +324,37 @@ function Grupo({
   const [erro, setErro] = useState<string | null>(null)
   const [confirmandoExcluir, setConfirmandoExcluir] = useState(false)
 
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: `${PREFIXO_GRUPO}${empresa}` })
+  useEffect(() => setNome(empresa), [empresa])
 
-  function excluir() {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: `${PREFIXO_GRUPO}${ancoraId}` })
+
+  function renomear() {
+    const n = nome.trim()
+    if (!n || n === empresa) return
     setErro(null)
     startTransition(async () => {
       const fd = new FormData()
-      fd.set("nome", empresa)
-      const r = await excluirEmpresaWsAction(fd)
+      fd.set("ancora_id", ancoraId)
+      fd.set("para", n)
+      const r = await renomearEmpresaWsAction(fd)
       if (!r.ok) {
-        setErro(r.erro ?? "Não foi possível excluir.")
-        setConfirmandoExcluir(false)
+        setErro(r.erro ?? "Não foi possível renomear.")
         return
       }
       router.refresh()
     })
   }
 
-  function renomear() {
-    const n = nome.trim()
-    if (!n || n === empresa) {
-      setEditando(false)
-      return
-    }
+  function excluir() {
     setErro(null)
     startTransition(async () => {
       const fd = new FormData()
-      fd.set("de", empresa)
-      fd.set("para", n)
-      const r = await renomearEmpresaWsAction(fd)
+      fd.set("ancora_id", ancoraId)
+      const r = await excluirEmpresaWsAction(fd)
       if (!r.ok) {
-        setErro(r.erro ?? "Não foi possível renomear.")
+        setErro(r.erro ?? "Não foi possível excluir.")
+        setConfirmandoExcluir(false)
         return
       }
       setEditando(false)
@@ -366,7 +377,7 @@ function Grupo({
       }}
       {...attributes}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
         <Alca {...listeners} />
         {editando ? (
           <input
@@ -374,10 +385,19 @@ function Grupo({
             type="text"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
+            // onBlur SÓ salva. Fechar aqui desmontava os botões de Excluir no
+            // meio do clique (blur acontece antes do click), e o clique se
+            // perdia — era por isso que "Excluir" não fazia nada.
             onBlur={renomear}
             onKeyDown={(e) => {
-              if (e.key === "Enter") renomear()
-              if (e.key === "Escape") setEditando(false)
+              if (e.key === "Enter") {
+                renomear()
+                setEditando(false)
+              }
+              if (e.key === "Escape") {
+                setNome(empresa)
+                setEditando(false)
+              }
             }}
             maxLength={120}
             className="glass-input"
@@ -391,9 +411,12 @@ function Grupo({
         )}
         <button
           type="button"
-          onClick={() => setEditando((v) => !v)}
-          aria-label={`Renomear ${empresa}`}
-          title="Renomear empresa (só no Workspace)"
+          onClick={() => {
+            setEditando((v) => !v)
+            setConfirmandoExcluir(false)
+          }}
+          aria-label={`Editar ${empresa}`}
+          title="Renomear ou excluir esta empresa"
           className="no-ds ws-btn-icone"
           style={{ width: 24, height: 24 }}
         >
@@ -401,11 +424,15 @@ function Grupo({
             <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
           </svg>
         </button>
-        {editando && podeExcluir &&
+
+        {editando &&
           (confirmandoExcluir ? (
             <>
+              {/* preventDefault no mousedown: o input não perde o foco, o
+                  blur não roda, e o clique chega inteiro neste botão. */}
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={excluir}
                 disabled={pending}
                 className="no-ds"
@@ -415,6 +442,7 @@ function Grupo({
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setConfirmandoExcluir(false)}
                 className="no-ds"
                 style={{ fontSize: 11, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer" }}
@@ -425,16 +453,23 @@ function Grupo({
           ) : (
             <button
               type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => setConfirmandoExcluir(true)}
               disabled={pending}
               className="no-ds"
               style={botaoExcluirGrupo}
-              title="Excluir empresa (só com o grupo vazio)"
+              title={
+                itens.length > 0
+                  ? "Mova os clientes para outro grupo antes de excluir"
+                  : "Excluir esta empresa"
+              }
             >
               Excluir
             </button>
           ))}
+
         <span style={{ fontSize: 10, color: "var(--text-4)" }}>{itens.length}</span>
+        {pending && <span style={{ fontSize: 10, color: "var(--text-4)" }}>salvando…</span>}
         {erro && <span style={{ fontSize: 10, color: "#e24b4a" }}>{erro}</span>}
       </div>
 
@@ -444,7 +479,7 @@ function Grupo({
             item.contextoId ? (
               <LinhaCliente key={item.contextoId} item={item} />
             ) : (
-              <LinhaClienteSemContexto key={item.clienteId ?? item.nome} item={item} />
+              <LinhaSemGrupo key={item.clienteId ?? item.nome} item={item} />
             )
           )}
           {itens.length === 0 && (
@@ -520,8 +555,7 @@ function ConteudoLinha({ item }: { item: ItemCliente }) {
   )
 }
 
-/** Linha com contexto: sortable, alça à esquerda, clique abre a área e
- *  lixeira à direita que só aparece no hover. */
+/** Linha com contexto: sortable, alça à esquerda, lixeira no hover. */
 function LinhaCliente({ item }: { item: ItemCliente }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -600,24 +634,17 @@ function LinhaCliente({ item }: { item: ItemCliente }) {
   )
 }
 
-function IconeLixeira() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <line x1="10" y1="11" x2="10" y2="17" />
-      <line x1="14" y1="11" x2="14" y2="17" />
-    </svg>
-  )
-}
-
 /** Cliente do cadastro sem pasta ainda: sem alça (a ordem nasce com a pasta). */
-function LinhaClienteSemContexto({ item }: { item: ItemCliente }) {
+function LinhaSemGrupo({ item }: { item: ItemCliente }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
 
   function abrir() {
+    if (item.contextoId) {
+      router.push(`/dashboard/workspace/c/${item.contextoId}`)
+      return
+    }
     if (!item.clienteId) return
     setErro(null)
     startTransition(async () => {
@@ -634,7 +661,7 @@ function LinhaClienteSemContexto({ item }: { item: ItemCliente }) {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-      <span style={{ width: 22, flexShrink: 0 }} aria-hidden="true" />
+      <span style={{ width: 20, flexShrink: 0 }} aria-hidden="true" />
       <button
         type="button"
         onClick={abrir}
@@ -646,6 +673,17 @@ function LinhaClienteSemContexto({ item }: { item: ItemCliente }) {
         {erro && <span style={{ fontSize: 10, color: "#e24b4a" }}>{erro}</span>}
       </button>
     </div>
+  )
+}
+
+function IconeLixeira() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
   )
 }
 
@@ -714,7 +752,7 @@ function NovoCliente({ empresas, aoFechar }: { empresas: string[]; aoFechar: () 
   const [erro, setErro] = useState<string | null>(null)
   const [nome, setNome] = useState("")
   const [empresa, setEmpresa] = useState("")
-  const [cor, setCor] = useState("#cf9338")
+  const [cor, setCor] = useState("#f5c164")
   const [fotoBase64, setFotoBase64] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 

@@ -14,6 +14,7 @@ import {
 } from "@dnd-kit/core"
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { useFlipReorder } from "@/lib/useFlipReorder"
 import {
   alternarConclusaoAction,
   criarTarefaAction,
@@ -84,6 +85,12 @@ export default function CalendarioTarefas({
   const [navPending, startNav] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
   const [mostrarSemData, setMostrarSemData] = useState(false)
+  // Conclusão otimista: o cartão desce pro fim da coluna no clique, sem
+  // esperar o servidor. Some quando os dados novos chegam (efeito abaixo).
+  const [concluidasOtim, setConcluidasOtim] = useState<Record<string, boolean>>({})
+  // Durante o arraste quem posiciona é o dnd-kit — o FLIP fica desligado
+  // pra as duas animações não brigarem pelo mesmo transform.
+  const [arrastando, setArrastando] = useState(false)
 
   const sensors = useSensors(
     // 6px de folga: sem isso, um clique pra abrir a tarefa viraria arraste.
@@ -123,6 +130,10 @@ export default function CalendarioTarefas({
     const mapa: Record<string, string[]> = { [BANDEJA]: [] }
     const ordenadas = [...tarefasVisiveis].sort(
       (a, b) =>
+        // CONCLUÍDA VAI PRO FIM da coluna: some da área de trabalho ativa sem
+        // sair da tela (fica apagada lá embaixo). Só depois vale a ordem
+        // manual — dentro de cada bloco a organização do time é respeitada.
+        Number(Boolean(a.concluida_em)) - Number(Boolean(b.concluida_em)) ||
         a.ordem - b.ordem ||
         (a.prazo_hora ?? "").localeCompare(b.prazo_hora ?? "") ||
         a.created_at.localeCompare(b.created_at)
@@ -136,7 +147,42 @@ export default function CalendarioTarefas({
   }, [tarefasVisiveis, semDataVisiveis])
 
   const [layout, setLayout] = useState(layoutServidor)
-  useEffect(() => setLayout(layoutServidor), [layoutServidor])
+  useEffect(() => {
+    setLayout(layoutServidor)
+    setConcluidasOtim({})
+  }, [layoutServidor])
+
+  /** Conclusão vista pela UI: a otimista vence o servidor enquanto existir. */
+  function estaConcluida(id: string): boolean {
+    const local = concluidasOtim[id]
+    if (local !== undefined) return local
+    return Boolean(porId.get(id)?.concluida_em)
+  }
+
+  /**
+   * Marca/desmarca e JÁ reordena a coluna — concluída cai pro fim, o FLIP
+   * anima o deslize e as outras sobem.
+   *
+   * A reordenação entra no `layout`, não numa ordenação de render: o arraste
+   * calcula índices em cima do layout, e se a tela mostrasse uma ordem
+   * diferente da guardada, soltar um cartão o colocaria na posição errada.
+   * Uma ordem só, para exibir e para arrastar.
+   */
+  function marcarConcluida(id: string, valor: boolean) {
+    const mapaNovo = { ...concluidasOtim, [id]: valor }
+    setConcluidasOtim(mapaNovo)
+    const concluida = (x: string) =>
+      mapaNovo[x] ?? Boolean(porId.get(x)?.concluida_em)
+    setLayout((l) => {
+      const coluna = Object.keys(l).find((k) => l[k].includes(id))
+      if (!coluna) return l
+      // Sort ESTÁVEL: dentro de cada bloco a ordem manual continua valendo.
+      const reordenada = [...l[coluna]].sort(
+        (a, b) => Number(concluida(a)) - Number(concluida(b))
+      )
+      return { ...l, [coluna]: reordenada }
+    })
+  }
 
   function navegar(mudancas: Record<string, string | null>) {
     const qs = new URLSearchParams(searchParams.toString())
@@ -257,8 +303,13 @@ export default function CalendarioTarefas({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
+      onDragStart={() => setArrastando(true)}
+      onDragCancel={() => setArrastando(false)}
       onDragOver={aoArrastarSobre}
-      onDragEnd={aoSoltar}
+      onDragEnd={(e) => {
+        setArrastando(false)
+        aoSoltar(e)
+      }}
     >
       <div className="ws-cal-raiz" style={{ opacity: navPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
         {/* ---------- Barra de ferramentas ---------- */}
@@ -351,6 +402,9 @@ export default function CalendarioTarefas({
                     modoCor={modoCor}
                     meuUsuarioId={meuUsuarioId}
                     contextoFixoId={contextoFixoId}
+                    animar={!arrastando}
+                    estaConcluida={estaConcluida}
+                    onConcluir={marcarConcluida}
                   />
                 ))}
               </div>
@@ -384,6 +438,8 @@ export default function CalendarioTarefas({
                       ids={layout[c.iso] ?? []}
                       porId={porId}
                       modoCor={modoCor}
+                      estaConcluida={estaConcluida}
+                      onConcluir={marcarConcluida}
                     />
                   ))}
                 </div>
@@ -392,7 +448,13 @@ export default function CalendarioTarefas({
           </div>
 
           {mostrarSemData && (
-            <Bandeja ids={bandejaIds} porId={porId} modoCor={modoCor} />
+            <Bandeja
+              ids={bandejaIds}
+              porId={porId}
+              modoCor={modoCor}
+              estaConcluida={estaConcluida}
+              onConcluir={marcarConcluida}
+            />
           )}
         </div>
       </div>
@@ -419,6 +481,9 @@ function ColunaDia({
   modoCor,
   meuUsuarioId,
   contextoFixoId,
+  animar,
+  estaConcluida,
+  onConcluir,
 }: {
   iso: string
   rotuloDia: string
@@ -428,9 +493,16 @@ function ColunaDia({
   modoCor: "colorido" | "mono"
   meuUsuarioId: string
   contextoFixoId?: string
+  animar: boolean
+  estaConcluida: (id: string) => boolean
+  onConcluir: (id: string, valor: boolean) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `${PREFIXO_DIA}${iso}` })
   const dia = Number(iso.slice(8, 10))
+  // FLIP: quando uma tarefa é concluída ela desce pro fim da coluna, e as
+  // outras sobem — tudo deslizando, em vez de pular de posição.
+  const corpoRef = useRef<HTMLDivElement>(null)
+  useFlipReorder(corpoRef, ids.join("|"), animar)
 
   return (
     <div
@@ -464,11 +536,19 @@ function ColunaDia({
         </div>
       </div>
 
-      <div className="ws-cal-coluna-corpo">
+      <div className="ws-cal-coluna-corpo" ref={corpoRef}>
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {ids.map((id) => {
             const t = porId.get(id)
-            return t ? <CartaoTarefa key={id} tarefa={t} modoCor={modoCor} /> : null
+            return t ? (
+              <CartaoTarefa
+                key={id}
+                tarefa={t}
+                modoCor={modoCor}
+                concluida={estaConcluida(id)}
+                onConcluir={onConcluir}
+              />
+            ) : null
           })}
         </SortableContext>
         <QuickAdd iso={iso} meuUsuarioId={meuUsuarioId} contextoFixoId={contextoFixoId} />
@@ -601,6 +681,8 @@ function DiaMes({
   ids,
   porId,
   modoCor,
+  estaConcluida,
+  onConcluir,
 }: {
   iso: string
   dia: number
@@ -609,6 +691,8 @@ function DiaMes({
   ids: string[]
   porId: Map<string, TarefaComRelacoes>
   modoCor: "colorido" | "mono"
+  estaConcluida: (id: string) => boolean
+  onConcluir: (id: string, valor: boolean) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `${PREFIXO_DIA}${iso}` })
   const [expandido, setExpandido] = useState(false)
@@ -644,7 +728,16 @@ function DiaMes({
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {visiveis.map((id) => {
           const t = porId.get(id)
-          return t ? <CartaoTarefa key={id} tarefa={t} modoCor={modoCor} compacto /> : null
+          return t ? (
+            <CartaoTarefa
+              key={id}
+              tarefa={t}
+              modoCor={modoCor}
+              concluida={estaConcluida(id)}
+              onConcluir={onConcluir}
+              compacto
+            />
+          ) : null
         })}
       </SortableContext>
       {restantes > 0 && (
@@ -675,10 +768,14 @@ function Bandeja({
   ids,
   porId,
   modoCor,
+  estaConcluida,
+  onConcluir,
 }: {
   ids: string[]
   porId: Map<string, TarefaComRelacoes>
   modoCor: "colorido" | "mono"
+  estaConcluida: (id: string) => boolean
+  onConcluir: (id: string, valor: boolean) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: BANDEJA })
   return (
@@ -710,7 +807,15 @@ function Bandeja({
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {ids.map((id) => {
           const t = porId.get(id)
-          return t ? <CartaoTarefa key={id} tarefa={t} modoCor={modoCor} /> : null
+          return t ? (
+            <CartaoTarefa
+              key={id}
+              tarefa={t}
+              modoCor={modoCor}
+              concluida={estaConcluida(id)}
+              onConcluir={onConcluir}
+            />
+          ) : null
         })}
       </SortableContext>
     </div>
@@ -722,21 +827,21 @@ function Bandeja({
 function CartaoTarefa({
   tarefa,
   modoCor,
+  concluida,
+  onConcluir,
   compacto,
 }: {
   tarefa: TarefaComRelacoes
   modoCor: "colorido" | "mono"
+  /** Estado VISTO (otimista) — mora no pai, que reordena a coluna com ele. */
+  concluida: boolean
+  onConcluir: (id: string, valor: boolean) => void
   compacto?: boolean
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [pendingCheck, startCheck] = useTransition()
-  // Otimista: a bolinha marca/desmarca na hora; o servidor confirma depois.
-  const [concluidaLocal, setConcluidaLocal] = useState(Boolean(tarefa.concluida_em))
-  useEffect(() => {
-    setConcluidaLocal(Boolean(tarefa.concluida_em))
-  }, [tarefa.concluida_em])
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: tarefa.id })
@@ -753,15 +858,17 @@ function CartaoTarefa({
   function alternarConclusao(e: React.MouseEvent) {
     e.stopPropagation()
     if (pendingCheck) return
-    const alvo = !concluidaLocal
-    setConcluidaLocal(alvo)
+    const alvo = !concluida
+    // O pai reordena a coluna na hora (concluída vai pro fim) e o FLIP
+    // anima o deslize; o servidor só confirma depois.
+    onConcluir(tarefa.id, alvo)
     startCheck(async () => {
       const fd = new FormData()
       fd.set("id", tarefa.id)
       fd.set("concluir", alvo ? "1" : "0")
       const r = await alternarConclusaoAction(fd)
       if (!r.ok) {
-        setConcluidaLocal(!alvo) // reverte
+        onConcluir(tarefa.id, !alvo) // reverte
         return
       }
       router.refresh()
@@ -780,6 +887,7 @@ function CartaoTarefa({
       }}
       {...listeners}
       {...attributes}
+      data-flip-id={tarefa.id}
       title={tarefa.titulo}
       className="no-ds ws-pill"
       style={{
@@ -790,7 +898,7 @@ function CartaoTarefa({
         // Mão de clicar por padrão; a de agarrar só DURANTE o arraste.
         cursor: isDragging ? "grabbing" : "pointer",
         // Concluída fica bem apagada (ref printTarefa.png).
-        opacity: isDragging ? 0.35 : concluidaLocal ? 0.38 : 1,
+        opacity: isDragging ? 0.35 : concluida ? 0.38 : 1,
         transform: CSS.Transform.toString(transform),
         transition,
         zIndex: isDragging ? 10 : undefined,
@@ -803,8 +911,8 @@ function CartaoTarefa({
       <span
         role="button"
         tabIndex={0}
-        aria-label={concluidaLocal ? "Reabrir tarefa" : "Concluir tarefa"}
-        data-concluida={concluidaLocal ? "1" : "0"}
+        aria-label={concluida ? "Reabrir tarefa" : "Concluir tarefa"}
+        data-concluida={concluida ? "1" : "0"}
         className="ws-pill-bolinha"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={alternarConclusao}
