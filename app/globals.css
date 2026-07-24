@@ -1313,6 +1313,8 @@ table {
   border: none;
   cursor: pointer;
   padding: 0;
+  /* O escurecer entra junto com o painel, mais lento, pra não "piscar". */
+  animation: ws-drawer-fundo 0.28s ease-out;
 }
 
 .ws-drawer {
@@ -1328,6 +1330,38 @@ table {
   border-radius: 0;
   border-left: 0.5px solid rgba(255, 255, 255, 0.08);
   background: var(--surface-1);
+  /* O painel entra deslizando da borda direita pra esquerda, como se fosse
+   * puxado da beira da tela. Sombra pra dar o descolamento do fundo. */
+  box-shadow: -24px 0 60px -20px rgba(0, 0, 0, 0.55);
+  animation: ws-drawer-entra 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Entrada do painel: da borda direita (fora da tela) até o lugar. */
+@keyframes ws-drawer-entra {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes ws-drawer-fundo {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Acessibilidade: quem pede menos movimento recebe só o aparecer, sem o
+ * deslize lateral. */
+@media (prefers-reduced-motion: reduce) {
+  .ws-drawer {
+    animation: ws-drawer-fundo 0.2s ease-out;
+  }
 }
 
 @media (max-width: 767px) {
