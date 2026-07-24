@@ -38,13 +38,22 @@ export default async function DrawerServidor({
     listarUsuariosAtivos(),
   ])
 
+  // O seletor "Projetos" espelha a aba Clientes. Contextos internos importados
+  // do Asana (arquivos, estudos, calendários etc.) continuam existindo no
+  // banco e em vínculos antigos, mas não são opções para novos vínculos.
+  // listarContextos() já omite arquivados, então inclusões e remoções na aba
+  // Clientes se refletem aqui no próximo refresh.
+  const projetosDeClientes = contextos.filter(
+    (contexto) => contexto.tipo === "cliente" || contexto.tipo === "empresa"
+  )
+
   return (
     <TarefaDrawer
       tarefa={tarefa}
       subtarefas={subtarefas}
       comentarios={comentarios}
       atividade={atividade}
-      contextos={contextos}
+      contextos={projetosDeClientes}
       usuarios={usuarios}
       hoje={hojeISO()}
       souAdmin={souAdmin}

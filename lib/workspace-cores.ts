@@ -9,9 +9,9 @@
 // fonte única dessas cores.
 //
 // A paleta é a VIBRANTE (pastéis saturados, tipo o print de referência), não a
-// versão escurecida do dark mode: sobre o cinza do workspace elas saltam e o
-// texto preto por cima é o que dá o contraste máximo. Por isso estiloCartao()
-// sempre usa #1e1f21 no texto — todas as 16 cores são claras o bastante.
+// versão escurecida do dark mode: sobre o cinza do workspace elas saltam.
+// Cores personalizadas também são aceitas, então o texto é calculado pela
+// luminância real do fundo em vez de assumir que toda cor será clara.
 
 export interface CorAsana {
   nome: string
@@ -143,8 +143,8 @@ const HEX_VALIDO = /^#[0-9a-fA-F]{6}$/
 
 /**
  * Estilo do cartão de tarefa no calendário, fiel ao Asana:
- * com cor de contexto → pill sólido naquela cor com texto PRETO (pedido de
- * legibilidade: as cores da paleta são médias e o escuro lê melhor em todas);
+ * com cor de contexto → pill sólido naquela cor e texto escolhido pela
+ * luminância (escuro em fundo claro, branco em fundo escuro);
  * sem cor → pill neutro (borda, fundo da superfície).
  */
 export function estiloCartao(cor: string | null | undefined): {
@@ -153,7 +153,7 @@ export function estiloCartao(cor: string | null | undefined): {
   border: string
 } {
   if (cor && HEX_VALIDO.test(cor)) {
-    return { background: cor, color: "#1e1f21", border: "none" }
+    return { background: cor, color: textoSobre(cor), border: "none" }
   }
   return {
     background: "var(--surface-1)",
