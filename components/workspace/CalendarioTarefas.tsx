@@ -12,13 +12,17 @@ import {
   type DragEndEvent,
   type DragOverEvent,
 } from "@dnd-kit/core"
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { useFlipReorder } from "@/lib/useFlipReorder"
 import {
   alternarConclusaoAction,
   criarTarefaAction,
-  moverTarefaCalendarioAction,
   reordenarDiaAction,
 } from "@/lib/workspace-actions"
 import { type TarefaComRelacoes } from "@/lib/workspace-tipos"
@@ -38,6 +42,22 @@ import {
 
 const BANDEJA = "sem-data"
 const PREFIXO_DIA = "dia:"
+type LayoutCalendario = Record<string, string[]>
+
+function copiarLayout(layout: LayoutCalendario): LayoutCalendario {
+  return Object.fromEntries(
+    Object.entries(layout).map(([coluna, ids]) => [coluna, [...ids]])
+  )
+}
+
+function colunaNoLayout(layout: LayoutCalendario, id: string): string | null {
+  if (id === BANDEJA) return BANDEJA
+  if (id.startsWith(PREFIXO_DIA)) return id.slice(PREFIXO_DIA.length)
+  for (const [coluna, ids] of Object.entries(layout)) {
+    if (ids.includes(id)) return coluna
+  }
+  return null
+}
 
 /**
  * Calendário compartilhado no desenho do Asana. A visão semanal tem altura
@@ -162,10 +182,22 @@ export default function CalendarioTarefas({
   }, [tarefasVisiveis, semDataVisiveis])
 
   const [layout, setLayout] = useState(layoutServidor)
+  // O cálculo do drop precisa ser síncrono. Ler `layout` logo depois de
+  // setLayout pode devolver o valor anterior do React, que era a causa da
+  // ordem incompleta enviada ao servidor.
+  const layoutRef = useRef<LayoutCalendario>(layoutServidor)
+  const inicioArrasteRef = useRef<LayoutCalendario | null>(null)
+  const ultimoSobreRef = useRef<string | null>(null)
   useEffect(() => {
+    layoutRef.current = layoutServidor
     setLayout(layoutServidor)
     setConcluidasOtim({})
   }, [layoutServidor])
+
+  function aplicarLayout(proximo: LayoutCalendario) {
+    layoutRef.current = proximo
+    setLayout(proximo)
+  }
 
   /** Conclusão vista pela UI: a otimista vence o servidor enquanto existir. */
   function estaConcluida(id: string): boolean {
@@ -216,79 +248,116 @@ export default function CalendarioTarefas({
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  /** Coluna (dia ISO ou BANDEJA) que contém o id — ou o próprio container. */
-  function colunaDe(id: string): string | null {
-    if (id === BANDEJA) return BANDEJA
-    if (id.startsWith(PREFIXO_DIA)) return id.slice(PREFIXO_DIA.length)
-    for (const [dia, ids] of Object.entries(layout)) {
-      if (ids.includes(id)) return dia
+  /**
+   * Reordena somente dentro do bloco da tarefa arrastada. Abertas e concluídas
+   * nunca se misturam: as abertas ficam primeiro, mas cada bloco mantém a
+   * liberdade total de ordenação.
+   */
+  function reordenarBloco(
+    ids: string[],
+    ativo: string,
+    sobre: string
+  ): string[] {
+    const ativoConcluido = estaConcluida(ativo)
+    const abertas = ids.filter((id) => id !== ativo && !estaConcluida(id))
+    const concluidas = ids.filter((id) => id !== ativo && estaConcluida(id))
+    const grupo = ativoConcluido ? concluidas : abertas
+
+    const original = ids.filter((id) => estaConcluida(id) === ativoConcluido)
+    const de = original.indexOf(ativo)
+    const para = original.indexOf(sobre)
+
+    if (de >= 0 && para >= 0) {
+      const reordenado = arrayMove(original, de, para)
+      return ativoConcluido
+        ? [...abertas, ...reordenado]
+        : [...reordenado, ...concluidas]
     }
-    return null
+
+    // Mudança de coluna ou soltura sobre o outro bloco:
+    // aberta entra no fim das abertas; concluída, no fim das concluídas.
+    const alvoMesmoBloco = grupo.indexOf(sobre)
+    const posicao = alvoMesmoBloco >= 0 ? alvoMesmoBloco : grupo.length
+    grupo.splice(posicao, 0, ativo)
+    return ativoConcluido
+      ? [...abertas, ...grupo]
+      : [...grupo, ...concluidas]
+  }
+
+  function calcularDrop(ativo: string, sobre: string): {
+    layout: LayoutCalendario
+    colunaDestino: string
+    idsDestino: string[]
+  } | null {
+    const base = inicioArrasteRef.current ?? layoutRef.current
+    const origem = colunaNoLayout(base, ativo)
+    const destino = colunaNoLayout(base, sobre)
+    if (!origem || !destino) return null
+
+    const proximo = copiarLayout(base)
+    if (origem !== destino) {
+      proximo[origem] = (proximo[origem] ?? []).filter((id) => id !== ativo)
+    }
+    proximo[destino] = reordenarBloco(
+      proximo[destino] ?? [],
+      ativo,
+      sobre
+    )
+    return {
+      layout: proximo,
+      colunaDestino: destino,
+      idsDestino: proximo[destino],
+    }
   }
 
   function aoArrastarSobre(e: DragOverEvent) {
     const ativo = String(e.active.id)
     const sobre = e.over ? String(e.over.id) : null
     if (!sobre) return
-    const de = colunaDe(ativo)
-    const para = colunaDe(sobre)
+    if (sobre !== ativo) ultimoSobreRef.current = sobre
+    const base = inicioArrasteRef.current ?? layoutRef.current
+    const de = colunaNoLayout(base, ativo)
+    const para = colunaNoLayout(base, sobre)
     if (!de || !para || de === para) return
 
-    // Move o cartão pro novo dia em tempo real (preview suave do dnd-kit).
-    setLayout((l) => {
-      const origem = l[de]?.filter((x) => x !== ativo) ?? []
-      const destino = [...(l[para] ?? [])]
-      const idx = destino.indexOf(sobre)
-      if (idx >= 0) destino.splice(idx, 0, ativo)
-      else destino.push(ativo)
-      return { ...l, [de]: origem, [para]: destino }
-    })
+    // Preview entre colunas calculado sempre a partir do retrato inicial,
+    // sem acumular movimentos intermediários do ponteiro.
+    const preview = calcularDrop(ativo, sobre)
+    if (preview) aplicarLayout(preview.layout)
   }
 
   function aoSoltar(e: DragEndEvent) {
     const ativo = String(e.active.id)
-    const sobre = e.over ? String(e.over.id) : null
-    if (!sobre) return
+    const sobreAtual = e.over ? String(e.over.id) : null
+    // Depois do preview entre colunas o dnd-kit pode reportar o próprio cartão
+    // como último alvo. Guardamos o último alvo real para não desfazer o gesto
+    // justamente na soltada.
+    const sobre =
+      sobreAtual && sobreAtual !== ativo ? sobreAtual : ultimoSobreRef.current
+    ultimoSobreRef.current = null
+    if (!sobre) {
+      if (inicioArrasteRef.current) aplicarLayout(inicioArrasteRef.current)
+      inicioArrasteRef.current = null
+      return
+    }
 
-    const para = colunaDe(sobre)
-    if (!para) return
-
-    // Reordena dentro da coluna final (o cross-coluna já aconteceu no over).
-    let idsFinais: string[] = []
-    setLayout((l) => {
-      const lista = [...(l[para] ?? [])]
-      const deIdx = lista.indexOf(ativo)
-      let alvoIdx = sobre.startsWith(PREFIXO_DIA) || sobre === BANDEJA
-        ? lista.length - 1
-        : lista.indexOf(sobre)
-      if (deIdx === -1 || alvoIdx === -1) {
-        idsFinais = lista
-        return l
-      }
-      lista.splice(deIdx, 1)
-      if (alvoIdx > deIdx) alvoIdx -= 1
-      lista.splice(alvoIdx, 0, ativo)
-      idsFinais = lista
-      return { ...l, [para]: lista }
-    })
+    const resultado = calcularDrop(ativo, sobre)
+    inicioArrasteRef.current = null
+    if (!resultado) return
+    aplicarLayout(resultado.layout)
 
     setErro(null)
     startTransition(async () => {
-      let r: { ok: boolean; erro?: string }
-      if (para === BANDEJA) {
-        const fd = new FormData()
-        fd.set("id", ativo)
-        fd.set("prazo_em", "")
-        r = await moverTarefaCalendarioAction(fd)
-      } else {
-        const fd = new FormData()
-        fd.set("movida_id", ativo)
-        fd.set("prazo_em", para)
-        fd.set("ids", JSON.stringify(idsFinais.length ? idsFinais : [ativo]))
-        r = await reordenarDiaAction(fd)
-      }
+      const fd = new FormData()
+      fd.set("movida_id", ativo)
+      fd.set(
+        "prazo_em",
+        resultado.colunaDestino === BANDEJA ? "" : resultado.colunaDestino
+      )
+      fd.set("ids", JSON.stringify(resultado.idsDestino))
+      const r = await reordenarDiaAction(fd)
       if (!r.ok) {
-        setLayout(layoutServidor) // reverte o gesto inteiro
+        aplicarLayout(layoutServidor) // reverte o gesto inteiro
         setErro(r.erro ?? "Não foi possível mover a tarefa.")
         return
       }
@@ -318,8 +387,17 @@ export default function CalendarioTarefas({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
-      onDragStart={() => setArrastando(true)}
-      onDragCancel={() => setArrastando(false)}
+      onDragStart={() => {
+        inicioArrasteRef.current = copiarLayout(layoutRef.current)
+        ultimoSobreRef.current = null
+        setArrastando(true)
+      }}
+      onDragCancel={() => {
+        if (inicioArrasteRef.current) aplicarLayout(inicioArrasteRef.current)
+        inicioArrasteRef.current = null
+        ultimoSobreRef.current = null
+        setArrastando(false)
+      }}
       onDragOver={aoArrastarSobre}
       onDragEnd={(e) => {
         setArrastando(false)
@@ -921,8 +999,10 @@ function CartaoTarefa({
         padding: compacto ? "3px 6px" : "6px 8px",
         // Mão de clicar por padrão; a de agarrar só DURANTE o arraste.
         cursor: isDragging ? "grabbing" : "pointer",
-        // Concluída fica bem apagada (ref printTarefa.png).
-        opacity: isDragging ? 0.35 : concluida ? 0.38 : 1,
+        // Conclusão é indicada pela bolinha marcada e pela posição no fim da
+        // coluna. Não apagamos o cartão inteiro: isso destruía o contraste,
+        // principalmente em cores escuras.
+        opacity: isDragging ? 0.35 : 1,
         transform: CSS.Transform.toString(transform),
         transition,
         zIndex: isDragging ? 10 : undefined,

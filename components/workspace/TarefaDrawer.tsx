@@ -113,9 +113,14 @@ export default function TarefaDrawer(props: Props) {
     executar(atualizarTarefaAction, fd)
   }
 
-  const contextosDisponiveis = contextos.filter(
-    (c) => !tarefa.contextos.some((tc) => tc.id === c.id)
-  )
+  const contextosDisponiveis = contextos
+    .filter((c) => c.tipo === "cliente" || c.tipo === "empresa")
+    .filter((c) => !tarefa.contextos.some((tc) => tc.id === c.id))
+    .sort(
+      (a, b) =>
+        (a.tipo === b.tipo ? 0 : a.tipo === "empresa" ? -1 : 1) ||
+        a.nome.localeCompare(b.nome, "pt-BR")
+    )
 
   const situacao = situacaoPrazo(tarefa.prazo_em, hoje)
   const corPrazo =
@@ -387,7 +392,9 @@ export default function TarefaDrawer(props: Props) {
                   >
                     <option value="" style={{ color: "#111" }}>+ Adicionar a um projeto</option>
                     {contextosDisponiveis.map((c) => (
-                      <option key={c.id} value={c.id} style={{ color: "#111" }}>{c.nome}</option>
+                      <option key={c.id} value={c.id} style={{ color: "#111" }}>
+                        {c.tipo === "empresa" ? `Empresa · ${c.nome}` : c.nome}
+                      </option>
                     ))}
                   </select>
                 )}
