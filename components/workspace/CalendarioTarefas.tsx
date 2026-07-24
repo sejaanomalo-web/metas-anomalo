@@ -999,12 +999,15 @@ function CartaoTarefa({
         padding: compacto ? "3px 6px" : "6px 8px",
         // Mão de clicar por padrão; a de agarrar só DURANTE o arraste.
         cursor: isDragging ? "grabbing" : "pointer",
-        // Conclusão é indicada pela bolinha marcada e pela posição no fim da
-        // coluna. Não apagamos o cartão inteiro: isso destruía o contraste,
-        // principalmente em cores escuras.
-        opacity: isDragging ? 0.35 : 1,
+        // Concluída APAGA o cartão: além da bolinha marcada e da posição no
+        // fim da coluna, o olho precisa distinguir feito de pendente de
+        // relance, sem ler. 0.45 (e não 0.38) mantém o título legível mesmo
+        // nas cores escuras.
+        opacity: isDragging ? 0.35 : concluida ? 0.45 : 1,
         transform: CSS.Transform.toString(transform),
-        transition,
+        transition: transition
+          ? `${transition}, opacity 0.18s ease`
+          : "opacity 0.18s ease",
         zIndex: isDragging ? 10 : undefined,
         flexShrink: 0,
       }}
