@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import type { Contexto } from "@/lib/workspace-tipos"
+import Avatar from "./Avatar"
+import SeletorBusca from "./SeletorBusca"
 
 /**
  * Filtros da lista. Todo estado vive na URL (não no client), porque:
@@ -23,7 +25,7 @@ export default function FiltrosTarefas({
   placeholderBusca = "Título ou descrição…",
 }: {
   contextos: Contexto[]
-  usuarios: { id: string; nome: string }[]
+  usuarios: { id: string; nome: string; email?: string; foto_url?: string | null }[]
   mostrarAgrupamento?: boolean
   /** false no calendário: a consulta de lá não usa busca textual. */
   mostrarBusca?: boolean
@@ -122,23 +124,57 @@ export default function FiltrosTarefas({
         }
       />
 
-      <Seletor
-        rotulo="Responsável"
+      {/* Responsável e Cliente usam o seletor COM BUSCA: são as duas listas que
+          crescem com o time e a carteira. Situação e Agrupar seguem <select>
+          nativo — com 2 a 4 opções fixas, um campo de busca só atrasaria. */}
+      <SeletorBusca
+        rotuloCampo="Responsável"
+        prefixoNoGatilho="Responsável"
         valor={responsavel}
-        onChange={(v) => aplicar({ responsavel: v })}
+        onEscolher={(v) => aplicar({ responsavel: v })}
+        variante="filtro"
+        textoVazio="Todos"
+        placeholderBusca="Pesquisar pessoa…"
+        textoNenhum="Ninguém com esse nome."
         opcoes={[
-          { valor: "", texto: "Todos" },
-          ...usuarios.map((u) => ({ valor: u.id, texto: u.nome })),
+          { valor: "", rotulo: "Todos", icone: <Avatar nome={null} tamanho={18} /> },
+          ...usuarios.map((u) => ({
+            valor: u.id,
+            rotulo: u.nome,
+            termos: u.email ?? "",
+            icone: <Avatar nome={u.nome} foto={u.foto_url ?? null} tamanho={18} />,
+          })),
         ]}
       />
 
-      <Seletor
-        rotulo={rotuloContexto}
+      <SeletorBusca
+        rotuloCampo={rotuloContexto}
+        prefixoNoGatilho={rotuloContexto}
         valor={contexto}
-        onChange={(v) => aplicar({ contexto: v })}
+        onEscolher={(v) => aplicar({ contexto: v })}
+        variante="filtro"
+        textoVazio="Todos"
+        placeholderBusca={`Pesquisar ${rotuloContexto.toLowerCase()}…`}
+        textoNenhum="Nada com esse nome."
         opcoes={[
-          { valor: "", texto: "Todos" },
-          ...contextos.map((c) => ({ valor: c.id, texto: c.nome })),
+          { valor: "", rotulo: "Todos" },
+          ...contextos.map((c) => ({
+            valor: c.id,
+            rotulo: c.nome,
+            detalhe: c.tipo === "empresa" ? "Empresa" : undefined,
+            icone: (
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: 3,
+                  background: c.cor ?? "#6d6e6f",
+                  flexShrink: 0,
+                }}
+              />
+            ),
+          })),
         ]}
       />
 

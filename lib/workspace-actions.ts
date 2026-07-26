@@ -12,10 +12,15 @@
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual, type UsuarioSessao } from "./auth"
+import { exigirWorkspace } from "./workspace-acesso"
 import { criarNotificacao } from "./notificacoes"
 import { ehDataISOValida, normalizarHora, proximaOcorrencia } from "./workspace-datas"
 import { extrairMencoes } from "./workspace-markdown"
-import { sanitizarHtmlNota } from "./workspace-notas"
+import {
+  gravarNota,
+  MAX_TITULO_NOTA,
+  type CamposNota,
+} from "./workspace-notas-gravar"
 import { uploadFotoPerfil } from "./workspace-midia"
 import {
   recorrenciaValida,
@@ -41,23 +46,14 @@ const MAX_COMENTARIO = 10_000
 // Guards e helpers
 // ============================================================
 
-// Devolve { usuario: null, erro } em vez de uma union discriminada: o TS nao
-// estreita destructuring de union quando o discriminante nao e um tipo
+// exigirWorkspace mora em lib/workspace-acesso.ts: a rota
+// /api/workspace/notas/salvar (flush do editor quando a janela fecha) precisa
+// da MESMA checagem, e um arquivo "use server" só exporta actions.
+//
+// Ela devolve { usuario: null, erro } em vez de uma union discriminada: o TS
+// nao estreita destructuring de union quando o discriminante nao e um tipo
 // literal (`erro: string` nao serve), e cada action ficaria cheia de `!`.
 // Checar `if (!usuario)` estreita de forma limpa e obvia.
-async function exigirWorkspace(): Promise<{
-  usuario: UsuarioSessao | null
-  erro?: string
-}> {
-  const usuario = await getUsuarioAtual()
-  if (!usuario) return { usuario: null, erro: "Sessão expirada. Entre de novo." }
-  // admin bypassa em temPermissao; aqui a checagem é explícita pelo mesmo
-  // motivo do resto do app: fail-closed se a chave não existir no JSONB.
-  if (usuario.papel !== "admin" && usuario.permissoes.workspace !== true) {
-    return { usuario: null, erro: "Sem permissão para o Workspace." }
-  }
-  return { usuario }
-}
 
 /** Quem pode mexer numa tarefa: admin, quem criou, ou o responsável. */
 function podeEditar(usuario: UsuarioSessao, tarefa: {
@@ -1606,39 +1602,28 @@ export async function criarNotaAction(
 }
 
 /**
- * Salva título e corpo. O corpo passa SEMPRE por sanitizarHtmlNota — o
- * dangerouslySetInnerHTML da renderização só vê HTML que o servidor montou.
+ * Salva título e corpo. O corpo passa SEMPRE por sanitizarHtmlNota (dentro de
+ * gravarNota) — o dangerouslySetInnerHTML da renderização só vê HTML que o
+ * servidor montou.
+ *
+ * Campo ausente no FormData não é tocado: o editor manda só o que mudou, e é
+ * isso que impede um save de título de sobrescrever o corpo com valor velho.
  */
 export async function salvarNotaAction(
   formData: FormData
 ): Promise<ResultadoWorkspace> {
   const { usuario, erro } = await exigirWorkspace()
   if (!usuario) return { ok: false, erro }
-  const db = getSupabaseAdmin()
-  if (!db) return { ok: false, erro: "Supabase indisponível." }
 
   const id = String(formData.get("id") ?? "").trim()
   if (!ehUuid(id)) return { ok: false, erro: "Nota inválida." }
 
-  const patch: Record<string, unknown> = {
-    atualizado_por: usuario.id,
-    updated_at: new Date().toISOString(),
-  }
-  if (formData.has("titulo")) patch.titulo = texto(formData, "titulo", 200)
-  if (formData.has("corpo_html")) {
-    patch.corpo_html = sanitizarHtmlNota(String(formData.get("corpo_html") ?? ""))
-  }
+  const campos: CamposNota = {}
+  if (formData.has("titulo")) campos.titulo = texto(formData, "titulo", MAX_TITULO_NOTA)
+  if (formData.has("corpo_html")) campos.corpo_html = String(formData.get("corpo_html") ?? "")
 
-  const { error } = await db
-    .from("ws_notas")
-    .update(patch)
-    .eq("id", id)
-    .is("excluida_em", null)
-  if (error) {
-    console.error("[workspace] salvarNota error", error.message)
-    return { ok: false, erro: "Não foi possível salvar a nota." }
-  }
-  return { ok: true, id }
+  const r = await gravarNota(usuario.id, id, campos)
+  return r.ok ? { ok: true, id } : { ok: false, erro: r.erro }
 }
 
 export async function excluirNotaAction(

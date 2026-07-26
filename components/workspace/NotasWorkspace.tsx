@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { criarNotaAction } from "@/lib/workspace-actions"
-import EditorNota from "./EditorNota"
+import EditorNota, { type EstadoSalvamento } from "./EditorNota"
 import type { Nota } from "@/lib/workspace-tipos"
 
 interface EscopoForm {
@@ -31,7 +31,7 @@ export default function NotasWorkspace({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
-  const [salvo, setSalvo] = useState(false)
+  const [estado, setEstado] = useState<EstadoSalvamento>("limpo")
   const [ativaId, setAtivaId] = useState<string | null>(notas[0]?.id ?? null)
   // Título digitado agora: reflete na lista da esquerda INSTANTANEAMENTE,
   // sem esperar o autosave + refresh do servidor.
@@ -136,14 +136,18 @@ export default function NotasWorkspace({
         ))}
       </aside>
 
-      {/* -------- Editor -------- */}
+      {/* -------- Editor --------
+          SEM `key={ativa.id}` de propósito: o editor precisa continuar MONTADO
+          ao trocar de nota. É o que permite a ele (a) salvar o pendente da nota
+          anterior antes de carregar a próxima e (b) lembrar o que foi digitado
+          nesta sessão, em vez de reler uma prop do servidor que ainda não sabe
+          da última edição — o caminho pelo qual o texto "voltava atrás". */}
       <div className="ws-notas-editor">
         {ativa ? (
           <EditorNota
-            key={ativa.id}
             nota={ativa}
             onErro={setErro}
-            onSalvo={() => setSalvo(true)}
+            onEstado={setEstado}
             onTitulo={(t) =>
               setTitulosLocais((m) => ({ ...m, [ativa.id]: t }))
             }
@@ -157,9 +161,21 @@ export default function NotasWorkspace({
             Crie a primeira nota com o botão &ldquo;Nova nota&rdquo;.
           </div>
         )}
-        {(erro || salvo) && (
-          <p role="status" style={{ fontSize: 11, margin: "6px 12px", color: erro ? "#e24b4a" : "#5da283" }}>
-            {erro ?? "Salvo"}
+
+        {/* Estado honesto do salvamento. "Salvo" só aparece quando o servidor
+            confirmou; enquanto há coisa pendente a pessoa vê "Salvando…", e
+            não um "Salvo" que mente. */}
+        {(erro || estado === "salvando" || estado === "pendente" || estado === "salvo") && (
+          <p
+            role="status"
+            aria-live="polite"
+            style={{
+              fontSize: 11,
+              margin: "6px 12px",
+              color: erro ? "#e24b4a" : estado === "salvo" ? "#5da283" : "var(--text-4)",
+            }}
+          >
+            {erro ?? (estado === "salvo" ? "Salvo" : "Salvando…")}
           </p>
         )}
       </div>

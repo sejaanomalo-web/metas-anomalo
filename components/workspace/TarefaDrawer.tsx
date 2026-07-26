@@ -29,6 +29,7 @@ import {
 import { formatarDataBR, rotuloPrazo, situacaoPrazo } from "@/lib/workspace-datas"
 import DescricaoRica from "./DescricaoRica"
 import Avatar from "./Avatar"
+import SeletorBusca, { type OpcaoBusca } from "./SeletorBusca"
 
 interface Props {
   tarefa: TarefaComRelacoes
@@ -36,7 +37,7 @@ interface Props {
   comentarios: Comentario[]
   atividade: EventoAtividade[]
   contextos: Contexto[]
-  usuarios: { id: string; nome: string }[]
+  usuarios: { id: string; nome: string; email?: string; foto_url?: string | null }[]
   hoje: string
   souAdmin: boolean
 }
@@ -121,6 +122,30 @@ export default function TarefaDrawer(props: Props) {
         (a.tipo === b.tipo ? 0 : a.tipo === "empresa" ? -1 : 1) ||
         a.nome.localeCompare(b.nome, "pt-BR")
     )
+
+  // ---------- Opções dos seletores com busca ----------
+  // O e-mail entra como `termos` (casa na busca, não polui a lista): quem tem
+  // dois colegas de nome parecido acha pelo login.
+  const opcoesResponsavel: OpcaoBusca[] = [
+    {
+      valor: "",
+      rotulo: "Sem responsável",
+      icone: <Avatar nome={null} tamanho={20} />,
+    },
+    ...usuarios.map((u) => ({
+      valor: u.id,
+      rotulo: u.nome,
+      termos: u.email ?? "",
+      icone: <Avatar nome={u.nome} foto={u.foto_url ?? null} tamanho={20} />,
+    })),
+  ]
+
+  const opcoesProjeto: OpcaoBusca[] = contextosDisponiveis.map((c) => ({
+    valor: c.id,
+    rotulo: c.nome,
+    detalhe: c.tipo === "empresa" ? "Empresa" : undefined,
+    icone: <QuadradinhoCor cor={c.cor} />,
+  }))
 
   const situacao = situacaoPrazo(tarefa.prazo_em, hoje)
   const corPrazo =
@@ -253,19 +278,18 @@ export default function TarefaDrawer(props: Props) {
           {/* ---------- Campos (rótulo à esquerda, como no Asana) ---------- */}
           <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <CampoLinha rotulo="Responsável">
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <Avatar nome={tarefa.responsavel_nome} foto={tarefa.responsavel_foto} tamanho={26} />
-                <select
-                  value={tarefa.responsavel_id ?? ""}
-                  onChange={(e) => salvarCampo("responsavel_id", e.target.value)}
+                <SeletorBusca
+                  rotuloCampo="Responsável"
+                  valor={tarefa.responsavel_id ?? ""}
+                  opcoes={opcoesResponsavel}
+                  onEscolher={(v) => salvarCampo("responsavel_id", v)}
+                  textoVazio="Sem responsável"
+                  placeholderBusca="Pesquisar pessoa…"
+                  textoNenhum="Ninguém com esse nome."
                   disabled={pending}
-                  className="no-ds ws-select"
-                >
-                  <option value="" style={{ color: "#111" }}>Sem responsável</option>
-                  {usuarios.map((u) => (
-                    <option key={u.id} value={u.id} style={{ color: "#111" }}>{u.nome}</option>
-                  ))}
-                </select>
+                />
               </div>
             </CampoLinha>
 
@@ -346,16 +370,7 @@ export default function TarefaDrawer(props: Props) {
                       color: "var(--text-1)",
                     }}
                   >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 3,
-                        background: c.cor ?? "#6d6e6f",
-                        flexShrink: 0,
-                      }}
-                    />
+                    <QuadradinhoCor cor={c.cor} />
                     {c.nome}
                     <button
                       type="button"
@@ -377,26 +392,26 @@ export default function TarefaDrawer(props: Props) {
                 ))}
 
                 {contextosDisponiveis.length > 0 && (
-                  <select
-                    value=""
-                    onChange={(e) => {
-                      if (!e.target.value) return
+                  <SeletorBusca
+                    rotuloCampo="Adicionar a um projeto"
+                    // Sempre "vazio": este seletor é um comando de ADICIONAR, não
+                    // o estado do campo — os projetos já vinculados são os chips
+                    // acima. Depois de escolher, a lista some da opção (o
+                    // servidor devolve a tarefa com o vínculo novo).
+                    valor=""
+                    opcoes={opcoesProjeto}
+                    onEscolher={(v) => {
+                      if (!v) return
                       const fd = new FormData()
                       fd.set("tarefa_id", tarefa.id)
-                      fd.set("contexto_id", e.target.value)
+                      fd.set("contexto_id", v)
                       executar(vincularContextoAction, fd)
                     }}
+                    textoVazio="+ Adicionar a um projeto"
+                    placeholderBusca="Pesquisar projeto…"
+                    textoNenhum="Nenhum projeto com esse nome."
                     disabled={pending}
-                    className="no-ds ws-select"
-                    aria-label="Adicionar a um projeto"
-                  >
-                    <option value="" style={{ color: "#111" }}>+ Adicionar a um projeto</option>
-                    {contextosDisponiveis.map((c) => (
-                      <option key={c.id} value={c.id} style={{ color: "#111" }}>
-                        {c.tipo === "empresa" ? `Empresa · ${c.nome}` : c.nome}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 )}
               </div>
             </CampoLinha>
@@ -747,6 +762,26 @@ function CampoLinha({ rotulo, children }: { rotulo: string; children: React.Reac
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
     </div>
+  )
+}
+
+/**
+ * Quadradinho de cor do projeto — o mesmo marcador do Asana, usado no chip do
+ * projeto vinculado e na lista do seletor de busca, pra que a cor que a pessoa
+ * já associa ao cliente seja a mesma nos dois lugares.
+ */
+function QuadradinhoCor({ cor }: { cor: string | null | undefined }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 10,
+        height: 10,
+        borderRadius: 3,
+        background: cor ?? "#6d6e6f",
+        flexShrink: 0,
+      }}
+    />
   )
 }
 
