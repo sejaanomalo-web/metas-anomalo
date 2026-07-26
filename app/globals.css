@@ -1890,6 +1890,167 @@ table {
   }
 }
 
+/* ============================================================
+ * SeletorBusca — combobox com campo de pesquisa (Responsável, Projetos,
+ * filtros). Substitui o <select> nativo onde a lista cresce com o uso.
+ *
+ * O popover é position:fixed com coordenadas calculadas em JS: o painel de
+ * tarefa tem overflow-y:auto e cortaria um popover absolute na borda.
+ * ============================================================ */
+.ws-combo-gatilho {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  max-width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+.ws-combo-gatilho:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Variante "campo": parece texto até o hover, como no Asana. */
+.ws-combo-gatilho-campo {
+  font-size: 13px;
+  color: var(--text-1);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-family: inherit;
+}
+.ws-combo-gatilho-campo:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+.ws-combo-gatilho:focus-visible {
+  outline: 2px solid var(--accent, #4573d2);
+  outline-offset: 1px;
+}
+
+.ws-combo-gatilho-texto {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.ws-combo-pop {
+  position: fixed;
+  /* Acima do painel de tarefa (z-index 70) — senão a lista abriria por baixo
+   * dele justamente nos campos que mais usam busca. */
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.14);
+  background: var(--surface-2, #1d1f21);
+  box-shadow: 0 18px 44px -12px rgba(0, 0, 0, 0.7);
+  animation: ws-combo-entra 0.12s ease-out;
+}
+
+@keyframes ws-combo-entra {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-combo-pop {
+    animation: none;
+  }
+}
+
+/* Celular: folha inferior. Uma lista "pra baixo" a partir de um campo que
+ * mora na metade de baixo do painel cairia fora da tela. */
+.ws-combo-pop-folha {
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  top: auto;
+  width: auto;
+  max-height: 62dvh;
+  border-radius: 14px;
+}
+
+.ws-combo-busca {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-1);
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 12px;
+  outline: none;
+  width: 100%;
+}
+.ws-combo-busca::placeholder {
+  color: var(--text-4);
+}
+
+.ws-combo-lista {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+}
+
+.ws-combo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-1);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.ws-combo-item-ativo {
+  background: rgba(69, 115, 210, 0.22);
+}
+
+.ws-combo-item-texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.ws-combo-item-rotulo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-combo-item-detalhe {
+  font-size: 10.5px;
+  color: var(--text-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-combo-vazio {
+  font-size: 12px;
+  color: var(--text-4);
+  padding: 12px 10px;
+  margin: 0;
+}
+
 /* Select "invisível" do painel de tarefa: parece texto até o hover, como os
  * campos do Asana; abre o dropdown nativo. */
 .ws-select {

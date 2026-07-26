@@ -112,20 +112,31 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
     }))
   }
   const ids = tarefas.map((t) => t.id)
+  // Só os responsáveis que APARECEM nesta página. Antes as duas consultas de
+  // pessoa vinham sem filtro ("todos os usuários", "todas as preferências"):
+  // funciona com 6 pessoas e piora sozinho conforme o time cresce, buscando
+  // dezenas de linhas e fotos pra preencher três avatares.
+  const responsaveis = Array.from(
+    new Set(tarefas.map((t) => t.responsavel_id).filter((v): v is string => Boolean(v)))
+  )
 
   const [vinculos, usuarios, subtarefas, comentarios, prefs] = await Promise.all([
     supabase
       .from("ws_tarefa_contextos")
       .select("tarefa_id, contexto_id, ws_contextos(id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, grupo_id, ordem, arquivado_em)")
       .in("tarefa_id", ids),
-    supabase.from("usuarios").select("id, nome"),
+    responsaveis.length > 0
+      ? supabase.from("usuarios").select("id, nome").in("id", responsaveis)
+      : Promise.resolve({ data: [] as { id: string; nome: string }[] }),
     supabase
       .from("ws_tarefas")
       .select("tarefa_pai_id, concluida_em")
       .in("tarefa_pai_id", ids)
       .is("excluida_em", null),
     supabase.from("ws_comentarios").select("tarefa_id").in("tarefa_id", ids).is("excluido_em", null),
-    supabase.from("ws_preferencias").select("usuario_id, foto_url"),
+    responsaveis.length > 0
+      ? supabase.from("ws_preferencias").select("usuario_id, foto_url").in("usuario_id", responsaveis)
+      : Promise.resolve({ data: [] as { usuario_id: string; foto_url: string | null }[] }),
   ])
 
   const porTarefa = new Map<string, Contexto[]>()
@@ -204,10 +215,22 @@ export async function listarTarefas(
   const offset = filtro.offset ?? 0
   const situacao = filtro.situacao ?? "pendentes"
 
-  let q = supabase
-    .from("ws_tarefas")
-    .select(COLUNAS_TAREFA)
-    .is("tarefa_pai_id", null)
+  // Contexto é N:N (ws_tarefa_contextos) e entra como JOIN no próprio select,
+  // não como lista de ids. A versão anterior lia TODOS os tarefa_id do vínculo
+  // e mandava um `.in("id", [...])`: com algumas centenas de tarefas no
+  // cliente, o querystring do PostgREST passa do limite aceito, a resposta vira
+  // 414 e a página do cliente aparecia VAZIA, sem erro na tela. Com `!inner` o
+  // banco resolve em uma query, sem limite de tamanho — e o embed é aninhado,
+  // então nenhuma tarefa vem duplicada.
+  const selecao = filtro.contextoId
+    ? `${COLUNAS_TAREFA}, ws_tarefa_contextos!inner(contexto_id)`
+    : COLUNAS_TAREFA
+
+  let q = supabase.from("ws_tarefas").select(selecao).is("tarefa_pai_id", null)
+
+  if (filtro.contextoId) {
+    q = q.eq("ws_tarefa_contextos.contexto_id", filtro.contextoId)
+  }
 
   if (filtro.incluirArquivadas) {
     // Aba Arquivo: mostra arquivadas e excluídas (soft), nunca some nada.
@@ -246,17 +269,6 @@ export async function listarTarefas(
     }
   }
 
-  // Contexto exige o passo extra pelo vínculo (N:N).
-  if (filtro.contextoId) {
-    const { data: vinc } = await supabase
-      .from("ws_tarefa_contextos")
-      .select("tarefa_id")
-      .eq("contexto_id", filtro.contextoId)
-    const ids = (vinc ?? []).map((v) => (v as { tarefa_id: string }).tarefa_id)
-    if (ids.length === 0) return { tarefas: [], temMais: false }
-    q = q.in("id", ids)
-  }
-
   // Pendentes primeiro por prazo (sem prazo no fim); concluídas, mais
   // recentes primeiro.
   if (situacao === "concluidas") {
@@ -274,7 +286,15 @@ export async function listarTarefas(
     console.error("[workspace] listarTarefas error", error.message)
     return { tarefas: [], temMais: false }
   }
-  const linhas = (data ?? []) as unknown as Tarefa[]
+  // O embed do JOIN vem junto na linha; tira ele pra que o objeto entregue às
+  // telas seja exatamente uma Tarefa, sem um campo fantasma viajando adiante.
+  // O `select` é montado em runtime (com ou sem o JOIN), então o supabase-js
+  // não consegue inferir a linha — daí o unknown antes do shape final.
+  const brutas = (data ?? []) as unknown as Record<string, unknown>[]
+  const linhas = brutas.map((linha) => {
+    const { ws_tarefa_contextos: _embed, ...resto } = linha
+    return resto as unknown as Tarefa
+  })
   const temMais = linhas.length > limite
   const pagina = temMais ? linhas.slice(0, limite) : linhas
   return { tarefas: await enriquecer(pagina), temMais }
@@ -646,22 +666,36 @@ export async function listarAtividade(
   })
 }
 
-/** Usuários ativos — opções de responsável e de menção. */
+/**
+ * Usuários ativos — opções de responsável e de menção.
+ *
+ * Traz `foto_url` (de ws_preferencias) porque o seletor de responsável mostra
+ * avatar na lista: com o time todo tendo nome curto e parecido, a foto é o que
+ * a pessoa reconhece antes de ler. Duas queries em paralelo em vez de embed:
+ * ws_preferencias pode não existir antes da migration da Fase 2, e nesse caso
+ * a lista de nomes precisa continuar funcionando.
+ */
 export async function listarUsuariosAtivos(): Promise<
-  { id: string; nome: string; email: string }[]
+  { id: string; nome: string; email: string; foto_url: string | null }[]
 > {
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
-  const { data, error } = await supabase
-    .from("usuarios")
-    .select("id, nome, email")
-    .eq("ativo", true)
-    .order("nome")
+  const [{ data, error }, prefs] = await Promise.all([
+    supabase.from("usuarios").select("id, nome, email").eq("ativo", true).order("nome"),
+    supabase.from("ws_preferencias").select("usuario_id, foto_url"),
+  ])
   if (error) {
     console.error("[workspace] listarUsuariosAtivos error", error.message)
     return []
   }
-  return (data ?? []) as { id: string; nome: string; email: string }[]
+  const fotos = new Map<string, string>()
+  for (const p of (prefs.data ?? []) as { usuario_id: string; foto_url: string | null }[]) {
+    if (p.foto_url) fotos.set(p.usuario_id, p.foto_url)
+  }
+  return ((data ?? []) as { id: string; nome: string; email: string }[]).map((u) => ({
+    ...u,
+    foto_url: fotos.get(u.id) ?? null,
+  }))
 }
 
 // ============================================================

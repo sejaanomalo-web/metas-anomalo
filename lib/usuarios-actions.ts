@@ -281,6 +281,34 @@ export async function alternarAtivoUsuarioAction(
 }
 
 /**
+ * Traduz o erro do Postgres numa frase que diz o que fazer.
+ *
+ * O caso real é o 23503 (foreign_key_violation): uma FK apontando pra
+ * public.usuarios com `on delete no action` recusa o delete e o Postgres
+ * responde com o nome da constraint, não com uma instrução. Despejar essa
+ * mensagem na tela ("violates foreign key constraint
+ * ws_tarefas_concluida_por_fkey") deixa quem está usando o sistema sem saída —
+ * a pessoa não tem como saber que existe uma migration pendente nem que
+ * DESATIVAR resolve o problema dela agora.
+ *
+ * A migration 20260729_usuarios_exclusao_fks.sql converte essas FKs em
+ * `on delete set null`; até ela rodar, esta mensagem é o que o admin vê.
+ */
+function mensagemDeErroDeExclusao(error: { code?: string; message: string }): string {
+  if (error.code !== "23503") return error.message
+
+  // O nome da tabela que bloqueou aparece entre aspas na mensagem do Postgres:
+  // ...violates foreign key constraint "x_fkey" on table "ws_tarefas"
+  const tabela = /on table "([^"]+)"/.exec(error.message)?.[1]
+  const onde = tabela ? ` (tabela ${tabela})` : ""
+  return (
+    `Este usuário tem registros ligados a ele${onde} que ainda bloqueiam a exclusão. ` +
+    "Falta aplicar a migration 20260729_usuarios_exclusao_fks.sql no SQL Editor do Supabase. " +
+    'Enquanto isso, "Desativar" remove o acesso da pessoa sem perder nada.'
+  )
+}
+
+/**
  * Exclusão definitiva do usuário. Diferente de desativar (preserva a
  * linha com ativo=false), o delete remove a linha de public.usuarios
  * por completo. FKs cuidam do resto:
@@ -288,6 +316,12 @@ export async function alternarAtivoUsuarioAction(
  *   • push_subscriptions   → CASCADE (subscriptions push vão junto)
  *   • lancamento_financeiro.criado_por → SET NULL (lançamentos
  *     financeiros do user permanecem, só esquece quem criou)
+ *   • colunas de autoria do Workspace (ws_tarefas.criado_por,
+ *     ws_tarefas.concluida_por, ws_comentarios.autor_id, ws_atividade.ator_id,
+ *     ws_notas.*, ws_contextos.criado_por, ws_abas.criado_por…) → SET NULL
+ *     pela migration 20260729. Nasceram sem `on delete`, o que é NO ACTION, e
+ *     por isso a exclusão vinha falhando; a tarefa/nota/comentário fica, só o
+ *     crédito de autoria some.
  *
  * O client exige digitar "Excluir" antes de chamar essa action —
  * camada extra de UX, mas a validação textual server-side abaixo é
@@ -320,8 +354,8 @@ export async function excluirUsuarioAction(
 
   const { error } = await supabase.from("usuarios").delete().eq("id", id)
   if (error) {
-    console.error("[usuarios] excluir error", error.message)
-    return { ok: false, erro: error.message }
+    console.error("[usuarios] excluir error", error.code, error.message)
+    return { ok: false, erro: mensagemDeErroDeExclusao(error) }
   }
 
   // Remoção TOTAL (decisão de produto) — gate ESTRITO de admin (apagar dados
