@@ -285,6 +285,9 @@ export default function TarefaDrawer(props: Props) {
                   valor={tarefa.responsavel_id ?? ""}
                   opcoes={opcoesResponsavel}
                   onEscolher={(v) => salvarCampo("responsavel_id", v)}
+                  // O avatar de 26px acima já mostra quem é: repetir o ícone
+                  // dentro do gatilho colocava dois avatares em sequência.
+                  iconeNoGatilho={false}
                   textoVazio="Sem responsável"
                   placeholderBusca="Pesquisar pessoa…"
                   textoNenhum="Ninguém com esse nome."

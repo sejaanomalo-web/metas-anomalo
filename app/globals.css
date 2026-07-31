@@ -1894,8 +1894,11 @@ table {
  * SeletorBusca — combobox com campo de pesquisa (Responsável, Projetos,
  * filtros). Substitui o <select> nativo onde a lista cresce com o uso.
  *
- * O popover é position:fixed com coordenadas calculadas em JS: o painel de
- * tarefa tem overflow-y:auto e cortaria um popover absolute na borda.
+ * O popover é position:fixed com coordenadas calculadas em JS e RENDERIZADO NO
+ * <body> via portal. Dentro do painel de tarefa ele quebrava duas vezes: o
+ * overflow-y:auto cortaria um popover absolute, e o will-change:transform do
+ * .ws-drawer torna o painel containing block dos descendentes fixed — as
+ * coordenadas de viewport iam parar centenas de px fora da tela.
  * ============================================================ */
 .ws-combo-gatilho {
   display: inline-flex;

@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { createPortal } from "react-dom"
 
 export interface OpcaoBusca {
   valor: string
@@ -33,10 +34,15 @@ export interface OpcaoBusca {
  *
  * Decisões que não são estéticas:
  *
- *  • POPOVER EM position:fixed, com as coordenadas calculadas do gatilho. O
- *    painel de tarefa (.ws-drawer) tem overflow-y:auto, e pelo CSS isso faz o
- *    eixo X virar `auto` também: um popover absolute seria CORTADO na borda do
- *    painel. Fixed escapa de qualquer ancestral com overflow.
+ *  • POPOVER EM PORTAL PRO <body>, com position:fixed e coordenadas calculadas
+ *    do gatilho. O portal NÃO é enfeite: o painel de tarefa (.ws-drawer) tem
+ *    `will-change: transform` e uma animação de entrada com transform, e pelo
+ *    CSS isso o torna CONTAINING BLOCK dos descendentes `position: fixed`.
+ *    Renderizado dentro do painel, o popover interpretava as coordenadas de
+ *    viewport como se fossem relativas ao painel e ia parar ~900px à direita,
+ *    fora da tela — e o foco no campo de busca fazia o painel rolar atrás dele,
+ *    o que aparecia como "a telinha pisca e some". No <body> nenhum ancestral
+ *    com transform, overflow ou z-index interfere.
  *  • VIRA PRA CIMA quando não há espaço embaixo, e no celular vira folha
  *    inferior — o campo "Projetos" fica na metade de baixo do painel, onde uma
  *    lista pra baixo cairia fora da tela.
@@ -57,6 +63,7 @@ export default function SeletorBusca({
   textoNenhum = "Nada encontrado.",
   disabled = false,
   variante = "campo",
+  iconeNoGatilho = true,
 }: {
   /** Nome do campo — vai no aria-label e no prefixo do gatilho, se pedido. */
   rotuloCampo: string
@@ -72,6 +79,12 @@ export default function SeletorBusca({
   disabled?: boolean
   /** `campo` = texto discreto (painel da tarefa); `filtro` = pílula de vidro. */
   variante?: "campo" | "filtro"
+  /**
+   * false quando quem chama JÁ desenha o ícone do valor atual do lado de fora —
+   * é o caso do Responsável no painel da tarefa, que tem o avatar grande de 26px
+   * ali. Sem isso apareciam DOIS avatares em sequência antes do nome.
+   */
+  iconeNoGatilho?: boolean
 }) {
   const [aberto, setAberto] = useState(false)
   const [busca, setBusca] = useState("")
@@ -82,6 +95,9 @@ export default function SeletorBusca({
   const popRef = useRef<HTMLDivElement>(null)
   const buscaRef = useRef<HTMLInputElement>(null)
   const listaRef = useRef<HTMLDivElement>(null)
+  // A última mudança de opção ativa veio do teclado? Decide se a lista pode
+  // rolar sozinha (ver o efeito de scrollIntoView).
+  const viaTecladoRef = useRef(false)
 
   const idBase = useId()
   const idLista = `${idBase}-lista`
@@ -108,37 +124,49 @@ export default function SeletorBusca({
     setAberto(true)
   }
 
+  // preventScroll em todo devolver-foco: o gatilho mora dentro do painel de
+  // tarefa (overflow-y:auto) e o navegador aproveitaria o focus() pra rolar o
+  // painel — o mesmo salto que fazia a lista parecer "piscar e sumir".
   function fechar(devolverFoco = true) {
     setAberto(false)
     setBusca("")
-    if (devolverFoco) gatilhoRef.current?.focus()
+    if (devolverFoco) gatilhoRef.current?.focus({ preventScroll: true })
   }
 
   function escolher(v: string) {
     setAberto(false)
     setBusca("")
-    gatilhoRef.current?.focus()
+    gatilhoRef.current?.focus({ preventScroll: true })
     // Só avisa quando muda de verdade: reescolher o mesmo responsável não
     // precisa virar request, refresh e linha no histórico da tarefa.
     if (v !== valor) onEscolher(v)
   }
 
-  // Reposiciona enquanto aberto: rolar a lista de trás ou girar o celular não
+  // Reposiciona enquanto aberto: rolar a tela de trás ou girar o celular não
   // pode deixar o popover "solto" longe do campo.
   useEffect(() => {
     if (!aberto) return
+    function aoRolar(e: Event) {
+      // Rolar a LISTA DE OPÇÕES não move o gatilho. Sem este filtro, cada
+      // quadro de rolagem da lista virava um setPos com objeto novo — re-render
+      // a cada evento de scroll, à toa.
+      if (e.target instanceof Node && popRef.current?.contains(e.target)) return
+      recalcularPosicao()
+    }
     recalcularPosicao()
     window.addEventListener("resize", recalcularPosicao)
-    window.addEventListener("scroll", recalcularPosicao, true)
+    window.addEventListener("scroll", aoRolar, true)
     return () => {
       window.removeEventListener("resize", recalcularPosicao)
-      window.removeEventListener("scroll", recalcularPosicao, true)
+      window.removeEventListener("scroll", aoRolar, true)
     }
   }, [aberto, recalcularPosicao])
 
   // Foco no campo de busca assim que abre — é o ponto da tela toda.
+  // preventScroll porque a posição do popover é calculada por nós: deixar o
+  // browser "rolar até o campo" só produziria salto de layout.
   useEffect(() => {
-    if (aberto) buscaRef.current?.focus()
+    if (aberto) buscaRef.current?.focus({ preventScroll: true })
   }, [aberto])
 
   // Clique fora fecha. pointerdown (e não click) porque o clique num item da
@@ -156,9 +184,11 @@ export default function SeletorBusca({
     return () => document.removeEventListener("pointerdown", aoApontar, true)
   }, [aberto])
 
-  // Mantém a opção ativa visível ao navegar com as setas.
+  // Mantém a opção ativa visível ao navegar com as SETAS — e só com as setas.
+  // Rolar a lista por causa do hover faria o item fugir de baixo do cursor, que
+  // é como se perde o clique num item parcialmente visível.
   useEffect(() => {
-    if (!aberto || indiceAtivo < 0) return
+    if (!aberto || indiceAtivo < 0 || !viaTecladoRef.current) return
     const el = listaRef.current?.querySelector<HTMLElement>(`[data-i="${indiceAtivo}"]`)
     el?.scrollIntoView({ block: "nearest" })
   }, [aberto, indiceAtivo])
@@ -166,21 +196,25 @@ export default function SeletorBusca({
   function aoTeclar(e: React.KeyboardEvent) {
     if (e.key === "ArrowDown") {
       e.preventDefault()
+      viaTecladoRef.current = true
       setAtivo((i) => (filtradas.length === 0 ? 0 : Math.min(i + 1, filtradas.length - 1)))
       return
     }
     if (e.key === "ArrowUp") {
       e.preventDefault()
+      viaTecladoRef.current = true
       setAtivo((i) => Math.max(i - 1, 0))
       return
     }
     if (e.key === "Home") {
       e.preventDefault()
+      viaTecladoRef.current = true
       setAtivo(0)
       return
     }
     if (e.key === "End") {
       e.preventDefault()
+      viaTecladoRef.current = true
       setAtivo(Math.max(filtradas.length - 1, 0))
       return
     }
@@ -219,7 +253,7 @@ export default function SeletorBusca({
             : undefined
         }
       >
-        {selecionada?.icone}
+        {iconeNoGatilho && selecionada?.icone}
         <span className="ws-combo-gatilho-texto">
           {prefixoNoGatilho ? `${prefixoNoGatilho}: ${textoGatilho}` : textoGatilho}
         </span>
@@ -239,77 +273,91 @@ export default function SeletorBusca({
         </svg>
       </button>
 
-      {aberto && pos && (
-        <div
-          ref={popRef}
-          className={`ws-combo-pop${pos.folha ? " ws-combo-pop-folha" : ""}`}
-          style={
-            pos.folha
-              ? undefined
-              : { left: pos.left, top: pos.top, width: pos.largura, maxHeight: pos.alturaMax }
-          }
-        >
-          <input
-            ref={buscaRef}
-            type="text"
-            value={busca}
-            onChange={(e) => {
-              setBusca(e.target.value)
-              setAtivo(0)
-            }}
-            onKeyDown={aoTeclar}
-            placeholder={placeholderBusca}
-            aria-label={`Pesquisar ${rotuloCampo.toLowerCase()}`}
-            role="combobox"
-            aria-expanded="true"
-            aria-controls={idLista}
-            aria-autocomplete="list"
-            aria-activedescendant={indiceAtivo >= 0 ? `${idBase}-op-${indiceAtivo}` : undefined}
-            className="no-ds ws-combo-busca"
-            autoComplete="off"
-            spellCheck={false}
-          />
+      {aberto &&
+        pos &&
+        // Portal pro <body>: ver o comentário do topo. `aberto` só vira true
+        // por clique, então nunca há portal durante o SSR.
+        createPortal(
+          <div
+            ref={popRef}
+            className={`ws-combo-pop${pos.folha ? " ws-combo-pop-folha" : ""}`}
+            style={
+              pos.folha
+                ? undefined
+                : { left: pos.left, top: pos.top, width: pos.largura, maxHeight: pos.alturaMax }
+            }
+          >
+            <input
+              ref={buscaRef}
+              type="text"
+              value={busca}
+              onChange={(e) => {
+                setBusca(e.target.value)
+                // Digitar reancora no primeiro resultado, e a lista PODE rolar
+                // pro topo por causa disso — é movimento pedido pelo teclado.
+                viaTecladoRef.current = true
+                setAtivo(0)
+              }}
+              onKeyDown={aoTeclar}
+              placeholder={placeholderBusca}
+              aria-label={`Pesquisar ${rotuloCampo.toLowerCase()}`}
+              role="combobox"
+              aria-expanded="true"
+              aria-controls={idLista}
+              aria-autocomplete="list"
+              aria-activedescendant={indiceAtivo >= 0 ? `${idBase}-op-${indiceAtivo}` : undefined}
+              className="no-ds ws-combo-busca"
+              autoComplete="off"
+              spellCheck={false}
+            />
 
-          <div ref={listaRef} id={idLista} role="listbox" aria-label={rotuloCampo} className="ws-combo-lista">
-            {filtradas.length === 0 && <p className="ws-combo-vazio">{textoNenhum}</p>}
+            <div ref={listaRef} id={idLista} role="listbox" aria-label={rotuloCampo} className="ws-combo-lista">
+              {filtradas.length === 0 && <p className="ws-combo-vazio">{textoNenhum}</p>}
 
-            {filtradas.map((o, i) => {
-              const escolhida = o.valor === valor
-              return (
-                <button
-                  key={o.valor || `__vazio-${i}`}
-                  id={`${idBase}-op-${i}`}
-                  data-i={i}
-                  type="button"
-                  role="option"
-                  aria-selected={escolhida}
-                  // pointerdown em vez de click: cobre mouse, toque e caneta
-                  // com um handler só, e acontece ANTES de qualquer mudança de
-                  // foco — no celular o `click` chega tarde demais, depois de o
-                  // teclado virtual mexer no layout.
-                  onPointerDown={(e) => {
-                    e.preventDefault()
-                    escolher(o.valor)
-                  }}
-                  onMouseEnter={() => setAtivo(i)}
-                  className={`no-ds ws-combo-item${i === indiceAtivo ? " ws-combo-item-ativo" : ""}`}
-                >
-                  {o.icone}
-                  <span className="ws-combo-item-texto">
-                    <span className="ws-combo-item-rotulo">{o.rotulo}</span>
-                    {o.detalhe && <span className="ws-combo-item-detalhe">{o.detalhe}</span>}
-                  </span>
-                  {escolhida && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, color: "#5da283" }}>
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
+              {filtradas.map((o, i) => {
+                const escolhida = o.valor === valor
+                return (
+                  <button
+                    key={o.valor || `__vazio-${i}`}
+                    id={`${idBase}-op-${i}`}
+                    data-i={i}
+                    type="button"
+                    role="option"
+                    aria-selected={escolhida}
+                    // pointerdown em vez de click: cobre mouse, toque e caneta
+                    // com um handler só, e acontece ANTES de qualquer mudança de
+                    // foco — no celular o `click` chega tarde demais, depois de o
+                    // teclado virtual mexer no layout.
+                    onPointerDown={(e) => {
+                      e.preventDefault()
+                      escolher(o.valor)
+                    }}
+                    onMouseEnter={() => {
+                      // Zera a marca do teclado: sem isso, a PRIMEIRA vez que
+                      // se usasse a seta deixava o ref em true pra sempre e o
+                      // hover voltava a rolar a lista sozinho.
+                      viaTecladoRef.current = false
+                      setAtivo(i)
+                    }}
+                    className={`no-ds ws-combo-item${i === indiceAtivo ? " ws-combo-item-ativo" : ""}`}
+                  >
+                    {o.icone}
+                    <span className="ws-combo-item-texto">
+                      <span className="ws-combo-item-rotulo">{o.rotulo}</span>
+                      {o.detalhe && <span className="ws-combo-item-detalhe">{o.detalhe}</span>}
+                    </span>
+                    {escolhida && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, color: "#5da283" }}>
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>,
+          document.body
+        )}
     </>
   )
 }
