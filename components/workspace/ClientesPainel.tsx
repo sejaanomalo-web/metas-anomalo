@@ -24,7 +24,7 @@ import {
   renomearEmpresaWsAction,
   reordenarContextosAction,
 } from "@/lib/workspace-actions"
-import { PALETA_ASANA, textoSobre } from "@/lib/workspace-cores"
+import { LOGO_CLIENTE, PALETA_ASANA, textoSobre } from "@/lib/workspace-cores"
 
 export interface ItemCliente {
   /** Contexto já existente (área de trabalho pronta e reordenável). */
@@ -505,7 +505,8 @@ function ConteudoLinha({ item }: { item: ItemCliente }) {
           alt=""
           width={26}
           height={26}
-          style={{ width: 26, height: 26, borderRadius: 7, objectFit: "cover", flexShrink: 0 }}
+          // `contain`, NÃO `cover`: ver LOGO_CLIENTE.
+          style={{ ...LOGO_CLIENTE, width: 26, height: 26, borderRadius: 7 }}
         />
       ) : (
         <span
@@ -874,7 +875,9 @@ function NovoCliente({ empresas, aoFechar }: { empresas: string[]; aoFechar: () 
           {fotoBase64 ? "Trocar foto" : "Subir foto"}
         </button>
         {fotoBase64 && (
-          <img src={fotoBase64} alt="Prévia" width={30} height={30} style={{ width: 30, height: 30, borderRadius: 8, objectFit: "cover" }} />
+          // Mesmo ajuste da lista de propósito: uma prévia com recorte
+          // diferente do resultado final é uma prévia que mente.
+          <img src={fotoBase64} alt="Prévia" width={30} height={30} style={{ ...LOGO_CLIENTE, width: 30, height: 30, borderRadius: 8 }} />
         )}
       </div>
 

@@ -9,7 +9,7 @@ import {
   atualizarContextoAction,
   excluirClienteWorkspaceAction,
 } from "@/lib/workspace-actions"
-import { PALETA_ASANA, textoSobre } from "@/lib/workspace-cores"
+import { LOGO_CLIENTE, PALETA_ASANA, textoSobre } from "@/lib/workspace-cores"
 import type { Contexto } from "@/lib/workspace-tipos"
 
 const ABAS: { chave: string; rotulo: string }[] = [
@@ -128,7 +128,8 @@ export default function ClienteHeader({
             alt={contexto.nome}
             width={34}
             height={34}
-            style={{ width: 34, height: 34, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+            // `contain`, NÃO `cover`: ver LOGO_CLIENTE.
+            style={{ ...LOGO_CLIENTE, width: 34, height: 34, borderRadius: 8 }}
           />
         ) : (
           <span

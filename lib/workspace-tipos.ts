@@ -151,6 +151,12 @@ export interface Comentario {
   tarefa_id: string
   autor_id: string | null
   autor_nome: string | null
+  /**
+   * A conta de quem escreveu foi excluída, e `autor_nome` é o nome preservado
+   * no momento da exclusão (ws_comentarios.autor_nome_hist). A interface marca
+   * isso pra ninguém procurar essa pessoa no seletor de responsável.
+   */
+  autor_removido: boolean
   /** Foto de perfil do autor (ws_preferencias), se houver. */
   autor_foto: string | null
   corpo: string

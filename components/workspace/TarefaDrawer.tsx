@@ -677,7 +677,15 @@ export default function TarefaDrawer(props: Props) {
                     <p style={{ fontSize: 12, margin: "0 0 2px" }}>
                       <strong style={{ color: "var(--text-1)", fontWeight: 600 }}>
                         {c.autor_nome ?? "—"}
-                      </strong>{" "}
+                      </strong>
+                      {/* A conta saiu do sistema, mas o comentário fica. Sem
+                          esta marca, o nome parece de alguém que ainda dá pra
+                          acionar — e não dá. */}
+                      {c.autor_removido && (
+                        <span style={{ color: "var(--text-4)", fontSize: 11 }}>
+                          {" "}(conta excluída)
+                        </span>
+                      )}{" "}
                       <span style={{ color: "var(--text-4)", fontSize: 11 }}>
                         {new Date(c.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                       </span>

@@ -139,6 +139,29 @@ export function textoSobre(hex: string): string {
   return luminancia(hex) > 0.28 ? "#1e1f21" : "#ffffff"
 }
 
+/**
+ * Ladrilho do LOGO DO CLIENTE (lista de clientes, cabeçalho, prévia do
+ * formulário). Quem chama completa com `width`/`height`/`borderRadius`.
+ *
+ * `contain` E NÃO `cover` — não é preferência estética, é o conserto de um bug
+ * relatado: a foto do "Antônio Carlos Corretor" e o logo da "HΛTO" apareciam
+ * cortados, e reenviar a imagem não adiantava (o arquivo é gravado inteiro; o
+ * corte era só na exibição). `cover` preenche o quadrado e JOGA FORA o que
+ * sobra da proporção: retrato perde topo e base — o rosto some —, e logo
+ * deitado perde as laterais. Um cliente escolhe a própria marca; o sistema não
+ * pode decidir qual pedaço dela vale a pena mostrar.
+ *
+ * O preço do `contain` é a tarja vazia na proporção que sobra. Daí o fundo
+ * discreto: assim a imagem menor lê como ladrilho proposital, não como falha
+ * de carregamento. Rosto de PESSOA (Avatar, "Sua foto de perfil") segue com
+ * `cover` de propósito — ali o círculo recortando o rosto é o esperado.
+ */
+export const LOGO_CLIENTE = {
+  objectFit: "contain",
+  background: "rgba(255, 255, 255, 0.06)",
+  flexShrink: 0,
+} as const
+
 const HEX_VALIDO = /^#[0-9a-fA-F]{6}$/
 
 /**

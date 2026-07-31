@@ -571,7 +571,9 @@ export async function listarComentarios(tarefaId: string): Promise<Comentario[]>
   if (!supabase) return []
   const { data, error } = await supabase
     .from("ws_comentarios")
-    .select("id, tarefa_id, autor_id, corpo, created_at, updated_at, usuarios(nome)")
+    .select(
+      "id, tarefa_id, autor_id, corpo, created_at, updated_at, autor_nome_hist, usuarios(nome)"
+    )
     .eq("tarefa_id", tarefaId)
     .is("excluido_em", null)
     .order("created_at")
@@ -584,6 +586,7 @@ export async function listarComentarios(tarefaId: string): Promise<Comentario[]>
   // pra o avatar do comentário ser o MESMO que aparece no calendário.
   const linhas = (data ?? []) as unknown as (Comentario & {
     usuarios: { nome: string } | { nome: string }[] | null
+    autor_nome_hist: string | null
   })[]
   const autores = [...new Set(linhas.map((c) => c.autor_id).filter(Boolean))] as string[]
   const fotoPorUsuario = new Map<string, string>()
@@ -599,11 +602,16 @@ export async function listarComentarios(tarefaId: string): Promise<Comentario[]>
 
   return linhas.map((c) => {
     const u = Array.isArray(c.usuarios) ? c.usuarios[0] : c.usuarios
+    // Conta viva manda no nome (a pessoa pode ter se renomeado depois). Só
+    // quando ela não existe mais é que vale o nome preservado na exclusão —
+    // sem ele o comentário viraria um "—" anônimo no meio da conversa.
+    const nomeVivo = u?.nome ?? null
     return {
       id: c.id,
       tarefa_id: c.tarefa_id,
       autor_id: c.autor_id,
-      autor_nome: u?.nome ?? null,
+      autor_nome: nomeVivo ?? c.autor_nome_hist ?? null,
+      autor_removido: nomeVivo === null && c.autor_nome_hist !== null,
       autor_foto: c.autor_id ? fotoPorUsuario.get(c.autor_id) ?? null : null,
       corpo: c.corpo,
       created_at: c.created_at,
