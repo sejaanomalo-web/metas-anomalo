@@ -283,29 +283,56 @@ export async function alternarAtivoUsuarioAction(
 /**
  * Traduz o erro do Postgres numa frase que diz o que fazer.
  *
- * O caso real é o 23503 (foreign_key_violation): uma FK apontando pra
- * public.usuarios com `on delete no action` recusa o delete e o Postgres
- * responde com o nome da constraint, não com uma instrução. Despejar essa
- * mensagem na tela ("violates foreign key constraint
- * ws_tarefas_concluida_por_fkey") deixa quem está usando o sistema sem saída —
- * a pessoa não tem como saber que existe uma migration pendente nem que
- * DESATIVAR resolve o problema dela agora.
+ * São DOIS erros reais, os dois já vistos em produção, e os dois chegam como
+ * um nome de constraint em vez de uma instrução:
  *
- * A migration 20260729_usuarios_exclusao_fks.sql converte essas FKs em
- * `on delete set null`; até ela rodar, esta mensagem é o que o admin vê.
+ *  • 23503 (foreign_key_violation) — FK apontando pra public.usuarios com
+ *    `on delete no action` recusa o delete:
+ *      violates foreign key constraint "ws_tarefas_concluida_por_fkey"
+ *    Resolvido pela migration 20260729_usuarios_exclusao_fks.sql.
+ *
+ *  • 23514 (check_violation) — a FK já é `set null`, mas anular a coluna
+ *    quebra um CHECK da tabela:
+ *      new row for relation "ws_comentarios" violates check constraint
+ *      "ws_comentarios_tem_autor"
+ *    Resolvido pela migration 20260731_exclusao_usuario_comentarios.sql.
+ *
+ * Despejar qualquer uma das duas na tela deixa quem usa o sistema sem saída: a
+ * pessoa não tem como saber que existe migration pendente, nem que DESATIVAR
+ * resolve o problema dela agora. Por isso a mensagem cita o arquivo exato e
+ * sempre oferece a saída imediata.
  */
 function mensagemDeErroDeExclusao(error: { code?: string; message: string }): string {
-  if (error.code !== "23503") return error.message
+  // Uma frase só, no fim das duas mensagens: a saída que não depende de
+  // ninguém aplicar migration nenhuma.
+  const alternativa =
+    ' Enquanto isso, "Desativar" remove o acesso da pessoa sem perder nada.'
 
-  // O nome da tabela que bloqueou aparece entre aspas na mensagem do Postgres:
-  // ...violates foreign key constraint "x_fkey" on table "ws_tarefas"
-  const tabela = /on table "([^"]+)"/.exec(error.message)?.[1]
-  const onde = tabela ? ` (tabela ${tabela})` : ""
-  return (
-    `Este usuário tem registros ligados a ele${onde} que ainda bloqueiam a exclusão. ` +
-    "Falta aplicar a migration 20260729_usuarios_exclusao_fks.sql no SQL Editor do Supabase. " +
-    'Enquanto isso, "Desativar" remove o acesso da pessoa sem perder nada.'
-  )
+  if (error.code === "23503") {
+    // O nome da tabela que bloqueou aparece entre aspas na mensagem do
+    // Postgres: ...foreign key constraint "x_fkey" on table "ws_tarefas"
+    const tabela = /on table "([^"]+)"/.exec(error.message)?.[1]
+    const onde = tabela ? ` (tabela ${tabela})` : ""
+    return (
+      `Este usuário tem registros ligados a ele${onde} que ainda bloqueiam a exclusão. ` +
+      "Falta aplicar a migration 20260729_usuarios_exclusao_fks.sql no SQL Editor do Supabase." +
+      alternativa
+    )
+  }
+
+  if (error.code === "23514") {
+    // ...for relation "ws_comentarios" violates check constraint "..."
+    const tabela = /for relation "([^"]+)"/.exec(error.message)?.[1]
+    const onde = tabela ? ` (tabela ${tabela})` : ""
+    return (
+      `Os registros deste usuário${onde} exigem um autor, e a exclusão tentaria deixá-los sem nenhum. ` +
+      "Falta aplicar a migration 20260731_exclusao_usuario_comentarios.sql no SQL Editor do Supabase — " +
+      "ela preserva o nome de quem escreveu antes de desligar a conta." +
+      alternativa
+    )
+  }
+
+  return error.message
 }
 
 /**
@@ -322,6 +349,11 @@ function mensagemDeErroDeExclusao(error: { code?: string; message: string }): st
  *     pela migration 20260729. Nasceram sem `on delete`, o que é NO ACTION, e
  *     por isso a exclusão vinha falhando; a tarefa/nota/comentário fica, só o
  *     crédito de autoria some.
+ *   • ws_comentarios é a exceção: um CHECK exige que todo comentário tenha
+ *     autor, então anular autor_id sozinho reprovava o delete. A migration
+ *     20260731 copia o nome pra ws_comentarios.autor_nome_hist (trigger BEFORE
+ *     DELETE) antes de o FK anular — o comentário fica com o nome de quem
+ *     escreveu, marcado como "conta excluída".
  *
  * O client exige digitar "Excluir" antes de chamar essa action —
  * camada extra de UX, mas a validação textual server-side abaixo é
