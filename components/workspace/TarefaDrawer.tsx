@@ -441,7 +441,9 @@ export default function TarefaDrawer(props: Props) {
                   autoFocus
                   placeholder="Sobre o que é esta tarefa?"
                   className="glass-input"
-                  style={{ fontSize: 13, padding: "8px 10px", borderRadius: 8, width: "100%", resize: "vertical", lineHeight: 1.5 }}
+                  // borderRadius 10 = o mesmo da .ws-texto-box, pra a silhueta
+                  // não mudar ao alternar entre ler e editar.
+                  style={{ fontSize: 13, padding: "10px 12px", borderRadius: 10, width: "100%", resize: "vertical", lineHeight: 1.5 }}
                 />
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                   <button
@@ -486,14 +488,19 @@ export default function TarefaDrawer(props: Props) {
               // vez de abrir o link. Agora o texto é só texto, e editar é um
               // botão próprio.
               <div>
-                {tarefa.descricao ? (
-                  <DescricaoRica texto={tarefa.descricao} />
-                ) : (
-                  <span style={{ fontSize: 13, color: "var(--text-4)" }}>
-                    Sobre o que é esta tarefa?
-                  </span>
-                )}
-                <div style={{ marginTop: 6 }}>
+                {/* O placeholder fica DENTRO da caixa: assim o campo existe
+                    visualmente mesmo vazio, que é o que dá o aspecto de
+                    formulário em vez de texto solto no painel. */}
+                <div className="ws-texto-box">
+                  {tarefa.descricao ? (
+                    <DescricaoRica texto={tarefa.descricao} />
+                  ) : (
+                    <span style={{ fontSize: 13, color: "var(--text-4)" }}>
+                      Sobre o que é esta tarefa?
+                    </span>
+                  )}
+                </div>
+                <div style={{ marginTop: 8 }}>
                   <button
                     type="button"
                     onClick={() => {
@@ -503,10 +510,9 @@ export default function TarefaDrawer(props: Props) {
                       setDescricao(tarefa.descricao ?? "")
                       setEditandoDescricao(true)
                     }}
-                    className="no-ds"
-                    style={acaoComentario}
+                    className="ws-btn-editar no-ds"
                   >
-                    {tarefa.descricao ? "Editar descrição" : "Adicionar descrição"}
+                    ✎ {tarefa.descricao ? "Editar descrição" : "Adicionar descrição"}
                   </button>
                 </div>
               </div>
@@ -724,7 +730,9 @@ export default function TarefaDrawer(props: Props) {
                           maxLength={10000}
                           autoFocus
                           className="glass-input"
-                          style={{ fontSize: 13, padding: "8px 10px", borderRadius: 8, width: "100%", resize: "vertical", lineHeight: 1.5 }}
+                          // Mesmo raio/padding da .ws-texto-box — ler e editar
+                          // com a mesma silhueta.
+                          style={{ fontSize: 13, padding: "10px 12px", borderRadius: 10, width: "100%", resize: "vertical", lineHeight: 1.5 }}
                           disabled={pending}
                         />
                         <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
@@ -768,20 +776,29 @@ export default function TarefaDrawer(props: Props) {
                       <>
                         {/* Texto puro, FORA de qualquer <button>: clicar num
                             link abre o link e nada mais. Editar só pelo botão
-                            abaixo. */}
-                        <DescricaoRica texto={c.corpo} />
+                            abaixo. A caixa dá o aspecto de comentário e segura
+                            o texto longo com scroll próprio. */}
+                        <div className="ws-texto-box ws-texto-box--compacto">
+                          <DescricaoRica texto={c.corpo} />
+                        </div>
                         {(souAdmin || (meuId !== null && c.autor_id === meuId)) && (
-                          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 12,
+                              marginTop: 7,
+                            }}
+                          >
                             <button
                               type="button"
                               onClick={() => {
                                 setComentarioEditando(c.id)
                                 setCorpoEditado(c.corpo)
                               }}
-                              className="no-ds"
-                              style={acaoComentario}
+                              className="ws-btn-editar no-ds"
                             >
-                              Editar
+                              ✎ Editar
                             </button>
                             <button
                               type="button"
@@ -821,7 +838,7 @@ export default function TarefaDrawer(props: Props) {
                   maxLength={10000}
                   placeholder="Adicionar um comentário"
                   className="glass-input"
-                  style={{ fontSize: 13, padding: "9px 11px", borderRadius: 8, width: "100%", resize: "vertical" }}
+                  style={{ fontSize: 13, padding: "10px 12px", borderRadius: 10, width: "100%", resize: "vertical", lineHeight: 1.5 }}
                   disabled={pending}
                 />
                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>

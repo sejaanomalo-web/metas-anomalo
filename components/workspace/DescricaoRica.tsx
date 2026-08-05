@@ -22,7 +22,10 @@ export default function DescricaoRica({
 
   return (
     <div
-      className={className}
+      // "ws-rico" vem SEMPRE: zera a margem do primeiro e do último bloco pra
+      // o texto não ficar descolado das bordas quando renderizado dentro de
+      // uma caixa com padding (.ws-texto-box). O className recebido soma.
+      className={className ? `ws-rico ${className}` : "ws-rico"}
       style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-2)" }}
     >
       {blocos.map((b, i) => (

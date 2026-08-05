@@ -1388,6 +1388,91 @@ table {
 }
 
 /* ============================================================
+ * Workspace — caixa de texto salvo (descrição e comentário).
+ *
+ * Mora aqui, e não em estilo inline como o resto do TarefaDrawer, porque
+ * precisa de :hover e de ::-webkit-scrollbar — que atributo style não
+ * alcança.
+ *
+ * A caixa usa os MESMOS tokens do .glass-input (--surface-3 / --input-border
+ * / raio 10). Assim o texto lido e o textarea de edição têm a mesma silhueta,
+ * e alternar entre ler e editar não "pula" na tela.
+ * ============================================================ */
+.ws-texto-box {
+  background: var(--surface-3);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  /* O pedido: texto longo rola DENTRO da caixa, inclusive fora do modo de
+   * edição, em vez de esticar a seção inteira do drawer. */
+  max-height: 260px;
+  overflow-y: auto;
+  /* Ao chegar no fim da rolagem, NÃO propaga pro drawer atrás. Sem isto,
+   * continuar rolando o comentário arrasta o painel inteiro junto. */
+  overscroll-behavior: contain;
+  /* O parágrafo usa white-space: pre-wrap; sem isto, uma URL longa colada
+   * sem espaços estoura a caixa na horizontal. */
+  overflow-wrap: anywhere;
+}
+
+/* Comentários aparecem vários na mesma tela — teto menor que a descrição. */
+.ws-texto-box--compacto {
+  max-height: 200px;
+}
+
+/* Barra de rolagem visível. No macOS a barra fica escondida até alguém
+ * rolar, então sem isto ninguém descobre que há mais conteúdo abaixo. */
+.ws-texto-box::-webkit-scrollbar {
+  width: 8px;
+}
+.ws-texto-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ws-texto-box::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+}
+.ws-texto-box::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* DescricaoRica dá margin: 6px 0 em cada parágrafo/lista. Dentro de uma
+ * caixa com padding, a margem do primeiro e do último soma ao padding e o
+ * texto fica descolado das bordas. Zera só nas pontas. */
+.ws-rico > p:first-child,
+.ws-rico > ul:first-child {
+  margin-top: 0;
+}
+.ws-rico > p:last-child,
+.ws-rico > ul:last-child {
+  margin-bottom: 0;
+}
+
+/* Botão "Editar" da descrição e do comentário. Contornado porque a versão
+ * anterior usava --text-4 (o tom mais apagado da paleta) e sumia na tela.
+ * O hover em ouro segue o mesmo idioma do .btn-gold-outline. */
+.ws-btn-editar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.ws-btn-editar:hover {
+  color: var(--accent);
+  border-color: rgba(201, 149, 58, 0.55);
+  background: rgba(201, 149, 58, 0.08);
+}
+
+/* ============================================================
  * Workspace — calendário semanal no desenho do Asana.
  *
  * O fundo é o CINZA do Asana (não o preto puro do resto do app) — é o
