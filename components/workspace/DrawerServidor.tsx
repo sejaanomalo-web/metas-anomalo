@@ -7,6 +7,7 @@ import {
   listarUsuariosAtivos,
 } from "@/lib/workspace"
 import { hojeISO } from "@/lib/workspace-datas"
+import { getUsuarioIdSync } from "@/lib/auth"
 import TarefaDrawer from "./TarefaDrawer"
 
 /**
@@ -29,6 +30,12 @@ export default async function DrawerServidor({
 }) {
   const tarefa = await getTarefa(tarefaId)
   if (!tarefa) return null
+
+  // Resolvido AQUI, e não recebido por prop, pra não ter que alterar as cinco
+  // páginas que abrem o drawer. Só decide quais botões aparecem (editar/apagar
+  // o próprio comentário); a permissão de verdade é checada de novo na server
+  // action, que é o que vale.
+  const meuId = getUsuarioIdSync()
 
   const [subtarefas, comentarios, atividade, contextos, usuarios] = await Promise.all([
     listarSubtarefas(tarefa.id),
@@ -57,6 +64,7 @@ export default async function DrawerServidor({
       usuarios={usuarios}
       hoje={hojeISO()}
       souAdmin={souAdmin}
+      meuId={meuId}
     />
   )
 }

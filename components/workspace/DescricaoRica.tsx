@@ -45,7 +45,11 @@ function BlocoView({ bloco }: { bloco: Bloco }) {
     )
   }
   return (
-    <p style={{ margin: "6px 0" }}>
+    // pre-wrap preserva indentação e espaços múltiplos que a pessoa digitou.
+    // As quebras de linha vêm como <br> (trecho "quebra"), não como \n — o
+    // parser já separou as linhas —, então pre-wrap aqui cuida só do espaço
+    // horizontal, sem risco de quebra dupla.
+    <p style={{ margin: "6px 0", whiteSpace: "pre-wrap" }}>
       <Trechos trechos={bloco.trechos} />
     </p>
   )
@@ -67,6 +71,9 @@ function TrechoView({ trecho }: { trecho: Trecho }) {
   switch (trecho.tipo) {
     case "texto":
       return <>{trecho.valor}</>
+    case "quebra":
+      // O Enter que a pessoa digitou. Sem isto, o texto chega embolado.
+      return <br />
     case "negrito":
       return <strong style={{ color: "var(--text-1)" }}>{trecho.valor}</strong>
     case "italico":
