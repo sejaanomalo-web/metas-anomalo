@@ -110,6 +110,7 @@ export type ChavePermissao =
   | "ver_notificacoes"
   | "crm"
   | "workspace"
+  | "leads"
 
 export type Permissoes = Record<ChavePermissao, boolean>
 
@@ -132,6 +133,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     ver_notificacoes: true,
     crm: true,
     workspace: true,
+    leads: true,
   },
   gestor_trafego: {
     dashboard_principal: false,
@@ -150,6 +152,9 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     // módulo (ver docs/WORKSPACE-PLANO.md §5.2). Liga no rollout.
     crm: false,
     workspace: false,
+    // Leads do Meta são operação de tráfego — o gestor precisa mapear os
+    // formulários e copiar o link do cliente.
+    leads: true,
   },
   comercial: {
     dashboard_principal: false,
@@ -166,6 +171,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     ver_notificacoes: true,
     crm: true,
     workspace: false,
+    leads: false,
   },
   custom: {
     dashboard_principal: false,
@@ -182,6 +188,7 @@ export const PRESETS_PERMISSOES: Record<PapelUsuario, Permissoes> = {
     ver_notificacoes: false,
     crm: false,
     workspace: false,
+    leads: false,
   },
 }
 

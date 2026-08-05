@@ -84,6 +84,11 @@ const CHAVES: { chave: ChavePermissao; rotulo: string; descricao: string }[] = [
     rotulo: "Workspace",
     descricao: "/dashboard/workspace (tarefas, calendário, clientes)",
   },
+  {
+    chave: "leads",
+    rotulo: "Leads do Meta",
+    descricao: "/dashboard/leads (link do cliente + formulários)",
+  },
 ]
 
 export default function GerenciadorUsuarios({
@@ -1034,6 +1039,7 @@ const PRESET_ADMIN: Permissoes = {
   ver_notificacoes: true,
   crm: true,
   workspace: true,
+  leads: true,
 }
 
 const PRESET_GESTOR: Permissoes = {
@@ -1051,6 +1057,7 @@ const PRESET_GESTOR: Permissoes = {
   ver_notificacoes: true,
   crm: false,
   workspace: false,
+  leads: true,
 }
 
 const PRESET_COMERCIAL: Permissoes = {
@@ -1068,4 +1075,5 @@ const PRESET_COMERCIAL: Permissoes = {
   ver_notificacoes: true,
   crm: true,
   workspace: false,
+  leads: false,
 }

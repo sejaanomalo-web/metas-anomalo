@@ -1130,6 +1130,57 @@ export async function comentarAction(
   return { ok: true, id: data.id as string }
 }
 
+/**
+ * Edita o corpo de um comentário já publicado.
+ *
+ * Permissão IDÊNTICA à de excluir: autor ou admin. Um comentário é fala de
+ * alguém — deixar terceiro reescrever seria pior que deixar apagar.
+ *
+ * Não gera atividade nem notificação: quem segue a tarefa já foi avisado
+ * quando o comentário foi criado, e avisar de novo a cada correção de typo
+ * treinaria o time a ignorar o sino. O updated_at é carimbado pelo trigger
+ * ws_comentarios_touch, então a UI consegue mostrar "(editado)".
+ */
+export async function editarComentarioAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const id = String(formData.get("id") ?? "").trim()
+  if (!ehUuid(id)) return { ok: false, erro: "Comentário inválido." }
+
+  const corpo = texto(formData, "corpo", MAX_COMENTARIO)
+  // O CHECK do banco exige corpo não-vazio: esvaziar é apagar, e apagar tem
+  // action própria. Barrar aqui dá mensagem melhor que o erro 23514.
+  if (!corpo) return { ok: false, erro: "O comentário não pode ficar vazio." }
+
+  const { data: c } = await db
+    .from("ws_comentarios")
+    .select("id, autor_id, tarefa_id, excluido_em")
+    .eq("id", id)
+    .maybeSingle()
+  if (!c || c.excluido_em) return { ok: false, erro: "Comentário não encontrado." }
+  if (usuario.papel !== "admin" && c.autor_id !== usuario.id) {
+    return { ok: false, erro: "Só o autor pode editar o comentário." }
+  }
+
+  const { error } = await db
+    .from("ws_comentarios")
+    .update({ corpo })
+    .eq("id", id)
+  if (error) {
+    console.error("[workspace] editarComentario error", error.message)
+    return { ok: false, erro: "Não foi possível salvar a edição." }
+  }
+
+  await ping(c.tarefa_id as string, "comentario")
+  revalidatePath(ROTA)
+  return { ok: true, id }
+}
+
 export async function excluirComentarioAction(
   formData: FormData
 ): Promise<ResultadoWorkspace> {

@@ -32,6 +32,10 @@ export type Trecho =
   | { tipo: "codigo"; valor: string }
   | { tipo: "link"; href: string; rotulo: string }
   | { tipo: "mencao"; nome: string }
+  // Quebra de linha SIMPLES dentro do mesmo parágrafo (o Enter que a pessoa
+  // digitou). Antes, linhas consecutivas eram unidas por espaço e o texto
+  // chegava embolado na tela — quem escreveu em 4 linhas via 1 parágrafo só.
+  | { tipo: "quebra" }
 
 export type Bloco =
   | { tipo: "paragrafo"; trechos: Trecho[] }
@@ -147,7 +151,19 @@ export function analisarDescricao(texto: string | null | undefined): Bloco[] {
 
   function fecharParagrafo() {
     if (paragrafo.length > 0) {
-      blocos.push({ tipo: "paragrafo", trechos: analisarInline(paragrafo.join(" ")) })
+      // Cada linha vira seus próprios trechos, separadas por uma quebra
+      // explícita. Antes era `paragrafo.join(" ")`, que transformava
+      //     Linha 1
+      //     Linha 2
+      // em "Linha 1 Linha 2" — a formatação que a pessoa escreveu sumia no
+      // salvamento. Linha em branco continua separando PARÁGRAFO (bloco novo);
+      // quebra simples agora vira <br>.
+      const trechos: Trecho[] = []
+      paragrafo.forEach((linha, i) => {
+        if (i > 0) trechos.push({ tipo: "quebra" })
+        trechos.push(...analisarInline(linha))
+      })
+      blocos.push({ tipo: "paragrafo", trechos })
       paragrafo = []
     }
   }
@@ -170,7 +186,10 @@ export function analisarDescricao(texto: string | null | undefined): Bloco[] {
       continue
     }
     fecharLista()
-    paragrafo.push(linha.trim())
+    // trimEnd, não trim: espaço à esquerda é indentação que a pessoa digitou
+    // de propósito, e o renderizador usa white-space: pre-wrap pra preservar.
+    // Espaço à direita é invisível e só sujaria o texto.
+    paragrafo.push(linha.replace(/\s+$/, ""))
   }
   fecharParagrafo()
   fecharLista()
@@ -191,8 +210,16 @@ export function descricaoResumida(
     const listaTrechos = b.tipo === "paragrafo" ? [b.trechos] : b.itens
     for (const trechos of listaTrechos) {
       for (const t of trechos) {
+        // A quebra vira espaço: este resumo é de UMA linha (preview da lista e
+        // trecho de busca), então <br> não teria sentido aqui.
         partes.push(
-          t.tipo === "link" ? t.rotulo : t.tipo === "mencao" ? `@${t.nome}` : t.valor
+          t.tipo === "quebra"
+            ? " "
+            : t.tipo === "link"
+              ? t.rotulo
+              : t.tipo === "mencao"
+                ? `@${t.nome}`
+                : t.valor
         )
       }
     }

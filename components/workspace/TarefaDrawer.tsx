@@ -10,6 +10,8 @@ import {
   criarTarefaAction,
   desvincularContextoAction,
   duplicarTarefaAction,
+  editarComentarioAction,
+  excluirComentarioAction,
   excluirTarefaAction,
   restaurarTarefaAction,
   excluirDefinitivoAction,
@@ -40,6 +42,9 @@ interface Props {
   usuarios: { id: string; nome: string; email?: string; foto_url?: string | null }[]
   hoje: string
   souAdmin: boolean
+  /** Id do usuário logado — decide quem vê "Editar"/"Apagar" no comentário.
+   *  A permissão real é checada de novo na server action. */
+  meuId: string | null
 }
 
 /** Verde do "Today/Completed" do Asana. */
@@ -59,7 +64,7 @@ const AZUL_ASANA = "#4573d2"
  * Supabase; erro reverte e fica visível.
  */
 export default function TarefaDrawer(props: Props) {
-  const { tarefa, subtarefas, comentarios, atividade, contextos, usuarios, hoje, souAdmin } = props
+  const { tarefa, subtarefas, comentarios, atividade, contextos, usuarios, hoje, souAdmin, meuId } = props
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -71,6 +76,9 @@ export default function TarefaDrawer(props: Props) {
   const [descricao, setDescricao] = useState(tarefa.descricao ?? "")
   const [editandoDescricao, setEditandoDescricao] = useState(false)
   const [novoComentario, setNovoComentario] = useState("")
+  // Comentário aberto para edição (id) + o texto sendo editado. Um por vez.
+  const [comentarioEditando, setComentarioEditando] = useState<string | null>(null)
+  const [corpoEditado, setCorpoEditado] = useState("")
   const [novaSubtarefa, setNovaSubtarefa] = useState("")
   const [confirmarApagar, setConfirmarApagar] = useState("")
   const [mostrarHistorico, setMostrarHistorico] = useState(false)
@@ -471,23 +479,13 @@ export default function TarefaDrawer(props: Props) {
                 </div>
               </>
             ) : (
-              <button
-                type="button"
-                onClick={() => setEditandoDescricao(true)}
-                className="no-ds"
-                style={{
-                  width: "100%",
-                  minHeight: 56,
-                  textAlign: "left",
-                  background: "transparent",
-                  border: "1px solid transparent",
-                  borderRadius: 8,
-                  padding: "6px 8px",
-                  margin: "-6px -8px",
-                  cursor: "text",
-                  color: "inherit",
-                }}
-              >
+              // ANTES isto era um <button> envolvendo a descrição inteira, o
+              // que dava dois problemas: (1) os links renderizados por
+              // DescricaoRica ficavam DENTRO de um botão — HTML inválido — e
+              // (2) clicar num link borbulhava pro onClick e abria o editor em
+              // vez de abrir o link. Agora o texto é só texto, e editar é um
+              // botão próprio.
+              <div>
                 {tarefa.descricao ? (
                   <DescricaoRica texto={tarefa.descricao} />
                 ) : (
@@ -495,7 +493,23 @@ export default function TarefaDrawer(props: Props) {
                     Sobre o que é esta tarefa?
                   </span>
                 )}
-              </button>
+                <div style={{ marginTop: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Recarrega do servidor: se outra pessoa editou enquanto
+                      // o drawer estava aberto, o textarea abre com o texto
+                      // atual, não com o que estava na tela.
+                      setDescricao(tarefa.descricao ?? "")
+                      setEditandoDescricao(true)
+                    }}
+                    className="no-ds"
+                    style={acaoComentario}
+                  >
+                    {tarefa.descricao ? "Editar descrição" : "Adicionar descrição"}
+                  </button>
+                </div>
+              </div>
             )}
           </section>
 
@@ -689,8 +703,104 @@ export default function TarefaDrawer(props: Props) {
                       <span style={{ color: "var(--text-4)", fontSize: 11 }}>
                         {new Date(c.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                       </span>
+                      {/* Marca de edição: sem ela, um comentário reescrito
+                          passaria por original. Tolerância de 2s absorve o
+                          updated_at que o trigger carimba junto do insert. */}
+                      {new Date(c.updated_at).getTime() -
+                        new Date(c.created_at).getTime() >
+                        2000 && (
+                        <span style={{ color: "var(--text-4)", fontSize: 11 }}>
+                          {" "}(editado)
+                        </span>
+                      )}
                     </p>
-                    <DescricaoRica texto={c.corpo} />
+
+                    {comentarioEditando === c.id ? (
+                      <>
+                        <textarea
+                          value={corpoEditado}
+                          onChange={(e) => setCorpoEditado(e.target.value)}
+                          rows={4}
+                          maxLength={10000}
+                          autoFocus
+                          className="glass-input"
+                          style={{ fontSize: 13, padding: "8px 10px", borderRadius: 8, width: "100%", resize: "vertical", lineHeight: 1.5 }}
+                          disabled={pending}
+                        />
+                        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                          <button
+                            type="button"
+                            disabled={pending || corpoEditado.trim() === ""}
+                            onClick={() => {
+                              const fd = new FormData()
+                              fd.set("id", c.id)
+                              fd.set("corpo", corpoEditado.trim())
+                              executar(editarComentarioAction, fd, () =>
+                                setComentarioEditando(null)
+                              )
+                            }}
+                            className="no-ds"
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 600,
+                              padding: "5px 14px",
+                              borderRadius: 6,
+                              background: AZUL_ASANA,
+                              color: "#fff",
+                              border: "none",
+                              cursor: corpoEditado.trim() === "" ? "default" : "pointer",
+                              opacity: corpoEditado.trim() === "" ? 0.5 : 1,
+                            }}
+                          >
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setComentarioEditando(null)}
+                            className="no-ds"
+                            style={acaoComentario}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {/* Texto puro, FORA de qualquer <button>: clicar num
+                            link abre o link e nada mais. Editar só pelo botão
+                            abaixo. */}
+                        <DescricaoRica texto={c.corpo} />
+                        {(souAdmin || (meuId !== null && c.autor_id === meuId)) && (
+                          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setComentarioEditando(c.id)
+                                setCorpoEditado(c.corpo)
+                              }}
+                              className="no-ds"
+                              style={acaoComentario}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => {
+                                if (!window.confirm("Apagar este comentário?")) return
+                                const fd = new FormData()
+                                fd.set("id", c.id)
+                                executar(excluirComentarioAction, fd)
+                              }}
+                              className="no-ds"
+                              style={acaoComentario}
+                            >
+                              Apagar
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -756,6 +866,16 @@ const rotuloSecao = {
   fontWeight: 600,
   color: "var(--text-2)",
   margin: "0 0 8px",
+} as const
+
+/** Ações discretas do comentário (Editar / Apagar / Cancelar). */
+const acaoComentario = {
+  fontSize: 11.5,
+  color: "var(--text-4)",
+  background: "none",
+  border: "none",
+  padding: 0,
+  cursor: "pointer",
 } as const
 
 /** Linha rótulo-à-esquerda / valor-à-direita, o layout de campos do Asana. */

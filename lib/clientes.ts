@@ -65,6 +65,12 @@ export function clienteDisplayName(c: ClienteTrafego): string {
 // Leituras de cadastro (cliente_trafego)
 // ============================================================
 
+// NOTA: leads_dash_token (módulo de leads do Meta) fica DE FORA de propósito.
+// Esta constante é usada por todas as telas de tráfego e pelo /vendas/<token>;
+// incluir uma coluna nova aqui faria TODAS elas quebrarem se o código subisse
+// antes da migration ser aplicada. O módulo de leads seleciona esse campo
+// explicitamente em lib/leads.ts, então uma migration pendente derruba só as
+// telas novas.
 export const COLUNAS_CLIENTE =
   "id, empresa_nome, nome, slug, display_name, token_meta_id, empresa_origem_nome, campaign_filter, ativo, ordem, status_campanhas, status_atualizado_em, ultimo_erro, vendas_form_token"
 

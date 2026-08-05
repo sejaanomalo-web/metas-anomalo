@@ -75,6 +75,7 @@ const ROTAS_NAO_EMPRESA = new Set([
   "/dashboard/formularios",
   "/dashboard/configuracoes",
   "/dashboard/workspace",
+  "/dashboard/leads",
 ])
 
 function ehRotaEmpresa(pathname: string): boolean {
@@ -231,6 +232,7 @@ function SidebarRail({
   const crmAtivo =
     pathname === "/dashboard/crm" || pathname.startsWith("/dashboard/crm/")
   const workspaceAtivo = pathname.startsWith("/dashboard/workspace")
+  const leadsAtivo = pathname.startsWith("/dashboard/leads")
   // Metas (antigo Empresas) só ativa quando NÃO estamos em tráfego,
   // comercial nem financeiro — evita destacar dois items ao mesmo tempo
   // em rotas aninhadas. Cobre /dashboard/metas e o detalhe de empresa
@@ -242,6 +244,7 @@ function SidebarRail({
     !comercialAtivo &&
     !crmAtivo &&
     !workspaceAtivo &&
+    !leadsAtivo &&
     ehRotaEmpresa(pathname)
   const configAtivo = pathname === "/dashboard/configuracoes"
 
@@ -256,6 +259,7 @@ function SidebarRail({
   // Workspace é gateado pela chave 'workspace', que hoje só o admin tem —
   // é assim que o módulo fica desligado até o rollout (ver WORKSPACE-PLANO §5.2).
   const podeWorkspace = temPermissao(usuarioAtual, "workspace")
+  const podeLeads = temPermissao(usuarioAtual, "leads")
   const podeConfig = temPermissao(usuarioAtual, "configuracoes")
 
   return (
@@ -343,6 +347,15 @@ function SidebarRail({
             href="/dashboard/workspace"
             expandido={expandido}
             ativo={workspaceAtivo}
+          />
+        )}
+        {podeLeads && (
+          <ItemMenu
+            icon={<IconeLeads />}
+            rotulo="Leads"
+            href="/dashboard/leads"
+            expandido={expandido}
+            ativo={leadsAtivo}
           />
         )}
       </nav>
@@ -679,6 +692,29 @@ function IconeCrm() {
       aria-hidden="true"
     >
       <path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z" />
+    </svg>
+  )
+}
+
+function IconeLeads() {
+  // Ímã — captação de leads dos formulários do Meta.
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 4v7a6 6 0 0 0 12 0V4" />
+      <line x1="3" y1="4" x2="9" y2="4" />
+      <line x1="15" y1="4" x2="21" y2="4" />
+      <line x1="6" y1="10" x2="9" y2="10" />
+      <line x1="15" y1="10" x2="18" y2="10" />
     </svg>
   )
 }
