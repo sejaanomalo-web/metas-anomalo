@@ -41,6 +41,10 @@ const ROTA = "/dashboard/workspace"
 const MAX_TITULO = 300
 const MAX_DESCRICAO = 20_000
 const MAX_COMENTARIO = 10_000
+// Tetos dos campos N:N do painel. Não são regra de negócio — são a barreira
+// contra um POST forjado com mil ids, que viraria mil notificações.
+const MAX_RESPONSAVEIS = 20
+const MAX_CONTEXTOS = 30
 
 // ============================================================
 // Guards e helpers
@@ -55,14 +59,22 @@ const MAX_COMENTARIO = 10_000
 // literal (`erro: string` nao serve), e cada action ficaria cheia de `!`.
 // Checar `if (!usuario)` estreita de forma limpa e obvia.
 
-/** Quem pode mexer numa tarefa: admin, quem criou, ou o responsável. */
+/**
+ * Quem pode mexer numa tarefa: admin, quem criou, ou QUALQUER responsável.
+ *
+ * `responsaveis_ids` vem preenchido por buscarTarefa. Sem ele a checagem cairia
+ * só na coluna espelho (o primeiro responsável) e o segundo responsável de uma
+ * tarefa levaria "Sem permissão" ao tentar editar a própria tarefa.
+ */
 function podeEditar(usuario: UsuarioSessao, tarefa: {
   criado_por: string | null
   responsavel_id: string | null
+  responsaveis_ids?: string[]
 }): boolean {
   if (usuario.papel === "admin") return true
   if (tarefa.criado_por === usuario.id) return true
   if (tarefa.responsavel_id === usuario.id) return true
+  if (tarefa.responsaveis_ids?.includes(usuario.id)) return true
   return false
 }
 
@@ -186,15 +198,98 @@ async function resolverMencoes(txt: string | null): Promise<string[]> {
   return ids
 }
 
-async function buscarTarefa(id: string): Promise<Tarefa | null> {
+/** Tarefa + a lista completa de responsáveis (N:N). */
+type TarefaComResponsaveis = Tarefa & { responsaveis_ids: string[] }
+
+/** Ids dos responsáveis de uma tarefa, na ordem de exibição. */
+async function responsaveisDaTarefa(tarefaId: string): Promise<string[]> {
+  const db = getSupabaseAdmin()
+  if (!db) return []
+  const { data } = await db
+    .from("ws_tarefa_responsaveis")
+    .select("usuario_id, ordem")
+    .eq("tarefa_id", tarefaId)
+    .order("ordem")
+  return ((data ?? []) as { usuario_id: string }[]).map((r) => r.usuario_id)
+}
+
+async function buscarTarefa(id: string): Promise<TarefaComResponsaveis | null> {
   const db = getSupabaseAdmin()
   if (!db) return null
-  const { data } = await db
-    .from("ws_tarefas")
-    .select("id, titulo, descricao, tarefa_pai_id, responsavel_id, criado_por, prazo_em, prazo_hora, inicio_em, prioridade, concluida_em, concluida_por, recorrencia, ordem, versao, arquivada_em, excluida_em, created_at, updated_at")
-    .eq("id", id)
-    .maybeSingle()
-  return (data as Tarefa) ?? null
+  const [{ data }, responsaveis] = await Promise.all([
+    db
+      .from("ws_tarefas")
+      .select("id, titulo, descricao, tarefa_pai_id, responsavel_id, criado_por, prazo_em, prazo_hora, inicio_em, prioridade, concluida_em, concluida_por, recorrencia, ordem, versao, arquivada_em, excluida_em, created_at, updated_at")
+      .eq("id", id)
+      .maybeSingle(),
+    responsaveisDaTarefa(id),
+  ])
+  if (!data) return null
+  return { ...(data as Tarefa), responsaveis_ids: responsaveis }
+}
+
+/**
+ * Grava a lista de responsáveis de uma tarefa como um CONJUNTO: recebe quem
+ * deve ficar e devolve quem entrou e quem saiu.
+ *
+ * Idempotente de propósito — a UI manda a seleção inteira do popover, não
+ * "adicione fulano". Reenviar a mesma lista (duplo clique, retry) não gera
+ * atividade nem notificação, porque `entraram` e `sairam` voltam vazios.
+ *
+ * `ordem` = posição na lista enviada: o primeiro é o principal, e é ele que o
+ * trigger do banco espelha em ws_tarefas.responsavel_id.
+ */
+async function gravarResponsaveis(
+  tarefaId: string,
+  desejados: string[]
+): Promise<{ entraram: string[]; sairam: string[]; erro?: string }> {
+  const db = getSupabaseAdmin()
+  if (!db) return { entraram: [], sairam: [], erro: "Supabase indisponível." }
+
+  const atuais = await responsaveisDaTarefa(tarefaId)
+  const alvo = [...new Set(desejados)]
+  const entraram = alvo.filter((id) => !atuais.includes(id))
+  const sairam = atuais.filter((id) => !alvo.includes(id))
+
+  if (sairam.length > 0) {
+    const { error } = await db
+      .from("ws_tarefa_responsaveis")
+      .delete()
+      .eq("tarefa_id", tarefaId)
+      .in("usuario_id", sairam)
+    if (error) {
+      console.error("[workspace] responsaveis delete", error.message)
+      return { entraram: [], sairam: [], erro: "Não foi possível salvar os responsáveis." }
+    }
+  }
+
+  if (alvo.length > 0) {
+    // upsert (e não insert dos que entraram): renumera a ordem de TODOS, senão
+    // reordenar sem trocar ninguém não teria efeito e o "principal" ficaria
+    // preso em quem foi atribuído primeiro.
+    const { error } = await db.from("ws_tarefa_responsaveis").upsert(
+      alvo.map((usuario_id, i) => ({ tarefa_id: tarefaId, usuario_id, ordem: i })),
+      { onConflict: "tarefa_id,usuario_id" }
+    )
+    if (error) {
+      console.error("[workspace] responsaveis upsert", error.message)
+      return { entraram: [], sairam: [], erro: "Não foi possível salvar os responsáveis." }
+    }
+  }
+
+  return { entraram, sairam }
+}
+
+/** Ids de responsável vindos do formulário — validados, sem repetição. */
+function idsDoForm(fd: FormData, campo: string): string[] {
+  return [
+    ...new Set(
+      fd
+        .getAll(campo)
+        .map((v) => String(v).trim())
+        .filter(ehUuid)
+    ),
+  ]
 }
 
 /**
@@ -225,7 +320,6 @@ async function materializarRecorrencia(atual: Tarefa, atorId: string): Promise<v
     .insert({
       titulo: atual.titulo,
       descricao: atual.descricao,
-      responsavel_id: atual.responsavel_id,
       criado_por: atorId,
       prazo_em: proxima,
       prazo_hora: atual.prazo_hora,
@@ -246,7 +340,8 @@ async function materializarRecorrencia(atual: Tarefa, atorId: string): Promise<v
   if (!nova) return
 
   // A próxima ocorrência aparece nos MESMOS contextos (calendário do cliente
-  // incluído) — sem isso ela nasceria órfã, fora de todas as pastas.
+  // incluído) — sem isso ela nasceria órfã, fora de todas as pastas — e com a
+  // MESMA equipe: uma tarefa recorrente de duas pessoas continua das duas.
   const { data: vincs } = await db
     .from("ws_tarefa_contextos")
     .select("contexto_id")
@@ -257,6 +352,7 @@ async function materializarRecorrencia(atual: Tarefa, atorId: string): Promise<v
       contextos.map((v) => ({ tarefa_id: nova.id as string, contexto_id: v.contexto_id }))
     )
   }
+  await gravarResponsaveis(nova.id as string, await responsaveisDaTarefa(atual.id))
   await registrarAtividade(nova.id as string, atorId, "criada", {
     recorrente_de: atual.id,
   })
@@ -394,9 +490,16 @@ export async function criarTarefaAction(
   if (!titulo) return { ok: false, erro: "Informe um título." }
 
   const descricao = texto(formData, "descricao", MAX_DESCRICAO) || null
-  const responsavelBruto = opcional(formData, "responsavel_id")
-  const responsavelId =
-    responsavelBruto && ehUuid(responsavelBruto) ? responsavelBruto : null
+  // Aceita os dois formatos: `responsavel_ids` (vários, o do painel) e
+  // `responsavel_id` (um só, dos atalhos de criação rápida). O segundo é
+  // simplesmente o primeiro item da lista.
+  const responsavelUnico = opcional(formData, "responsavel_id")
+  const responsaveisIds = [
+    ...new Set([
+      ...(responsavelUnico && ehUuid(responsavelUnico) ? [responsavelUnico] : []),
+      ...idsDoForm(formData, "responsavel_ids"),
+    ]),
+  ]
   const prazo = dataOpcional(formData, "prazo_em")
   const prazoEm = prazo === undefined ? null : prazo
   const prazoHora = prazoEm ? normalizarHora(opcional(formData, "prazo_hora")) : null
@@ -414,7 +517,10 @@ export async function criarTarefaAction(
         titulo,
         descricao,
         tarefa_pai_id: tarefaPaiId,
-        responsavel_id: responsavelId,
+        // responsavel_id NÃO vai aqui: quem manda é ws_tarefa_responsaveis,
+        // gravada logo abaixo, e o trigger do banco espelha o principal de
+        // volta nesta coluna. Escrever nos dois lugares só criaria uma segunda
+        // versão da verdade.
         criado_por: usuario.id,
         prazo_em: prazoEm,
         prazo_hora: prazoHora,
@@ -447,12 +553,16 @@ export async function criarTarefaAction(
     )
   }
 
+  if (responsaveisIds.length > 0) {
+    await gravarResponsaveis(tarefaId, responsaveisIds)
+  }
+
   await garantirSeguidor(tarefaId, usuario.id)
-  if (responsavelId) await garantirSeguidor(tarefaId, responsavelId)
+  for (const r of responsaveisIds) await garantirSeguidor(tarefaId, r)
   await registrarAtividade(tarefaId, usuario.id, "criada", { titulo })
   await ping(tarefaId, "tarefa")
   await notificar({
-    destinatarios: [responsavelId, ...(await resolverMencoes(descricao))],
+    destinatarios: [...responsaveisIds, ...(await resolverMencoes(descricao))],
     atorId: usuario.id,
     titulo: "Nova tarefa atribuída",
     mensagem: `${usuario.nome} atribuiu "${titulo}" a você.`,
@@ -531,14 +641,17 @@ export async function atualizarTarefaAction(
     }
   }
 
-  if (formData.has("responsavel_id")) {
+  // Responsáveis vivem em ws_tarefa_responsaveis, não numa coluna — ficam FORA
+  // do `patch` e são gravados depois do UPDATE. `null` = o formulário não
+  // mencionou o campo, então não se mexe nele.
+  //   • responsavel_ids  → a seleção INTEIRA do painel (pode ser vazia)
+  //   • responsavel_id   → compatibilidade: um só, "" para desatribuir
+  let respDesejados: string[] | null = null
+  if (formData.has("responsavel_ids")) {
+    respDesejados = idsDoForm(formData, "responsavel_ids")
+  } else if (formData.has("responsavel_id")) {
     const bruto = opcional(formData, "responsavel_id")
-    const novo = bruto && ehUuid(bruto) ? bruto : null
-    if (novo !== atual.responsavel_id) {
-      patch.responsavel_id = novo
-      mudanca.responsavel = { de: atual.responsavel_id, para: novo }
-      eventos.push("responsavel")
-    }
+    respDesejados = bruto && ehUuid(bruto) ? [bruto] : []
   }
 
   if (formData.has("prazo_em")) {
@@ -595,26 +708,47 @@ export async function atualizarTarefaAction(
     }
   }
 
-  if (Object.keys(patch).length === 0) return { ok: true, id }
-
-  patch.versao = atual.versao + 1
-
-  const { data, error } = await db
-    .from("ws_tarefas")
-    .update(patch)
-    .eq("id", id)
-    .eq("versao", atual.versao)
-    .select("id")
-    .maybeSingle()
-
-  if (error) {
-    console.error("[workspace] atualizarTarefa error", error.message)
-    return { ok: false, erro: "Não foi possível salvar." }
+  if (Object.keys(patch).length === 0 && respDesejados === null) {
+    return { ok: true, id }
   }
-  if (!data) {
-    return {
-      ok: false,
-      erro: "Outra pessoa editou esta tarefa agora. Recarregue para ver a versão atual.",
+
+  if (Object.keys(patch).length > 0) {
+    patch.versao = atual.versao + 1
+
+    const { data, error } = await db
+      .from("ws_tarefas")
+      .update(patch)
+      .eq("id", id)
+      .eq("versao", atual.versao)
+      .select("id")
+      .maybeSingle()
+
+    if (error) {
+      console.error("[workspace] atualizarTarefa error", error.message)
+      return { ok: false, erro: "Não foi possível salvar." }
+    }
+    if (!data) {
+      return {
+        ok: false,
+        erro: "Outra pessoa editou esta tarefa agora. Recarregue para ver a versão atual.",
+      }
+    }
+  }
+
+  // Responsáveis: conjunto novo, e o diff diz quem avisar. Só quem ENTROU
+  // recebe notificação — quem saiu já não tem o que fazer com a tarefa, e quem
+  // ficou não mudou de vida.
+  let entraram: string[] = []
+  if (respDesejados !== null) {
+    const r = await gravarResponsaveis(id, respDesejados)
+    if (r.erro) return { ok: false, erro: r.erro }
+    entraram = r.entraram
+    if (r.entraram.length > 0 || r.sairam.length > 0) {
+      eventos.push("responsavel")
+      mudanca.responsaveis = {
+        de: atual.responsaveis_ids,
+        para: respDesejados,
+      }
     }
   }
 
@@ -623,11 +757,10 @@ export async function atualizarTarefaAction(
   }
   await ping(id, "tarefa")
 
-  if (patch.responsavel_id) {
-    const novoResp = patch.responsavel_id as string
-    await garantirSeguidor(id, novoResp)
+  for (const novoResp of entraram) await garantirSeguidor(id, novoResp)
+  if (entraram.length > 0) {
     await notificar({
-      destinatarios: [novoResp],
+      destinatarios: entraram,
       atorId: usuario.id,
       titulo: "Tarefa atribuída a você",
       mensagem: `${usuario.nome} atribuiu "${atual.titulo}" a você.`,
@@ -792,8 +925,170 @@ export async function alternarConclusaoAction(
 }
 
 // ============================================================
+// RESPONSÁVEIS (N:N)
+// ============================================================
+
+/**
+ * Grava a EQUIPE inteira da tarefa de uma vez — o que o seletor com marcação
+ * múltipla do painel envia quando o popover fecha.
+ *
+ * Conjunto, não comandos: a lista que chega é o estado final. Marcar três
+ * pessoas e fechar é UMA chamada, não três — e reenviar a mesma lista não
+ * duplica notificação nem linha no histórico.
+ *
+ * Separada de atualizarTarefaAction de propósito: mexer na equipe não deve
+ * esbarrar na trava de versão de título/descrição, do mesmo jeito que arrastar
+ * no calendário tem a própria action.
+ */
+export async function definirResponsaveisAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const tarefaId = String(formData.get("tarefa_id") ?? "").trim()
+  if (!ehUuid(tarefaId)) return { ok: false, erro: "Tarefa inválida." }
+  const atual = await buscarTarefa(tarefaId)
+  if (!atual) return { ok: false, erro: "Tarefa não encontrada." }
+  if (!podeEditar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
+
+  const desejados = idsDoForm(formData, "responsavel_ids")
+  if (desejados.length > MAX_RESPONSAVEIS) {
+    return { ok: false, erro: `No máximo ${MAX_RESPONSAVEIS} responsáveis por tarefa.` }
+  }
+
+  // Ids que não são de usuário ativo não ENTRAM — um id forjado no POST viraria
+  // um avatar fantasma que ninguém consegue tirar da tarefa. Quem JÁ estava na
+  // tarefa continua valendo mesmo desativado: desativar alguém não pode
+  // desatribuir as tarefas dela em silêncio, no primeiro clique de um colega
+  // que só queria acrescentar mais uma pessoa.
+  let validos = desejados
+  const novos = desejados.filter((id) => !atual.responsaveis_ids.includes(id))
+  if (novos.length > 0) {
+    const { data: existentes } = await db
+      .from("usuarios")
+      .select("id")
+      .in("id", novos)
+      .eq("ativo", true)
+    const ok = new Set(((existentes ?? []) as { id: string }[]).map((u) => u.id))
+    validos = desejados.filter((id) => ok.has(id) || atual.responsaveis_ids.includes(id))
+  }
+
+  const r = await gravarResponsaveis(tarefaId, validos)
+  if (r.erro) return { ok: false, erro: r.erro }
+  if (r.entraram.length === 0 && r.sairam.length === 0) {
+    return { ok: true, id: tarefaId }
+  }
+
+  for (const novoResp of r.entraram) await garantirSeguidor(tarefaId, novoResp)
+  await registrarAtividade(tarefaId, usuario.id, "responsavel", {
+    responsaveis: { de: atual.responsaveis_ids, para: validos },
+  })
+  await ping(tarefaId, "tarefa")
+  if (r.entraram.length > 0) {
+    await notificar({
+      destinatarios: r.entraram,
+      atorId: usuario.id,
+      titulo: "Tarefa atribuída a você",
+      mensagem: `${usuario.nome} atribuiu "${atual.titulo}" a você.`,
+      tarefaId,
+    })
+  }
+
+  revalidatePath(ROTA)
+  return { ok: true, id: tarefaId }
+}
+
+// ============================================================
 // VÍNCULOS COM CONTEXTO
 // ============================================================
+
+/**
+ * Grava a lista INTEIRA de projetos da tarefa — o par de
+ * definirResponsaveisAction para o seletor múltiplo de Projetos.
+ *
+ * Só mexe nos contextos que aparecem como opção no painel (cliente/empresa).
+ * Vínculos com contextos internos herdados da importação do Asana continuam
+ * intactos: eles não estão na lista enviada, e apagá-los "por omissão" tiraria
+ * a tarefa de pastas que o painel nem mostra.
+ */
+export async function definirContextosAction(
+  formData: FormData
+): Promise<ResultadoWorkspace> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Supabase indisponível." }
+
+  const tarefaId = String(formData.get("tarefa_id") ?? "").trim()
+  if (!ehUuid(tarefaId)) return { ok: false, erro: "Tarefa inválida." }
+  const atual = await buscarTarefa(tarefaId)
+  if (!atual) return { ok: false, erro: "Tarefa não encontrada." }
+  if (!podeEditar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
+
+  const desejados = idsDoForm(formData, "contexto_ids")
+  if (desejados.length > MAX_CONTEXTOS) {
+    return { ok: false, erro: `No máximo ${MAX_CONTEXTOS} projetos por tarefa.` }
+  }
+  // O universo que este seletor pode alterar. Sem ele, um vínculo com contexto
+  // interno sumiria toda vez que alguém mexesse nos projetos.
+  const gerenciaveis = idsDoForm(formData, "contextos_visiveis")
+
+  const { data: atuaisData, error: erroLeitura } = await db
+    .from("ws_tarefa_contextos")
+    .select("contexto_id")
+    .eq("tarefa_id", tarefaId)
+  if (erroLeitura) {
+    console.error("[workspace] definirContextos leitura", erroLeitura.message)
+    return { ok: false, erro: "Não foi possível salvar os projetos." }
+  }
+  const atuais = ((atuaisData ?? []) as { contexto_id: string }[]).map((v) => v.contexto_id)
+
+  const entraram = desejados.filter((c) => !atuais.includes(c))
+  const sairam = atuais.filter(
+    (c) => !desejados.includes(c) && (gerenciaveis.length === 0 || gerenciaveis.includes(c))
+  )
+
+  if (sairam.length > 0) {
+    const { error } = await db
+      .from("ws_tarefa_contextos")
+      .delete()
+      .eq("tarefa_id", tarefaId)
+      .in("contexto_id", sairam)
+    if (error) {
+      console.error("[workspace] definirContextos delete", error.message)
+      return { ok: false, erro: "Não foi possível salvar os projetos." }
+    }
+  }
+
+  if (entraram.length > 0) {
+    const { error } = await db.from("ws_tarefa_contextos").upsert(
+      entraram.map((contexto_id) => ({ tarefa_id: tarefaId, contexto_id })),
+      { onConflict: "tarefa_id,contexto_id", ignoreDuplicates: true }
+    )
+    if (error) {
+      console.error("[workspace] definirContextos upsert", error.message)
+      return { ok: false, erro: "Não foi possível salvar os projetos." }
+    }
+  }
+
+  if (entraram.length === 0 && sairam.length === 0) {
+    return { ok: true, id: tarefaId }
+  }
+
+  if (entraram.length > 0) {
+    await registrarAtividade(tarefaId, usuario.id, "vinculo_add", { contextos: entraram })
+  }
+  if (sairam.length > 0) {
+    await registrarAtividade(tarefaId, usuario.id, "vinculo_rm", { contextos: sairam })
+  }
+  await ping(tarefaId, "tarefa")
+  revalidatePath(ROTA)
+  return { ok: true, id: tarefaId }
+}
+
 
 export async function vincularContextoAction(
   formData: FormData
@@ -1019,7 +1314,7 @@ export async function duplicarTarefaAction(
     .insert({
       titulo: `${origem.titulo} (cópia)`.slice(0, MAX_TITULO),
       descricao: manterDescricao ? origem.descricao : null,
-      responsavel_id: manterResponsavel ? origem.responsavel_id : null,
+      // responsavel_id sai do vínculo (gravado abaixo) — ver criarTarefaAction.
       criado_por: usuario.id,
       prazo_em: manterPrazo ? origem.prazo_em : null,
       prazo_hora: manterPrazo ? origem.prazo_hora : null,
@@ -1032,6 +1327,11 @@ export async function duplicarTarefaAction(
     return { ok: false, erro: "Não foi possível duplicar." }
   }
   const novoId = nova.id as string
+
+  // A cópia nasce com a EQUIPE inteira, não só com o principal.
+  if (manterResponsavel && origem.responsaveis_ids.length > 0) {
+    await gravarResponsaveis(novoId, origem.responsaveis_ids)
+  }
 
   if (manterVinculos) {
     const { data: vinc } = await db
@@ -1053,21 +1353,34 @@ export async function duplicarTarefaAction(
   if (manterSubtarefas) {
     const { data: subs } = await db
       .from("ws_tarefas")
-      .select("titulo, descricao, responsavel_id, prazo_em, prazo_hora, prioridade, ordem")
+      .select("id, titulo, descricao, prazo_em, prazo_hora, prioridade, ordem")
       .eq("tarefa_pai_id", id)
       .is("excluida_em", null)
-    const linhas = ((subs ?? []) as Record<string, unknown>[]).map((s) => ({
-      titulo: s.titulo,
-      descricao: manterDescricao ? s.descricao : null,
-      responsavel_id: manterResponsavel ? s.responsavel_id : null,
-      criado_por: usuario.id,
-      prazo_em: manterPrazo ? s.prazo_em : null,
-      prazo_hora: manterPrazo ? s.prazo_hora : null,
-      prioridade: s.prioridade,
-      ordem: s.ordem,
-      tarefa_pai_id: novoId,
-    }))
-    if (linhas.length > 0) await db.from("ws_tarefas").insert(linhas)
+      .order("ordem")
+    // Uma por vez (e não insert em lote) porque cada subtarefa tem a PRÓPRIA
+    // lista de responsáveis pra copiar, e um insert em lote não devolve de
+    // forma confiável qual linha nova corresponde a qual original.
+    for (const sub of (subs ?? []) as Record<string, unknown>[]) {
+      const { data: novaSub } = await db
+        .from("ws_tarefas")
+        .insert({
+          titulo: sub.titulo,
+          descricao: manterDescricao ? sub.descricao : null,
+          criado_por: usuario.id,
+          prazo_em: manterPrazo ? sub.prazo_em : null,
+          prazo_hora: manterPrazo ? sub.prazo_hora : null,
+          prioridade: sub.prioridade,
+          ordem: sub.ordem,
+          tarefa_pai_id: novoId,
+        })
+        .select("id")
+        .maybeSingle()
+      if (!novaSub) continue
+      if (manterResponsavel) {
+        const resp = await responsaveisDaTarefa(sub.id as string)
+        if (resp.length > 0) await gravarResponsaveis(novaSub.id as string, resp)
+      }
+    }
   }
 
   await garantirSeguidor(novoId, usuario.id)
@@ -1118,7 +1431,7 @@ export async function comentarAction(
     destinatarios: [
       ...(await seguidoresDe(tarefaId)),
       ...(await resolverMencoes(corpo)),
-      tarefa.responsavel_id,
+      ...tarefa.responsaveis_ids,
     ],
     atorId: usuario.id,
     titulo: "Novo comentário",

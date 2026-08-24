@@ -8,6 +8,8 @@ import {
   atualizarTarefaAction,
   comentarAction,
   criarTarefaAction,
+  definirContextosAction,
+  definirResponsaveisAction,
   desvincularContextoAction,
   duplicarTarefaAction,
   editarComentarioAction,
@@ -15,7 +17,6 @@ import {
   excluirTarefaAction,
   restaurarTarefaAction,
   excluirDefinitivoAction,
-  vincularContextoAction,
 } from "@/lib/workspace-actions"
 import {
   recorrenciaValida,
@@ -122,9 +123,11 @@ export default function TarefaDrawer(props: Props) {
     executar(atualizarTarefaAction, fd)
   }
 
-  const contextosDisponiveis = contextos
+  // A lista do seletor de Projetos mostra TODOS os projetos, marcando os que a
+  // tarefa já tem: no modo de marcação múltipla, desmarcar é como se tira a
+  // tarefa de um projeto — esconder os vinculados deixaria a lista pela metade.
+  const projetosDoSeletor = contextos
     .filter((c) => c.tipo === "cliente" || c.tipo === "empresa")
-    .filter((c) => !tarefa.contextos.some((tc) => tc.id === c.id))
     .sort(
       (a, b) =>
         (a.tipo === b.tipo ? 0 : a.tipo === "empresa" ? -1 : 1) ||
@@ -134,26 +137,41 @@ export default function TarefaDrawer(props: Props) {
   // ---------- Opções dos seletores com busca ----------
   // O e-mail entra como `termos` (casa na busca, não polui a lista): quem tem
   // dois colegas de nome parecido acha pelo login.
-  const opcoesResponsavel: OpcaoBusca[] = [
-    {
-      valor: "",
-      rotulo: "Sem responsável",
-      icone: <Avatar nome={null} tamanho={20} />,
-    },
-    ...usuarios.map((u) => ({
-      valor: u.id,
-      rotulo: u.nome,
-      termos: u.email ?? "",
-      icone: <Avatar nome={u.nome} foto={u.foto_url ?? null} tamanho={20} />,
-    })),
-  ]
+  const opcoesResponsavel: OpcaoBusca[] = usuarios.map((u) => ({
+    valor: u.id,
+    rotulo: u.nome,
+    termos: u.email ?? "",
+    icone: <Avatar nome={u.nome} foto={u.foto_url ?? null} tamanho={20} />,
+  }))
 
-  const opcoesProjeto: OpcaoBusca[] = contextosDisponiveis.map((c) => ({
+  const opcoesProjeto: OpcaoBusca[] = projetosDoSeletor.map((c) => ({
     valor: c.id,
     rotulo: c.nome,
     detalhe: c.tipo === "empresa" ? "Empresa" : undefined,
     icone: <QuadradinhoCor cor={c.cor} />,
   }))
+
+  const responsaveis = tarefa.responsaveis
+
+  /** Manda a EQUIPE inteira (a action calcula o diff). */
+  function salvarResponsaveis(ids: string[]) {
+    const fd = new FormData()
+    fd.set("tarefa_id", tarefa.id)
+    for (const id of ids) fd.append("responsavel_ids", id)
+    executar(definirResponsaveisAction, fd)
+  }
+
+  /** Manda a lista inteira de projetos, mais o universo que ela pode mexer. */
+  function salvarProjetos(ids: string[]) {
+    const fd = new FormData()
+    fd.set("tarefa_id", tarefa.id)
+    for (const id of ids) fd.append("contexto_ids", id)
+    // Sem isto, um vínculo com contexto interno (herdado da importação do
+    // Asana, que este seletor nem lista) sumiria "por omissão" na primeira vez
+    // que alguém mexesse nos projetos.
+    for (const c of projetosDoSeletor) fd.append("contextos_visiveis", c.id)
+    executar(definirContextosAction, fd)
+  }
 
   const situacao = situacaoPrazo(tarefa.prazo_em, hoje)
   const corPrazo =
@@ -285,18 +303,43 @@ export default function TarefaDrawer(props: Props) {
 
           {/* ---------- Campos (rótulo à esquerda, como no Asana) ---------- */}
           <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <CampoLinha rotulo="Responsável">
-              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <Avatar nome={tarefa.responsavel_nome} foto={tarefa.responsavel_foto} tamanho={26} />
+            {/* Responsáveis = N pessoas. Mesmo desenho do campo Projetos:
+                chips do que já está + um seletor que é COMANDO de adicionar,
+                com marcação múltipla (marca três e fecha uma vez só). */}
+            <CampoLinha rotulo="Responsáveis">
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {responsaveis.length === 0 && <Avatar nome={null} tamanho={26} />}
+
+                {responsaveis.map((p) => (
+                  <span key={p.id} className="ws-chip-pessoa">
+                    <Avatar nome={p.nome} foto={p.foto_url} tamanho={22} />
+                    <span className="ws-chip-pessoa-nome">{p.nome}</span>
+                    <button
+                      type="button"
+                      aria-label={`Tirar ${p.nome} desta tarefa`}
+                      title={`Tirar ${p.nome} desta tarefa`}
+                      disabled={pending}
+                      onClick={() =>
+                        salvarResponsaveis(
+                          responsaveis.filter((r) => r.id !== p.id).map((r) => r.id)
+                        )
+                      }
+                      className="no-ds ws-chip-x"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+
                 <SeletorBusca
-                  rotuloCampo="Responsável"
-                  valor={tarefa.responsavel_id ?? ""}
+                  rotuloCampo="Responsáveis"
+                  multiplo
+                  valores={responsaveis.map((p) => p.id)}
                   opcoes={opcoesResponsavel}
-                  onEscolher={(v) => salvarCampo("responsavel_id", v)}
-                  // O avatar de 26px acima já mostra quem é: repetir o ícone
-                  // dentro do gatilho colocava dois avatares em sequência.
-                  iconeNoGatilho={false}
-                  textoVazio="Sem responsável"
+                  onConfirmar={salvarResponsaveis}
+                  textoVazio={
+                    responsaveis.length === 0 ? "Atribuir a alguém" : "+ Adicionar pessoa"
+                  }
                   placeholderBusca="Pesquisar pessoa…"
                   textoNenhum="Ninguém com esse nome."
                   disabled={pending}
@@ -402,23 +445,21 @@ export default function TarefaDrawer(props: Props) {
                   </span>
                 ))}
 
-                {contextosDisponiveis.length > 0 && (
+                {projetosDoSeletor.length > 0 && (
                   <SeletorBusca
-                    rotuloCampo="Adicionar a um projeto"
-                    // Sempre "vazio": este seletor é um comando de ADICIONAR, não
-                    // o estado do campo — os projetos já vinculados são os chips
-                    // acima. Depois de escolher, a lista some da opção (o
-                    // servidor devolve a tarefa com o vínculo novo).
-                    valor=""
+                    rotuloCampo="Projetos"
+                    // Comando de ADICIONAR, não o estado do campo — os projetos
+                    // vinculados são os chips acima. Em marcação múltipla dá pra
+                    // marcar quatro clientes de uma vez, e desmarcar tira.
+                    multiplo
+                    valores={tarefa.contextos.map((c) => c.id)}
                     opcoes={opcoesProjeto}
-                    onEscolher={(v) => {
-                      if (!v) return
-                      const fd = new FormData()
-                      fd.set("tarefa_id", tarefa.id)
-                      fd.set("contexto_id", v)
-                      executar(vincularContextoAction, fd)
-                    }}
-                    textoVazio="+ Adicionar a um projeto"
+                    onConfirmar={salvarProjetos}
+                    textoVazio={
+                      tarefa.contextos.length === 0
+                        ? "+ Adicionar a um projeto"
+                        : "+ Adicionar projeto"
+                    }
                     placeholderBusca="Pesquisar projeto…"
                     textoNenhum="Nenhum projeto com esse nome."
                     disabled={pending}
@@ -1254,13 +1295,13 @@ function rotuloEvento(evento: string): string {
     case "criada": return "criou a tarefa"
     case "titulo": return "mudou o título"
     case "descricao": return "editou a descrição"
-    case "responsavel": return "trocou o responsável"
+    case "responsavel": return "mudou os responsáveis"
     case "prazo": return "mudou o prazo"
     case "prioridade": return "mudou a prioridade"
     case "concluida": return "concluiu"
     case "reaberta": return "reabriu"
-    case "vinculo_add": return "vinculou a um contexto"
-    case "vinculo_rm": return "removeu de um contexto"
+    case "vinculo_add": return "vinculou a projeto(s)"
+    case "vinculo_rm": return "removeu de projeto(s)"
     case "arquivada": return "arquivou"
     case "restaurada": return "restaurou"
     case "excluida": return "mandou para a lixeira"

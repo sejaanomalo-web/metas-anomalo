@@ -2139,6 +2139,122 @@ table {
   margin: 0;
 }
 
+/* Marcação múltipla — caixinha à esquerda do item. É ela que avisa, antes do
+ * primeiro clique, que a lista aceita mais de uma escolha. */
+.ws-combo-caixa {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1.5px solid var(--text-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.ws-combo-caixa-marcada {
+  background: #5da283;
+  border-color: #5da283;
+  color: #fff;
+}
+
+/* Rodapé do modo múltiplo: contador + "Concluir". No celular a lista vira
+ * folha inferior e cobre a tela — sem um botão visível, fechar dependeria de
+ * acertar o dedo fora dela. */
+.ws-combo-rodape {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--text-4);
+  border-top: 0.5px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.ws-combo-concluir {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fff;
+  background: #4573d2;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.ws-combo-concluir:hover {
+  filter: brightness(1.1);
+}
+
+/* Chip de responsável/projeto no painel da tarefa — o estado do campo quando
+ * o seletor vira comando de "adicionar". */
+.ws-chip-pessoa {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 8px 3px 3px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-1);
+  max-width: 100%;
+  min-width: 0;
+}
+.ws-chip-pessoa-nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.ws-chip-x {
+  background: none;
+  border: none;
+  color: var(--text-4);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.ws-chip-x:hover:not(:disabled) {
+  color: var(--text-1);
+}
+.ws-chip-x:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Pilha de avatares das listas compactas (linha, cartão do calendário).
+ * Sobreposição negativa: 3 pessoas ocupam pouco mais que 1 avatar. */
+.ws-avatares {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.ws-avatares > * {
+  margin-left: -6px;
+  box-shadow: 0 0 0 1.5px var(--surface-1);
+  border-radius: 50%;
+}
+.ws-avatares > *:first-child {
+  margin-left: 0;
+}
+.ws-avatares-mais {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-weight: 700;
+  flex-shrink: 0;
+  user-select: none;
+}
+
 /* Select "invisível" do painel de tarefa: parece texto até o hover, como os
  * campos do Asana; abre o dropdown nativo. */
 .ws-select {

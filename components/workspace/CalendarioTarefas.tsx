@@ -27,7 +27,7 @@ import {
 } from "@/lib/workspace-actions"
 import { type TarefaComRelacoes } from "@/lib/workspace-tipos"
 import { corDaTarefa, estiloCartao } from "@/lib/workspace-cores"
-import Avatar from "./Avatar"
+import Avatares from "./Avatares"
 import {
   DIAS_SEMANA_CURTO,
   DIAS_SEMANA_LONGO,
@@ -140,7 +140,9 @@ export default function CalendarioTarefas({
     const bate = (t: TarefaComRelacoes) => {
       if (t.titulo.toLowerCase().includes(q)) return true
       if (t.descricao?.toLowerCase().includes(q)) return true
-      if (t.responsavel_nome?.toLowerCase().includes(q)) return true
+      // Busca em TODOS os responsáveis: procurar por alguém que é o segundo
+      // responsável tem que achar a tarefa igual.
+      if (t.responsaveis.some((r) => r.nome.toLowerCase().includes(q))) return true
       if (t.contextos.some((c) => c.nome.toLowerCase().includes(q))) return true
       if (t.prazo_em) {
         const [a, m, d] = t.prazo_em.split("-")
@@ -1034,9 +1036,7 @@ function CartaoTarefa({
           <polyline points="20 6 9 17 4 12" />
         </svg>
       </span>
-      {!compacto && (
-        <Avatar nome={tarefa.responsavel_nome} foto={tarefa.responsavel_foto} tamanho={26} />
-      )}
+      {!compacto && <Avatares pessoas={tarefa.responsaveis} tamanho={26} max={3} />}
       <span className={compacto ? "ws-pill-titulo-1l" : "ws-pill-titulo"}>
         {tarefa.prazo_hora ? `${tarefa.prazo_hora.slice(0, 5)} ` : ""}
         {tarefa.titulo}
