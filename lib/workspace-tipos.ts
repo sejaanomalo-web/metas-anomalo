@@ -134,9 +134,24 @@ export interface Tarefa {
   updated_at: string
 }
 
+/** Uma pessoa atribuída à tarefa, já com o que o avatar precisa. */
+export interface ResponsavelTarefa {
+  id: string
+  nome: string
+  /** Foto de perfil (ws_preferencias), se houver. */
+  foto_url: string | null
+}
+
 /** Tarefa + tudo que a UI precisa pra desenhar uma linha sem N+1 queries. */
 export interface TarefaComRelacoes extends Tarefa {
   contextos: Contexto[]
+  /**
+   * TODOS os responsáveis, em ordem (o primeiro é o principal). Fonte da
+   * verdade da UI — `responsavel_nome`/`responsavel_foto` abaixo são só o
+   * atalho pro primeiro, mantido para as listas compactas que só cabem um
+   * avatar.
+   */
+  responsaveis: ResponsavelTarefa[]
   responsavel_nome: string | null
   /** Foto de perfil do responsável (ws_preferencias), se houver. */
   responsavel_foto: string | null

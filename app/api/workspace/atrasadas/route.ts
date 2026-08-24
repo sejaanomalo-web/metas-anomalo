@@ -25,7 +25,9 @@ const ROTA = "/dashboard/workspace"
  * mesma tarefa já foi visto uma vez.
  *
  * A notificação é PESSOAL (usuarioIds = responsável) e respeita a preferência
- * `ws_tarefa` de cada um, como todo o resto do módulo.
+ * `ws_tarefa` de cada um, como todo o resto do módulo. Tarefa de duas pessoas
+ * avisa as DUAS: o aviso vale pra quem pode agir, e "só o principal recebe"
+ * era exatamente como uma tarefa compartilhada ficava esquecida.
  */
 async function executar() {
   const authHeader = headers().get("authorization")
@@ -41,15 +43,17 @@ async function executar() {
   // Prazo <= anteontem (BRT). Hoje-1 = ontem fica de fora (regra dos 2 dias).
   const limite = somarDiasISO(hojeISO(), -2)
 
+  // !inner na tabela de vínculo: só tarefas COM responsável, e a lista de
+  // responsáveis vem junto — antes era `.not("responsavel_id","is",null)` e a
+  // coluna só conhece o principal.
   const { data: atrasadas, error } = await db
     .from("ws_tarefas")
-    .select("id, titulo, prazo_em, responsavel_id")
+    .select("id, titulo, prazo_em, ws_tarefa_responsaveis!inner(usuario_id)")
     .is("tarefa_pai_id", null)
     .is("concluida_em", null)
     .is("excluida_em", null)
     .is("arquivada_em", null)
     .is("alerta_atraso_em", null)
-    .not("responsavel_id", "is", null)
     .not("prazo_em", "is", null)
     .lte("prazo_em", limite)
     .limit(200)
@@ -59,22 +63,25 @@ async function executar() {
     return NextResponse.json({ erro: "falha_leitura" }, { status: 500 })
   }
 
-  const tarefas = (atrasadas ?? []) as {
+  const tarefas = (atrasadas ?? []) as unknown as {
     id: string
     titulo: string
     prazo_em: string
-    responsavel_id: string
+    ws_tarefa_responsaveis: { usuario_id: string }[]
   }[]
   if (tarefas.length === 0) {
     return NextResponse.json({ ok: true, notificadas: 0 })
   }
 
-  // Agrupa por pessoa: 5 tarefas atrasadas viram UM aviso, não cinco.
+  // Agrupa por pessoa: 5 tarefas atrasadas viram UM aviso, não cinco. Uma
+  // tarefa de duas pessoas entra no balde das duas.
   const porResponsavel = new Map<string, typeof tarefas>()
   for (const t of tarefas) {
-    const lista = porResponsavel.get(t.responsavel_id) ?? []
-    lista.push(t)
-    porResponsavel.set(t.responsavel_id, lista)
+    for (const r of t.ws_tarefa_responsaveis ?? []) {
+      const lista = porResponsavel.get(r.usuario_id) ?? []
+      lista.push(t)
+      porResponsavel.set(r.usuario_id, lista)
+    }
   }
 
   const hoje = hojeISO()
@@ -107,16 +114,20 @@ async function executar() {
       usuarioIds: [usuarioId],
     })
 
-    // Marca DEPOIS de notificar: se a criação falhar, o cron tenta de novo
-    // amanhã em vez de engolir o alerta em silêncio.
-    const { error: errMarca } = await db
-      .from("ws_tarefas")
-      .update({ alerta_atraso_em: new Date().toISOString() })
-      .in("id", lista.map((t) => t.id))
-    if (errMarca) {
-      console.error("[workspace/atrasadas] marcar", errMarca.message)
-    }
     notificadas += n
+  }
+
+  // Marca DEPOIS de notificar TODO MUNDO: se a criação falhar, o cron tenta de
+  // novo amanhã em vez de engolir o alerta em silêncio. E fora do laço por
+  // pessoa — uma tarefa de duas pessoas marcada no primeiro balde sairia da
+  // consulta do segundo... que já está em memória, mas a intenção é explícita:
+  // o carimbo é da TAREFA, não do aviso de cada um.
+  const { error: errMarca } = await db
+    .from("ws_tarefas")
+    .update({ alerta_atraso_em: new Date().toISOString() })
+    .in("id", tarefas.map((t) => t.id))
+  if (errMarca) {
+    console.error("[workspace/atrasadas] marcar", errMarca.message)
   }
 
   return NextResponse.json({ ok: true, notificadas, pessoas: porResponsavel.size })

@@ -51,12 +51,21 @@ export interface OpcaoBusca {
  *    fácil tem que funcionar.
  *  • TECLADO COMPLETO (↑ ↓ Enter Esc) com aria-activedescendant, porque um
  *    combobox de mentira só serve pra quem usa mouse.
+ *  • MODO MÚLTIPLO (`multiplo`): a mesma lista com caixinhas de marcação. Uma
+ *    tarefa quase nunca é de uma pessoa só nem de um cliente só, e marcar três
+ *    pessoas não pode custar três aberturas do popover. A lista NÃO fecha a
+ *    cada clique, e a seleção só vai pro servidor QUANDO O POPOVER FECHA —
+ *    marcar quatro pessoas é uma requisição, não quatro, e nenhuma delas
+ *    recebe notificação de um estado intermediário que durou meio segundo.
  */
 export default function SeletorBusca({
   rotuloCampo,
-  valor,
+  valor = "",
   opcoes,
   onEscolher,
+  multiplo = false,
+  valores,
+  onConfirmar,
   textoVazio = "Selecionar…",
   prefixoNoGatilho,
   placeholderBusca = "Pesquisar…",
@@ -67,9 +76,17 @@ export default function SeletorBusca({
 }: {
   /** Nome do campo — vai no aria-label e no prefixo do gatilho, se pedido. */
   rotuloCampo: string
-  valor: string
+  /** Modo simples: o valor atual. Ignorado quando `multiplo`. */
+  valor?: string
   opcoes: OpcaoBusca[]
-  onEscolher: (valor: string) => void
+  /** Modo simples: chamado a cada escolha (e a lista fecha). */
+  onEscolher?: (valor: string) => void
+  /** Marcação múltipla: a lista fica aberta e a seleção só sai ao fechar. */
+  multiplo?: boolean
+  /** Modo múltiplo: o que já está marcado quando a lista abre. */
+  valores?: string[]
+  /** Modo múltiplo: a seleção final, uma vez só, quando o popover fecha. */
+  onConfirmar?: (valores: string[]) => void
   /** O que o gatilho mostra quando `valor` não casa com nenhuma opção. */
   textoVazio?: string
   /** "Responsável: Todos" nos filtros. Omitido nos campos do painel. */
@@ -90,6 +107,13 @@ export default function SeletorBusca({
   const [busca, setBusca] = useState("")
   const [ativo, setAtivo] = useState(0)
   const [pos, setPos] = useState<Posicao | null>(null)
+  // Modo múltiplo: seleção EM RASCUNHO enquanto o popover está aberto.
+  const [selecao, setSelecao] = useState<string[]>([])
+  // Espelho da seleção pro fechamento: fechar() é chamado de listeners de
+  // documento (pointerdown, teclado) cuja closure enxergaria um `selecao`
+  // congelado no render em que o listener foi registrado.
+  const selecaoRef = useRef<string[]>([])
+  const inicialRef = useRef<string[]>([])
 
   const gatilhoRef = useRef<HTMLButtonElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
@@ -103,6 +127,8 @@ export default function SeletorBusca({
   const idLista = `${idBase}-lista`
 
   const selecionada = opcoes.find((o) => o.valor === valor && o.valor !== "")
+
+  const marcados = useMemo(() => new Set(multiplo ? selecao : []), [multiplo, selecao])
 
   const filtradas = useMemo(() => filtrar(opcoes, busca), [opcoes, busca])
 
@@ -120,8 +146,35 @@ export default function SeletorBusca({
     if (disabled) return
     setBusca("")
     setAtivo(0)
+    if (multiplo) {
+      // Sempre relê da prop: entre uma abertura e outra o servidor pode ter
+      // devolvido dado novo (outra pessoa mexeu na mesma tarefa).
+      const base = [...new Set(valores ?? [])]
+      setSelecao(base)
+      selecaoRef.current = base
+      inicialRef.current = base
+    }
     recalcularPosicao()
     setAberto(true)
+  }
+
+  /** Marca/desmarca sem fechar — o gesto do modo múltiplo. */
+  function alternar(v: string) {
+    const atual = selecaoRef.current
+    const proximo = atual.includes(v) ? atual.filter((x) => x !== v) : [...atual, v]
+    selecaoRef.current = proximo
+    setSelecao(proximo)
+  }
+
+  /** Manda a seleção pro servidor SÓ se ela mudou de verdade. */
+  function confirmarSeMudou() {
+    if (!multiplo) return
+    const antes = inicialRef.current
+    const agora = selecaoRef.current
+    const igual =
+      antes.length === agora.length && antes.every((v) => agora.includes(v))
+    inicialRef.current = agora
+    if (!igual) onConfirmar?.(agora)
   }
 
   // preventScroll em todo devolver-foco: o gatilho mora dentro do painel de
@@ -130,16 +183,31 @@ export default function SeletorBusca({
   function fechar(devolverFoco = true) {
     setAberto(false)
     setBusca("")
+    confirmarSeMudou()
     if (devolverFoco) gatilhoRef.current?.focus({ preventScroll: true })
   }
 
   function escolher(v: string) {
+    // Múltiplo: clicar marca e a lista FICA ABERTA — é o ponto do modo.
+    if (multiplo) {
+      alternar(v)
+      // Limpa a busca depois de marcar: quem digitou "bru" pra achar o Bruno
+      // vai querer procurar a PRÓXIMA pessoa, e teria que apagar o termo à mão
+      // antes de cada uma. Só quando há termo — sem isso, marcar dois vizinhos
+      // da mesma lista faria a lista saltar de volta ao topo à toa.
+      if (busca !== "") {
+        setBusca("")
+        viaTecladoRef.current = true
+        setAtivo(0)
+      }
+      return
+    }
     setAberto(false)
     setBusca("")
     gatilhoRef.current?.focus({ preventScroll: true })
     // Só avisa quando muda de verdade: reescolher o mesmo responsável não
     // precisa virar request, refresh e linha no histórico da tarefa.
-    if (v !== valor) onEscolher(v)
+    if (v !== valor) onEscolher?.(v)
   }
 
   // Reposiciona enquanto aberto: rolar a tela de trás ou girar o celular não
@@ -177,8 +245,9 @@ export default function SeletorBusca({
       const alvo = e.target as Node
       if (popRef.current?.contains(alvo)) return
       if (gatilhoRef.current?.contains(alvo)) return
-      setAberto(false)
-      setBusca("")
+      // fechar() e não setAberto(false): clicar fora É o gesto de "terminei",
+      // e no modo múltiplo é ele que manda a seleção pro servidor.
+      fechar(false)
     }
     document.addEventListener("pointerdown", aoApontar, true)
     return () => document.removeEventListener("pointerdown", aoApontar, true)
@@ -234,7 +303,9 @@ export default function SeletorBusca({
     if (e.key === "Tab") fechar(false)
   }
 
-  const textoGatilho = selecionada?.rotulo ?? textoVazio
+  // No modo múltiplo o gatilho é um comando ("+ Adicionar…"): o estado do campo
+  // são os chips que quem chama desenha do lado de fora.
+  const textoGatilho = multiplo ? textoVazio : selecionada?.rotulo ?? textoVazio
 
   return (
     <>
@@ -245,6 +316,7 @@ export default function SeletorBusca({
         onClick={() => (aberto ? fechar() : abrir())}
         aria-label={rotuloCampo}
         aria-haspopup="listbox"
+        data-multiplo={multiplo ? "1" : undefined}
         aria-expanded={aberto}
         className={variante === "filtro" ? "glass-input ws-combo-gatilho" : "no-ds ws-combo-gatilho ws-combo-gatilho-campo"}
         style={
@@ -253,7 +325,7 @@ export default function SeletorBusca({
             : undefined
         }
       >
-        {iconeNoGatilho && selecionada?.icone}
+        {iconeNoGatilho && !multiplo && selecionada?.icone}
         <span className="ws-combo-gatilho-texto">
           {prefixoNoGatilho ? `${prefixoNoGatilho}: ${textoGatilho}` : textoGatilho}
         </span>
@@ -311,11 +383,18 @@ export default function SeletorBusca({
               spellCheck={false}
             />
 
-            <div ref={listaRef} id={idLista} role="listbox" aria-label={rotuloCampo} className="ws-combo-lista">
+            <div
+              ref={listaRef}
+              id={idLista}
+              role="listbox"
+              aria-label={rotuloCampo}
+              aria-multiselectable={multiplo || undefined}
+              className="ws-combo-lista"
+            >
               {filtradas.length === 0 && <p className="ws-combo-vazio">{textoNenhum}</p>}
 
               {filtradas.map((o, i) => {
-                const escolhida = o.valor === valor
+                const escolhida = multiplo ? marcados.has(o.valor) : o.valor === valor
                 return (
                   <button
                     key={o.valor || `__vazio-${i}`}
@@ -341,12 +420,28 @@ export default function SeletorBusca({
                     }}
                     className={`no-ds ws-combo-item${i === indiceAtivo ? " ws-combo-item-ativo" : ""}`}
                   >
+                    {/* Caixinha à ESQUERDA: é ela que anuncia, antes do
+                        primeiro clique, que dá pra marcar mais de um. Um
+                        "check" só no fim da linha parece confirmação de escolha
+                        única. */}
+                    {multiplo && (
+                      <span
+                        className={`ws-combo-caixa${escolhida ? " ws-combo-caixa-marcada" : ""}`}
+                        aria-hidden="true"
+                      >
+                        {escolhida && (
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </span>
+                    )}
                     {o.icone}
                     <span className="ws-combo-item-texto">
                       <span className="ws-combo-item-rotulo">{o.rotulo}</span>
                       {o.detalhe && <span className="ws-combo-item-detalhe">{o.detalhe}</span>}
                     </span>
-                    {escolhida && (
+                    {!multiplo && escolhida && (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, color: "#5da283" }}>
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
@@ -355,6 +450,29 @@ export default function SeletorBusca({
                 )
               })}
             </div>
+
+            {/* Rodapé só no modo múltiplo. No celular a lista é uma folha que
+                cobre a tela: sem um "Concluir" visível, fechar dependeria de
+                acertar o dedo fora dela. */}
+            {multiplo && (
+              <div className="ws-combo-rodape">
+                <span>
+                  {selecao.length === 0
+                    ? "Nenhum selecionado"
+                    : `${selecao.length} selecionado${selecao.length === 1 ? "" : "s"}`}
+                </span>
+                <button
+                  type="button"
+                  className="no-ds ws-combo-concluir"
+                  onPointerDown={(e) => {
+                    e.preventDefault()
+                    fechar()
+                  }}
+                >
+                  Concluir
+                </button>
+              </div>
+            )}
           </div>,
           document.body
         )}

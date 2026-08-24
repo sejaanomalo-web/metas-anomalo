@@ -142,13 +142,22 @@ function agruparTarefas(
   }
 
   if (agrupar === "responsavel") {
+    // Uma tarefa com duas pessoas aparece nos DOIS grupos — mesma regra do
+    // agrupamento por contexto logo abaixo, e a única honesta com o modelo:
+    // escolher um "dono" faria a tarefa sumir da lista do colega.
     const mapa = new Map<string, { titulo: string; tarefas: TarefaComRelacoes[] }>()
     for (const t of tarefas) {
-      const chave = t.responsavel_id ?? "__sem__"
-      const titulo = t.responsavel_nome ?? "Sem responsável"
-      const g = mapa.get(chave) ?? { titulo, tarefas: [] }
-      g.tarefas.push(t)
-      mapa.set(chave, g)
+      if (t.responsaveis.length === 0) {
+        const g = mapa.get("__sem__") ?? { titulo: "Sem responsável", tarefas: [] }
+        g.tarefas.push(t)
+        mapa.set("__sem__", g)
+        continue
+      }
+      for (const r of t.responsaveis) {
+        const g = mapa.get(r.id) ?? { titulo: r.nome, tarefas: [] }
+        g.tarefas.push(t)
+        mapa.set(r.id, g)
+      }
     }
     return [...mapa.entries()]
       .sort((a, b) => a[1].titulo.localeCompare(b[1].titulo, "pt-BR"))

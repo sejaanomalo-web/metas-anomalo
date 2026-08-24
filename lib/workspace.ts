@@ -21,6 +21,7 @@ import type {
   FiltroTarefas,
   Nota,
   PreferenciaUsuario,
+  ResponsavelTarefa,
   Tarefa,
   TarefaComRelacoes,
 } from "./workspace-tipos"
@@ -36,6 +37,42 @@ export const COLUNAS_TAREFA =
 
 export const COLUNAS_CONTEXTO =
   "id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, grupo_id, ordem, arquivado_em"
+
+/**
+ * Monta o `select` com os JOINs que o filtro exigir.
+ *
+ * Contexto e responsável são os dois campos N:N da tarefa, e filtrar por eles
+ * é JOIN, não lista de ids: a versão por `.in("id", [...])` estoura o tamanho
+ * do querystring do PostgREST (414) assim que o cliente passa de algumas
+ * centenas de tarefas — e o 414 chegava na tela como "nenhuma tarefa", sem
+ * erro nenhum. Com `!inner` o banco resolve numa query, e como o embed é
+ * ANINHADO nenhuma tarefa volta duplicada.
+ */
+function selecaoComFiltros(filtro: {
+  contextoId?: string
+  responsavelId?: string
+}): string {
+  const embeds: string[] = []
+  if (filtro.contextoId) embeds.push("ws_tarefa_contextos!inner(contexto_id)")
+  if (filtro.responsavelId) embeds.push("ws_tarefa_responsaveis!inner(usuario_id)")
+  return embeds.length > 0 ? `${COLUNAS_TAREFA}, ${embeds.join(", ")}` : COLUNAS_TAREFA
+}
+
+/**
+ * Tira os embeds do JOIN da linha: o que segue pras telas é exatamente uma
+ * Tarefa, sem campo fantasma viajando adiante. O `select` é montado em runtime,
+ * então o supabase-js não consegue inferir a linha — daí o unknown no caminho.
+ */
+function semEmbeds(data: unknown): Tarefa[] {
+  return ((data ?? []) as Record<string, unknown>[]).map((linha) => {
+    const {
+      ws_tarefa_contextos: _ctx,
+      ws_tarefa_responsaveis: _resp,
+      ...resto
+    } = linha
+    return resto as unknown as Tarefa
+  })
+}
 
 // ============================================================
 // Contextos
@@ -94,9 +131,10 @@ export async function getContextoDoCliente(
 // ============================================================
 
 /**
- * Enriquece um lote de tarefas com contextos, nome do responsável, progresso
- * de subtarefas e contagem de comentários — tudo em 4 queries fixas,
- * independente do tamanho do lote (nada de N+1).
+ * Enriquece um lote de tarefas com contextos, responsáveis, progresso de
+ * subtarefas e contagem de comentários — em 6 queries fixas repartidas em duas
+ * ondas, independente do tamanho do lote (nada de N+1). A segunda onda existe
+ * porque só dá pra buscar "as pessoas desta página" depois de saber quem são.
  */
 async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
   const supabase = getSupabaseAdmin()
@@ -104,6 +142,7 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
     return tarefas.map((t) => ({
       ...t,
       contextos: [],
+      responsaveis: [],
       responsavel_nome: null,
       responsavel_foto: null,
       subtarefas_total: 0,
@@ -112,28 +151,51 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
     }))
   }
   const ids = tarefas.map((t) => t.id)
-  // Só os responsáveis que APARECEM nesta página. Antes as duas consultas de
-  // pessoa vinham sem filtro ("todos os usuários", "todas as preferências"):
-  // funciona com 6 pessoas e piora sozinho conforme o time cresce, buscando
-  // dezenas de linhas e fotos pra preencher três avatares.
-  const responsaveis = Array.from(
-    new Set(tarefas.map((t) => t.responsavel_id).filter((v): v is string => Boolean(v)))
-  )
 
-  const [vinculos, usuarios, subtarefas, comentarios, prefs] = await Promise.all([
+  // ONDA 1 — tudo que só depende dos ids das tarefas. Os responsáveis agora
+  // vivem em ws_tarefa_responsaveis (N:N), e a lista deles entra aqui.
+  const [vinculos, vincResp, subtarefas, comentarios] = await Promise.all([
     supabase
       .from("ws_tarefa_contextos")
       .select("tarefa_id, contexto_id, ws_contextos(id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, grupo_id, ordem, arquivado_em)")
       .in("tarefa_id", ids),
-    responsaveis.length > 0
-      ? supabase.from("usuarios").select("id, nome").in("id", responsaveis)
-      : Promise.resolve({ data: [] as { id: string; nome: string }[] }),
+    supabase
+      .from("ws_tarefa_responsaveis")
+      .select("tarefa_id, usuario_id, ordem")
+      .in("tarefa_id", ids)
+      .order("ordem"),
     supabase
       .from("ws_tarefas")
       .select("tarefa_pai_id, concluida_em")
       .in("tarefa_pai_id", ids)
       .is("excluida_em", null),
     supabase.from("ws_comentarios").select("tarefa_id").in("tarefa_id", ids).is("excluido_em", null),
+  ])
+
+  const linhasResp = (vincResp.data ?? []) as {
+    tarefa_id: string
+    usuario_id: string
+    ordem: number
+  }[]
+
+  // A coluna responsavel_id é espelho do primeiro (trigger no banco), mas entra
+  // no conjunto mesmo assim: se um espelho ficar velho por escrita direta no
+  // SQL Editor, o nome ainda aparece em vez de sumir da tela.
+  const responsaveis = Array.from(
+    new Set([
+      ...linhasResp.map((r) => r.usuario_id),
+      ...tarefas.map((t) => t.responsavel_id).filter((v): v is string => Boolean(v)),
+    ])
+  )
+
+  // ONDA 2 — só as pessoas que APARECEM nesta página. Antes as duas consultas
+  // de pessoa vinham sem filtro ("todos os usuários", "todas as preferências"):
+  // funciona com 6 pessoas e piora sozinho conforme o time cresce, buscando
+  // dezenas de linhas e fotos pra preencher três avatares.
+  const [usuarios, prefs] = await Promise.all([
+    responsaveis.length > 0
+      ? supabase.from("usuarios").select("id, nome").in("id", responsaveis)
+      : Promise.resolve({ data: [] as { id: string; nome: string }[] }),
     responsaveis.length > 0
       ? supabase.from("ws_preferencias").select("usuario_id, foto_url").in("usuario_id", responsaveis)
       : Promise.resolve({ data: [] as { usuario_id: string; foto_url: string | null }[] }),
@@ -179,17 +241,37 @@ async function enriquecer(tarefas: Tarefa[]): Promise<TarefaComRelacoes[]> {
     comentPorTarefa.set(c.tarefa_id, (comentPorTarefa.get(c.tarefa_id) ?? 0) + 1)
   }
 
+  // Responsáveis por tarefa, já ordenados e sem quem não existe mais na tabela
+  // de usuários (conta excluída no meio do caminho não vira avatar fantasma).
+  const respPorTarefa = new Map<string, ResponsavelTarefa[]>()
+  for (const r of [...linhasResp].sort((a, b) => a.ordem - b.ordem)) {
+    const nome = nomePorUsuario.get(r.usuario_id)
+    if (!nome) continue
+    const lista = respPorTarefa.get(r.tarefa_id) ?? []
+    lista.push({ id: r.usuario_id, nome, foto_url: fotoPorUsuario.get(r.usuario_id) ?? null })
+    respPorTarefa.set(r.tarefa_id, lista)
+  }
+
   return tarefas.map((t) => {
     const p = progresso.get(t.id)
+    const resp = respPorTarefa.get(t.id) ?? []
+    // O "principal" é o primeiro da lista; a coluna espelho só entra se a
+    // lista estiver vazia (tarefa tocada por script antigo).
+    const principal =
+      resp[0] ??
+      (t.responsavel_id && nomePorUsuario.get(t.responsavel_id)
+        ? {
+            id: t.responsavel_id,
+            nome: nomePorUsuario.get(t.responsavel_id)!,
+            foto_url: fotoPorUsuario.get(t.responsavel_id) ?? null,
+          }
+        : null)
     return {
       ...t,
       contextos: (porTarefa.get(t.id) ?? []).sort((a, b) => a.ordem - b.ordem),
-      responsavel_nome: t.responsavel_id
-        ? nomePorUsuario.get(t.responsavel_id) ?? null
-        : null,
-      responsavel_foto: t.responsavel_id
-        ? fotoPorUsuario.get(t.responsavel_id) ?? null
-        : null,
+      responsaveis: resp.length > 0 ? resp : principal ? [principal] : [],
+      responsavel_nome: principal?.nome ?? null,
+      responsavel_foto: principal?.foto_url ?? null,
       subtarefas_total: p?.total ?? 0,
       subtarefas_concluidas: p?.feitas ?? 0,
       comentarios_total: comentPorTarefa.get(t.id) ?? 0,
@@ -215,16 +297,7 @@ export async function listarTarefas(
   const offset = filtro.offset ?? 0
   const situacao = filtro.situacao ?? "pendentes"
 
-  // Contexto é N:N (ws_tarefa_contextos) e entra como JOIN no próprio select,
-  // não como lista de ids. A versão anterior lia TODOS os tarefa_id do vínculo
-  // e mandava um `.in("id", [...])`: com algumas centenas de tarefas no
-  // cliente, o querystring do PostgREST passa do limite aceito, a resposta vira
-  // 414 e a página do cliente aparecia VAZIA, sem erro na tela. Com `!inner` o
-  // banco resolve em uma query, sem limite de tamanho — e o embed é aninhado,
-  // então nenhuma tarefa vem duplicada.
-  const selecao = filtro.contextoId
-    ? `${COLUNAS_TAREFA}, ws_tarefa_contextos!inner(contexto_id)`
-    : COLUNAS_TAREFA
+  const selecao = selecaoComFiltros(filtro)
 
   let q = supabase.from("ws_tarefas").select(selecao).is("tarefa_pai_id", null)
 
@@ -241,7 +314,12 @@ export async function listarTarefas(
   if (situacao === "pendentes") q = q.is("concluida_em", null)
   if (situacao === "concluidas") q = q.not("concluida_em", "is", null)
 
-  if (filtro.responsavelId) q = q.eq("responsavel_id", filtro.responsavelId)
+  // Responsável agora é N:N: a pessoa entra no filtro se estiver na LISTA da
+  // tarefa, não só se for a principal. Sem isto, quem foi adicionado como
+  // segundo responsável não veria a própria tarefa em nenhuma tela filtrada.
+  if (filtro.responsavelId) {
+    q = q.eq("ws_tarefa_responsaveis.usuario_id", filtro.responsavelId)
+  }
   if (filtro.prazoDe) q = q.gte("prazo_em", filtro.prazoDe)
   if (filtro.prazoAte) q = q.lte("prazo_em", filtro.prazoAte)
   if (filtro.apenasSemPrazo) q = q.is("prazo_em", null)
@@ -286,15 +364,7 @@ export async function listarTarefas(
     console.error("[workspace] listarTarefas error", error.message)
     return { tarefas: [], temMais: false }
   }
-  // O embed do JOIN vem junto na linha; tira ele pra que o objeto entregue às
-  // telas seja exatamente uma Tarefa, sem um campo fantasma viajando adiante.
-  // O `select` é montado em runtime (com ou sem o JOIN), então o supabase-js
-  // não consegue inferir a linha — daí o unknown antes do shape final.
-  const brutas = (data ?? []) as unknown as Record<string, unknown>[]
-  const linhas = brutas.map((linha) => {
-    const { ws_tarefa_contextos: _embed, ...resto } = linha
-    return resto as unknown as Tarefa
-  })
+  const linhas = semEmbeds(data)
   const temMais = linhas.length > limite
   const pagina = temMais ? linhas.slice(0, limite) : linhas
   return { tarefas: await enriquecer(pagina), temMais }
@@ -352,7 +422,7 @@ export async function listarTarefasDoMes(
 
   let q = supabase
     .from("ws_tarefas")
-    .select(COLUNAS_TAREFA)
+    .select(selecaoComFiltros(filtro))
     .is("tarefa_pai_id", null)
     .is("excluida_em", null)
     .is("arquivada_em", null)
@@ -361,25 +431,18 @@ export async function listarTarefasDoMes(
     .order("prazo_hora", { ascending: true, nullsFirst: true })
     .order("ordem")
 
-  if (filtro.responsavelId) q = q.eq("responsavel_id", filtro.responsavelId)
-  if (filtro.situacao === "pendentes") q = q.is("concluida_em", null)
-
-  if (filtro.contextoId) {
-    const { data: vinc } = await supabase
-      .from("ws_tarefa_contextos")
-      .select("tarefa_id")
-      .eq("contexto_id", filtro.contextoId)
-    const ids = (vinc ?? []).map((v) => (v as { tarefa_id: string }).tarefa_id)
-    if (ids.length === 0) return []
-    q = q.in("id", ids)
+  if (filtro.responsavelId) {
+    q = q.eq("ws_tarefa_responsaveis.usuario_id", filtro.responsavelId)
   }
+  if (filtro.situacao === "pendentes") q = q.is("concluida_em", null)
+  if (filtro.contextoId) q = q.eq("ws_tarefa_contextos.contexto_id", filtro.contextoId)
 
   const { data, error } = await q.limit(500)
   if (error) {
     console.error("[workspace] listarTarefasDoMes error", error.message)
     return []
   }
-  return enriquecer((data ?? []) as unknown as Tarefa[])
+  return enriquecer(semEmbeds(data))
 }
 
 /**
@@ -397,7 +460,7 @@ export async function listarTarefasDoIntervalo(
 
   let q = supabase
     .from("ws_tarefas")
-    .select(COLUNAS_TAREFA)
+    .select(selecaoComFiltros(filtro))
     .is("tarefa_pai_id", null)
     .is("excluida_em", null)
     .is("arquivada_em", null)
@@ -406,25 +469,18 @@ export async function listarTarefasDoIntervalo(
     .order("prazo_hora", { ascending: true, nullsFirst: true })
     .order("ordem")
 
-  if (filtro.responsavelId) q = q.eq("responsavel_id", filtro.responsavelId)
-  if (filtro.situacao === "pendentes") q = q.is("concluida_em", null)
-
-  if (filtro.contextoId) {
-    const { data: vinc } = await supabase
-      .from("ws_tarefa_contextos")
-      .select("tarefa_id")
-      .eq("contexto_id", filtro.contextoId)
-    const ids = (vinc ?? []).map((v) => (v as { tarefa_id: string }).tarefa_id)
-    if (ids.length === 0) return []
-    q = q.in("id", ids)
+  if (filtro.responsavelId) {
+    q = q.eq("ws_tarefa_responsaveis.usuario_id", filtro.responsavelId)
   }
+  if (filtro.situacao === "pendentes") q = q.is("concluida_em", null)
+  if (filtro.contextoId) q = q.eq("ws_tarefa_contextos.contexto_id", filtro.contextoId)
 
   const { data, error } = await q.limit(500)
   if (error) {
     console.error("[workspace] listarTarefasDoIntervalo error", error.message)
     return []
   }
-  return enriquecer((data ?? []) as unknown as Tarefa[])
+  return enriquecer(semEmbeds(data))
 }
 
 /** Bandeja "Sem data" do calendário. */
@@ -475,11 +531,15 @@ export async function getMinhasTarefas(
   const daquiA7 = somarDiasISO(hoje, 7)
   const haSete = somarDiasISO(hoje, -7)
 
+  // JOIN na lista de responsáveis, não `eq` na coluna: "minhas tarefas" inclui
+  // aquelas em que sou UM dos responsáveis, não só as em que sou o principal.
+  const selecaoMinhas = `${COLUNAS_TAREFA}, ws_tarefa_responsaveis!inner(usuario_id)`
+
   const [pendentes, concluidas] = await Promise.all([
     supabase
       .from("ws_tarefas")
-      .select(COLUNAS_TAREFA)
-      .eq("responsavel_id", usuarioId)
+      .select(selecaoMinhas)
+      .eq("ws_tarefa_responsaveis.usuario_id", usuarioId)
       .is("concluida_em", null)
       .is("excluida_em", null)
       .is("arquivada_em", null)
@@ -487,8 +547,8 @@ export async function getMinhasTarefas(
       .limit(300),
     supabase
       .from("ws_tarefas")
-      .select(COLUNAS_TAREFA)
-      .eq("responsavel_id", usuarioId)
+      .select(selecaoMinhas)
+      .eq("ws_tarefa_responsaveis.usuario_id", usuarioId)
       .not("concluida_em", "is", null)
       .is("excluida_em", null)
       .gte("concluida_em", `${haSete}T00:00:00Z`)
@@ -497,8 +557,8 @@ export async function getMinhasTarefas(
   ])
 
   const todas = await enriquecer([
-    ...((pendentes.data ?? []) as unknown as Tarefa[]),
-    ...((concluidas.data ?? []) as unknown as Tarefa[]),
+    ...semEmbeds(pendentes.data),
+    ...semEmbeds(concluidas.data),
   ])
 
   const out: BaldesMinhasTarefas = { ...vazio, atrasadas: [], hoje: [], proximos7: [], semPrazo: [], concluidasRecentes: [] }

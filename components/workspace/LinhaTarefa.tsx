@@ -7,7 +7,7 @@ import { corDoContexto, type TarefaComRelacoes } from "@/lib/workspace-tipos"
 import { corDaTarefa } from "@/lib/workspace-cores"
 import { descricaoResumida } from "@/lib/workspace-markdown"
 import { rotuloPrazo, situacaoPrazo } from "@/lib/workspace-datas"
-import Avatar from "./Avatar"
+import Avatares from "./Avatares"
 
 /** #rrggbb → rgba com alpha — tinta de fundo da linha na cor do cliente. */
 function tinta(hex: string, alpha: number): string {
@@ -190,11 +190,15 @@ export default function LinhaTarefa({
             />
           ) : null}
 
-          {tarefa.responsavel_nome && (
+          {/* Vários responsáveis: pilha de avatares + o nome do primeiro e um
+              "+N". Escrever os nomes todos numa linha que já leva prazo,
+              projetos e contadores empurraria tudo pra fora. */}
+          {tarefa.responsaveis.length > 0 && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <Avatar nome={tarefa.responsavel_nome} tamanho={16} />
+              <Avatares pessoas={tarefa.responsaveis} tamanho={16} max={3} />
               <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-                {tarefa.responsavel_nome}
+                {tarefa.responsaveis[0].nome}
+                {tarefa.responsaveis.length > 1 && ` +${tarefa.responsaveis.length - 1}`}
               </span>
             </span>
           )}
