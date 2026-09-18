@@ -60,13 +60,28 @@ const MAX_CONTEXTOS = 30
 // Checar `if (!usuario)` estreita de forma limpa e obvia.
 
 /**
- * Quem pode mexer numa tarefa: admin, quem criou, ou QUALQUER responsável.
+ * Quem pode EDITAR uma tarefa (título, descrição, prazo, responsáveis,
+ * projetos, conclusão, posição no calendário): qualquer usuário com acesso ao
+ * Workspace — a agenda é colaborativa, como no Asana. O acesso em si já foi
+ * barrado por exigirWorkspace; a trava de `versao` protege contra sobrescrita.
+ */
+function podeEditar(
+  _usuario: UsuarioSessao,
+  _tarefa: { criado_por: string | null; responsavel_id: string | null }
+): boolean {
+  return true
+}
+
+/**
+ * Quem pode ARQUIVAR, mandar pra lixeira ou restaurar: admin, quem criou, ou
+ * QUALQUER responsável. Mais restrito que editar porque tira a tarefa da vista
+ * de todo mundo.
  *
  * `responsaveis_ids` vem preenchido por buscarTarefa. Sem ele a checagem cairia
  * só na coluna espelho (o primeiro responsável) e o segundo responsável de uma
- * tarefa levaria "Sem permissão" ao tentar editar a própria tarefa.
+ * tarefa levaria "Sem permissão" na própria tarefa.
  */
-function podeEditar(usuario: UsuarioSessao, tarefa: {
+function podeGerenciar(usuario: UsuarioSessao, tarefa: {
   criado_por: string | null
   responsavel_id: string | null
   responsaveis_ids?: string[]
@@ -1178,7 +1193,7 @@ export async function arquivarTarefaAction(
 
   const atual = await buscarTarefa(id)
   if (!atual) return { ok: false, erro: "Tarefa não encontrada." }
-  if (!podeEditar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
+  if (!podeGerenciar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
 
   const { error } = await db
     .from("ws_tarefas")
@@ -1208,7 +1223,7 @@ export async function excluirTarefaAction(
   if (!ehUuid(id)) return { ok: false, erro: "Tarefa inválida." }
   const atual = await buscarTarefa(id)
   if (!atual) return { ok: false, erro: "Tarefa não encontrada." }
-  if (!podeEditar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
+  if (!podeGerenciar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
 
   const { error } = await db
     .from("ws_tarefas")
@@ -1234,7 +1249,7 @@ export async function restaurarTarefaAction(
   if (!ehUuid(id)) return { ok: false, erro: "Tarefa inválida." }
   const atual = await buscarTarefa(id)
   if (!atual) return { ok: false, erro: "Tarefa não encontrada." }
-  if (!podeEditar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
+  if (!podeGerenciar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
 
   const { error } = await db
     .from("ws_tarefas")
