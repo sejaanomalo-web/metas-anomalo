@@ -977,6 +977,7 @@ export default function EditorNota({
         aria-busy={salvandoAgora}
         onInput={aoDigitarCorpo}
         onPaste={aoColar}
+        onClick={abrirLinkClicado}
         // Sair do campo salva na hora: clicar em outra nota ou em outro lugar
         // da tela não tem que esperar o debounce.
         onBlur={flushAgora}
@@ -1078,6 +1079,23 @@ function marcarLinksSeguros(el: HTMLElement) {
     a.target = "_blank"
     a.rel = "noopener noreferrer"
   }
+}
+
+/**
+ * Dentro de um contentEditable o navegador não segue links: o clique só põe o
+ * cursor ali. Aqui o clique simples abre o link em nova aba. Se a pessoa
+ * estiver arrastando pra selecionar (seleção não colapsada), não abre — assim
+ * dá pra selecionar o texto do link pra trocar ou formatar.
+ */
+function abrirLinkClicado(e: React.MouseEvent<HTMLDivElement>) {
+  const a = (e.target as HTMLElement).closest?.("a[href]") as HTMLAnchorElement | null
+  if (!a || !e.currentTarget.contains(a)) return
+  const sel = window.getSelection()
+  if (sel && !sel.isCollapsed) return
+  // Mesma regra do sanitizador (hrefSeguro): só http(s).
+  if (!/^https?:\/\//i.test(a.href)) return
+  e.preventDefault()
+  window.open(a.href, "_blank", "noopener,noreferrer")
 }
 
 /**
