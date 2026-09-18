@@ -1924,6 +1924,7 @@ table {
 .ws-nota-corpo a {
   color: #7aa5f8;
   text-decoration: underline;
+  cursor: pointer;
 }
 .ws-nota-corpo ul,
 .ws-nota-corpo ol {
