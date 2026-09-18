@@ -24,6 +24,12 @@ function temPermissao(
   return (usuario.permissoes as Permissoes)[chave] === true
 }
 
+function rotuloVisao(visao: NonNullable<UsuarioSessao["visao"]>): string {
+  if (visao === "gestor_trafego") return "Gestor de tráfego"
+  if (visao === "comercial") return "Comercial"
+  return "Personalizada"
+}
+
 /**
  * Shell global de /dashboard/*:
  *
@@ -371,6 +377,46 @@ function SidebarRail({
           borderTop: "1px solid rgba(255,255,255,0.06)",
         }}
       >
+        {/* Lembrete de que o menu está curto por escolha própria — sem ele,
+         *  um admin em visão simplificada procura uma aba que "sumiu". Só no
+         *  rail expandido: colapsado não há largura pra texto. */}
+        {usuarioAtual.visao && expandido && (
+          <Link
+            href="/dashboard/configuracoes"
+            style={{
+              display: "block",
+              margin: "0 0 4px",
+              padding: "8px 12px",
+              borderRadius: 8,
+              background: "rgba(201,149,58,0.10)",
+              border: "0.5px solid rgba(201,149,58,0.28)",
+              textDecoration: "none",
+            }}
+          >
+            <span
+              style={{
+                display: "block",
+                fontSize: 9,
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                color: "var(--accent)",
+                fontWeight: 600,
+              }}
+            >
+              Visão simplificada
+            </span>
+            <span
+              style={{
+                display: "block",
+                fontSize: 11,
+                color: "var(--text-3)",
+                marginTop: 2,
+              }}
+            >
+              {rotuloVisao(usuarioAtual.visao)} · trocar
+            </span>
+          </Link>
+        )}
         {podeConfig && (
           <ItemMenu
             icon={<IconeConfig />}

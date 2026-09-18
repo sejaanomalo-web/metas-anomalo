@@ -3,6 +3,7 @@ import FormConfig from "@/components/FormConfig"
 import AtivarNotificacoes from "@/components/AtivarNotificacoes"
 import PreferenciasNotificacoes from "@/components/PreferenciasNotificacoes"
 import GerenciadorUsuarios from "@/components/GerenciadorUsuarios"
+import MeuNivelAcesso from "@/components/MeuNivelAcesso"
 import GerenciadorFormularios, {
   type FormId,
 } from "@/components/GerenciadorFormularios"
@@ -31,7 +32,12 @@ export default async function ConfiguracoesPage({
 }) {
   const usuario = await requererPermissao("configuracoes")
   const podeGerenciarUsuarios = temPermissao(usuario, "gerenciar_usuarios")
+  // ehAdmin usa o papel EFETIVO: um admin que escolheu ver menos deixa de
+  // receber as seções pesadas de admin (resumos, edição de dados lançados).
   const ehAdmin = usuario.papel === "admin"
+  // ...já o card de nível de acesso olha o papel REAL — é o caminho de volta,
+  // e some se a gente olhasse o efetivo.
+  const ehAdminReal = usuario.papelReal === "admin"
 
   // Escopo por papel: quais toggles de notificação e quais formulários
   // cada acesso enxerga em Configurações.
@@ -137,6 +143,13 @@ export default async function ConfiguracoesPage({
           inicial={preferencias}
           chavesPermitidas={chavesNotif}
         />
+
+        {ehAdminReal && (
+          <MeuNivelAcesso
+            visaoAtual={usuario.visao}
+            permissoesAtuais={usuario.permissoes}
+          />
+        )}
 
         {podeGerenciarUsuarios && (
           <GerenciadorUsuarios

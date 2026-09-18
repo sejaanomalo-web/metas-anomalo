@@ -12,84 +12,13 @@ import {
 } from "@/lib/usuarios-actions"
 import type { ChavePermissao, PapelUsuario, Permissoes } from "@/lib/auth"
 import CampoSenha from "@/components/inputs/CampoSenha"
-
-const CHAVES: { chave: ChavePermissao; rotulo: string; descricao: string }[] = [
-  {
-    chave: "dashboard_principal",
-    rotulo: "Dashboard",
-    descricao: "/dashboard (visão consolidada do Hub)",
-  },
-  {
-    chave: "dashboard_empresas",
-    rotulo: "Metas",
-    descricao: "/dashboard/metas (metas das empresas do Hub)",
-  },
-  {
-    chave: "dashboard_empresa_detalhe",
-    rotulo: "Empresa (detalhe)",
-    descricao: "/dashboard/[empresa] (página individual)",
-  },
-  {
-    chave: "dashboard_trafego",
-    rotulo: "Tráfego pago",
-    descricao: "/dashboard/trafego + /dashboard/[empresa]/trafego",
-  },
-  {
-    chave: "dashboard_comercial",
-    rotulo: "Comercial",
-    descricao: "/dashboard/comercial (funil + relatórios do comercial)",
-  },
-  {
-    chave: "dashboard_financeiro",
-    rotulo: "Financeiro",
-    descricao: "/dashboard/financeiro (caixa, lançamentos, recorrentes)",
-  },
-  {
-    chave: "formularios",
-    rotulo: "Formulários",
-    descricao: "/dashboard/formularios (acesso à aba)",
-  },
-  {
-    chave: "formulario_comercial",
-    rotulo: "Form · Comercial",
-    descricao: "Seção Comercial do formulário (relatório diário)",
-  },
-  {
-    chave: "formulario_trafego",
-    rotulo: "Form · Tráfego",
-    descricao: "Seção Tráfego Pago do formulário (dados reais)",
-  },
-  {
-    chave: "configuracoes",
-    rotulo: "Configurações",
-    descricao: "/dashboard/configuracoes",
-  },
-  {
-    chave: "gerenciar_usuarios",
-    rotulo: "Gerenciar usuários",
-    descricao: "Criar / editar / desativar usuários",
-  },
-  {
-    chave: "ver_notificacoes",
-    rotulo: "Notificações",
-    descricao: "Sino flutuante (push + in-app)",
-  },
-  {
-    chave: "crm",
-    rotulo: "CRM",
-    descricao: "/dashboard/crm (leads, WhatsApp, Kanban, calendário)",
-  },
-  {
-    chave: "workspace",
-    rotulo: "Workspace",
-    descricao: "/dashboard/workspace (tarefas, calendário, clientes)",
-  },
-  {
-    chave: "leads",
-    rotulo: "Leads do Meta",
-    descricao: "/dashboard/leads (link do cliente + formulários)",
-  },
-]
+import {
+  CHAVES_UI as CHAVES,
+  PRESET_ADMIN,
+  PRESET_COMERCIAL,
+  PRESET_GESTOR,
+  rotuloPapel,
+} from "@/lib/permissoes-ui"
 
 export default function GerenciadorUsuarios({
   usuariosIniciais,
@@ -292,12 +221,6 @@ export default function GerenciadorUsuarios({
   )
 }
 
-function rotuloPapel(papel: PapelUsuario): string {
-  if (papel === "admin") return "Admin"
-  if (papel === "gestor_trafego") return "Gestor de tráfego"
-  if (papel === "comercial") return "Comercial"
-  return "Personalizado"
-}
 
 function AcoesLinha({
   usuario,
@@ -1022,58 +945,4 @@ function Campo({
   )
 }
 
-// Presets locais (cópia do server pra renderização imediata no client).
-// Mantidos sincronizados com PRESETS_PERMISSOES em lib/auth.ts.
-const PRESET_ADMIN: Permissoes = {
-  dashboard_principal: true,
-  dashboard_empresas: true,
-  dashboard_empresa_detalhe: true,
-  dashboard_trafego: true,
-  dashboard_comercial: true,
-  dashboard_financeiro: true,
-  formularios: true,
-  formulario_comercial: true,
-  formulario_trafego: true,
-  configuracoes: true,
-  gerenciar_usuarios: true,
-  ver_notificacoes: true,
-  crm: true,
-  workspace: true,
-  leads: true,
-}
 
-const PRESET_GESTOR: Permissoes = {
-  dashboard_principal: false,
-  dashboard_empresas: false,
-  dashboard_empresa_detalhe: false,
-  dashboard_trafego: true,
-  dashboard_comercial: false,
-  dashboard_financeiro: false,
-  formularios: true,
-  formulario_comercial: false,
-  formulario_trafego: true,
-  configuracoes: true,
-  gerenciar_usuarios: false,
-  ver_notificacoes: true,
-  crm: false,
-  workspace: false,
-  leads: true,
-}
-
-const PRESET_COMERCIAL: Permissoes = {
-  dashboard_principal: false,
-  dashboard_empresas: false,
-  dashboard_empresa_detalhe: false,
-  dashboard_trafego: false,
-  dashboard_comercial: true,
-  dashboard_financeiro: false,
-  formularios: true,
-  formulario_comercial: true,
-  formulario_trafego: false,
-  configuracoes: true,
-  gerenciar_usuarios: false,
-  ver_notificacoes: true,
-  crm: true,
-  workspace: false,
-  leads: false,
-}

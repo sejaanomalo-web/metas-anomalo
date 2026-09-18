@@ -3,12 +3,14 @@
 import { revalidatePath } from "next/cache"
 import { randomBytes, scryptSync } from "crypto"
 import {
+  CHAVES_PERMISSAO,
   PRESETS_PERMISSOES,
+  ehVisaoValida,
   getUsuarioAtual,
   requererPermissao,
-  type ChavePermissao,
   type PapelUsuario,
   type Permissoes,
+  type VisaoSimplificada,
 } from "./auth"
 import { getSupabaseAdmin } from "./supabase"
 
@@ -63,26 +65,12 @@ function emailValido(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-const CHAVES: ChavePermissao[] = [
-  "dashboard_principal",
-  "dashboard_empresas",
-  "dashboard_empresa_detalhe",
-  "dashboard_trafego",
-  "dashboard_comercial",
-  "dashboard_financeiro",
-  "formularios",
-  "formulario_comercial",
-  "formulario_trafego",
-  "configuracoes",
-  "gerenciar_usuarios",
-  "ver_notificacoes",
-  "crm",
-  "workspace",
-]
-
 function permissoesFromFormData(formData: FormData): Permissoes {
   const result = {} as Permissoes
-  for (const chave of CHAVES) {
+  // CHAVES_PERMISSAO vem de lib/auth — a lista local que existia aqui tinha
+  // ficado sem 'leads', então essa permissão nascia sempre false em usuários
+  // custom, por mais que o checkbox estivesse marcado na tela.
+  for (const chave of CHAVES_PERMISSAO) {
     result[chave] = formData.get(`perm_${chave}`) === "on"
   }
   return result
@@ -207,10 +195,14 @@ export async function atualizarUsuarioAction(
   }
 
   // Defesa: admin não pode rebaixar a si mesmo (evita lockout do sistema).
+  // Quem quer só ver menos tela usa "Meu nível de acesso" em Configurações —
+  // lá a mudança é reversível por quem a fez (definirMeuNivelAcessoAction).
   if (admin.id === id && papel !== "admin") {
     return {
       ok: false,
-      erro: "Você não pode rebaixar seu próprio papel de admin.",
+      erro:
+        "Você não pode rebaixar seu próprio papel de admin. Pra ver menos " +
+        'interfaces, use "Meu nível de acesso" aqui em Configurações.',
     }
   }
 
@@ -470,6 +462,74 @@ export async function definirMinhaSenhaAction(
     .eq("id", usuario.id)
   if (error) {
     console.error("[usuarios] definir minha senha error", error.message)
+    return { ok: false, erro: error.message }
+  }
+
+  revalidarSuperficiesUsuarios()
+  return { ok: true }
+}
+
+/**
+ * "Meu nível de acesso": o admin escolhe ver MENOS do sistema.
+ *
+ * Não é rebaixamento de cargo — o papel na tabela continua 'admin'. O que a
+ * action grava é a VISÃO (usuarios.visao), uma preferência pessoal que o
+ * getUsuarioAtual traduz em papel efetivo + permissões efetivas. Por isso:
+ *
+ *   • o time comercial e as notificações por papel continuam iguais (essas
+ *     leituras vão direto na coluna papel);
+ *   • a volta é sempre possível — este gate olha papelReal, não o papel
+ *     efetivo, então mesmo um admin em visão "comercial" (que perdeu
+ *     'gerenciar_usuarios') consegue restaurar o acesso completo;
+ *   • permissoesDaVisao força 'configuracoes' ligada, senão o caminho de
+ *     volta sumiria da tela junto com o resto.
+ *
+ * nivel: 'completo' (limpa a visão) | gestor_trafego | comercial | custom.
+ */
+export async function definirMeuNivelAcessoAction(
+  formData: FormData
+): Promise<ResultadoUsuario> {
+  const usuario = await getUsuarioAtual()
+  if (!usuario) return { ok: false, erro: "Sessão expirada." }
+  if (usuario.papelReal !== "admin") {
+    return {
+      ok: false,
+      erro: "Só quem é admin pode escolher o próprio nível de acesso.",
+    }
+  }
+
+  const nivelRaw = String(formData.get("nivel") ?? "completo")
+  const visao: VisaoSimplificada | null = ehVisaoValida(nivelRaw)
+    ? nivelRaw
+    : null
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const { error } = await supabase
+    .from("usuarios")
+    .update({
+      visao,
+      // Só guarda o JSONB quando ele é usado; nas visões de preset a fonte da
+      // verdade é o PRESETS_PERMISSOES, não uma cópia congelada no banco.
+      visao_permissoes: visao === "custom" ? permissoesFromFormData(formData) : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", usuario.id)
+  if (error) {
+    // 42703/PGRST204 = colunas novas ainda não existem no banco.
+    if (error.code === "42703" || error.code === "PGRST204") {
+      return {
+        ok: false,
+        erro:
+          "Falta aplicar a migration 20260918_usuarios_visao_simplificada.sql " +
+          "no SQL Editor do Supabase.",
+      }
+    }
+    if (error.code === "23514") {
+      return { ok: false, erro: "Nível de acesso inválido." }
+    }
+    console.error("[usuarios] definir meu nivel error", error.message)
     return { ok: false, erro: error.message }
   }
 

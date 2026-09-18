@@ -114,6 +114,27 @@ export type ChavePermissao =
 
 export type Permissoes = Record<ChavePermissao, boolean>
 
+/** Todas as chaves de permissão, em ordem de exibição. Fonte ÚNICA — as
+ *  actions e a UI importam daqui pra não esquecer chave nova (foi o que
+ *  aconteceu com 'leads', que ficava sempre false em usuários custom). */
+export const CHAVES_PERMISSAO: readonly ChavePermissao[] = [
+  "dashboard_principal",
+  "dashboard_empresas",
+  "dashboard_empresa_detalhe",
+  "dashboard_trafego",
+  "dashboard_comercial",
+  "dashboard_financeiro",
+  "formularios",
+  "formulario_comercial",
+  "formulario_trafego",
+  "configuracoes",
+  "gerenciar_usuarios",
+  "ver_notificacoes",
+  "crm",
+  "workspace",
+  "leads",
+]
+
 /** Preset de permissões por papel. admin não usa (bypassa via temPermissao).
  *  gestor_trafego ganha SÓ as duas chaves de tráfego + notificações. custom
  *  começa zerado e o admin escolhe os checkboxes. */
@@ -196,8 +217,52 @@ export interface UsuarioSessao {
   id: string
   email: string
   nome: string
+  /** Papel EFETIVO — o que a UI e os guards enxergam. É igual ao papelReal,
+   *  exceto quando um admin escolheu uma visão simplificada pra si mesmo
+   *  (ver `visao`), e aí vale a visão. */
   papel: PapelUsuario
+  /** Papel gravado no banco — nunca muda por escolha de visão. É o que diz
+   *  QUEM a pessoa é (e quem pode voltar ao acesso completo). */
+  papelReal: PapelUsuario
+  /** Visão simplificada escolhida pelo próprio admin em Configurações.
+   *  null = acesso completo. Só admin pode ter visão. */
+  visao: VisaoSimplificada | null
   permissoes: Permissoes
+}
+
+/** Níveis que um admin pode escolher pra si mesmo em "Meu nível de acesso".
+ *  'admin' não entra aqui: voltar ao acesso completo é `visao = null`. */
+export type VisaoSimplificada = Exclude<PapelUsuario, "admin">
+
+const VISOES_VALIDAS: readonly VisaoSimplificada[] = [
+  "gestor_trafego",
+  "comercial",
+  "custom",
+]
+
+export function ehVisaoValida(v: unknown): v is VisaoSimplificada {
+  return VISOES_VALIDAS.includes(v as VisaoSimplificada)
+}
+
+/**
+ * Permissões efetivas de um admin que escolheu ver menos. Parte do preset
+ * 'custom' (tudo false) pra garantir que TODA chave exista mesmo que o JSONB
+ * gravado seja antigo/parcial — fail-closed.
+ *
+ * `configuracoes` volta ligada à força: é a saída de emergência. Sem ela o
+ * admin que escolhesse uma visão sem Configurações não teria mais por onde
+ * voltar ao acesso completo (o card de nível de acesso vive lá), e só um
+ * UPDATE no banco resolveria.
+ */
+export function permissoesDaVisao(
+  visao: VisaoSimplificada,
+  visaoPermissoes: Permissoes | null
+): Permissoes {
+  const base =
+    visao === "custom"
+      ? visaoPermissoes ?? PRESETS_PERMISSOES.custom
+      : PRESETS_PERMISSOES[visao]
+  return { ...PRESETS_PERMISSOES.custom, ...base, configuracoes: true }
 }
 
 /**
@@ -275,11 +340,28 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
   if (!usuarioId) return null
   const supabase = getSupabaseAdmin()
   if (!supabase) return null
-  const { data } = await supabase
+  // As colunas de visão são novas (migration 20260918). Se ela ainda não foi
+  // aplicada, o select com as colunas novas falha inteiro — e falhar aqui
+  // significa deslogar TODO MUNDO. Por isso: tenta com visão, e se o Postgres
+  // reclamar de coluna inexistente (42703 / PGRST204), refaz sem ela.
+  let data: Record<string, unknown> | null = null
+  const comVisao = await supabase
     .from("usuarios")
-    .select("id, email, nome, ativo, papel, permissoes")
+    .select(
+      "id, email, nome, ativo, papel, permissoes, visao, visao_permissoes"
+    )
     .eq("id", usuarioId)
     .maybeSingle()
+  if (comVisao.error) {
+    const semVisao = await supabase
+      .from("usuarios")
+      .select("id, email, nome, ativo, papel, permissoes")
+      .eq("id", usuarioId)
+      .maybeSingle()
+    data = semVisao.data as Record<string, unknown> | null
+  } else {
+    data = comVisao.data as Record<string, unknown> | null
+  }
   if (!data || !data.ativo) return null
   // Fail-CLOSED: papel/permissoes ausentes ou inválidos caem no MENOR
   // privilégio (custom = tudo false), nunca em admin. Hoje todos os
@@ -300,12 +382,40 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
     data.permissoes && typeof data.permissoes === "object"
       ? (data.permissoes as Permissoes)
       : PRESETS_PERMISSOES.custom
+
+  // Visão simplificada: SÓ vale pra quem é admin de verdade. Se a linha tiver
+  // visão gravada e o papel tiver sido rebaixado depois, a visão é ignorada
+  // (o papel real já limita tudo).
+  const visao: VisaoSimplificada | null =
+    papel === "admin" && ehVisaoValida(data.visao) ? data.visao : null
+
+  if (!visao) {
+    return {
+      id: data.id as string,
+      email: data.email as string,
+      nome: data.nome as string,
+      papel,
+      papelReal: papel,
+      visao: null,
+      permissoes,
+    }
+  }
+
+  const visaoPermissoes: Permissoes | null =
+    data.visao_permissoes && typeof data.visao_permissoes === "object"
+      ? (data.visao_permissoes as Permissoes)
+      : null
+
   return {
     id: data.id as string,
     email: data.email as string,
     nome: data.nome as string,
-    papel,
-    permissoes,
+    // O papel EFETIVO vira o da visão: é isso que faz o rail encolher e os
+    // gates de admin (requererAdmin, workspace, exclusões) se fecharem.
+    papel: visao,
+    papelReal: "admin",
+    visao,
+    permissoes: permissoesDaVisao(visao, visaoPermissoes),
   }
 }
 
