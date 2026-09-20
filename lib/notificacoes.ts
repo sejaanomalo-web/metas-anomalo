@@ -9,6 +9,11 @@ export type TipoNotificacao =
   | "meta_batida"
   | "dados_sentinela"
   | "crm_lembrete"
+  // Dinheiro a pagar/receber. São DOIS tipos porque são duas conversas:
+  // "vence hoje" avisa uma vez e é informação; "atrasada há N dias" repete
+  // todo dia e é cobrança. Num checkbox só, desligar uma desligaria a outra.
+  | "conta_vence_hoje"
+  | "conta_atrasada"
   // Workspace: um tipo só cobre atribuição, prazo, comentário e menção. São
   // eventos da MESMA tarefa — separar em quatro só daria ao usuário quatro
   // checkboxes para tomar a mesma decisão ("quero saber das minhas tarefas?").

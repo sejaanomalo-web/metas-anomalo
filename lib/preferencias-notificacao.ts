@@ -13,6 +13,8 @@ export interface PreferenciasNotificacao {
   dados_sentinela: boolean
   crm_lembrete: boolean
   ws_tarefa: boolean
+  conta_vence_hoje: boolean
+  conta_atrasada: boolean
 }
 
 const TIPOS: (keyof PreferenciasNotificacao)[] = [
@@ -24,6 +26,8 @@ const TIPOS: (keyof PreferenciasNotificacao)[] = [
   "dados_sentinela",
   "crm_lembrete",
   "ws_tarefa",
+  "conta_vence_hoje",
+  "conta_atrasada",
 ]
 
 const PADRAO: PreferenciasNotificacao = {
@@ -35,6 +39,8 @@ const PADRAO: PreferenciasNotificacao = {
   dados_sentinela: true,
   crm_lembrete: true,
   ws_tarefa: true,
+  conta_vence_hoje: true,
+  conta_atrasada: true,
 }
 
 /** Preferências do usuário. Ausência de linha = tudo ligado (PADRAO). */

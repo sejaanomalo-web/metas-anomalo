@@ -5,6 +5,10 @@
       "schedule": "0 6 1 * *"
     },
     {
+      "path": "/api/financeiro/avisos",
+      "schedule": "0 10 * * *"
+    },
+    {
       "path": "/api/wa/diario",
       "schedule": "0 0 * * *"
     },
