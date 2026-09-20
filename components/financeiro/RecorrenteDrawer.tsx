@@ -9,6 +9,7 @@ import {
 } from "@/lib/financeiro-actions"
 import { mesValido } from "@/lib/data"
 import CampoInteiro from "@/components/inputs/CampoInteiro"
+import ComboboxCategoria from "./ComboboxCategoria"
 import CampoMoeda from "@/components/inputs/CampoMoeda"
 import type {
   CategoriaFinanceira,
@@ -47,11 +48,20 @@ export default function RecorrenteDrawer({
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>(
     recorrente?.periodicidade ?? "mensal"
   )
+  const [categoriaId, setCategoriaId] = useState<string>(
+    recorrente?.categoria_id ?? ""
+  )
+
+  /** Trocar o tipo limpa a categoria: a lista depende do tipo, e manter a
+   *  anterior gravaria um vínculo que não existe pra esse tipo. */
+  function trocarTipo(novoTipo: TipoLancamento) {
+    setTipo(novoTipo)
+    setCategoriaId("")
+  }
 
   if (!aberto) return null
   const editando = !!recorrente
   const contasAtivas = contas.filter((c) => c.ativa)
-  const categoriasDoTipo = categorias.filter((c) => c.tipo === tipo && c.ativa)
 
   function refreshUI() {
     router.refresh()
@@ -130,7 +140,7 @@ export default function RecorrenteDrawer({
             <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
               {(["receita", "despesa"] as const).map((t) => (
                 <button
-                  key={t} type="button" onClick={() => setTipo(t)}
+                  key={t} type="button" onClick={() => trocarTipo(t)}
                   style={{
                     flex: 1, padding: 10, borderRadius: 2,
                     border: tipo === t ? "1px solid var(--foreground)" : "1px solid var(--border)",
@@ -221,17 +231,12 @@ export default function RecorrenteDrawer({
           </Campo>
 
           <Campo label="Categoria">
-            <select
-              name="categoria_id"
-              defaultValue={recorrente?.categoria_id ?? categoriasDoTipo[0]?.id ?? ""}
-              key={tipo /* força re-render quando troca tipo */}
-              className="glass-input" style={{ width: "100%" }}
-            >
-              <option value="">· Sem categoria ·</option>
-              {categoriasDoTipo.map((c) => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
-              ))}
-            </select>
+            <ComboboxCategoria
+              categorias={categorias}
+              tipo={tipo}
+              valor={categoriaId}
+              onChange={setCategoriaId}
+            />
           </Campo>
 
           <Campo label="Conta">
