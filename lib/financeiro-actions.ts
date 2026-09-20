@@ -505,6 +505,13 @@ export async function salvarContaAction(
   }
 }
 
+/**
+ * Exclui uma conta. Diferente de categoria, aqui a exclusão é BLOQUEADA
+ * quando há lançamentos: soltar o vínculo faria o dinheiro desaparecer do
+ * saldo de qualquer conta (R5 soma por conta_id), e um saldo que muda sozinho
+ * é a pior coisa que pode acontecer nesta tela. Desativar resolve o caso real
+ * — a conta some das listas de escolha e o saldo histórico continua de pé.
+ */
 export async function excluirContaAction(id: string): Promise<ResultadoFinanceiro> {
   const { erro } = await exigirPermissao()
   if (erro) return { ok: false, erro }
@@ -512,21 +519,52 @@ export async function excluirContaAction(id: string): Promise<ResultadoFinanceir
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
 
-  const { data: lanc } = await supabase
+  const { count } = await supabase
     .from("lancamento_financeiro")
-    .select("id")
+    .select("id", { count: "exact", head: true })
     .eq("conta_id", id)
     .is("deletado_em", null)
-    .limit(1)
-  if (lanc && lanc.length > 0) {
+
+  if ((count ?? 0) > 0) {
     return {
       ok: false,
-      erro: "Conta está em uso em lançamentos. Desative em vez de excluir.",
+      erro:
+        `Esta conta tem ${count} lançamento(s) e não pode ser excluída — o saldo ` +
+        "deles deixaria de existir. Desative a conta: ela some das listas de " +
+        "escolha e o histórico continua intacto.",
     }
   }
 
-  const { error } = await supabase.from("conta_financeira").delete().eq("id", id)
-  if (error) return { ok: false, erro: error.message }
+  const { data, error } = await supabase
+    .from("conta_financeira")
+    .delete()
+    .eq("id", id)
+    .select("id")
+  if (error) return { ok: false, erro: traduzirErroBanco(error) }
+  const semPermissao = conferirLinhasAfetadas(data, "excluir a conta")
+  if (semPermissao) return { ok: false, erro: semPermissao }
+
+  revalidarFinanceiro()
+  return { ok: true, id }
+}
+
+/** Desativa a conta — a saída recomendada quando há histórico. */
+export async function desativarContaAction(id: string): Promise<ResultadoFinanceiro> {
+  const { erro } = await exigirPermissao()
+  if (erro) return { ok: false, erro }
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
+
+  const { data, error } = await supabase
+    .from("conta_financeira")
+    .update({ ativa: false })
+    .eq("id", id)
+    .select("id")
+  if (error) return { ok: false, erro: traduzirErroBanco(error) }
+  const semPermissao = conferirLinhasAfetadas(data, "desativar a conta")
+  if (semPermissao) return { ok: false, erro: semPermissao }
+
   revalidarFinanceiro()
   return { ok: true, id }
 }

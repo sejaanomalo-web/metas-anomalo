@@ -1,8 +1,14 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import ListaContas from "@/components/financeiro/ListaContas"
+import GraficoComparativoContas from "@/components/financeiro/GraficoComparativoContas"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { parsePeriodo } from "@/lib/periodo"
-import { listarContas, getSaldoPorConta } from "@/lib/financeiro"
+import { periodoQS } from "@/lib/periodo-url"
+import {
+  getComparativoContas,
+  getSaldoPorConta,
+  listarContas,
+} from "@/lib/financeiro"
 import { requererPermissao } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
@@ -18,9 +24,11 @@ export default async function ContasPage({
   const mes = periodo.mes
   const ano = periodo.ano
 
-  const [contas, saldosLista] = await Promise.all([
+  const anoRef = Number(periodo.de.slice(0, 4))
+  const [contas, saldosLista, comparativo] = await Promise.all([
     listarContas(false),
     getSaldoPorConta(),
+    getComparativoContas(anoRef),
   ])
 
   const saldos = new Map(saldosLista.map((s) => [s.conta.id, s.saldo_atual]))
@@ -53,7 +61,9 @@ export default async function ContasPage({
 
       <FinanceiroNav mes={mes} ano={ano} />
 
-      <ListaContas contas={contas} saldos={saldos} />
+      <GraficoComparativoContas dados={comparativo} ano={anoRef} />
+
+      <ListaContas contas={contas} saldos={saldos} qsPeriodo={periodoQS(periodo)} />
     </main>
   )
 }
