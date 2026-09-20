@@ -10,7 +10,7 @@ import type {
   PagamentoRecorrente,
 } from "@/lib/financeiro"
 import { formatBRL, type Mes } from "@/lib/data"
-import { rotuloMes } from "@/lib/financeiro"
+import { rotuloMes } from "@/lib/financeiro-regras"
 
 interface Props {
   recorrentes: PagamentoRecorrente[]

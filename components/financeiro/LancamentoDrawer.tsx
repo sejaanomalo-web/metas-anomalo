@@ -9,7 +9,7 @@ import {
   salvarRecorrenteAction,
   materializarPeriodoAction,
 } from "@/lib/financeiro-actions"
-import { rotuloMes } from "@/lib/financeiro"
+import { rotuloMes } from "@/lib/financeiro-regras"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,

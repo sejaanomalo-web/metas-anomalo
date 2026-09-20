@@ -3,7 +3,7 @@
 import { useState } from "react"
 import ContaDrawer from "./ContaDrawer"
 import type { ContaFinanceira } from "@/lib/financeiro"
-import { tipoContaRotulo } from "@/lib/financeiro"
+import { tipoContaRotulo } from "@/lib/financeiro-regras"
 import { formatBRL } from "@/lib/data"
 
 export default function ListaContas({

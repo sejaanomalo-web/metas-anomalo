@@ -1,7 +1,7 @@
 "use client"
 
 import type { DREMes, PontoFluxoMensal } from "@/lib/financeiro"
-import { rotuloMes } from "@/lib/financeiro"
+import { rotuloMes } from "@/lib/financeiro-regras"
 import type { Mes } from "@/lib/data"
 
 interface ProjecaoPonto {
