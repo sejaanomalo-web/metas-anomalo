@@ -28,6 +28,8 @@ import {
 import { type TarefaComRelacoes } from "@/lib/workspace-tipos"
 import { corDaTarefa, estiloCartao } from "@/lib/workspace-cores"
 import Avatares from "./Avatares"
+import VencimentosDoDia from "./VencimentosDoDia"
+import type { VencimentoDoDia as ItemVencimento } from "@/lib/financeiro"
 import {
   DIAS_SEMANA_CURTO,
   DIAS_SEMANA_LONGO,
@@ -81,6 +83,7 @@ export default function CalendarioTarefas({
   contextoFixoId,
   modoCor = "colorido",
   busca = "",
+  vencimentos = {},
 }: {
   modo: "semana" | "mes"
   /** Domingo da semana exibida (modo semana). */
@@ -88,6 +91,9 @@ export default function CalendarioTarefas({
   ano: number
   mes: number
   tarefas: TarefaComRelacoes[]
+  /** Vencimentos do financeiro por dia (AAAA-MM-DD). Ficam fora do
+   *  drag-and-drop: arrastar uma conta não mudaria o vencimento de nada. */
+  vencimentos?: Record<string, ItemVencimento[]>
   semData: TarefaComRelacoes[]
   hoje: string
   meuUsuarioId: string
@@ -501,6 +507,7 @@ export default function CalendarioTarefas({
                     animar={!arrastando}
                     estaConcluida={estaConcluida}
                     onConcluir={marcarConcluida}
+                    vencimentos={vencimentos[iso] ?? []}
                   />
                 ))}
               </div>
@@ -536,6 +543,7 @@ export default function CalendarioTarefas({
                       modoCor={modoCor}
                       estaConcluida={estaConcluida}
                       onConcluir={marcarConcluida}
+                      vencimentos={vencimentos[c.iso] ?? []}
                     />
                   ))}
                 </div>
@@ -580,6 +588,7 @@ const ColunaDia = forwardRef<HTMLDivElement, {
   animar: boolean
   estaConcluida: (id: string) => boolean
   onConcluir: (id: string, valor: boolean) => void
+  vencimentos: ItemVencimento[]
 }>(function ColunaDia({
   iso,
   rotuloDia,
@@ -592,6 +601,7 @@ const ColunaDia = forwardRef<HTMLDivElement, {
   animar,
   estaConcluida,
   onConcluir,
+  vencimentos,
 }, refExterna) {
   const { setNodeRef, isOver } = useDroppable({ id: `${PREFIXO_DIA}${iso}` })
   const dia = Number(iso.slice(8, 10))
@@ -639,6 +649,8 @@ const ColunaDia = forwardRef<HTMLDivElement, {
       </div>
 
       <div className="ws-cal-coluna-corpo" ref={corpoRef}>
+        {/* Fora do SortableContext de propósito — ver VencimentosDoDia. */}
+        <VencimentosDoDia itens={vencimentos} />
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {ids.map((id) => {
             const t = porId.get(id)
@@ -787,6 +799,7 @@ function DiaMes({
   modoCor,
   estaConcluida,
   onConcluir,
+  vencimentos,
 }: {
   iso: string
   dia: number
@@ -797,6 +810,7 @@ function DiaMes({
   modoCor: "colorido" | "mono"
   estaConcluida: (id: string) => boolean
   onConcluir: (id: string, valor: boolean) => void
+  vencimentos: ItemVencimento[]
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `${PREFIXO_DIA}${iso}` })
   const [expandido, setExpandido] = useState(false)
@@ -829,6 +843,7 @@ function DiaMes({
       >
         {dia}
       </span>
+      <VencimentosDoDia itens={vencimentos} compacto />
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {visiveis.map((id) => {
           const t = porId.get(id)

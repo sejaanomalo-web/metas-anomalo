@@ -738,6 +738,90 @@ export async function getDREPeriodo(
 }
 
 // ============================================================
+// Agenda — vencimentos como itens do dia
+// ============================================================
+
+/** Um vencimento como a agenda precisa vê-lo: sem horário, com valor. */
+export interface VencimentoDoDia {
+  id: string
+  descricao: string
+  tipo: TipoLancamento
+  valor: number
+  /** Data pela qual ele aparece na agenda (vencimento efetivo). */
+  vencimento: string
+  atrasado: boolean
+  /** Link que abre a lista já no dia, no eixo de vencimento e com o detalhe. */
+  href: string
+}
+
+/**
+ * Vencimentos em aberto de um intervalo, agrupados por dia.
+ *
+ * Só `previsto`: uma conta paga não é mais compromisso, e continuar
+ * aparecendo na agenda só faria a pessoa conferir duas vezes.
+ *
+ * O `voltar` embutido no link é o que permite ao financeiro oferecer o
+ * caminho de volta — sem ele, quem clica num vencimento cai na lista e perde
+ * a referência de onde veio.
+ */
+export async function listarVencimentosPorDia(
+  de: string,
+  ate: string,
+  voltarPara?: string
+): Promise<Record<string, VencimentoDoDia[]>> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return {}
+
+  const { data, error } = await supabase
+    .from("lancamento_financeiro")
+    .select("id, descricao, tipo, valor, status, data, data_vencimento")
+    .is("deletado_em", null)
+    .eq("status", "previsto")
+    .or(filtroVencimentoPostgREST(de, ate))
+    .limit(LIMITE_LANCAMENTOS)
+
+  if (error) {
+    // A agenda não pode quebrar por causa do financeiro: sem os vencimentos,
+    // ela continua mostrando as tarefas.
+    console.error("[financeiro] listarVencimentosPorDia error", error.message)
+    return {}
+  }
+
+  const hoje = new Date().toISOString().slice(0, 10)
+  const porDia: Record<string, VencimentoDoDia[]> = {}
+
+  for (const l of (data ?? []) as (LancamentoParaRegra & {
+    id: string
+    descricao: string
+  })[]) {
+    const vencimento = vencimentoEfetivo(l)
+    const qs = new URLSearchParams({
+      modo: "dia",
+      de: vencimento,
+      eixo: "vencimento",
+      lanc: l.id,
+    })
+    if (voltarPara) qs.set("voltar", voltarPara)
+
+    const item: VencimentoDoDia = {
+      id: l.id,
+      descricao: l.descricao,
+      tipo: l.tipo,
+      valor: valorNumerico(l.valor),
+      vencimento,
+      atrasado: vencimento < hoje,
+      href: `/dashboard/financeiro/lancamentos?${qs.toString()}`,
+    }
+    ;(porDia[vencimento] ??= []).push(item)
+  }
+
+  for (const lista of Object.values(porDia)) {
+    lista.sort((a, b) => b.valor - a.valor)
+  }
+  return porDia
+}
+
+// ============================================================
 // Categorias — uso, detalhe e evolução
 // ============================================================
 
