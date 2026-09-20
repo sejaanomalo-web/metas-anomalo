@@ -122,16 +122,18 @@ export default function LancamentoDrawer({
   const lancamentoDeRecorrente = editando && !!lancamento?.recorrente_id
 
   /**
-   * Refresh defensivo: router.refresh() + reload duro depois de 250ms.
-   * O reload garante invalidação do Router Cache do Next + Service Worker
-   * PWA — sem ele, usuários relataram que o lançamento criado aparecia
-   * só após hard refresh manual.
+   * Revalidação suave. A Server Action já chamou revalidatePath, então o
+   * servidor devolveu o RSC atualizado na resposta da própria ação;
+   * router.refresh() só repinta a árvore com ele.
+   *
+   * Aqui havia um reload duro do documento. Ele destruía o app inteiro
+   * depois de cada gravação — e no atalho da tela de início, onde não há
+   * barra de navegação, isso aparecia como a tela de splash de volta. O
+   * motivo alegado era o Service Worker, mas public/sw.js não faz cache de
+   * navegação: só trata push e notificationclick.
    */
   function refreshUI() {
     router.refresh()
-    setTimeout(() => {
-      window.location.reload()
-    }, 250)
   }
 
   async function onSubmitVariavel(fd: FormData) {
@@ -231,6 +233,8 @@ export default function LancamentoDrawer({
           background: "var(--surface-1)",
           borderLeft: "0.5px solid rgba(255,255,255,0.10)",
           overflowY: "auto",
+          // Impede o scroll de encadear na página atrás do drawer (iOS).
+          overscrollBehavior: "contain",
           padding: "32px 28px",
           animation: "painel-slide-left 0.22s ease-out",
         }}

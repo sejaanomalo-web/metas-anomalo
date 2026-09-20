@@ -63,9 +63,22 @@ export default function RecorrenteDrawer({
   const editando = !!recorrente
   const contasAtivas = contas.filter((c) => c.ativa)
 
+  /**
+   * Revalidação suave. A Server Action correspondente já chama
+   * revalidatePath, o que invalida a rota no servidor E devolve o RSC novo
+   * na resposta da própria ação — router.refresh() apenas garante que a
+   * árvore atual seja repintada com esse payload.
+   *
+   * Aqui havia um reload duro do documento 250–400ms depois. Ele abortava o
+   * refresh em voo, destruía o documento, rebaixava todo o bundle e
+   * reexecutava o layout inteiro. No app instalado (display: standalone) não
+   * existe barra de navegação, então isso aparecia como a tela de splash de
+   * volta — parecia que o aplicativo tinha fechado sozinho. O motivo alegado
+   * era o cache do Service Worker, mas public/sw.js só trata push e
+   * notificationclick: ele nunca serve HTML, logo nunca serviu HTML velho.
+   */
   function refreshUI() {
     router.refresh()
-    setTimeout(() => window.location.reload(), 250)
   }
 
   async function onSubmit(fd: FormData) {
@@ -125,6 +138,8 @@ export default function RecorrenteDrawer({
           background: "var(--background)",
           borderLeft: "1px solid var(--border)",
           overflowY: "auto",
+          // Impede o scroll de encadear na página atrás do drawer (iOS).
+          overscrollBehavior: "contain",
           padding: "32px 28px",
           animation: "painel-slide-left 0.22s ease-out",
         }}

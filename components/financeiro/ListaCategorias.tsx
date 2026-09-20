@@ -114,14 +114,26 @@ export default function ListaCategorias({
         />
       </div>
 
-      <CategoriaDrawer
-        aberto={drawerAberto}
-        fechar={() => setDrawerAberto(false)}
-        categoria={editando}
-        tipoInicial={tipoNova}
-        coresEmUso={coresEmUso}
-        onPedirExclusao={setExcluindo}
-      />
+      {/* Renderizado só quando aberto, de propósito.
+          O drawer faz `if (!aberto) return null` DEPOIS dos hooks, então ele
+          nunca desmontava: os inicializadores de useState rodavam uma única
+          vez, no primeiro render da página — quando não havia registro
+          nenhum selecionado. Nas aberturas seguintes, tipo/status/conta/
+          categoria/cor continuavam com o valor da vez anterior, enquanto os
+          campos não controlados (descrição, valor, datas) se atualizavam
+          normalmente: o formulário abria metade certo, metade errado.
+          Montar a cada abertura garante estado novo. A animação de entrada
+          continua igual — o painel interno já era criado e destruído. */}
+      {drawerAberto && (
+        <CategoriaDrawer
+          aberto={drawerAberto}
+          fechar={() => setDrawerAberto(false)}
+          categoria={editando}
+          tipoInicial={tipoNova}
+          coresEmUso={coresEmUso}
+          onPedirExclusao={setExcluindo}
+        />
+      )}
 
       {excluindo && (
         <DialogoExcluirCategoria
@@ -130,8 +142,8 @@ export default function ListaCategorias({
           aoConcluir={(mensagem) => {
             setExcluindo(null)
             setAviso(mensagem)
+            // Só refresh: o reload apagava o aviso recém-definido acima.
             router.refresh()
-            setTimeout(() => window.location.reload(), 400)
           }}
         />
       )}

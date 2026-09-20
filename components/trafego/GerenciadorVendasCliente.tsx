@@ -182,6 +182,8 @@ function PainelGerenciador({
           background: "var(--surface-1)",
           borderLeft: "0.5px solid rgba(255,255,255,0.10)",
           overflowY: "auto",
+          // Impede o scroll de encadear na página atrás do drawer (iOS).
+          overscrollBehavior: "contain",
           padding: "32px 28px",
           animation: "painel-slide-left 0.22s ease-out",
         }}

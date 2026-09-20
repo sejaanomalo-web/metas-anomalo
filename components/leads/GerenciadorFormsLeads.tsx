@@ -364,6 +364,8 @@ const painel: React.CSSProperties = {
   padding: 24,
   maxHeight: "88vh",
   overflowY: "auto",
+  // Impede o scroll de encadear na página atrás do drawer (iOS).
+  overscrollBehavior: "contain",
 }
 
 const rotulo: React.CSSProperties = {
