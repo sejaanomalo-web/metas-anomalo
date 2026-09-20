@@ -57,27 +57,44 @@ export default async function CrmPage({
   const inicioJanela = new Date(agora.getFullYear(), agora.getMonth() - 13, 1).toISOString()
   const fimJanela = new Date(agora.getFullYear(), agora.getMonth() + 7, 0).toISOString()
 
-  const [leads, leadsArquivados, instancias, etapas, etiquetas, atividades, proximas, tipos, totalArquivados] =
-    await Promise.all([
-      listarLeadsInbox(),
-      verArquivados ? listarLeadsInbox({ arquivados: true }) : Promise.resolve([]),
-      listarInstancias(),
-      listarEtapas(),
-      listarEtiquetas(),
-      listarAtividadesCalendario(inicioJanela, fimJanela),
-      listarProximasAtividades(),
-      listarTiposAtividade(),
-      contarLeadsArquivados(),
-    ])
+  // `leadId` sobe para antes do Promise.all: ele vem de searchParams e não
+  // depende de consulta nenhuma. Antes, `buscarLead` ficava depois do bloco
+  // e virava uma SEGUNDA onda serial — ou seja, abrir uma conversa
+  // rebuscava o inbox inteiro e 20 meses de agenda, e só então ia atrás da
+  // conversa que de fato mudou. Num inbox de WhatsApp esse é o clique mais
+  // repetido do sistema.
+  const leadId = aba === "conversas" ? searchParams.lead : undefined
+
+  const [
+    leads,
+    leadsArquivados,
+    instancias,
+    etapas,
+    etiquetas,
+    atividades,
+    proximas,
+    tipos,
+    totalArquivados,
+    lead,
+  ] = await Promise.all([
+    listarLeadsInbox(),
+    verArquivados ? listarLeadsInbox({ arquivados: true }) : Promise.resolve([]),
+    listarInstancias(),
+    listarEtapas(),
+    listarEtiquetas(),
+    listarAtividadesCalendario(inicioJanela, fimJanela),
+    listarProximasAtividades(),
+    listarTiposAtividade(),
+    contarLeadsArquivados(),
+    // Mesmo padrão condicional já usado acima em `verArquivados`.
+    leadId ? buscarLead(leadId) : Promise.resolve(null),
+  ])
   // Kanban/Calendário sempre usam os ativos — "Ver arquivados" é só uma
   // lente da lista de Conversas, não afeta as outras abas.
   const leadsConversas = verArquivados ? leadsArquivados : leads
 
   const corPorEmpresa: Record<string, string> = {}
   for (const inst of instancias) corPorEmpresa[inst.empresa_slug] = inst.cor
-
-  const leadId = aba === "conversas" ? searchParams.lead : undefined
-  const lead = leadId ? await buscarLead(leadId) : null
 
   return (
     <main
