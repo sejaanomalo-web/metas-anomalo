@@ -132,6 +132,19 @@ export default function AppShell({
     setHydrated(true)
   }, [])
 
+  /**
+   * Mantém --rail-width no :root em sincronia com o estado.
+   *
+   * O valor inicial é escrito por um script inline no <head> (app/layout.tsx),
+   * antes da primeira pintura — é isso que evita o rail nascer recolhido e
+   * pular para 240px depois da hidratação. Aqui só acompanhamos as mudanças
+   * posteriores (clique no toggle, fechamento automático no mobile).
+   */
+  useEffect(() => {
+    const largura = expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
+    document.documentElement.style.setProperty("--rail-width", `${largura}px`)
+  }, [expandido])
+
   // Em mobile, ao mudar de rota fecha o drawer automaticamente — é o
   // padrão esperado de menus tipo hambúrguer.
   useEffect(() => {
@@ -156,7 +169,6 @@ export default function AppShell({
   }
 
   const value: SidebarCtx = { expandido, toggle, setExpandido }
-  const railWidth = hydrated && expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
 
   return (
     <SidebarContext.Provider value={value}>
@@ -201,9 +213,10 @@ export default function AppShell({
       <div
         className="app-main"
         style={{
-          // CSS var permite que a regra mobile sobrescreva pra 0 sem
-          // que precisemos checar matchMedia no React.
-          ["--rail-width" as string]: `${railWidth}px`,
+          // --rail-width NÃO é escrita aqui: ela vive no :root, definida pelo
+          // script inline do <head> antes da primeira pintura e mantida pelo
+          // efeito acima. Um valor inline neste elemento competiria com o do
+          // :root e traria de volta o pulo na hidratação.
           // dvh (não vh): em mobile, vh usa a viewport "grande" (barra do
           // navegador recolhida) — quando a barra está visível (o estado
           // mais comum), min-height:100vh deixa esse container mais alto do
@@ -228,7 +241,14 @@ function SidebarRail({
   usuarioAtual: UsuarioSessao
 }) {
   const pathname = usePathname()
-  const width = expandido ? RAIL_EXPANDED : RAIL_COLLAPSED
+  // A largura vem da MESMA fonte que a margem do conteúdo: a variável
+  // --rail-width no :root, escrita pelo script inline do <head> antes da
+  // primeira pintura. Derivar de `expandido` aqui faria o rail nascer com
+  // 72px enquanto o conteúdo já reservava 240px — um vão visível por um
+  // quadro. Os RÓTULOS continuam dependendo de `expandido` (que espera a
+  // hidratação): eles aparecem dentro de uma largura que já está certa, o
+  // que é só pintura, e não reflow da página inteira.
+  const width = "var(--rail-width, 72px)"
 
   const dashboardAtivo = pathname === "/dashboard"
   const trafegoAtivo = ehRotaTrafego(pathname)
