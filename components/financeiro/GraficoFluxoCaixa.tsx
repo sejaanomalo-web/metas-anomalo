@@ -11,19 +11,12 @@ import {
   Tooltip,
   Legend,
 } from "recharts"
-import type { Mes } from "@/lib/data"
 import { formatBRL } from "@/lib/data"
-
-interface PontoFluxo {
-  mes: Mes
-  receitas: number
-  despesas: number
-  resultado: number
-}
+import type { PontoFluxoMensal } from "@/lib/financeiro"
 
 interface TooltipProps {
   active?: boolean
-  payload?: { name: string; value: number; color?: string; payload?: PontoFluxo }[]
+  payload?: { name: string; value: number; color?: string; payload?: PontoFluxoMensal }[]
   label?: string
 }
 
@@ -64,7 +57,7 @@ export default function GraficoFluxoCaixa({
   dados,
   ano,
 }: {
-  dados: PontoFluxo[]
+  dados: PontoFluxoMensal[]
   ano: number
 }) {
   return (
@@ -89,18 +82,20 @@ export default function GraficoFluxoCaixa({
           FLUXO DE CAIXA · {ano}
         </p>
         <h3 style={{ fontSize: 18, marginTop: 4 }}>Receitas, despesas e resultado mensal</h3>
+        <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>
+          Só lançamentos realizados, no mês da competência — a mesma regra do DRE.
+        </p>
       </div>
       <div style={{ width: "100%", height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={dados} margin={{ top: 16, right: 8, bottom: 0, left: 8 }}>
             <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" vertical={false} />
             <XAxis
-              dataKey="mes"
+              dataKey="rotulo"
               stroke="var(--muted-foreground)"
               tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
               tickLine={false}
               axisLine={{ stroke: "var(--border)" }}
-              tickFormatter={(v: string) => v.slice(0, 3)}
             />
             <YAxis
               stroke="var(--muted-foreground)"

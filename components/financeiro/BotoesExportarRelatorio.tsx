@@ -1,17 +1,12 @@
 "use client"
 
-import type { DREMes } from "@/lib/financeiro"
+import type { DREMes, PontoFluxoMensal } from "@/lib/financeiro"
+import { rotuloMes } from "@/lib/financeiro"
 import type { Mes } from "@/lib/data"
 
-interface PontoFluxo {
-  mes: Mes
-  receitas: number
-  despesas: number
-  resultado: number
-}
-
 interface ProjecaoPonto {
-  mes: Mes
+  mes: number
+  rotulo: string
   receitas: number
   despesas: number
   resultado: number
@@ -19,7 +14,7 @@ interface ProjecaoPonto {
 
 interface Props {
   dre: DREMes
-  fluxo: PontoFluxo[]
+  fluxo: PontoFluxoMensal[]
   projecao: ProjecaoPonto[]
   mes: Mes
   ano: number
@@ -125,7 +120,7 @@ function linhaCSV(...campos: (string | number)[]): string {
 
 function montarCSV(
   dre: DREMes,
-  fluxo: PontoFluxo[],
+  fluxo: PontoFluxoMensal[],
   projecao: ProjecaoPonto[],
   periodoLabel: string,
   ano: number
@@ -172,7 +167,7 @@ function montarCSV(
     linhas.push(linhaCSV("Mês", "Receita projetada (R$)", "Despesa projetada (R$)", "Resultado (R$)"))
     for (const p of projecao) {
       linhas.push(
-        linhaCSV(p.mes, p.receitas.toFixed(2), p.despesas.toFixed(2), p.resultado.toFixed(2))
+        linhaCSV(p.rotulo, p.receitas.toFixed(2), p.despesas.toFixed(2), p.resultado.toFixed(2))
       )
     }
     linhas.push("")
@@ -183,7 +178,7 @@ function montarCSV(
   linhas.push(linhaCSV("Mês", "Receitas (R$)", "Despesas (R$)", "Resultado (R$)"))
   for (const p of fluxo) {
     linhas.push(
-      linhaCSV(p.mes, p.receitas.toFixed(2), p.despesas.toFixed(2), p.resultado.toFixed(2))
+      linhaCSV(rotuloMes(p.mes), p.receitas.toFixed(2), p.despesas.toFixed(2), p.resultado.toFixed(2))
     )
   }
   // Totais do ano

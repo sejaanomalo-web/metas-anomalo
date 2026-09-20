@@ -7,11 +7,13 @@ import { parseNumeroForm } from "./parse-numero"
 import { type Mes } from "./data"
 import {
   mesNumero,
+  rangeDoMesNumISO,
   type TipoLancamento,
   type StatusLancamento,
   type TipoConta,
   type Periodicidade,
 } from "./financeiro"
+import { recorrentesAMaterializar } from "./financeiro-regras"
 
 export interface ResultadoFinanceiro {
   ok: boolean
@@ -500,62 +502,109 @@ export async function excluirRecorrenteAction(id: string): Promise<ResultadoFina
 // MATERIALIZAÇÃO DE RECORRENTES
 // ============================================================
 
-/**
- * Server action chamável do client (com auth). Wrapper sobre
- * materializarRecorrentesDoMes que evita o round-trip HTTP via
- * /api/financeiro/materializar (que dependia de cookie de sessão
- * que o Service Worker às vezes intercepta/bloqueia).
- *
- * Os drawers de Lançamento e Recorrente chamam essa direto.
- */
-export async function materializarMesAction(
-  mes: Mes,
-  ano: number
-): Promise<{ ok: boolean; criados: number; erro?: string }> {
-  const { erro } = await exigirPermissao()
-  if (erro) return { ok: false, criados: 0, erro }
-  return materializarRecorrentesDoMes(mes, ano)
+export interface ResultadoMaterializacao {
+  ok: boolean
+  criados: number
+  erro?: string
 }
 
 /**
- * Gera os lancamentos previstos do mês/ano informado para todos os
- * recorrentes ativos. Idempotente: antes de inserir, verifica se já
- * existe lançamento com (recorrente_id, ano, mes). Chamado por cron
- * mensal e também via endpoint admin manual.
+ * Server action chamável do client (com auth). Wrapper sobre
+ * materializarRecorrentesDoPeriodo que evita o round-trip HTTP via
+ * /api/financeiro/materializar (que dependia de cookie de sessão que o
+ * Service Worker às vezes intercepta/bloqueia).
  *
- * Retorna quantos lançamentos foram criados.
+ * `mes` é o mês do CALENDÁRIO (1–12), não o tipo `Mes`: gerar os recorrentes
+ * de janeiro precisa ser possível.
  */
+export async function materializarPeriodoAction(
+  ano: number,
+  mes: number
+): Promise<ResultadoMaterializacao> {
+  const { erro } = await exigirPermissao()
+  if (erro) return { ok: false, criados: 0, erro }
+  return materializarRecorrentesDoPeriodo(ano, mes)
+}
+
+/** Forma antiga, por nome de mês. Mantida para os call-sites existentes. */
+export async function materializarMesAction(
+  mes: Mes,
+  ano: number
+): Promise<ResultadoMaterializacao> {
+  return materializarPeriodoAction(ano, mesNumero(mes))
+}
+
+/** Idem, sem checagem de permissão (uso interno/cron). */
 export async function materializarRecorrentesDoMes(
   mes: Mes,
   ano: number
-): Promise<{ ok: boolean; criados: number; erro?: string }> {
+): Promise<ResultadoMaterializacao> {
+  return materializarRecorrentesDoPeriodo(ano, mesNumero(mes))
+}
+
+/**
+ * Gera os lançamentos previstos de um mês para todos os recorrentes ativos.
+ *
+ * Quem decide o QUE gerar e em QUE DIA é `recorrentesAMaterializar`
+ * (lib/financeiro-regras.ts) — função pura, coberta por teste, inclusive nos
+ * casos de borda que sempre mordem: dia 31 em fevereiro, recorrente já
+ * encerrado, e rodar duas vezes o mesmo mês.
+ *
+ * Idempotência em duas camadas: a consulta dos já gerados (aqui) e o índice
+ * único parcial no banco (migração 20260920), que cobre o caso de dois
+ * cliques simultâneos passarem juntos pela consulta. Por isso o erro 23505 é
+ * tratado como "já existe" e não como falha.
+ *
+ * Retorna quantos lançamentos foram criados.
+ */
+export async function materializarRecorrentesDoPeriodo(
+  ano: number,
+  mes: number
+): Promise<ResultadoMaterializacao> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, criados: 0, erro: "supabase_indisponivel" }
+  if (!Number.isInteger(mes) || mes < 1 || mes > 12) {
+    return { ok: false, criados: 0, erro: "Mês inválido." }
+  }
 
-  // mesNumero retorna o número do calendário (Abril=4, Maio=5, ...).
-  // Não confundir com MESES.indexOf(mes)+1 que dá o índice no array
-  // (Abril=1, Maio=2) — esse era o bug: queries filtravam por mês
-  // errado e nunca encontravam recorrentes elegíveis.
-  const mesNum = mesNumero(mes)
-  if (!mesNum || mesNum < 1) return { ok: false, criados: 0, erro: "Mes inválido." }
+  const { inicio, fim } = rangeDoMesNumISO(ano, mes)
 
-  const inicio = `${ano}-${String(mesNum).padStart(2, "0")}-01`
-  const ultimoDia = new Date(ano, mesNum, 0).getDate()
-  const fim = `${ano}-${String(mesNum).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`
-
-  // 1. Recorrentes ativos que cobrem o mês alvo.
-  const { data: recs } = await supabase
+  // 1. Recorrentes ativos que podem cobrir o mês. O filtro fino (periodicidade,
+  //    dia, início/fim) é da função pura — aqui só evitamos trazer a tabela toda.
+  const { data: recs, error: errRecs } = await supabase
     .from("pagamento_recorrente")
-    .select("id, tipo, valor, categoria_id, conta_id, periodicidade, dia_vencimento, inicio, fim, nome, status_padrao")
+    .select(
+      "id, tipo, valor, categoria_id, conta_id, periodicidade, dia_vencimento, inicio, fim, nome, ativo"
+    )
     .eq("ativo", true)
     .lte("inicio", fim)
     .or(`fim.is.null,fim.gte.${inicio}`)
 
+  if (errRecs) {
+    console.error("[financeiro] materializar recorrentes error", errRecs.message)
+    return { ok: false, criados: 0, erro: errRecs.message }
+  }
   if (!recs || recs.length === 0) return { ok: true, criados: 0 }
 
-  // 2. Para cada recorrente, checar se já existe lancamento no mês (idempotência).
-  let criados = 0
-  for (const rec of recs as {
+  // 2. Quem já tem lançamento no mês (uma consulta só, não uma por recorrente).
+  const { data: existentes, error: errExist } = await supabase
+    .from("lancamento_financeiro")
+    .select("recorrente_id")
+    .not("recorrente_id", "is", null)
+    .gte("data", inicio)
+    .lte("data", fim)
+    .is("deletado_em", null)
+
+  if (errExist) {
+    console.error("[financeiro] materializar existentes error", errExist.message)
+    return { ok: false, criados: 0, erro: errExist.message }
+  }
+
+  const jaGerados = ((existentes ?? []) as { recorrente_id: string }[]).map(
+    (e) => e.recorrente_id
+  )
+
+  type RecRow = {
     id: string
     tipo: TipoLancamento
     valor: number
@@ -566,32 +615,20 @@ export async function materializarRecorrentesDoMes(
     inicio: string
     fim: string | null
     nome: string
-    status_padrao: "previsto" | "realizado"
-  }[]) {
-    // Só periodicidade=mensal entra no MVP (anual/semanal viram refinamento depois).
-    if (rec.periodicidade !== "mensal") continue
-    if (!rec.dia_vencimento) continue
+    ativo: boolean
+  }
 
-    const { data: existente } = await supabase
-      .from("lancamento_financeiro")
-      .select("id")
-      .eq("recorrente_id", rec.id)
-      .gte("data", inicio)
-      .lte("data", fim)
-      .is("deletado_em", null)
-      .maybeSingle()
+  const aCriar = recorrentesAMaterializar(recs as RecRow[], jaGerados, ano, mes)
+  if (aCriar.length === 0) return { ok: true, criados: 0 }
 
-    if (existente) continue
-
-    // Clampa dia ao último dia do mês se passar (ex.: dia 31 em fevereiro).
-    const diaEfetivo = Math.min(rec.dia_vencimento, ultimoDia)
-    const dataLanc = `${ano}-${String(mesNum).padStart(2, "0")}-${String(diaEfetivo).padStart(2, "0")}`
-
-    // Recorrente materializa SEMPRE como previsto (sem data_pagamento).
-    // Aparece em "Próximos vencimentos" e só vira realizado quando o
-    // usuário marca como pago. (status_padrao foi descontinuado.)
+  let criados = 0
+  for (const { recorrente: rec, data: dataLanc } of aCriar) {
+    // Nasce PREVISTO e sem data de pagamento: aparece em "Vencimentos em
+    // aberto" e só entra no caixa quando alguém marcar como pago.
+    // Competência e vencimento coincidem — é uma conta do mês.
     const { error: errInsert } = await supabase.from("lancamento_financeiro").insert({
       data: dataLanc,
+      data_vencimento: dataLanc,
       data_pagamento: null,
       tipo: rec.tipo,
       valor: rec.valor,
@@ -599,10 +636,14 @@ export async function materializarRecorrentesDoMes(
       conta_id: rec.conta_id,
       descricao: rec.nome,
       recorrente_id: rec.id,
+      origem: "Recorrente",
       status: "previsto",
     })
 
     if (errInsert) {
+      // 23505 = o índice único pegou uma corrida. O lançamento existe, que é
+      // o resultado desejado — não é erro.
+      if (errInsert.code === "23505") continue
       console.error("[financeiro] materializar insert error", errInsert.message, rec.id)
       continue
     }

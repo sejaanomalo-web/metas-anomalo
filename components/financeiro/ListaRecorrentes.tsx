@@ -3,20 +3,25 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import RecorrenteDrawer from "./RecorrenteDrawer"
-import { materializarMesAction } from "@/lib/financeiro-actions"
+import { materializarPeriodoAction } from "@/lib/financeiro-actions"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
   PagamentoRecorrente,
 } from "@/lib/financeiro"
 import { formatBRL, type Mes } from "@/lib/data"
+import { rotuloMes } from "@/lib/financeiro"
 
 interface Props {
   recorrentes: PagamentoRecorrente[]
   categorias: CategoriaFinanceira[]
   contas: ContaFinanceira[]
+  /** Rótulo do mês (só UI). */
   mesAtual: Mes
   anoAtual: number
+  /** Mês do CALENDÁRIO (1–12) — é ele que vai pro banco. Ver §3.2: o tipo
+   *  `Mes` cobre só Abril–Dezembro e faria janeiro virar abril. */
+  mesNum: number
 }
 
 export default function ListaRecorrentes({
@@ -25,7 +30,9 @@ export default function ListaRecorrentes({
   contas,
   mesAtual,
   anoAtual,
+  mesNum,
 }: Props) {
+  const rotuloPeriodo = `${rotuloMes(mesNum)}/${anoAtual}`
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
@@ -45,15 +52,15 @@ export default function ListaRecorrentes({
     startTransition(async () => {
       // Chamada direta de server action (sem fetch HTTP) — mais
       // confiável em PWA porque elimina dependência de cookie/SW.
-      const matResult = await materializarMesAction(mesAtual, anoAtual)
+      const matResult = await materializarPeriodoAction(anoAtual, mesNum)
       if (!matResult.ok) {
         setErro(`Erro: ${matResult.erro ?? "falha desconhecida"}`)
         return
       }
       setSucesso(
         matResult.criados === 0
-          ? `Nenhum lançamento novo (todos já existem para ${mesAtual}/${anoAtual}).`
-          : `${matResult.criados} lançamento(s) criado(s) para ${mesAtual}/${anoAtual}.`
+          ? `Nenhum lançamento novo (todos já existem para ${rotuloPeriodo}).`
+          : `${matResult.criados} lançamento(s) criado(s) para ${rotuloPeriodo}.`
       )
       router.refresh()
       setTimeout(() => window.location.reload(), 400)
@@ -79,7 +86,7 @@ export default function ListaRecorrentes({
           className="btn-gold-outline"
           style={{ opacity: pending ? 0.6 : 1 }}
         >
-          {pending ? "Gerando..." : `Gerar lançamentos de ${mesAtual}/${anoAtual}`}
+          {pending ? "Gerando..." : `Gerar lançamentos de ${rotuloPeriodo}`}
         </button>
         <button type="button" onClick={abrirNovo} className="btn-gold-filled">
           + Novo recorrente

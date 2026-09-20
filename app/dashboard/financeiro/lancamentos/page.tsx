@@ -104,8 +104,8 @@ export default async function FinanceiroLancamentosPage({
         categorias={categorias}
         contas={contas}
         empresas={empresasUI}
-        mesAtual={mes}
-        anoAtual={ano}
+        mesNum={Number(periodo.de.slice(5, 7))}
+        anoAtual={Number(periodo.de.slice(0, 4))}
       />
     </main>
   )

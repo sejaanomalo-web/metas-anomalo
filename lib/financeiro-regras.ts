@@ -387,6 +387,52 @@ export function recorrentesAMaterializar<T extends RecorrenteParaRegra & { id: s
 }
 
 // ============================================================
+// Meses — calendário de verdade, 1 a 12
+// ============================================================
+
+/**
+ * O resto do sistema usa `Mes` (lib/data.ts), que cobre só Abril–Dezembro:
+ * é a janela operacional das metas, e janeiro/fevereiro/março caem em Abril
+ * como menor opção disponível.
+ *
+ * No financeiro isso não serve. O caixa existe nos doze meses, e o fallback
+ * silencioso fazia o cron mensal do dia 1º materializar ABRIL quando rodasse
+ * em janeiro. Por isso o módulo trabalha internamente com mês numérico e usa
+ * `Mes` apenas como rótulo de UI, quando a tela pede.
+ */
+export const NOMES_MES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+] as const
+
+export const NOMES_MES_CURTO = [
+  "jan", "fev", "mar", "abr", "mai", "jun",
+  "jul", "ago", "set", "out", "nov", "dez",
+] as const
+
+/** Nome do mês (1–12). Fora da faixa devolve string vazia em vez de quebrar. */
+export function rotuloMes(mes: number): string {
+  return NOMES_MES[mes - 1] ?? ""
+}
+
+export function rotuloMesCurto(mes: number): string {
+  return NOMES_MES_CURTO[mes - 1] ?? ""
+}
+
+/** Ano e mês (1–12) de uma data ISO, sem passar por Date (e sem fuso). */
+export function anoMesDeISO(iso: string): { ano: number; mes: number } {
+  return {
+    ano: Number(iso.slice(0, 4)),
+    mes: Number(iso.slice(5, 7)),
+  }
+}
+
+/** Chave "AAAA-MM" — usada para agrupar séries mensais. */
+export function chaveMes(iso: string): string {
+  return iso.slice(0, 7)
+}
+
+// ============================================================
 // Cores das categorias
 // ============================================================
 

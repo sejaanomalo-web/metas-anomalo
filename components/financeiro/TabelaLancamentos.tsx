@@ -34,14 +34,14 @@ export default function TabelaLancamentos({
   categorias,
   contas,
   empresas,
-  mesAtual,
+  mesNum,
   anoAtual,
 }: {
   lancamentos: LancamentoFinanceiro[]
   categorias: CategoriaFinanceira[]
   contas: ContaFinanceira[]
   empresas: Empresa[]
-  mesAtual?: string
+  mesNum?: number
   anoAtual?: number
 }) {
   const router = useRouter()
@@ -277,7 +277,7 @@ export default function TabelaLancamentos({
         contas={contas}
         empresas={empresas}
         lancamento={editando}
-        mesAtual={mesAtual}
+        mesNum={mesNum}
         anoAtual={anoAtual}
       />
     </>

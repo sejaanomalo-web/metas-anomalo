@@ -7,9 +7,9 @@ import {
   atualizarLancamentoAction,
   excluirLancamentoAction,
   salvarRecorrenteAction,
-  materializarMesAction,
+  materializarPeriodoAction,
 } from "@/lib/financeiro-actions"
-import { mesValido } from "@/lib/data"
+import { rotuloMes } from "@/lib/financeiro"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
@@ -33,9 +33,9 @@ interface Props {
   contas: ContaFinanceira[]
   empresas: Empresa[]
   lancamento?: LancamentoFinanceiro | null
-  /** Mês/ano vigentes — usados pra materializar lançamentos do recorrente
-   *  recém-criado no mês corrente da listagem. */
-  mesAtual?: string
+  /** Mês (1–12) e ano vigentes — usados pra materializar os lançamentos do
+   *  recorrente recém-criado já no mês que a listagem está mostrando. */
+  mesNum?: number
   anoAtual?: number
 }
 
@@ -48,7 +48,7 @@ export default function LancamentoDrawer({
   contas,
   empresas,
   lancamento,
-  mesAtual,
+  mesNum,
   anoAtual,
 }: Props) {
   const router = useRouter()
@@ -150,12 +150,11 @@ export default function LancamentoDrawer({
     // Chamada direta de server action (sem fetch HTTP) — antes tava
     // dependendo de POST /api/financeiro/materializar e o cookie de
     // sessão às vezes não chegava (PWA/SW intercepta).
-    if (mesAtual && anoAtual) {
-      const mesEnum = mesValido(mesAtual)
-      const matResult = await materializarMesAction(mesEnum, anoAtual)
+    if (mesNum && anoAtual) {
+      const matResult = await materializarPeriodoAction(anoAtual, mesNum)
       if (matResult.ok) {
         setSucesso(
-          `Recorrente criado. ${matResult.criados} lançamento(s) gerado(s) pra ${mesAtual}/${anoAtual}.`
+          `Recorrente criado. ${matResult.criados} lançamento(s) gerado(s) pra ${rotuloMes(mesNum)}/${anoAtual}.`
         )
       } else if (matResult.erro) {
         // Recorrente já salvou — só sinaliza problema de materialização.

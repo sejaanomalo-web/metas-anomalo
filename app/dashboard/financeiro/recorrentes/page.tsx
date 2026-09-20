@@ -65,7 +65,8 @@ export default async function RecorrentesPage({
         categorias={categorias}
         contas={contas}
         mesAtual={mes}
-        anoAtual={ano}
+        anoAtual={Number(periodo.de.slice(0, 4))}
+        mesNum={Number(periodo.de.slice(5, 7))}
       />
     </main>
   )
