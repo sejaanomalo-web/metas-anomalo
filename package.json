@@ -6,6 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test lib/*.test.ts",
+    "test:financeiro": "node --import tsx --test lib/financeiro-regras.test.ts",
     "lint": "next lint",
     "test:relatorios": "tsx scripts/test-relatorios.ts"
   },

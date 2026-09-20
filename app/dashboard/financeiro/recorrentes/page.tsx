@@ -32,7 +32,7 @@ export default async function RecorrentesPage({
   ])
 
   return (
-    <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
       <div>
         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)" }}>
           Financeiro · Recorrentes
@@ -65,7 +65,8 @@ export default async function RecorrentesPage({
         categorias={categorias}
         contas={contas}
         mesAtual={mes}
-        anoAtual={ano}
+        anoAtual={Number(periodo.de.slice(0, 4))}
+        mesNum={Number(periodo.de.slice(5, 7))}
       />
     </main>
   )

@@ -1,15 +1,32 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import LancamentoDrawer from "./LancamentoDrawer"
-import { marcarRealizadoAction } from "@/lib/financeiro-actions"
+import LancamentoDetalhe from "./LancamentoDetalhe"
+import {
+  excluirLancamentoAction,
+  marcarRealizadoAction,
+} from "@/lib/financeiro-actions"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
   LancamentoFinanceiro,
 } from "@/lib/financeiro"
-import { statusRotulo } from "@/lib/financeiro"
+import {
+  corDaCategoria,
+  dataDoEixo,
+  estaAtrasado,
+  rotulosDaSituacao,
+  rotuloSituacaoCurto,
+  somarLancamentos,
+  statusRotuloComAtraso,
+  valorNumerico,
+  SITUACOES,
+  type EixoPeriodo,
+  type SituacaoFinanceira,
+} from "@/lib/financeiro-regras"
 import { formatBRL } from "@/lib/data"
 
 interface Empresa {
@@ -23,25 +40,47 @@ function formatDataBR(iso: string | null): string {
   return `${d}/${m}/${y.slice(2)}`
 }
 
-function corStatus(status: string): string {
-  if (status === "realizado") return "var(--success)"
-  if (status === "previsto") return "var(--warning)"
+function corStatus(rotulo: string): string {
+  if (rotulo === "Realizado") return "var(--success)"
+  if (rotulo === "Atrasado") return "var(--destructive)"
+  if (rotulo === "Previsto") return "var(--warning)"
   return "var(--muted-foreground)"
 }
 
 export default function TabelaLancamentos({
   lancamentos,
+  truncado,
+  limite,
   categorias,
   contas,
   empresas,
-  mesAtual,
+  situacao,
+  eixo,
+  hrefsSituacao,
+  lancDeepLink,
+  prefill,
+  mesNum,
   anoAtual,
 }: {
   lancamentos: LancamentoFinanceiro[]
+  truncado: boolean
+  limite: number
   categorias: CategoriaFinanceira[]
   contas: ContaFinanceira[]
   empresas: Empresa[]
-  mesAtual?: string
+  situacao: SituacaoFinanceira
+  eixo: EixoPeriodo
+  hrefsSituacao: Record<SituacaoFinanceira, string>
+  /** ?lanc=<id> abre o detalhe daquele lançamento UMA vez. */
+  lancDeepLink: string | null
+  /** Vindo da Conferência com o Sentinela: abre o formulário já preenchido. */
+  prefill?: {
+    tipo?: "receita" | "despesa"
+    valor?: number
+    descricao?: string
+    empresa_cliente?: string
+  } | null
+  mesNum?: number
   anoAtual?: number
 }) {
   const router = useRouter()
@@ -49,25 +88,100 @@ export default function TabelaLancamentos({
   const [, startTransition] = useTransition()
   const [drawerAberto, setDrawerAberto] = useState(false)
   const [editando, setEditando] = useState<LancamentoFinanceiro | null>(null)
+  const [detalhe, setDetalhe] = useState<LancamentoFinanceiro | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
 
-  const catById = new Map(categorias.map((c) => [c.id, c]))
-  const contaById = new Map(contas.map((c) => [c.id, c]))
+  // Data de hoje calculada uma vez por render, e não dentro do map: com uma
+  // tabela grande, `new Date()` por linha faria duas linhas vizinhas usarem
+  // dias diferentes na virada da meia-noite.
+  const hoje = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
-  /** Marca um lançamento previsto como realizado em 1 clique.
-   *  Usa a data de hoje como data_pagamento. Pra escolher outra
-   *  data, abrir Editar. */
+  const catById = useMemo(
+    () => new Map(categorias.map((c) => [c.id, c])),
+    [categorias]
+  )
+  const contaById = useMemo(
+    () => new Map(contas.map((c) => [c.id, c])),
+    [contas]
+  )
+
+  // O totalizador soma EXATAMENTE as linhas que estão na tela, com a mesma
+  // função pura dos testes. É isso que impede o total de divergir da lista.
+  const totais = useMemo(
+    () => somarLancamentos(lancamentos, situacao),
+    [lancamentos, situacao]
+  )
+  const rotulos = rotulosDaSituacao(situacao)
+
+  // Prefill da Conferência: abre o formulário já preenchido, uma vez só.
+  const prefillUsado = useRef(false)
+  useEffect(() => {
+    if (prefillUsado.current || !prefill) return
+    prefillUsado.current = true
+    setEditando(null)
+    setDrawerAberto(true)
+  }, [prefill])
+
+  // Deep link: abre o detalhe uma única vez. Sem o ref, fechar o painel faria
+  // o efeito reabrir na renderização seguinte, e o painel ficaria "grudado".
+  const deepLinkUsado = useRef(false)
+  useEffect(() => {
+    if (deepLinkUsado.current) return
+    if (!lancDeepLink) return
+    const alvo = lancamentos.find((l) => l.id === lancDeepLink)
+    if (!alvo) return
+    deepLinkUsado.current = true
+    setDetalhe(alvo)
+  }, [lancDeepLink, lancamentos])
+
+  /**
+   * Refresh defensivo: router.refresh() + reload duro. O reload garante
+   * invalidação do Router Cache do Next + Service Worker do PWA — sem ele,
+   * o lançamento alterado só aparecia após refresh manual.
+   */
+  function refreshUI() {
+    router.refresh()
+    setTimeout(() => window.location.reload(), 250)
+  }
+
+  /** Marca um previsto como realizado em 1 clique, com a data de hoje.
+   *  Pra escolher outra data, abrir Editar. */
   function marcarPago(id: string) {
     setPendingId(id)
-    const hoje = new Date().toISOString().slice(0, 10)
+    setErro(null)
     startTransition(async () => {
       const r = await marcarRealizadoAction(id, hoje)
       setPendingId(null)
       if (!r.ok) {
-        alert(`Erro: ${r.erro ?? "falha"}`)
+        setErro(r.erro ?? "Não foi possível marcar como realizado.")
         return
       }
-      router.refresh()
-      setTimeout(() => window.location.reload(), 250)
+      setAviso("Marcado como realizado.")
+      refreshUI()
+    })
+  }
+
+  function excluir(l: LancamentoFinanceiro) {
+    if (
+      !confirm(
+        `Excluir "${l.descricao}" (${formatBRL(valorNumerico(l.valor))})?\n\n` +
+          "O lançamento sai das listas e dos totais, mas continua guardado no histórico."
+      )
+    ) {
+      return
+    }
+    setPendingId(l.id)
+    setErro(null)
+    startTransition(async () => {
+      const r = await excluirLancamentoAction(l.id)
+      setPendingId(null)
+      if (!r.ok) {
+        setErro(r.erro ?? "Não foi possível excluir.")
+        return
+      }
+      setAviso("Lançamento excluído.")
+      refreshUI()
     })
   }
 
@@ -76,19 +190,120 @@ export default function TabelaLancamentos({
     setDrawerAberto(true)
   }
   function editar(l: LancamentoFinanceiro) {
+    setDetalhe(null)
     setEditando(l)
     setDrawerAberto(true)
   }
 
+  const colunaData = eixo === "vencimento" ? "Vencimento" : "Data"
+
   return (
     <>
+      {/* Situação: o que os totais somam (R1/R2) */}
       <div
-        className="glass"
         style={{
-          padding: 0,
-          overflow: "hidden",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
         }}
       >
+        <p style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          Situação dos totais
+        </p>
+        <div style={{ display: "flex", gap: 4, padding: 4, background: "var(--surface-1)", borderRadius: 10 }}>
+          {SITUACOES.map((s) => {
+            const ativo = s === situacao
+            return (
+              <Link
+                key={s}
+                href={hrefsSituacao[s]}
+                title={rotulosDaSituacao(s).dica}
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
+                  borderRadius: 7,
+                  background: ativo ? "var(--accent)" : "transparent",
+                  color: ativo ? "#000" : "var(--text-2)",
+                  textDecoration: "none",
+                }}
+              >
+                {rotuloSituacaoCurto(s)}
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Totalizadores */}
+      <section
+        className="grid grid-cols-1 md:grid-cols-3"
+        style={{ gap: 12, marginTop: 12 }}
+      >
+        <Totalizador rotulo={rotulos.entrada} valor={totais.entradas} cor="var(--success)" />
+        <Totalizador rotulo={rotulos.saida} valor={totais.saidas} cor="var(--destructive)" />
+        <Totalizador
+          rotulo={rotulos.saldo}
+          valor={totais.saldo}
+          cor={totais.saldo >= 0 ? "var(--foreground)" : "var(--destructive)"}
+          destaque
+        />
+      </section>
+
+      {eixo === "vencimento" && (
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--text-3)",
+            marginTop: 10,
+            lineHeight: 1.5,
+          }}
+        >
+          Recorte por <strong>vencimento</strong>: a lista mostra o que vence no
+          período, pago ou não — inclusive o que já foi pago adiantado.
+        </p>
+      )}
+
+      {truncado && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 12,
+            background: "rgba(234, 179, 8, 0.10)",
+            border: "0.5px solid rgba(234, 179, 8, 0.40)",
+            borderRadius: 8,
+            fontSize: 12,
+            color: "var(--text-1)",
+            lineHeight: 1.5,
+          }}
+        >
+          A consulta parou em <strong>{limite} lançamentos</strong>. Os totais
+          acima somam só o que está carregado — há mais linhas no período.
+          Estreite o período ou use os filtros pra ver o total correto.
+        </div>
+      )}
+
+      {(aviso || erro) && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 12,
+            borderRadius: 8,
+            fontSize: 13,
+            color: "var(--text-1)",
+            background: erro ? "rgba(239, 68, 68, 0.12)" : "rgba(22, 163, 74, 0.12)",
+            border: `0.5px solid ${erro ? "rgba(239, 68, 68, 0.40)" : "rgba(22, 163, 74, 0.40)"}`,
+          }}
+        >
+          {erro ?? aviso}
+        </div>
+      )}
+
+      <div className="glass" style={{ padding: 0, overflow: "hidden", marginTop: 16 }}>
         <div
           style={{
             padding: "16px 24px",
@@ -122,16 +337,10 @@ export default function TabelaLancamentos({
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 13,
-              }}
-            >
+            <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "var(--surface-2)" }}>
-                  <Th>Data</Th>
+                  <Th>{colunaData}</Th>
                   <Th>Descrição</Th>
                   <Th>Categoria</Th>
                   <Th>Conta</Th>
@@ -144,14 +353,20 @@ export default function TabelaLancamentos({
                 {lancamentos.map((l) => {
                   const cat = l.categoria_id ? catById.get(l.categoria_id) : null
                   const conta = l.conta_id ? contaById.get(l.conta_id) : null
+                  const rotuloStatus = statusRotuloComAtraso(l, hoje)
+                  const ocupada = pendingId === l.id
+                  const cancelado = l.status === "cancelado"
                   return (
                     <tr
                       key={l.id}
+                      onClick={() => setDetalhe(l)}
                       style={{
                         borderTop: "1px solid var(--border)",
+                        cursor: "pointer",
+                        opacity: cancelado ? 0.55 : 1,
                       }}
                     >
-                      <Td>{formatDataBR(l.data)}</Td>
+                      <Td>{formatDataBR(dataDoEixo(l, eixo))}</Td>
                       <Td>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span
@@ -163,18 +378,26 @@ export default function TabelaLancamentos({
                               flexShrink: 0,
                             }}
                           />
-                          <span>{l.descricao}</span>
-                          {l.empresa_cliente && (
+                          <div style={{ minWidth: 0 }}>
                             <span
                               style={{
-                                fontSize: 11,
-                                color: "var(--muted-foreground)",
-                                marginLeft: 4,
+                                textDecoration: cancelado ? "line-through" : "none",
                               }}
                             >
-                              · {l.empresa_cliente}
+                              {l.descricao}
                             </span>
-                          )}
+                            {(l.origem || l.empresa_cliente) && (
+                              <p
+                                style={{
+                                  fontSize: 11,
+                                  color: "var(--muted-foreground)",
+                                  marginTop: 2,
+                                }}
+                              >
+                                {[l.origem, l.empresa_cliente].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </Td>
                       <Td>
@@ -185,25 +408,30 @@ export default function TabelaLancamentos({
                                 width: 8,
                                 height: 8,
                                 borderRadius: 2,
-                                background: cat.cor,
+                                background: corDaCategoria(cat),
                               }}
                             />
                             {cat.nome}
                           </span>
                         ) : (
-                          <span style={{ color: "var(--muted-foreground)" }}>·</span>
+                          <span style={{ color: "var(--muted-foreground)" }}>Sem categoria</span>
                         )}
                       </Td>
-                      <Td>{conta?.nome ?? "·"}</Td>
+                      <Td>
+                        {conta?.nome ?? (
+                          <span style={{ color: "var(--muted-foreground)" }}>Sem conta</span>
+                        )}
+                      </Td>
                       <Td align="right">
                         <span
                           style={{
                             fontVariantNumeric: "tabular-nums",
                             fontWeight: 600,
-                            color: l.tipo === "receita" ? "var(--success)" : "var(--foreground)",
+                            color: l.tipo === "receita" ? "var(--success)" : "var(--destructive)",
+                            whiteSpace: "nowrap",
                           }}
                         >
-                          {l.tipo === "receita" ? "+" : "−"} {formatBRL(l.valor)}
+                          {l.tipo === "receita" ? "+" : "−"} {formatBRL(valorNumerico(l.valor))}
                         </span>
                       </Td>
                       <Td>
@@ -214,51 +442,45 @@ export default function TabelaLancamentos({
                             borderRadius: 9999,
                             fontSize: 11,
                             fontWeight: 500,
-                            border: `1px solid ${corStatus(l.status)}`,
-                            color: corStatus(l.status),
+                            whiteSpace: "nowrap",
+                            border: `1px solid ${corStatus(rotuloStatus)}`,
+                            color: corStatus(rotuloStatus),
                           }}
+                          title={
+                            estaAtrasado(l, hoje)
+                              ? "Previsto com vencimento já passado — continua contando no previsto."
+                              : undefined
+                          }
                         >
-                          {statusRotulo(l.status)}
+                          {rotuloStatus}
                         </span>
                       </Td>
                       <Td align="right">
-                        <div style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
+                        <div
+                          style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           {l.status === "previsto" && (
-                            <button
-                              type="button"
+                            <BotaoLinha
                               onClick={() => marcarPago(l.id)}
-                              disabled={pendingId === l.id}
-                              title="Marcar como pago (data de hoje)"
-                              style={{
-                                background: "transparent",
-                                border: "1px solid var(--success)",
-                                borderRadius: 2,
-                                padding: "4px 10px",
-                                cursor: pendingId === l.id ? "wait" : "pointer",
-                                fontSize: 12,
-                                color: "var(--success)",
-                                opacity: pendingId === l.id ? 0.5 : 1,
-                                fontWeight: 500,
-                              }}
+                              disabled={ocupada}
+                              cor="var(--success)"
+                              title="Marcar como realizado com a data de hoje"
                             >
-                              {pendingId === l.id ? "..." : "Marcar pago"}
-                            </button>
+                              {ocupada ? "..." : "Marcar pago"}
+                            </BotaoLinha>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => editar(l)}
-                            style={{
-                              background: "transparent",
-                              border: "1px solid var(--border)",
-                              borderRadius: 2,
-                              padding: "4px 10px",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              color: "var(--foreground)",
-                            }}
-                          >
+                          <BotaoLinha onClick={() => editar(l)} disabled={ocupada}>
                             Editar
-                          </button>
+                          </BotaoLinha>
+                          <BotaoLinha
+                            onClick={() => excluir(l)}
+                            disabled={ocupada}
+                            cor="var(--destructive)"
+                            title="Excluir (o histórico é preservado)"
+                          >
+                            Excluir
+                          </BotaoLinha>
                         </div>
                       </Td>
                     </tr>
@@ -270,6 +492,17 @@ export default function TabelaLancamentos({
         )}
       </div>
 
+      {detalhe && (
+        <LancamentoDetalhe
+          lancamento={detalhe}
+          categorias={categorias}
+          contas={contas}
+          hoje={hoje}
+          fechar={() => setDetalhe(null)}
+          editar={() => editar(detalhe)}
+        />
+      )}
+
       <LancamentoDrawer
         aberto={drawerAberto}
         fechar={() => setDrawerAberto(false)}
@@ -277,10 +510,94 @@ export default function TabelaLancamentos({
         contas={contas}
         empresas={empresas}
         lancamento={editando}
-        mesAtual={mesAtual}
+        prefill={editando ? null : prefill}
+        mesNum={mesNum}
         anoAtual={anoAtual}
       />
     </>
+  )
+}
+
+function Totalizador({
+  rotulo,
+  valor,
+  cor,
+  destaque,
+}: {
+  rotulo: string
+  valor: number
+  cor: string
+  destaque?: boolean
+}) {
+  return (
+    <div
+      className="glass"
+      style={{
+        padding: "14px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        borderColor: destaque ? "rgba(201,149,58,0.35)" : undefined,
+      }}
+    >
+      <p
+        style={{
+          fontSize: 11,
+          color: "var(--text-3)",
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {rotulo}
+      </p>
+      <p
+        style={{
+          fontSize: 20,
+          fontWeight: 700,
+          fontVariantNumeric: "tabular-nums",
+          color: cor,
+        }}
+      >
+        {formatBRL(valor)}
+      </p>
+    </div>
+  )
+}
+
+function BotaoLinha({
+  onClick,
+  disabled,
+  cor,
+  title,
+  children,
+}: {
+  onClick: () => void
+  disabled?: boolean
+  cor?: string
+  title?: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        background: "transparent",
+        border: `1px solid ${cor ?? "var(--border)"}`,
+        borderRadius: 4,
+        padding: "4px 10px",
+        cursor: disabled ? "wait" : "pointer",
+        fontSize: 12,
+        fontWeight: 500,
+        whiteSpace: "nowrap",
+        color: cor ?? "var(--foreground)",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -301,6 +618,7 @@ function Th({
         color: "var(--muted-foreground)",
         letterSpacing: "0.04em",
         textTransform: "uppercase",
+        whiteSpace: "nowrap",
       }}
     >
       {children}
@@ -316,13 +634,7 @@ function Td({
   align?: "left" | "right" | "center"
 }) {
   return (
-    <td
-      style={{
-        textAlign: align,
-        padding: "12px 16px",
-        verticalAlign: "middle",
-      }}
-    >
+    <td style={{ textAlign: align, padding: "12px 16px", verticalAlign: "middle" }}>
       {children}
     </td>
   )

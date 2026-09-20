@@ -1,16 +1,12 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import BotoesExportarRelatorio from "@/components/financeiro/BotoesExportarRelatorio"
-import { formatBRL, formatNumero, MESES, type Mes } from "@/lib/data"
+import { formatBRL, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
-import { getDREPeriodo, getFluxoCaixaAnual } from "@/lib/financeiro"
+import { getDREPeriodo, getFluxoCaixaAnual, rotuloMes } from "@/lib/financeiro"
 import { requererPermissao } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
-
-function mesIndex(mes: Mes): number {
-  return MESES.indexOf(mes)
-}
 
 export default async function RelatoriosPage({
   searchParams,
@@ -30,28 +26,32 @@ export default async function RelatoriosPage({
     getFluxoCaixaAnual(ano),
   ])
 
-  // Projeção 3 meses à frente: média móvel das receitas/despesas
-  // realizadas nos 3 meses anteriores ao mês atual selecionado.
-  const idx = mesIndex(mes)
-  const tresAntes = fluxo.slice(Math.max(0, idx - 3), idx)
-  const mediaReceita = tresAntes.length > 0
-    ? tresAntes.reduce((s, p) => s + p.receitas, 0) / tresAntes.length
-    : 0
-  const mediaDespesa = tresAntes.length > 0
-    ? tresAntes.reduce((s, p) => s + p.despesas, 0) / tresAntes.length
-    : 0
+  // Projeção 3 meses à frente: média móvel das receitas/despesas realizadas
+  // nos 3 meses anteriores. O mês de referência vem do INÍCIO do período
+  // selecionado, no calendário de verdade (1–12) — não do tipo `Mes`, que
+  // pula janeiro a março.
+  const mesRef = Number(periodo.de.slice(5, 7))
+  const tresAntes = fluxo.slice(Math.max(0, mesRef - 1 - 3), mesRef - 1)
+  const media = (campo: "receitas" | "despesas") =>
+    tresAntes.length > 0
+      ? tresAntes.reduce((s, p) => s + p[campo], 0) / tresAntes.length
+      : 0
+  const mediaReceita = media("receitas")
+  const mediaDespesa = media("despesas")
+  // Projeta sempre 3 meses, atravessando a virada do ano (dezembro → janeiro).
   const projecao = [1, 2, 3].map((offset) => {
-    const i = idx + offset
+    const m = ((mesRef - 1 + offset) % 12) + 1
     return {
-      mes: i < MESES.length ? MESES[i] : null,
+      mes: m,
+      rotulo: rotuloMes(m),
       receitas: mediaReceita,
       despesas: mediaDespesa,
       resultado: mediaReceita - mediaDespesa,
     }
-  }).filter((p): p is { mes: Mes; receitas: number; despesas: number; resultado: number } => p.mes !== null)
+  })
 
   return (
-    <main className="mx-auto px-8 py-10 space-y-10" style={{ maxWidth: 1280 }}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-10" style={{ maxWidth: 1280 }}>
       <div>
         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)" }}>
           Financeiro · Relatórios
@@ -190,7 +190,7 @@ export default async function RelatoriosPage({
               <tbody>
                 {projecao.map((p) => (
                   <tr key={p.mes} style={{ borderBottom: "1px solid var(--border)" }}>
-                    <Td>{p.mes}</Td>
+                    <Td>{p.rotulo}</Td>
                     <Td align="right" mono>{formatBRL(p.receitas)}</Td>
                     <Td align="right" mono>{formatBRL(p.despesas)}</Td>
                     <Td align="right" mono>
@@ -224,7 +224,7 @@ export default async function RelatoriosPage({
             </thead>
             <tbody>
               {fluxo.map((p) => {
-                const ehAtual = p.mes === mes
+                const ehAtual = p.mes === mesRef
                 return (
                   <tr
                     key={p.mes}
@@ -234,7 +234,7 @@ export default async function RelatoriosPage({
                       fontWeight: ehAtual ? 600 : 400,
                     }}
                   >
-                    <Td>{p.mes}</Td>
+                    <Td>{rotuloMes(p.mes)}</Td>
                     <Td align="right" mono>{formatBRL(p.receitas)}</Td>
                     <Td align="right" mono>{formatBRL(p.despesas)}</Td>
                     <Td align="right" mono>
@@ -249,7 +249,8 @@ export default async function RelatoriosPage({
           </table>
         </div>
         <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>
-          {formatNumero(fluxo.length)} meses · só lançamentos realizados entram nos totais.
+          {formatNumero(fluxo.length)} meses · só lançamentos realizados, pela data
+          de competência — a mesma regra do DRE acima.
         </p>
       </section>
     </main>

@@ -7,7 +7,7 @@ import {
   excluirContaAction,
 } from "@/lib/financeiro-actions"
 import type { ContaFinanceira, TipoConta } from "@/lib/financeiro"
-import { tipoContaRotulo } from "@/lib/financeiro"
+import { tipoContaRotulo } from "@/lib/financeiro-regras"
 import { formatBRL } from "@/lib/data"
 import CampoInteiro from "@/components/inputs/CampoInteiro"
 import CampoMoeda from "@/components/inputs/CampoMoeda"

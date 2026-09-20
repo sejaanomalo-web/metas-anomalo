@@ -1,15 +1,94 @@
 import { getSupabaseAdmin } from "./supabase"
 import { MESES, type Mes } from "./data"
 import { getResumoPorIntervaloPorEmpresa } from "./sentinela"
+import {
+  anoMesDeISO,
+  chaveMes,
+  corDaCategoria,
+  dataDoPeriodo,
+  dentroDoPeriodo,
+  dentroDoPeriodoPorVencimento,
+  filtroPeriodoPostgREST,
+  filtroVencimentoPostgREST,
+  baldesDaGranularidade,
+  janelaDaGranularidade,
+  montarSerie,
+  recorrentesAMaterializar,
+  rotuloMes,
+  rotuloMesCurto,
+  saldoDaConta,
+  somarLancamentos,
+  valorNumerico,
+  vencimentoEfetivo,
+  PALETA_CATEGORIAS,
+  type BaldeSerie,
+  type EixoPeriodo,
+  type Granularidade,
+  type LancamentoParaRegra,
+  type SituacaoFinanceira,
+  type TotaisFinanceiros,
+} from "./financeiro-regras"
 
 // ============================================================
 // Tipos
 // ============================================================
 
-export type TipoLancamento = "receita" | "despesa"
-export type StatusLancamento = "previsto" | "realizado" | "cancelado"
-export type TipoConta = "banco" | "caixa" | "cartao_credito" | "investimento"
-export type Periodicidade = "mensal" | "anual" | "semanal"
+// O vocabulário e as regras moram em lib/financeiro-regras.ts (puro, sem
+// banco). Aqui só re-exportamos para que os imports existentes
+// (`from "@/lib/financeiro"`) continuem valendo — e para que não exista uma
+// segunda definição de "o que é um status" em lugar nenhum.
+export {
+  corDaCategoria,
+  corDeterministica,
+  dataDoEixo,
+  dataDoPeriodo,
+  entraNaSituacao,
+  estaAtrasado,
+  proximaCorLivre,
+  rotuloMes,
+  rotuloMesCurto,
+  rotulosDaSituacao,
+  rotuloSituacaoCurto,
+  saldoDaConta,
+  somarLancamentos,
+  statusRotulo,
+  statusRotuloComAtraso,
+  tipoContaRotulo,
+  valorNumerico,
+  vencimentoEfetivo,
+  CORES_DISPONIVEIS,
+  FORMAS_PAGAMENTO,
+  FORMA_PAGAMENTO_PADRAO,
+  PALETA_CATEGORIAS,
+  SITUACOES,
+} from "./financeiro-regras"
+
+export {
+  GRANULARIDADES,
+  chaveDaGranularidade,
+  janelaDaGranularidade,
+  rotuloGranularidade,
+} from "./financeiro-regras"
+
+export type {
+  BaldeSerie,
+  EixoPeriodo,
+  Granularidade,
+  LancamentoParaRegra,
+  Periodicidade,
+  SituacaoFinanceira,
+  StatusLancamento,
+  TipoConta,
+  TipoLancamento,
+  TotaisFinanceiros,
+} from "./financeiro-regras"
+
+import type {
+  Periodicidade,
+  StatusLancamento,
+  TipoConta,
+  TipoLancamento,
+} from "./financeiro-regras"
 
 export interface CategoriaFinanceira {
   id: string
@@ -33,7 +112,10 @@ export interface ContaFinanceira {
 
 export interface LancamentoFinanceiro {
   id: string
+  /** Competência: quando o fato aconteceu. */
   data: string
+  /** Quando o dinheiro deve andar. Nulo = usar a competência (R3). */
+  data_vencimento: string | null
   data_pagamento: string | null
   tipo: TipoLancamento
   valor: number
@@ -43,6 +125,9 @@ export interface LancamentoFinanceiro {
   observacoes: string | null
   recorrente_id: string | null
   empresa_cliente: string | null
+  /** Texto livre de procedência: "Recorrente", "Extrato", "Fornecedor X". */
+  origem: string | null
+  forma_pagamento: string | null
   status: StatusLancamento
   anexo_url: string | null
   criado_por: string | null
@@ -95,6 +180,23 @@ export interface SaldoConta {
   saldo_atual: number
 }
 
+/** Uma barra da série anual. `mes` é o mês do calendário (1–12). */
+export interface PontoFluxoMensal {
+  mes: number
+  rotulo: string
+  receitas: number
+  despesas: number
+  resultado: number
+}
+
+/** Colunas do lançamento lidas pelas telas. Uma lista só: um SELECT que
+ *  esquece `data_vencimento` faz a regra R3 silenciosamente cair no ramo
+ *  "sem vencimento" e o lançamento aparece no mês errado. */
+const COLUNAS_LANCAMENTO =
+  "id, data, data_vencimento, data_pagamento, tipo, valor, categoria_id, " +
+  "conta_id, descricao, observacoes, recorrente_id, empresa_cliente, origem, " +
+  "forma_pagamento, status, anexo_url, criado_por, created_at, updated_at"
+
 // ============================================================
 // Helpers
 // ============================================================
@@ -120,20 +222,20 @@ export function rangeDoMesISO(mes: Mes, ano: number): { inicio: string; fim: str
   return { inicio, fim }
 }
 
-export function tipoContaRotulo(tipo: TipoConta): string {
-  switch (tipo) {
-    case "banco": return "Banco"
-    case "caixa": return "Caixa"
-    case "cartao_credito": return "Cartão de crédito"
-    case "investimento": return "Investimento"
-  }
-}
-
-export function statusRotulo(status: StatusLancamento): string {
-  switch (status) {
-    case "previsto": return "Previsto"
-    case "realizado": return "Realizado"
-    case "cancelado": return "Cancelado"
+/**
+ * Intervalo fechado de um mês do CALENDÁRIO (1–12) — sem passar pelo tipo
+ * `Mes`, que só cobre Abril–Dezembro. É esta a função que o financeiro usa
+ * internamente; `rangeDoMesISO` fica para quem já dependia dela.
+ */
+export function rangeDoMesNumISO(
+  ano: number,
+  mes: number
+): { inicio: string; fim: string } {
+  const mm = String(mes).padStart(2, "0")
+  const ultimoDia = new Date(ano, mes, 0).getDate()
+  return {
+    inicio: `${ano}-${mm}-01`,
+    fim: `${ano}-${mm}-${String(ultimoDia).padStart(2, "0")}`,
   }
 }
 
@@ -179,56 +281,134 @@ export async function listarContas(ativasApenas = true): Promise<ContaFinanceira
   return (data ?? []) as ContaFinanceira[]
 }
 
+/** Teto de linhas por consulta. Acima disso a tela avisa que os totais
+ *  somam só o que foi carregado — um total menor que o real, sem aviso, é
+ *  pior do que nenhum total. */
+export const LIMITE_LANCAMENTOS = 500
+
 export interface FiltrosLancamento {
   mes?: Mes
   ano?: number
   /** Intervalo arbitrário (YYYY-MM-DD, inclusivos). Tem PRIORIDADE sobre
    *  mes/ano quando ambos presentes — usado pelo período global em modo
-   *  dia/intervalo. Filtra pela coluna `data` (competência). */
+   *  dia/intervalo. */
   de?: string
   ate?: string
   tipo?: TipoLancamento
   status?: StatusLancamento
+  /** Recorte de soma (R1). Não filtra a lista: cancelado continua visível,
+   *  só não entra nos totais. */
+  situacao?: SituacaoFinanceira
   conta_id?: string
   categoria_id?: string
+  /** 'competencia' (padrão, R3) ou 'vencimento' (R6, links externos). */
+  eixo?: EixoPeriodo
   limit?: number
+  /** Busca livre em descrição e origem. */
+  busca?: string
 }
 
-export async function listarLancamentos(
+export interface ResultadoLancamentos {
+  lancamentos: LancamentoFinanceiro[]
+  /** true quando a consulta bateu no teto — a tela precisa avisar. */
+  truncado: boolean
+  limite: number
+}
+
+/**
+ * Lista lançamentos aplicando a regra R3 (ou R6, no eixo de vencimento).
+ *
+ * O recorte não é "where data between": um lançamento em aberto cai no mês do
+ * VENCIMENTO, e um pago cai no mês da competência. O filtro correspondente
+ * tem três ramos e é gerado por `filtroPeriodoPostgREST`, a partir da mesma
+ * declaração que alimenta o predicado em memória — é o que impede a lista e
+ * os totais de discordarem.
+ *
+ * A ordenação usa sempre a MESMA data que recortou.
+ */
+export async function listarLancamentosDetalhado(
   filtros: FiltrosLancamento = {}
-): Promise<LancamentoFinanceiro[]> {
+): Promise<ResultadoLancamentos> {
+  const limite = filtros.limit ?? LIMITE_LANCAMENTOS
+  const vazio = { lancamentos: [], truncado: false, limite }
   const supabase = getSupabaseAdmin()
-  if (!supabase) return []
+  if (!supabase) return vazio
+
+  const eixo: EixoPeriodo = filtros.eixo ?? "competencia"
+
+  let de = filtros.de
+  let ate = filtros.ate
+  if ((!de || !ate) && filtros.mes && filtros.ano) {
+    const r = rangeDoMesISO(filtros.mes, filtros.ano)
+    de = r.inicio
+    ate = r.fim
+  } else if (!de && !ate && filtros.ano) {
+    de = `${filtros.ano}-01-01`
+    ate = `${filtros.ano}-12-31`
+  }
+
   let q = supabase
     .from("lancamento_financeiro")
-    .select(
-      "id, data, data_pagamento, tipo, valor, categoria_id, conta_id, descricao, observacoes, recorrente_id, empresa_cliente, status, anexo_url, criado_por, created_at, updated_at"
-    )
+    .select(COLUNAS_LANCAMENTO)
     .is("deletado_em", null)
-    .order("data", { ascending: false })
-    .order("created_at", { ascending: false })
 
-  if (filtros.de && filtros.ate) {
-    // Intervalo explícito tem prioridade (período global em dia/intervalo).
-    q = q.gte("data", filtros.de).lte("data", filtros.ate)
-  } else if (filtros.mes && filtros.ano) {
-    const { inicio, fim } = rangeDoMesISO(filtros.mes, filtros.ano)
-    q = q.gte("data", inicio).lte("data", fim)
-  } else if (filtros.ano) {
-    q = q.gte("data", `${filtros.ano}-01-01`).lte("data", `${filtros.ano}-12-31`)
+  if (de && ate) {
+    q = q.or(
+      eixo === "vencimento"
+        ? filtroVencimentoPostgREST(de, ate)
+        : filtroPeriodoPostgREST(de, ate)
+    )
   }
+
   if (filtros.tipo) q = q.eq("tipo", filtros.tipo)
   if (filtros.status) q = q.eq("status", filtros.status)
   if (filtros.conta_id) q = q.eq("conta_id", filtros.conta_id)
   if (filtros.categoria_id) q = q.eq("categoria_id", filtros.categoria_id)
-  if (filtros.limit) q = q.limit(filtros.limit)
+  if (filtros.busca) {
+    const termo = filtros.busca.replace(/[%,()]/g, " ").trim()
+    if (termo) q = q.or(`descricao.ilike.%${termo}%,origem.ilike.%${termo}%`)
+  }
+
+  // Ordena pelas duas datas porque o Postgres não sabe aplicar a regra R3 num
+  // ORDER BY simples; a ordenação fina (pela data que recortou) é feita em
+  // memória logo abaixo, sobre o conjunto já limitado.
+  q = q
+    .order("data_vencimento", { ascending: false, nullsFirst: false })
+    .order("data", { ascending: false })
+    .limit(limite + 1)
 
   const { data, error } = await q
   if (error) {
     console.error("[financeiro] listarLancamentos error", error.message)
+    throw error
+  }
+
+  const linhas = (data ?? []) as unknown as LancamentoFinanceiro[]
+  const truncado = linhas.length > limite
+  const lancamentos = truncado ? linhas.slice(0, limite) : linhas
+
+  const dataDeOrdenacao = (l: LancamentoFinanceiro) =>
+    eixo === "vencimento" ? vencimentoEfetivo(l) : dataDoPeriodo(l)
+  lancamentos.sort((a, b) => {
+    const da = dataDeOrdenacao(a)
+    const db = dataDeOrdenacao(b)
+    if (da !== db) return da < db ? 1 : -1
+    return a.created_at < b.created_at ? 1 : -1
+  })
+
+  return { lancamentos, truncado, limite }
+}
+
+/** Forma antiga (só a lista). Mantida para os call-sites existentes. */
+export async function listarLancamentos(
+  filtros: FiltrosLancamento = {}
+): Promise<LancamentoFinanceiro[]> {
+  try {
+    const { lancamentos } = await listarLancamentosDetalhado(filtros)
+    return lancamentos
+  } catch {
     return []
   }
-  return (data ?? []) as LancamentoFinanceiro[]
 }
 
 export async function getLancamentoPorId(id: string): Promise<LancamentoFinanceiro | null> {
@@ -236,7 +416,7 @@ export async function getLancamentoPorId(id: string): Promise<LancamentoFinancei
   if (!supabase) return null
   const { data, error } = await supabase
     .from("lancamento_financeiro")
-    .select("*")
+    .select(COLUNAS_LANCAMENTO)
     .eq("id", id)
     .is("deletado_em", null)
     .maybeSingle()
@@ -244,7 +424,7 @@ export async function getLancamentoPorId(id: string): Promise<LancamentoFinancei
     console.error("[financeiro] getLancamentoPorId error", error.message)
     return null
   }
-  return (data ?? null) as LancamentoFinanceiro | null
+  return (data ?? null) as unknown as LancamentoFinanceiro | null
 }
 
 /**
@@ -260,9 +440,11 @@ export async function getResumoFinanceiroMes(
 }
 
 /**
- * Igual a getResumoFinanceiroMes, mas para um INTERVALO arbitrário de
- * datas (YYYY-MM-DD, inclusivos). Usado quando o seletor de período
- * global está em modo dia/intervalo. mes/ano são só rótulos do retorno.
+ * Igual a getResumoFinanceiroMes, mas para um INTERVALO arbitrário de datas.
+ *
+ * Passa pelo MESMO recorte (R3) e pela MESMA soma (`somarLancamentos`) que a
+ * lista de lançamentos usa. Antes esta função recortava por `data` e somava
+ * inline, então o KPI e a lista podiam discordar sem que nada acusasse.
  */
 export async function getResumoFinanceiroPeriodo(
   inicio: string,
@@ -270,64 +452,60 @@ export async function getResumoFinanceiroPeriodo(
   mes: Mes,
   ano: number
 ): Promise<ResumoFinanceiroMes> {
-  const supabase = getSupabaseAdmin()
   const base: ResumoFinanceiroMes = {
-    mes,
-    ano,
-    total_receitas: 0,
-    total_despesas: 0,
-    resultado: 0,
+    mes, ano,
+    total_receitas: 0, total_despesas: 0, resultado: 0,
     qtd_lancamentos: 0,
-    receitas_previstas: 0,
-    despesas_previstas: 0,
+    receitas_previstas: 0, despesas_previstas: 0,
   }
-  if (!supabase) return base
-  const { data, error } = await supabase
-    .from("lancamento_financeiro")
-    .select("tipo, valor, status")
-    .is("deletado_em", null)
-    .gte("data", inicio)
-    .lte("data", fim)
-  if (error) {
-    console.error("[financeiro] getResumoFinanceiroPeriodo error", error.message)
+
+  let lancamentos: LancamentoFinanceiro[]
+  try {
+    lancamentos = (await listarLancamentosDetalhado({ de: inicio, ate: fim })).lancamentos
+  } catch (e) {
+    console.error("[financeiro] getResumoFinanceiroPeriodo error", e)
     return base
   }
-  for (const r of (data ?? []) as {
-    tipo: TipoLancamento
-    valor: number
-    status: StatusLancamento
-  }[]) {
-    if (r.status === "cancelado") continue
-    base.qtd_lancamentos += 1
-    const valor = Number(r.valor)
-    if (r.status === "realizado") {
-      if (r.tipo === "receita") base.total_receitas += valor
-      else base.total_despesas += valor
-    } else if (r.status === "previsto") {
-      if (r.tipo === "receita") base.receitas_previstas += valor
-      else base.despesas_previstas += valor
-    }
-  }
-  base.resultado = base.total_receitas - base.total_despesas
+
+  const realizado = somarLancamentos(lancamentos, "realizado")
+  const previsto = somarLancamentos(lancamentos, "previsto")
+  const total = somarLancamentos(lancamentos, "total")
+
+  base.total_receitas = realizado.entradas
+  base.total_despesas = realizado.saidas
+  base.resultado = realizado.saldo
+  base.receitas_previstas = previsto.entradas
+  base.despesas_previstas = previsto.saidas
+  base.qtd_lancamentos = total.quantidade
   return base
 }
 
+/** Totais por situação de um período — alimenta os totalizadores da lista. */
+export async function getTotaisDoPeriodo(
+  filtros: FiltrosLancamento
+): Promise<Record<SituacaoFinanceira, TotaisFinanceiros>> {
+  const { lancamentos } = await listarLancamentosDetalhado(filtros)
+  return {
+    realizado: somarLancamentos(lancamentos, "realizado"),
+    previsto: somarLancamentos(lancamentos, "previsto"),
+    total: somarLancamentos(lancamentos, "total"),
+  }
+}
+
 /**
- * Saldo atual de uma conta = saldo_inicial + soma de receitas
- * realizadas - soma de despesas realizadas (lançamentos com
- * data_pagamento posterior a data_saldo_inicial).
+ * R5. Saldo atual de cada conta = saldo inicial + receitas pagas − despesas
+ * pagas. Contas inativas entram: o saldo histórico delas continua sendo
+ * dinheiro da empresa.
  */
 export async function getSaldoPorConta(): Promise<SaldoConta[]> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
 
-  // As duas leituras são independentes — roda em paralelo (mesmo resultado,
-  // uma ida-e-volta a menos). inclui contas inativas pra saldo histórico.
   const [contas, movRes] = await Promise.all([
     listarContas(false),
     supabase
       .from("lancamento_financeiro")
-      .select("conta_id, tipo, valor, data_pagamento")
+      .select("conta_id, tipo, valor, status, data, data_pagamento")
       .is("deletado_em", null)
       .eq("status", "realizado")
       .not("data_pagamento", "is", null),
@@ -337,25 +515,20 @@ export async function getSaldoPorConta(): Promise<SaldoConta[]> {
   const { data, error } = movRes
   if (error) {
     console.error("[financeiro] getSaldoPorConta error", error.message)
-    return contas.map((c) => ({ conta: c, saldo_atual: Number(c.saldo_inicial) }))
+    return contas.map((c) => ({ conta: c, saldo_atual: valorNumerico(c.saldo_inicial) }))
   }
 
-  type Row = {
-    conta_id: string | null
-    tipo: TipoLancamento
-    valor: number
-    data_pagamento: string
-  }
-  const movPorConta = new Map<string, number>()
-  for (const r of (data ?? []) as Row[]) {
+  const porConta = new Map<string, LancamentoParaRegra[]>()
+  for (const r of (data ?? []) as (LancamentoParaRegra & { conta_id: string | null })[]) {
     if (!r.conta_id) continue
-    const delta = r.tipo === "receita" ? Number(r.valor) : -Number(r.valor)
-    movPorConta.set(r.conta_id, (movPorConta.get(r.conta_id) ?? 0) + delta)
+    const lista = porConta.get(r.conta_id) ?? []
+    lista.push(r)
+    porConta.set(r.conta_id, lista)
   }
 
   return contas.map((conta) => ({
     conta,
-    saldo_atual: Number(conta.saldo_inicial) + (movPorConta.get(conta.id) ?? 0),
+    saldo_atual: saldoDaConta(conta.saldo_inicial, porConta.get(conta.id) ?? []),
   }))
 }
 
@@ -365,68 +538,83 @@ export async function getSaldoTotal(): Promise<number> {
 }
 
 /**
- * Série mensal de receita/despesa/resultado pro ano informado.
- * Alimenta o GraficoFluxoCaixa do overview. Só lançamentos
- * realizados com data_pagamento entram.
+ * R4. Série dos DOZE meses do ano: receita, despesa e resultado REALIZADOS,
+ * agrupados por COMPETÊNCIA.
+ *
+ * Duas correções em relação ao que havia antes:
+ *
+ *  1. Agrupava por `data_pagamento`, enquanto o DRE da mesma página agrupa
+ *     por competência. Como 17 das 79 linhas realizadas têm pagamento em mês
+ *     diferente da competência, o DRE e o "Histórico do ano" logo abaixo
+ *     podiam mostrar números diferentes para o mesmo mês. Agora os dois usam
+ *     competência — a regra da referência (R4) e a que o DRE já seguia.
+ *
+ *  2. Devolvia só Abril–Dezembro, porque iterava o tipo `Mes`. O caixa existe
+ *     nos doze meses.
  */
-export async function getFluxoCaixaAnual(ano: number): Promise<
-  { mes: Mes; receitas: number; despesas: number; resultado: number }[]
-> {
+export async function getFluxoCaixaAnual(ano: number): Promise<PontoFluxoMensal[]> {
+  const vazio = (): PontoFluxoMensal[] =>
+    Array.from({ length: 12 }, (_, i) => ({
+      mes: i + 1,
+      rotulo: rotuloMesCurto(i + 1),
+      receitas: 0,
+      despesas: 0,
+      resultado: 0,
+    }))
+
   const supabase = getSupabaseAdmin()
-  if (!supabase) return MESES.map((mes) => ({ mes, receitas: 0, despesas: 0, resultado: 0 }))
+  if (!supabase) return vazio()
+
   const { data, error } = await supabase
     .from("lancamento_financeiro")
-    .select("tipo, valor, data_pagamento")
+    .select("tipo, valor, data")
     .is("deletado_em", null)
     .eq("status", "realizado")
-    .not("data_pagamento", "is", null)
-    .gte("data_pagamento", `${ano}-01-01`)
-    .lte("data_pagamento", `${ano}-12-31`)
+    .gte("data", `${ano}-01-01`)
+    .lte("data", `${ano}-12-31`)
   if (error) {
     console.error("[financeiro] getFluxoCaixaAnual error", error.message)
-    return MESES.map((mes) => ({ mes, receitas: 0, despesas: 0, resultado: 0 }))
+    return vazio()
   }
-  const acc = new Map<Mes, { receitas: number; despesas: number }>()
-  for (const r of (data ?? []) as {
-    tipo: TipoLancamento
-    valor: number
-    data_pagamento: string
-  }[]) {
-    const m = new Date(r.data_pagamento + "T12:00:00Z").getMonth() + 1
-    const mesNome = MESES.find((nome) => MES_NUM[nome] === m)
-    if (!mesNome) continue
-    const bucket = acc.get(mesNome) ?? { receitas: 0, despesas: 0 }
-    if (r.tipo === "receita") bucket.receitas += Number(r.valor)
-    else bucket.despesas += Number(r.valor)
-    acc.set(mesNome, bucket)
+
+  const serie = vazio()
+  for (const r of (data ?? []) as { tipo: TipoLancamento; valor: number | string; data: string }[]) {
+    const { mes } = anoMesDeISO(r.data)
+    const ponto = serie[mes - 1]
+    if (!ponto) continue
+    const v = valorNumerico(r.valor)
+    if (r.tipo === "receita") ponto.receitas += v
+    else ponto.despesas += v
   }
-  return MESES.map((mes) => {
-    const b = acc.get(mes) ?? { receitas: 0, despesas: 0 }
-    return { ...b, mes, resultado: b.receitas - b.despesas }
-  })
+  for (const p of serie) p.resultado = p.receitas - p.despesas
+  return serie
 }
 
 /**
- * Lançamentos previstos EM ABERTO (status=previsto), ordenados por data
- * ascendente — vencidos primeiro, depois os próximos. Inclui atrasados
- * de propósito: como tudo nasce previsto, um recorrente não pago que
- * venceu não pode sumir do radar. Usado no card "Vencimentos em aberto".
+ * Lançamentos em aberto, ordenados pelo vencimento — vencidos primeiro,
+ * depois os próximos. Inclui atrasados de propósito: como tudo nasce
+ * previsto, uma conta que venceu não pode sumir do radar.
  */
 export async function getProximosPrevistos(limit = 6): Promise<LancamentoFinanceiro[]> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return []
   const { data, error } = await supabase
     .from("lancamento_financeiro")
-    .select("*")
+    .select(COLUNAS_LANCAMENTO)
     .is("deletado_em", null)
     .eq("status", "previsto")
+    .order("data_vencimento", { ascending: true, nullsFirst: false })
     .order("data", { ascending: true })
-    .limit(limit)
+    .limit(limit * 3)
   if (error) {
     console.error("[financeiro] getProximosPrevistos error", error.message)
     return []
   }
-  return (data ?? []) as LancamentoFinanceiro[]
+  const linhas = (data ?? []) as unknown as LancamentoFinanceiro[]
+  // A ordenação final é pelo vencimento EFETIVO (coalesce), que o Postgres
+  // não expressa num order by simples sem índice de expressão.
+  linhas.sort((a, b) => (vencimentoEfetivo(a) < vencimentoEfetivo(b) ? -1 : 1))
+  return linhas.slice(0, limit)
 }
 
 export async function listarRecorrentes(ativosApenas = true): Promise<PagamentoRecorrente[]> {
@@ -475,10 +663,12 @@ export async function getDREMes(mes: Mes, ano: number): Promise<DREMes> {
 }
 
 /**
- * Igual a getDREMes, mas para um INTERVALO arbitrário de datas
- * (YYYY-MM-DD, inclusivos). Usado quando o período global está em modo
- * dia/intervalo e pela divisão de gastos por categoria da Visão geral.
- * mes/ano são só rótulos do retorno.
+ * R4. DRE do intervalo: só lançamentos REALIZADOS, agrupados por
+ * COMPETÊNCIA (`data`) — regime de competência, não de caixa.
+ *
+ * É a mesma regra que `getFluxoCaixaAnual` passou a usar, e é por isso que o
+ * DRE e o "Histórico do ano" na mesma página agora mostram o mesmo número
+ * para o mesmo mês.
  */
 export async function getDREPeriodo(
   inicio: string,
@@ -512,10 +702,10 @@ export async function getDREPeriodo(
 
   for (const l of (lancamentos ?? []) as {
     tipo: TipoLancamento
-    valor: number
+    valor: number | string
     categoria_id: string | null
   }[]) {
-    const valor = Number(l.valor)
+    const valor = valorNumerico(l.valor)
     const acc = l.tipo === "receita" ? receitaAcc : despesaAcc
     const entry = acc.get(l.categoria_id) ?? { total: 0, qtd: 0 }
     entry.total += valor
@@ -530,7 +720,9 @@ export async function getDREPeriodo(
       linhas.push({
         categoria_id: catId,
         categoria_nome: cat?.nome ?? "Sem categoria",
-        cor: cat?.cor ?? "#4c4e54",
+        // Categoria sem cor gravada recebe sempre a MESMA cor (hash do id),
+        // pra não trocar de cor entre a Visão geral e a aba Categorias.
+        cor: corDaCategoria(cat),
         total, qtd,
       })
     }
@@ -542,6 +734,361 @@ export async function getDREPeriodo(
   base.total_receitas = base.receitas.reduce((s, l) => s + l.total, 0)
   base.total_despesas = base.despesas.reduce((s, l) => s + l.total, 0)
   base.resultado = base.total_receitas - base.total_despesas
+  return base
+}
+
+// ============================================================
+// Agenda — vencimentos como itens do dia
+// ============================================================
+
+/** Um vencimento como a agenda precisa vê-lo: sem horário, com valor. */
+export interface VencimentoDoDia {
+  id: string
+  descricao: string
+  tipo: TipoLancamento
+  valor: number
+  /** Data pela qual ele aparece na agenda (vencimento efetivo). */
+  vencimento: string
+  atrasado: boolean
+  /** Link que abre a lista já no dia, no eixo de vencimento e com o detalhe. */
+  href: string
+}
+
+/**
+ * Vencimentos em aberto de um intervalo, agrupados por dia.
+ *
+ * Só `previsto`: uma conta paga não é mais compromisso, e continuar
+ * aparecendo na agenda só faria a pessoa conferir duas vezes.
+ *
+ * O `voltar` embutido no link é o que permite ao financeiro oferecer o
+ * caminho de volta — sem ele, quem clica num vencimento cai na lista e perde
+ * a referência de onde veio.
+ */
+export async function listarVencimentosPorDia(
+  de: string,
+  ate: string,
+  voltarPara?: string
+): Promise<Record<string, VencimentoDoDia[]>> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return {}
+
+  const { data, error } = await supabase
+    .from("lancamento_financeiro")
+    .select("id, descricao, tipo, valor, status, data, data_vencimento")
+    .is("deletado_em", null)
+    .eq("status", "previsto")
+    .or(filtroVencimentoPostgREST(de, ate))
+    .limit(LIMITE_LANCAMENTOS)
+
+  if (error) {
+    // A agenda não pode quebrar por causa do financeiro: sem os vencimentos,
+    // ela continua mostrando as tarefas.
+    console.error("[financeiro] listarVencimentosPorDia error", error.message)
+    return {}
+  }
+
+  const hoje = new Date().toISOString().slice(0, 10)
+  const porDia: Record<string, VencimentoDoDia[]> = {}
+
+  for (const l of (data ?? []) as (LancamentoParaRegra & {
+    id: string
+    descricao: string
+  })[]) {
+    const vencimento = vencimentoEfetivo(l)
+    const qs = new URLSearchParams({
+      modo: "dia",
+      de: vencimento,
+      eixo: "vencimento",
+      lanc: l.id,
+    })
+    if (voltarPara) qs.set("voltar", voltarPara)
+
+    const item: VencimentoDoDia = {
+      id: l.id,
+      descricao: l.descricao,
+      tipo: l.tipo,
+      valor: valorNumerico(l.valor),
+      vencimento,
+      atrasado: vencimento < hoje,
+      href: `/dashboard/financeiro/lancamentos?${qs.toString()}`,
+    }
+    ;(porDia[vencimento] ??= []).push(item)
+  }
+
+  for (const lista of Object.values(porDia)) {
+    lista.sort((a, b) => b.valor - a.valor)
+  }
+  return porDia
+}
+
+// ============================================================
+// Categorias — uso, detalhe e evolução
+// ============================================================
+
+export interface UsoCategoria {
+  lancamentos: number
+  recorrentes: number
+  total: number
+}
+
+/**
+ * Quantos registros dependem de uma categoria. É o que o diálogo de exclusão
+ * mostra ANTES de perguntar: "em uso por 3 lançamentos" muda completamente a
+ * decisão de quem ia clicar em excluir sem pensar.
+ */
+export async function contarUsoCategoria(id: string): Promise<UsoCategoria> {
+  const vazio = { lancamentos: 0, recorrentes: 0, total: 0 }
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return vazio
+
+  const [lanc, rec] = await Promise.all([
+    supabase
+      .from("lancamento_financeiro")
+      .select("id", { count: "exact", head: true })
+      .eq("categoria_id", id)
+      .is("deletado_em", null),
+    supabase
+      .from("pagamento_recorrente")
+      .select("id", { count: "exact", head: true })
+      .eq("categoria_id", id),
+  ])
+
+  const lancamentos = lanc.count ?? 0
+  const recorrentes = rec.count ?? 0
+  return { lancamentos, recorrentes, total: lancamentos + recorrentes }
+}
+
+export async function getCategoriaPorId(
+  id: string
+): Promise<CategoriaFinanceira | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from("categoria_financeira")
+    .select("id, nome, tipo, parent_id, cor, ativa, ordem")
+    .eq("id", id)
+    .maybeSingle()
+  if (error) {
+    console.error("[financeiro] getCategoriaPorId error", error.message)
+    return null
+  }
+  return (data ?? null) as CategoriaFinanceira | null
+}
+
+/**
+ * Série de evolução de uma categoria (ou dos lançamentos SEM categoria,
+ * quando `categoriaId` é null) na granularidade pedida.
+ *
+ * A consulta recorta pela janela da própria granularidade — 5 anos, 12 meses,
+ * 12 semanas ou os dias do mês — e não pelo período global: o gráfico existe
+ * justamente pra olhar além do período selecionado.
+ */
+export async function getEvolucaoCategoria(opts: {
+  categoriaId: string | null
+  tipo?: TipoLancamento
+  granularidade: Granularidade
+  referencia: string
+  situacao?: SituacaoFinanceira
+}): Promise<BaldeSerie[]> {
+  const { de, ate } = janelaDaGranularidade(opts.granularidade, opts.referencia)
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return baldesDaGranularidade(opts.granularidade, opts.referencia)
+
+  let q = supabase
+    .from("lancamento_financeiro")
+    .select("tipo, valor, status, data, data_vencimento, data_pagamento")
+    .is("deletado_em", null)
+    .or(filtroPeriodoPostgREST(de, ate))
+
+  if (opts.categoriaId) q = q.eq("categoria_id", opts.categoriaId)
+  else q = q.is("categoria_id", null)
+  if (opts.tipo) q = q.eq("tipo", opts.tipo)
+
+  const { data, error } = await q
+  if (error) {
+    console.error("[financeiro] getEvolucaoCategoria error", error.message)
+    return baldesDaGranularidade(opts.granularidade, opts.referencia)
+  }
+
+  return montarSerie(
+    (data ?? []) as LancamentoParaRegra[],
+    opts.granularidade,
+    opts.referencia,
+    opts.situacao ?? "realizado"
+  )
+}
+
+/** Lançamentos de uma categoria (ou sem categoria) num período. */
+export async function listarLancamentosDaCategoria(opts: {
+  categoriaId: string | null
+  tipo?: TipoLancamento
+  de: string
+  ate: string
+  busca?: string
+}): Promise<LancamentoFinanceiro[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+
+  let q = supabase
+    .from("lancamento_financeiro")
+    .select(COLUNAS_LANCAMENTO)
+    .is("deletado_em", null)
+    .or(filtroPeriodoPostgREST(opts.de, opts.ate))
+    .limit(LIMITE_LANCAMENTOS)
+
+  if (opts.categoriaId) q = q.eq("categoria_id", opts.categoriaId)
+  else q = q.is("categoria_id", null)
+  if (opts.tipo) q = q.eq("tipo", opts.tipo)
+  if (opts.busca) {
+    const termo = opts.busca.replace(/[%,()]/g, " ").trim()
+    if (termo) q = q.or(`descricao.ilike.%${termo}%,origem.ilike.%${termo}%`)
+  }
+
+  const { data, error } = await q
+  if (error) {
+    console.error("[financeiro] listarLancamentosDaCategoria error", error.message)
+    return []
+  }
+  const linhas = (data ?? []) as unknown as LancamentoFinanceiro[]
+  linhas.sort((a, b) => (dataDoPeriodo(a) < dataDoPeriodo(b) ? 1 : -1))
+  return linhas
+}
+
+// ============================================================
+// Contas — detalhe
+// ============================================================
+
+export async function getContaPorId(id: string): Promise<ContaFinanceira | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from("conta_financeira")
+    .select("id, nome, tipo, saldo_inicial, data_saldo_inicial, ativa, ordem")
+    .eq("id", id)
+    .maybeSingle()
+  if (error) {
+    console.error("[financeiro] getContaPorId error", error.message)
+    return null
+  }
+  return (data ?? null) as ContaFinanceira | null
+}
+
+/** Movimentações de uma conta no período, já ordenadas pela regra R3. */
+export async function listarLancamentosDaConta(opts: {
+  contaId: string
+  de: string
+  ate: string
+}): Promise<LancamentoFinanceiro[]> {
+  const { lancamentos } = await listarLancamentosDetalhado({
+    de: opts.de,
+    ate: opts.ate,
+    conta_id: opts.contaId,
+  })
+  return lancamentos
+}
+
+/** Série mensal do ano de UMA conta — alimenta o gráfico do detalhe. */
+export async function getFluxoAnualDaConta(
+  contaId: string,
+  ano: number
+): Promise<PontoFluxoMensal[]> {
+  const serie: PontoFluxoMensal[] = Array.from({ length: 12 }, (_, i) => ({
+    mes: i + 1,
+    rotulo: rotuloMesCurto(i + 1),
+    receitas: 0,
+    despesas: 0,
+    resultado: 0,
+  }))
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return serie
+
+  const { data, error } = await supabase
+    .from("lancamento_financeiro")
+    .select("tipo, valor, data")
+    .is("deletado_em", null)
+    .eq("conta_id", contaId)
+    .eq("status", "realizado")
+    .gte("data", `${ano}-01-01`)
+    .lte("data", `${ano}-12-31`)
+  if (error) {
+    console.error("[financeiro] getFluxoAnualDaConta error", error.message)
+    return serie
+  }
+
+  for (const r of (data ?? []) as { tipo: TipoLancamento; valor: number | string; data: string }[]) {
+    const { mes } = anoMesDeISO(r.data)
+    const ponto = serie[mes - 1]
+    if (!ponto) continue
+    const v = valorNumerico(r.valor)
+    if (r.tipo === "receita") ponto.receitas += v
+    else ponto.despesas += v
+  }
+  for (const p of serie) p.resultado = p.receitas - p.despesas
+  return serie
+}
+
+/**
+ * Comparativo mês a mês de TODAS as contas no ano — duas barras por conta.
+ * Uma consulta só; separar por conta em memória é mais barato que N consultas.
+ */
+export interface ComparativoContas {
+  contas: { id: string; nome: string; cor: string }[]
+  meses: { mes: number; rotulo: string; valores: Record<string, { receitas: number; despesas: number }> }[]
+}
+
+export async function getComparativoContas(ano: number): Promise<ComparativoContas> {
+  const contas = await listarContas(false)
+  const meses = Array.from({ length: 12 }, (_, i) => ({
+    mes: i + 1,
+    rotulo: rotuloMesCurto(i + 1),
+    valores: Object.fromEntries(
+      contas.map((c) => [c.id, { receitas: 0, despesas: 0 }])
+    ) as Record<string, { receitas: number; despesas: number }>,
+  }))
+
+  const base: ComparativoContas = {
+    contas: contas.map((c, i) => ({
+      id: c.id,
+      nome: c.nome,
+      // Cor estável por posição — conta não tem cor no banco, e mudar de cor
+      // entre visitas tornaria o gráfico ilegível.
+      cor: PALETA_CATEGORIAS[i % PALETA_CATEGORIAS.length],
+    })),
+    meses,
+  }
+  if (contas.length === 0) return base
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return base
+
+  const { data, error } = await supabase
+    .from("lancamento_financeiro")
+    .select("conta_id, tipo, valor, data")
+    .is("deletado_em", null)
+    .not("conta_id", "is", null)
+    .eq("status", "realizado")
+    .gte("data", `${ano}-01-01`)
+    .lte("data", `${ano}-12-31`)
+  if (error) {
+    console.error("[financeiro] getComparativoContas error", error.message)
+    return base
+  }
+
+  for (const r of (data ?? []) as {
+    conta_id: string
+    tipo: TipoLancamento
+    valor: number | string
+    data: string
+  }[]) {
+    const { mes } = anoMesDeISO(r.data)
+    const balde = meses[mes - 1]?.valores[r.conta_id]
+    if (!balde) continue
+    const v = valorNumerico(r.valor)
+    if (r.tipo === "receita") balde.receitas += v
+    else balde.despesas += v
+  }
+
   return base
 }
 
@@ -597,10 +1144,10 @@ export async function getConferenciaSentinelaPeriodo(
     .not("empresa_cliente", "is", null)
 
   const receitaPorEmpresa = new Map<string, number>()
-  for (const r of (receitas ?? []) as { empresa_cliente: string; valor: number }[]) {
+  for (const r of (receitas ?? []) as { empresa_cliente: string; valor: number | string }[]) {
     receitaPorEmpresa.set(
       r.empresa_cliente,
-      (receitaPorEmpresa.get(r.empresa_cliente) ?? 0) + Number(r.valor)
+      (receitaPorEmpresa.get(r.empresa_cliente) ?? 0) + valorNumerico(r.valor)
     )
   }
 

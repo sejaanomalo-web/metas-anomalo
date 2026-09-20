@@ -5,14 +5,20 @@ import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { parsePeriodo } from "@/lib/periodo"
 import { periodoQS } from "@/lib/periodo-url"
 import {
-  listarLancamentos,
+  listarLancamentosDetalhado,
   listarCategorias,
   listarContas,
 } from "@/lib/financeiro"
+import { ehCaminhoInternoSeguro } from "@/lib/financeiro-regras"
+import type { EixoPeriodo, SituacaoFinanceira } from "@/lib/financeiro-regras"
 import { listarEmpresas } from "@/lib/empresas-actions"
 import { requererPermissao } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
+
+function situacaoValida(v?: string): SituacaoFinanceira {
+  return v === "realizado" || v === "previsto" ? v : "total"
+}
 
 export default async function FinanceiroLancamentosPage({
   searchParams,
@@ -25,6 +31,14 @@ export default async function FinanceiroLancamentosPage({
     modo?: string
     tipo?: string
     status?: string
+    situacao?: string
+    eixo?: string
+    lanc?: string
+    voltar?: string
+    busca?: string
+    novo?: string
+    empresa?: string
+    valor?: string
   }
 }) {
   await requererPermissao("dashboard_financeiro")
@@ -42,8 +56,47 @@ export default async function FinanceiroLancamentosPage({
       ? (searchParams.status as "previsto" | "realizado" | "cancelado")
       : undefined
 
-  const [lancamentos, categorias, contas, empresas] = await Promise.all([
-    listarLancamentos({ de: periodo.de, ate: periodo.ate, tipo, status }),
+  // Situação decide o que os TOTAIS somam (R1/R2). Os chips acima filtram
+  // quais LINHAS aparecem. São coisas diferentes e a tela diz isso.
+  const situacao = situacaoValida(searchParams?.situacao)
+
+  // R6. Links vindos da agenda perguntam "o que vence neste dia", não "de que
+  // mês é este dinheiro" — aí o recorte e a ordem passam pelo vencimento.
+  const eixo: EixoPeriodo =
+    searchParams?.eixo === "vencimento" ? "vencimento" : "competencia"
+
+  // Redirect aberto: só caminho interno é aceito como destino do "Voltar".
+  const voltar = ehCaminhoInternoSeguro(searchParams?.voltar)
+    ? (searchParams!.voltar as string)
+    : null
+
+  const busca = (searchParams?.busca ?? "").trim() || undefined
+
+  // Atalho da Conferência com o Sentinela: ?novo=receita&empresa=X&valor=Y
+  // abre o formulário já preenchido, pra transformar uma divergência em
+  // lançamento sem redigitar o que o sistema já sabe.
+  const valorPrefill = Number(searchParams?.valor)
+  const prefill =
+    searchParams?.novo === "receita" || searchParams?.novo === "despesa"
+      ? {
+          tipo: searchParams.novo as "receita" | "despesa",
+          valor: Number.isFinite(valorPrefill) && valorPrefill > 0 ? valorPrefill : undefined,
+          empresa_cliente: searchParams?.empresa || undefined,
+          descricao: searchParams?.empresa
+            ? `Mensalidade ${searchParams.empresa}`
+            : undefined,
+        }
+      : null
+
+  const [resultado, categorias, contas, empresas] = await Promise.all([
+    listarLancamentosDetalhado({
+      de: periodo.de,
+      ate: periodo.ate,
+      tipo,
+      status,
+      eixo,
+      busca,
+    }),
     listarCategorias(undefined, false),
     listarContas(false),
     listarEmpresas(true),
@@ -54,11 +107,25 @@ export default async function FinanceiroLancamentosPage({
   // Base de query que PRESERVA o período (modo/de/ate ou mes/ano) nos chips
   // de filtro — antes os chips fixavam ?mes=&ano= e derrubavam dia/intervalo.
   const base = periodoQS(periodo)
+  const extras: string[] = []
+  if (eixo === "vencimento") extras.push("eixo=vencimento")
+  if (voltar) extras.push(`voltar=${encodeURIComponent(voltar)}`)
+  const sufixo = extras.length > 0 ? `&${extras.join("&")}` : ""
+
   const lancHref = (extra?: string) =>
-    `/dashboard/financeiro/lancamentos?${base}${extra ? `&${extra}` : ""}`
+    `/dashboard/financeiro/lancamentos?${base}${extra ? `&${extra}` : ""}${sufixo}`
+
+  const filtroAtual = (novo: string) => {
+    const partes: string[] = []
+    if (tipo) partes.push(`tipo=${tipo}`)
+    if (status) partes.push(`status=${status}`)
+    if (busca) partes.push(`busca=${encodeURIComponent(busca)}`)
+    partes.push(novo)
+    return partes.join("&")
+  }
 
   return (
-    <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
       <div>
         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)" }}>
           Financeiro · Lançamentos
@@ -76,36 +143,63 @@ export default async function FinanceiroLancamentosPage({
           <h1 style={{ fontSize: 36 }}>Lançamentos · {periodo.rotulo}</h1>
           <SeletorPeriodoGlobal mesAtual={mes} anoAtual={ano} />
         </div>
+        {voltar && (
+          <Link
+            href={voltar}
+            style={{
+              display: "inline-block",
+              marginTop: 10,
+              fontSize: 13,
+              color: "var(--accent)",
+              textDecoration: "none",
+            }}
+          >
+            ← {voltar.startsWith("/dashboard/workspace") ? "Voltar para a agenda" : "Voltar"}
+          </Link>
+        )}
         <div className="gold-divider" style={{ marginTop: 18 }} />
       </div>
 
       <FinanceiroNav mes={mes} ano={ano} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <FiltroChip href={lancHref()} ativo={!tipo && !status}>
+        <FiltroChip href={lancHref(filtroAtual("").replace(/^tipo=[^&]*&?/, ""))} ativo={!tipo}>
           Todos
         </FiltroChip>
-        <FiltroChip href={lancHref("tipo=receita")} ativo={tipo === "receita"}>
+        <FiltroChip href={lancHref(filtroAtual("tipo=receita"))} ativo={tipo === "receita"}>
           Receitas
         </FiltroChip>
-        <FiltroChip href={lancHref("tipo=despesa")} ativo={tipo === "despesa"}>
+        <FiltroChip href={lancHref(filtroAtual("tipo=despesa"))} ativo={tipo === "despesa"}>
           Despesas
         </FiltroChip>
-        <FiltroChip href={lancHref("status=previsto")} ativo={status === "previsto"}>
+        <FiltroChip href={lancHref(filtroAtual("status=previsto"))} ativo={status === "previsto"}>
           Previstos
         </FiltroChip>
-        <FiltroChip href={lancHref("status=realizado")} ativo={status === "realizado"}>
+        <FiltroChip href={lancHref(filtroAtual("status=realizado"))} ativo={status === "realizado"}>
           Realizados
         </FiltroChip>
       </div>
 
       <TabelaLancamentos
-        lancamentos={lancamentos}
+        lancamentos={resultado.lancamentos}
+        truncado={resultado.truncado}
+        limite={resultado.limite}
         categorias={categorias}
         contas={contas}
         empresas={empresasUI}
-        mesAtual={mes}
-        anoAtual={ano}
+        situacao={situacao}
+        eixo={eixo}
+        // Funções não atravessam a fronteira servidor→cliente: os três links
+        // vão prontos.
+        hrefsSituacao={{
+          realizado: lancHref(filtroAtual("situacao=realizado")),
+          previsto: lancHref(filtroAtual("situacao=previsto")),
+          total: lancHref(filtroAtual("situacao=total")),
+        }}
+        lancDeepLink={searchParams?.lanc ?? null}
+        prefill={prefill}
+        mesNum={Number(periodo.de.slice(5, 7))}
+        anoAtual={Number(periodo.de.slice(0, 4))}
       />
     </main>
   )

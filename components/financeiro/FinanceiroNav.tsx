@@ -17,6 +17,7 @@ const ITEMS: { rotulo: string; href: string; matchExact?: boolean }[] = [
   { rotulo: "Contas", href: "/dashboard/financeiro/contas" },
   { rotulo: "Categorias", href: "/dashboard/financeiro/categorias" },
   { rotulo: "Relatórios", href: "/dashboard/financeiro/relatorios" },
+  { rotulo: "Importar extrato", href: "/dashboard/financeiro/importar" },
 ]
 
 /**
@@ -35,7 +36,10 @@ export default function FinanceiroNav({ mes, ano }: Props) {
       style={{
         display: "flex",
         gap: 4,
-        flexWrap: "wrap",
+        // Rola na horizontal no celular: com sete abas, `flexWrap` empilharia
+        // três linhas de pílulas e empurraria o conteúdo pra fora da tela.
+        overflowX: "auto",
+        scrollbarWidth: "none",
         padding: 4,
         background: "var(--surface-1)",
         border: "0.5px solid rgba(255,255,255,0.06)",
@@ -55,6 +59,7 @@ export default function FinanceiroNav({ mes, ano }: Props) {
               display: "inline-flex",
               alignItems: "center",
               padding: "8px 16px",
+              whiteSpace: "nowrap",
               fontSize: 12,
               fontWeight: 600,
               letterSpacing: "0.5px",

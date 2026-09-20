@@ -3,20 +3,28 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import RecorrenteDrawer from "./RecorrenteDrawer"
-import { materializarMesAction } from "@/lib/financeiro-actions"
+import {
+  excluirRecorrenteAction,
+  materializarPeriodoAction,
+} from "@/lib/financeiro-actions"
 import type {
   CategoriaFinanceira,
   ContaFinanceira,
   PagamentoRecorrente,
 } from "@/lib/financeiro"
 import { formatBRL, type Mes } from "@/lib/data"
+import { rotuloMes, valorNumerico } from "@/lib/financeiro-regras"
 
 interface Props {
   recorrentes: PagamentoRecorrente[]
   categorias: CategoriaFinanceira[]
   contas: ContaFinanceira[]
+  /** Rótulo do mês (só UI). */
   mesAtual: Mes
   anoAtual: number
+  /** Mês do CALENDÁRIO (1–12) — é ele que vai pro banco. Ver §3.2: o tipo
+   *  `Mes` cobre só Abril–Dezembro e faria janeiro virar abril. */
+  mesNum: number
 }
 
 export default function ListaRecorrentes({
@@ -25,13 +33,16 @@ export default function ListaRecorrentes({
   contas,
   mesAtual,
   anoAtual,
+  mesNum,
 }: Props) {
+  const rotuloPeriodo = `${rotuloMes(mesNum)}/${anoAtual}`
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
   const [sucesso, setSucesso] = useState<string | null>(null)
   const [drawerAberto, setDrawerAberto] = useState(false)
   const [editando, setEditando] = useState<PagamentoRecorrente | null>(null)
+  const [pendingId, setPendingId] = useState<string | null>(null)
 
   const catById = new Map(categorias.map((c) => [c.id, c]))
   const contaById = new Map(contas.map((c) => [c.id, c]))
@@ -39,21 +50,56 @@ export default function ListaRecorrentes({
   function abrirNovo() { setEditando(null); setDrawerAberto(true) }
   function editar(r: PagamentoRecorrente) { setEditando(r); setDrawerAberto(true) }
 
+  function excluir(r: PagamentoRecorrente) {
+    if (
+      !confirm(
+        `Excluir o recorrente "${r.nome}"?\n\n` +
+          "Os lançamentos já gerados CONTINUAM existindo — eles só deixam de " +
+          "apontar para este modelo. O que para é a geração dos próximos meses."
+      )
+    ) {
+      return
+    }
+    setErro(null)
+    setSucesso(null)
+    setPendingId(r.id)
+    startTransition(async () => {
+      const res = await excluirRecorrenteAction(r.id)
+      setPendingId(null)
+      if (!res.ok) {
+        setErro(res.erro ?? "Não foi possível excluir.")
+        return
+      }
+      setSucesso(`"${r.nome}" foi excluído. Os lançamentos já gerados continuam lá.`)
+      router.refresh()
+      setTimeout(() => window.location.reload(), 400)
+    })
+  }
+
+  /** "Sem fim" · "Até 31/12/2026" — a diferença entre uma despesa que some
+   *  sozinha em dezembro e uma que vai cobrar pra sempre. */
+  function janela(r: PagamentoRecorrente): string {
+    if (!r.ativo) return "Inativo"
+    if (!r.fim) return "Sem fim"
+    const [y, m, d] = r.fim.split("-")
+    return `Até ${d}/${m}/${y}`
+  }
+
   async function materializar() {
     setErro(null)
     setSucesso(null)
     startTransition(async () => {
       // Chamada direta de server action (sem fetch HTTP) — mais
       // confiável em PWA porque elimina dependência de cookie/SW.
-      const matResult = await materializarMesAction(mesAtual, anoAtual)
+      const matResult = await materializarPeriodoAction(anoAtual, mesNum)
       if (!matResult.ok) {
         setErro(`Erro: ${matResult.erro ?? "falha desconhecida"}`)
         return
       }
       setSucesso(
         matResult.criados === 0
-          ? `Nenhum lançamento novo (todos já existem para ${mesAtual}/${anoAtual}).`
-          : `${matResult.criados} lançamento(s) criado(s) para ${mesAtual}/${anoAtual}.`
+          ? `Nenhum lançamento novo (todos já existem para ${rotuloPeriodo}).`
+          : `${matResult.criados} lançamento(s) criado(s) para ${rotuloPeriodo}.`
       )
       router.refresh()
       setTimeout(() => window.location.reload(), 400)
@@ -79,7 +125,7 @@ export default function ListaRecorrentes({
           className="btn-gold-outline"
           style={{ opacity: pending ? 0.6 : 1 }}
         >
-          {pending ? "Gerando..." : `Gerar lançamentos de ${mesAtual}/${anoAtual}`}
+          {pending ? "Gerando..." : `Gerar lançamentos de ${rotuloPeriodo}`}
         </button>
         <button type="button" onClick={abrirNovo} className="btn-gold-filled">
           + Novo recorrente
@@ -130,11 +176,10 @@ export default function ListaRecorrentes({
           {recorrentes.map((r) => {
             const cat = r.categoria_id ? catById.get(r.categoria_id) : null
             const conta = r.conta_id ? contaById.get(r.conta_id) : null
+            const ocupado = pendingId === r.id
             return (
-              <button
+              <div
                 key={r.id}
-                type="button"
-                onClick={() => editar(r)}
                 className="glass"
                 style={{
                   padding: "20px 24px",
@@ -142,11 +187,19 @@ export default function ListaRecorrentes({
                   display: "flex",
                   flexDirection: "column",
                   gap: 8,
-                  cursor: "pointer",
                   opacity: r.ativo ? 1 : 0.55,
                   border: "1px solid var(--border)",
                 }}
               >
+                <div
+                  onClick={() => editar(r)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") editar(r)
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
                 <p
                   style={{
                     fontSize: 11,
@@ -171,13 +224,33 @@ export default function ListaRecorrentes({
                     marginTop: 4,
                   }}
                 >
-                  {formatBRL(r.valor)}
+                  {formatBRL(valorNumerico(r.valor))}
                 </p>
                 <p style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
                   {cat ? cat.nome : "Sem categoria"}
                   {conta && ` · ${conta.nome}`}
+                  {" · "}
+                  {janela(r)}
                 </p>
-              </button>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    marginTop: 10,
+                    paddingTop: 12,
+                    borderTop: "1px solid var(--border)",
+                  }}
+                >
+                  <BotaoCard onClick={() => editar(r)} disabled={ocupado}>
+                    Editar
+                  </BotaoCard>
+                  <BotaoCard onClick={() => excluir(r)} disabled={ocupado} perigo>
+                    {ocupado ? "..." : "Excluir"}
+                  </BotaoCard>
+                </div>
+              </div>
             )
           })}
         </div>
@@ -193,5 +266,38 @@ export default function ListaRecorrentes({
         anoAtual={anoAtual}
       />
     </>
+  )
+}
+
+function BotaoCard({
+  onClick,
+  disabled,
+  perigo,
+  children,
+}: {
+  onClick: () => void
+  disabled?: boolean
+  perigo?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: "5px 12px",
+        background: "transparent",
+        border: `1px solid ${perigo ? "rgba(239,68,68,0.40)" : "var(--border)"}`,
+        borderRadius: 4,
+        cursor: disabled ? "wait" : "pointer",
+        fontSize: 12,
+        fontWeight: 500,
+        color: perigo ? "#ef4444" : "var(--foreground)",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {children}
+    </button>
   )
 }

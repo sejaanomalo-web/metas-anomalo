@@ -4,14 +4,29 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual, temPermissao } from "./auth"
 import { parseNumeroForm } from "./parse-numero"
+import { conferirLinhasAfetadas, traduzirErroBanco } from "./financeiro-erros"
+import { proximaCorLivre } from "./financeiro-regras"
 import { type Mes } from "./data"
 import {
+  contarUsoCategoria,
   mesNumero,
+  rangeDoMesNumISO,
   type TipoLancamento,
   type StatusLancamento,
   type TipoConta,
   type Periodicidade,
 } from "./financeiro"
+import { recorrentesAMaterializar } from "./financeiro-regras"
+
+/**
+ * Invalida o financeiro E o painel. O painel mostra dinheiro do mês; se só o
+ * financeiro fosse revalidado, o número do painel continuaria velho até a
+ * próxima navegação completa.
+ */
+function revalidarFinanceiro(): void {
+  revalidatePath("/dashboard/financeiro", "layout")
+  revalidatePath("/dashboard")
+}
 
 export interface ResultadoFinanceiro {
   ok: boolean
@@ -59,6 +74,79 @@ function isoDate(v: FormDataEntryValue | null): string | null {
   return s
 }
 
+function texto(fd: FormData, campo: string): string | null {
+  return String(fd.get(campo) ?? "").trim() || null
+}
+
+/** Hoje em São Paulo. `new Date().toISOString()` daria o dia seguinte depois
+ *  das 21h, jogando o pagamento pro mês errado na virada do mês. */
+function hojeISO(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
+/**
+ * Campos que criar e editar compartilham. Devolve o payload ou a mensagem de
+ * erro — as duas actions divergiam em validação antes de existir este ponto
+ * comum (só uma checava tamanho mínimo, por exemplo).
+ */
+function lerCamposLancamento(
+  formData: FormData
+): { erro: string } | { payload: Record<string, unknown> } {
+  const tipo = String(formData.get("tipo") ?? "")
+  if (!tipoValido(tipo)) return { erro: "Tipo inválido (receita/despesa)." }
+
+  const status = String(formData.get("status") ?? "previsto")
+  if (!statusValido(status)) return { erro: "Status inválido." }
+
+  const valorParsed = parseNumeroForm(formData.get("valor"))
+  if (valorParsed.erro) return { erro: `Valor: ${valorParsed.erro}` }
+  if (valorParsed.value === null || valorParsed.value <= 0) {
+    return { erro: "Valor é obrigatório e maior que zero." }
+  }
+
+  const descricao = String(formData.get("descricao") ?? "").trim()
+  if (descricao.length < 2) {
+    return { erro: "Descrição precisa de pelo menos 2 caracteres." }
+  }
+
+  const data = isoDate(formData.get("data"))
+  if (!data) return { erro: "Data de competência inválida (use AAAA-MM-DD)." }
+
+  const data_vencimento = isoDate(formData.get("data_vencimento"))
+  let data_pagamento = isoDate(formData.get("data_pagamento"))
+
+  // R8. Realizado sem data de pagamento assume HOJE em vez de recusar o
+  // salvamento. Antes isso barrava quem só queria registrar algo já pago, e a
+  // data acabava digitada errada na pressa.
+  if (status === "realizado" && !data_pagamento) data_pagamento = hojeISO()
+  // Voltar para previsto solta a data de pagamento: um previsto com data de
+  // pagamento preenchida entraria no saldo da conta sem estar realizado.
+  if (status !== "realizado") data_pagamento = null
+
+  return {
+    payload: {
+      data,
+      data_vencimento,
+      data_pagamento,
+      tipo,
+      valor: valorParsed.value,
+      categoria_id: texto(formData, "categoria_id"),
+      conta_id: texto(formData, "conta_id"),
+      descricao,
+      observacoes: texto(formData, "observacoes"),
+      empresa_cliente: texto(formData, "empresa_cliente"),
+      origem: texto(formData, "origem"),
+      forma_pagamento: texto(formData, "forma_pagamento"),
+      status,
+    },
+  }
+}
+
 // ============================================================
 // LANCAMENTOS
 // ============================================================
@@ -72,62 +160,21 @@ export async function criarLancamentoAction(
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
 
-  const tipo = String(formData.get("tipo") ?? "")
-  if (!tipoValido(tipo)) return { ok: false, erro: "Tipo inválido (receita/despesa)." }
-
-  // Default PREVISTO: um lançamento nasce previsto e só vira realizado
-  // quando o usuário marca como pago (data de pagamento). Realizado
-  // continua disponível como escolha explícita (ex.: registrar algo já pago).
-  const status = String(formData.get("status") ?? "previsto")
-  if (!statusValido(status)) return { ok: false, erro: "Status inválido." }
-
-  const valorParsed = parseNumeroForm(formData.get("valor"))
-  if (valorParsed.erro) return { ok: false, erro: `Valor: ${valorParsed.erro}` }
-  if (valorParsed.value === null || valorParsed.value <= 0) {
-    return { ok: false, erro: "Valor é obrigatório e maior que zero." }
-  }
-
-  const data = isoDate(formData.get("data"))
-  if (!data) return { ok: false, erro: "Data inválida (use AAAA-MM-DD)." }
-
-  const data_pagamento = isoDate(formData.get("data_pagamento"))
-  const descricao = String(formData.get("descricao") ?? "").trim()
-  if (!descricao) return { ok: false, erro: "Descrição obrigatória." }
-
-  const categoria_id = String(formData.get("categoria_id") ?? "").trim() || null
-  const conta_id = String(formData.get("conta_id") ?? "").trim() || null
-  const observacoes = String(formData.get("observacoes") ?? "").trim() || null
-  const empresa_cliente = String(formData.get("empresa_cliente") ?? "").trim() || null
-
-  // Regra: status=realizado exige data_pagamento.
-  if (status === "realizado" && !data_pagamento) {
-    return { ok: false, erro: "Lançamento realizado precisa de data de pagamento." }
-  }
+  const lido = lerCamposLancamento(formData)
+  if ("erro" in lido) return { ok: false, erro: lido.erro }
 
   const { data: row, error } = await supabase
     .from("lancamento_financeiro")
-    .insert({
-      data,
-      data_pagamento,
-      tipo,
-      valor: valorParsed.value,
-      categoria_id,
-      conta_id,
-      descricao,
-      observacoes,
-      empresa_cliente,
-      status,
-      criado_por: usuarioId,
-    })
+    .insert({ ...lido.payload, criado_por: usuarioId })
     .select("id")
     .single()
 
   if (error) {
     console.error("[financeiro] criarLancamento error", error.message)
-    return { ok: false, erro: error.message }
+    return { ok: false, erro: traduzirErroBanco(error) }
   }
 
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id: row.id as string }
 }
 
@@ -143,56 +190,20 @@ export async function atualizarLancamentoAction(
   const id = String(formData.get("id") ?? "").trim()
   if (!id) return { ok: false, erro: "ID inválido." }
 
-  const tipo = String(formData.get("tipo") ?? "")
-  if (!tipoValido(tipo)) return { ok: false, erro: "Tipo inválido." }
-
-  const status = String(formData.get("status") ?? "")
-  if (!statusValido(status)) return { ok: false, erro: "Status inválido." }
-
-  const valorParsed = parseNumeroForm(formData.get("valor"))
-  if (valorParsed.erro) return { ok: false, erro: `Valor: ${valorParsed.erro}` }
-  if (valorParsed.value === null || valorParsed.value <= 0) {
-    return { ok: false, erro: "Valor é obrigatório e maior que zero." }
-  }
-
-  const data = isoDate(formData.get("data"))
-  if (!data) return { ok: false, erro: "Data inválida." }
-
-  const data_pagamento = isoDate(formData.get("data_pagamento"))
-  const descricao = String(formData.get("descricao") ?? "").trim()
-  if (!descricao) return { ok: false, erro: "Descrição obrigatória." }
-
-  if (status === "realizado" && !data_pagamento) {
-    return { ok: false, erro: "Lançamento realizado precisa de data de pagamento." }
-  }
-
-  const categoria_id = String(formData.get("categoria_id") ?? "").trim() || null
-  const conta_id = String(formData.get("conta_id") ?? "").trim() || null
-  const observacoes = String(formData.get("observacoes") ?? "").trim() || null
-  const empresa_cliente = String(formData.get("empresa_cliente") ?? "").trim() || null
+  const lido = lerCamposLancamento(formData)
+  if ("erro" in lido) return { ok: false, erro: lido.erro }
 
   const { error } = await supabase
     .from("lancamento_financeiro")
-    .update({
-      data,
-      data_pagamento,
-      tipo,
-      valor: valorParsed.value,
-      categoria_id,
-      conta_id,
-      descricao,
-      observacoes,
-      empresa_cliente,
-      status,
-    })
+    .update(lido.payload)
     .eq("id", id)
 
   if (error) {
     console.error("[financeiro] atualizarLancamento error", error.message)
-    return { ok: false, erro: error.message }
+    return { ok: false, erro: traduzirErroBanco(error) }
   }
 
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -209,7 +220,7 @@ export async function excluirLancamentoAction(id: string): Promise<ResultadoFina
     .eq("id", id)
 
   if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -233,7 +244,7 @@ export async function marcarRealizadoAction(
     .eq("id", id)
 
   if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -269,7 +280,7 @@ export async function salvarCategoriaAction(
       .update(payload)
       .eq("id", id)
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id }
   } else {
     const { data, error } = await supabase
@@ -278,47 +289,168 @@ export async function salvarCategoriaAction(
       .select("id")
       .single()
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id: data.id as string }
   }
 }
 
-export async function excluirCategoriaAction(id: string): Promise<ResultadoFinanceiro> {
+/**
+ * Cria (ou reaproveita) uma categoria a partir do nome digitado no combobox.
+ *
+ * Reaproveitar é o ponto: digitar "aluguel" quando já existe "Aluguel" tem que
+ * selecionar a que existe, não criar uma segunda. Sem isso, o DRE acaba com a
+ * mesma despesa dividida em duas linhas por diferença de maiúscula.
+ *
+ * A cor não é escolhida aqui: a categoria nasce com a primeira cor livre da
+ * paleta, pra não sair tudo cinza nem repetir a cor da vizinha.
+ */
+export async function criarCategoriaRapidaAction(
+  nome: string,
+  tipo: string
+): Promise<ResultadoFinanceiro & { nome?: string; cor?: string }> {
+  const { erro } = await exigirPermissao()
+  if (erro) return { ok: false, erro }
+  if (!tipoValido(tipo)) return { ok: false, erro: "Tipo inválido." }
+
+  const limpo = nome.trim()
+  if (limpo.length < 2) {
+    return { ok: false, erro: "Nome precisa de pelo menos 2 caracteres." }
+  }
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
+
+  const { data: existentes, error: errBusca } = await supabase
+    .from("categoria_financeira")
+    .select("id, nome, cor, ativa")
+    .eq("tipo", tipo)
+  if (errBusca) return { ok: false, erro: traduzirErroBanco(errBusca) }
+
+  const lista = (existentes ?? []) as {
+    id: string
+    nome: string
+    cor: string | null
+    ativa: boolean
+  }[]
+
+  const igual = lista.find(
+    (c) => c.nome.trim().toLowerCase() === limpo.toLowerCase()
+  )
+  if (igual) {
+    // Se estava desativada, reativa: o usuário acabou de pedir por ela.
+    if (!igual.ativa) {
+      await supabase
+        .from("categoria_financeira")
+        .update({ ativa: true })
+        .eq("id", igual.id)
+    }
+    revalidarFinanceiro()
+    return { ok: true, id: igual.id, nome: igual.nome, cor: igual.cor ?? undefined }
+  }
+
+  const cor = proximaCorLivre(lista.map((c) => c.cor))
+  const { data, error } = await supabase
+    .from("categoria_financeira")
+    .insert({ nome: limpo, tipo, cor, ativa: true, ordem: 0 })
+    .select("id, nome, cor")
+    .single()
+  if (error) return { ok: false, erro: traduzirErroBanco(error) }
+
+  revalidarFinanceiro()
+  return { ok: true, id: data.id as string, nome: data.nome as string, cor: data.cor as string }
+}
+
+/** O que o usuário escolheu no diálogo de exclusão. */
+export type ModoExclusaoCategoria = "desativar" | "excluir"
+
+export interface ResultadoExclusaoCategoria extends ResultadoFinanceiro {
+  /** Quantos vínculos ficaram sem categoria. */
+  soltos?: number
+}
+
+/**
+ * R9. Exclusão de categoria com as duas saídas honestas.
+ *
+ * Antes isto simplesmente BLOQUEAVA quando a categoria estava em uso, e a
+ * pessoa ficava sem opção: a categoria errada continuava na lista pra sempre.
+ * Agora o diálogo conta o uso e oferece o que realmente se quer em cada caso:
+ *
+ *   • desativar — some das listas de escolha, o histórico continua exibindo
+ *     o nome. É o recomendado, e é o que quase todo mundo quer de fato.
+ *
+ *   • excluir — os vínculos são SOLTOS (viram "Sem categoria") e a categoria
+ *     some. Nenhum lançamento é apagado: dinheiro não sai em cascata.
+ *
+ * Não é transacional (são passos sequenciais). É aceitável porque nenhum
+ * passo destrói informação: se parar no meio, sobram lançamentos sem
+ * categoria e a categoria ainda existe — estado consistente e reversível.
+ */
+export async function excluirCategoriaAction(
+  id: string,
+  modo: ModoExclusaoCategoria = "excluir"
+): Promise<ResultadoExclusaoCategoria> {
   const { erro } = await exigirPermissao()
   if (erro) return { ok: false, erro }
 
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
 
-  // Bloqueia exclusão se a categoria está em uso (lançamentos ou recorrentes).
-  const { data: lanc } = await supabase
-    .from("lancamento_financeiro")
-    .select("id")
-    .eq("categoria_id", id)
-    .is("deletado_em", null)
-    .limit(1)
-  if (lanc && lanc.length > 0) {
-    return {
-      ok: false,
-      erro: "Categoria está em uso em lançamentos. Desative em vez de excluir.",
-    }
-  }
-  const { data: rec } = await supabase
-    .from("pagamento_recorrente")
-    .select("id")
-    .eq("categoria_id", id)
-    .limit(1)
-  if (rec && rec.length > 0) {
-    return {
-      ok: false,
-      erro: "Categoria está em uso em pagamentos recorrentes. Desative em vez de excluir.",
-    }
+  if (modo === "desativar") {
+    const { data, error } = await supabase
+      .from("categoria_financeira")
+      .update({ ativa: false })
+      .eq("id", id)
+      .select("id")
+    if (error) return { ok: false, erro: traduzirErroBanco(error) }
+    const semPermissao = conferirLinhasAfetadas(data, "desativar a categoria")
+    if (semPermissao) return { ok: false, erro: semPermissao }
+    revalidarFinanceiro()
+    return { ok: true, id }
   }
 
-  const { error } = await supabase.from("categoria_financeira").delete().eq("id", id)
-  if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
-  return { ok: true, id }
+  // Solta os vínculos antes de remover. A FK é ON DELETE SET NULL, mas fazer
+  // explicitamente permite CONTAR quantos foram soltos e avisar o usuário.
+  let soltos = 0
+
+  const { data: lancSoltos, error: errLanc } = await supabase
+    .from("lancamento_financeiro")
+    .update({ categoria_id: null })
+    .eq("categoria_id", id)
+    .select("id")
+  if (errLanc) return { ok: false, erro: traduzirErroBanco(errLanc) }
+  soltos += lancSoltos?.length ?? 0
+
+  const { data: recSoltos, error: errRec } = await supabase
+    .from("pagamento_recorrente")
+    .update({ categoria_id: null })
+    .eq("categoria_id", id)
+    .select("id")
+  if (errRec) return { ok: false, erro: traduzirErroBanco(errRec) }
+  soltos += recSoltos?.length ?? 0
+
+  // `.select()` no delete não é enfeite: um delete barrado pela RLS devolve
+  // ZERO linhas SEM erro, e a tela diria "excluída" com a categoria ainda lá.
+  const { data: removidas, error } = await supabase
+    .from("categoria_financeira")
+    .delete()
+    .eq("id", id)
+    .select("id")
+  if (error) return { ok: false, erro: traduzirErroBanco(error) }
+  const semPermissao = conferirLinhasAfetadas(removidas, "excluir a categoria")
+  if (semPermissao) return { ok: false, erro: semPermissao }
+
+  revalidarFinanceiro()
+  return { ok: true, id, soltos }
+}
+
+/** Contagem de uso, pro diálogo perguntar já sabendo o tamanho do estrago. */
+export async function contarUsoCategoriaAction(
+  id: string
+): Promise<{ ok: boolean; lancamentos: number; recorrentes: number; erro?: string }> {
+  const { erro } = await exigirPermissao()
+  if (erro) return { ok: false, lancamentos: 0, recorrentes: 0, erro }
+  const uso = await contarUsoCategoria(id)
+  return { ok: true, lancamentos: uso.lancamentos, recorrentes: uso.recorrentes }
 }
 
 // ============================================================
@@ -359,7 +491,7 @@ export async function salvarContaAction(
       .update(payload)
       .eq("id", id)
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id }
   } else {
     const { data, error } = await supabase
@@ -368,11 +500,18 @@ export async function salvarContaAction(
       .select("id")
       .single()
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id: data.id as string }
   }
 }
 
+/**
+ * Exclui uma conta. Diferente de categoria, aqui a exclusão é BLOQUEADA
+ * quando há lançamentos: soltar o vínculo faria o dinheiro desaparecer do
+ * saldo de qualquer conta (R5 soma por conta_id), e um saldo que muda sozinho
+ * é a pior coisa que pode acontecer nesta tela. Desativar resolve o caso real
+ * — a conta some das listas de escolha e o saldo histórico continua de pé.
+ */
 export async function excluirContaAction(id: string): Promise<ResultadoFinanceiro> {
   const { erro } = await exigirPermissao()
   if (erro) return { ok: false, erro }
@@ -380,22 +519,53 @@ export async function excluirContaAction(id: string): Promise<ResultadoFinanceir
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
 
-  const { data: lanc } = await supabase
+  const { count } = await supabase
     .from("lancamento_financeiro")
-    .select("id")
+    .select("id", { count: "exact", head: true })
     .eq("conta_id", id)
     .is("deletado_em", null)
-    .limit(1)
-  if (lanc && lanc.length > 0) {
+
+  if ((count ?? 0) > 0) {
     return {
       ok: false,
-      erro: "Conta está em uso em lançamentos. Desative em vez de excluir.",
+      erro:
+        `Esta conta tem ${count} lançamento(s) e não pode ser excluída — o saldo ` +
+        "deles deixaria de existir. Desative a conta: ela some das listas de " +
+        "escolha e o histórico continua intacto.",
     }
   }
 
-  const { error } = await supabase.from("conta_financeira").delete().eq("id", id)
-  if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
+  const { data, error } = await supabase
+    .from("conta_financeira")
+    .delete()
+    .eq("id", id)
+    .select("id")
+  if (error) return { ok: false, erro: traduzirErroBanco(error) }
+  const semPermissao = conferirLinhasAfetadas(data, "excluir a conta")
+  if (semPermissao) return { ok: false, erro: semPermissao }
+
+  revalidarFinanceiro()
+  return { ok: true, id }
+}
+
+/** Desativa a conta — a saída recomendada quando há histórico. */
+export async function desativarContaAction(id: string): Promise<ResultadoFinanceiro> {
+  const { erro } = await exigirPermissao()
+  if (erro) return { ok: false, erro }
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
+
+  const { data, error } = await supabase
+    .from("conta_financeira")
+    .update({ ativa: false })
+    .eq("id", id)
+    .select("id")
+  if (error) return { ok: false, erro: traduzirErroBanco(error) }
+  const semPermissao = conferirLinhasAfetadas(data, "desativar a conta")
+  if (semPermissao) return { ok: false, erro: semPermissao }
+
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -467,7 +637,7 @@ export async function salvarRecorrenteAction(
       .update(payload)
       .eq("id", id)
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id }
   } else {
     const { data, error } = await supabase
@@ -476,7 +646,7 @@ export async function salvarRecorrenteAction(
       .select("id")
       .single()
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id: data.id as string }
   }
 }
@@ -492,7 +662,7 @@ export async function excluirRecorrenteAction(id: string): Promise<ResultadoFina
   // Recorrentes inativos podem ser desativados em vez de excluídos.
   const { error } = await supabase.from("pagamento_recorrente").delete().eq("id", id)
   if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -500,62 +670,109 @@ export async function excluirRecorrenteAction(id: string): Promise<ResultadoFina
 // MATERIALIZAÇÃO DE RECORRENTES
 // ============================================================
 
-/**
- * Server action chamável do client (com auth). Wrapper sobre
- * materializarRecorrentesDoMes que evita o round-trip HTTP via
- * /api/financeiro/materializar (que dependia de cookie de sessão
- * que o Service Worker às vezes intercepta/bloqueia).
- *
- * Os drawers de Lançamento e Recorrente chamam essa direto.
- */
-export async function materializarMesAction(
-  mes: Mes,
-  ano: number
-): Promise<{ ok: boolean; criados: number; erro?: string }> {
-  const { erro } = await exigirPermissao()
-  if (erro) return { ok: false, criados: 0, erro }
-  return materializarRecorrentesDoMes(mes, ano)
+export interface ResultadoMaterializacao {
+  ok: boolean
+  criados: number
+  erro?: string
 }
 
 /**
- * Gera os lancamentos previstos do mês/ano informado para todos os
- * recorrentes ativos. Idempotente: antes de inserir, verifica se já
- * existe lançamento com (recorrente_id, ano, mes). Chamado por cron
- * mensal e também via endpoint admin manual.
+ * Server action chamável do client (com auth). Wrapper sobre
+ * materializarRecorrentesDoPeriodo que evita o round-trip HTTP via
+ * /api/financeiro/materializar (que dependia de cookie de sessão que o
+ * Service Worker às vezes intercepta/bloqueia).
  *
- * Retorna quantos lançamentos foram criados.
+ * `mes` é o mês do CALENDÁRIO (1–12), não o tipo `Mes`: gerar os recorrentes
+ * de janeiro precisa ser possível.
  */
+export async function materializarPeriodoAction(
+  ano: number,
+  mes: number
+): Promise<ResultadoMaterializacao> {
+  const { erro } = await exigirPermissao()
+  if (erro) return { ok: false, criados: 0, erro }
+  return materializarRecorrentesDoPeriodo(ano, mes)
+}
+
+/** Forma antiga, por nome de mês. Mantida para os call-sites existentes. */
+export async function materializarMesAction(
+  mes: Mes,
+  ano: number
+): Promise<ResultadoMaterializacao> {
+  return materializarPeriodoAction(ano, mesNumero(mes))
+}
+
+/** Idem, sem checagem de permissão (uso interno/cron). */
 export async function materializarRecorrentesDoMes(
   mes: Mes,
   ano: number
-): Promise<{ ok: boolean; criados: number; erro?: string }> {
+): Promise<ResultadoMaterializacao> {
+  return materializarRecorrentesDoPeriodo(ano, mesNumero(mes))
+}
+
+/**
+ * Gera os lançamentos previstos de um mês para todos os recorrentes ativos.
+ *
+ * Quem decide o QUE gerar e em QUE DIA é `recorrentesAMaterializar`
+ * (lib/financeiro-regras.ts) — função pura, coberta por teste, inclusive nos
+ * casos de borda que sempre mordem: dia 31 em fevereiro, recorrente já
+ * encerrado, e rodar duas vezes o mesmo mês.
+ *
+ * Idempotência em duas camadas: a consulta dos já gerados (aqui) e o índice
+ * único parcial no banco (migração 20260920), que cobre o caso de dois
+ * cliques simultâneos passarem juntos pela consulta. Por isso o erro 23505 é
+ * tratado como "já existe" e não como falha.
+ *
+ * Retorna quantos lançamentos foram criados.
+ */
+export async function materializarRecorrentesDoPeriodo(
+  ano: number,
+  mes: number
+): Promise<ResultadoMaterializacao> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, criados: 0, erro: "supabase_indisponivel" }
+  if (!Number.isInteger(mes) || mes < 1 || mes > 12) {
+    return { ok: false, criados: 0, erro: "Mês inválido." }
+  }
 
-  // mesNumero retorna o número do calendário (Abril=4, Maio=5, ...).
-  // Não confundir com MESES.indexOf(mes)+1 que dá o índice no array
-  // (Abril=1, Maio=2) — esse era o bug: queries filtravam por mês
-  // errado e nunca encontravam recorrentes elegíveis.
-  const mesNum = mesNumero(mes)
-  if (!mesNum || mesNum < 1) return { ok: false, criados: 0, erro: "Mes inválido." }
+  const { inicio, fim } = rangeDoMesNumISO(ano, mes)
 
-  const inicio = `${ano}-${String(mesNum).padStart(2, "0")}-01`
-  const ultimoDia = new Date(ano, mesNum, 0).getDate()
-  const fim = `${ano}-${String(mesNum).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`
-
-  // 1. Recorrentes ativos que cobrem o mês alvo.
-  const { data: recs } = await supabase
+  // 1. Recorrentes ativos que podem cobrir o mês. O filtro fino (periodicidade,
+  //    dia, início/fim) é da função pura — aqui só evitamos trazer a tabela toda.
+  const { data: recs, error: errRecs } = await supabase
     .from("pagamento_recorrente")
-    .select("id, tipo, valor, categoria_id, conta_id, periodicidade, dia_vencimento, inicio, fim, nome, status_padrao")
+    .select(
+      "id, tipo, valor, categoria_id, conta_id, periodicidade, dia_vencimento, inicio, fim, nome, ativo"
+    )
     .eq("ativo", true)
     .lte("inicio", fim)
     .or(`fim.is.null,fim.gte.${inicio}`)
 
+  if (errRecs) {
+    console.error("[financeiro] materializar recorrentes error", errRecs.message)
+    return { ok: false, criados: 0, erro: errRecs.message }
+  }
   if (!recs || recs.length === 0) return { ok: true, criados: 0 }
 
-  // 2. Para cada recorrente, checar se já existe lancamento no mês (idempotência).
-  let criados = 0
-  for (const rec of recs as {
+  // 2. Quem já tem lançamento no mês (uma consulta só, não uma por recorrente).
+  const { data: existentes, error: errExist } = await supabase
+    .from("lancamento_financeiro")
+    .select("recorrente_id")
+    .not("recorrente_id", "is", null)
+    .gte("data", inicio)
+    .lte("data", fim)
+    .is("deletado_em", null)
+
+  if (errExist) {
+    console.error("[financeiro] materializar existentes error", errExist.message)
+    return { ok: false, criados: 0, erro: errExist.message }
+  }
+
+  const jaGerados = ((existentes ?? []) as { recorrente_id: string }[]).map(
+    (e) => e.recorrente_id
+  )
+
+  type RecRow = {
     id: string
     tipo: TipoLancamento
     valor: number
@@ -566,32 +783,20 @@ export async function materializarRecorrentesDoMes(
     inicio: string
     fim: string | null
     nome: string
-    status_padrao: "previsto" | "realizado"
-  }[]) {
-    // Só periodicidade=mensal entra no MVP (anual/semanal viram refinamento depois).
-    if (rec.periodicidade !== "mensal") continue
-    if (!rec.dia_vencimento) continue
+    ativo: boolean
+  }
 
-    const { data: existente } = await supabase
-      .from("lancamento_financeiro")
-      .select("id")
-      .eq("recorrente_id", rec.id)
-      .gte("data", inicio)
-      .lte("data", fim)
-      .is("deletado_em", null)
-      .maybeSingle()
+  const aCriar = recorrentesAMaterializar(recs as RecRow[], jaGerados, ano, mes)
+  if (aCriar.length === 0) return { ok: true, criados: 0 }
 
-    if (existente) continue
-
-    // Clampa dia ao último dia do mês se passar (ex.: dia 31 em fevereiro).
-    const diaEfetivo = Math.min(rec.dia_vencimento, ultimoDia)
-    const dataLanc = `${ano}-${String(mesNum).padStart(2, "0")}-${String(diaEfetivo).padStart(2, "0")}`
-
-    // Recorrente materializa SEMPRE como previsto (sem data_pagamento).
-    // Aparece em "Próximos vencimentos" e só vira realizado quando o
-    // usuário marca como pago. (status_padrao foi descontinuado.)
+  let criados = 0
+  for (const { recorrente: rec, data: dataLanc } of aCriar) {
+    // Nasce PREVISTO e sem data de pagamento: aparece em "Vencimentos em
+    // aberto" e só entra no caixa quando alguém marcar como pago.
+    // Competência e vencimento coincidem — é uma conta do mês.
     const { error: errInsert } = await supabase.from("lancamento_financeiro").insert({
       data: dataLanc,
+      data_vencimento: dataLanc,
       data_pagamento: null,
       tipo: rec.tipo,
       valor: rec.valor,
@@ -599,10 +804,14 @@ export async function materializarRecorrentesDoMes(
       conta_id: rec.conta_id,
       descricao: rec.nome,
       recorrente_id: rec.id,
+      origem: "Recorrente",
       status: "previsto",
     })
 
     if (errInsert) {
+      // 23505 = o índice único pegou uma corrida. O lançamento existe, que é
+      // o resultado desejado — não é erro.
+      if (errInsert.code === "23505") continue
       console.error("[financeiro] materializar insert error", errInsert.message, rec.id)
       continue
     }
@@ -615,6 +824,6 @@ export async function materializarRecorrentesDoMes(
     criados += 1
   }
 
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, criados }
 }

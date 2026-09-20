@@ -1,4 +1,5 @@
-import { requererPermissao } from "@/lib/auth"
+import { requererPermissao, temPermissao } from "@/lib/auth"
+import { listarVencimentosPorDia } from "@/lib/financeiro"
 import {
   getPreferencia,
   listarAbas,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/workspace"
 import {
   ehDataISOValida,
+  gradeDoMes,
   hojeISO,
   inicioDaSemana,
   somarDiasISO,
@@ -19,6 +21,7 @@ import WorkspaceRealtime from "@/components/workspace/WorkspaceRealtime"
 import FiltrosTarefas from "@/components/workspace/FiltrosTarefas"
 import CalendarioTarefas from "@/components/workspace/CalendarioTarefas"
 import DrawerServidor from "@/components/workspace/DrawerServidor"
+import FonteFinanceiro from "@/components/workspace/FonteFinanceiro"
 
 export const dynamic = "force-dynamic"
 
@@ -63,7 +66,22 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
     situacao: situacao as "pendentes" | "todas",
   }
 
-  const [tarefas, semData, contextos, usuarios, abas, pref] = await Promise.all([
+  // Fonte "financeiro" na agenda: só aparece pra quem tem o módulo, e pode
+  // ser desligada na URL (?fin=0). Ligada por padrão — uma conta a vencer é
+  // exatamente o tipo de compromisso que a agenda existe pra lembrar.
+  const podeFinanceiro = temPermissao(usuario, "dashboard_financeiro")
+  const fonteFinanceiro = podeFinanceiro && um(searchParams, "fin") !== "0"
+
+  // O intervalo de vencimentos acompanha o que a grade REALMENTE mostra: a
+  // visão de mês desenha dias do mês anterior e do seguinte, e um vencimento
+  // sumir justamente nessas bordas seria confuso.
+  const grade = modo === "mes" ? gradeDoMes(ano, mes) : []
+  const janela =
+    modo === "semana"
+      ? { de: semana, ate: somarDiasISO(semana, 6) }
+      : { de: grade[0].iso, ate: grade[grade.length - 1].iso }
+
+  const [tarefas, semData, contextos, usuarios, abas, pref, vencimentos] = await Promise.all([
     modo === "semana"
       ? listarTarefasDoIntervalo(semana, somarDiasISO(semana, 6), filtro)
       : listarTarefasDoMes(ano, mes, filtro),
@@ -72,6 +90,9 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
     listarUsuariosAtivos(),
     listarAbas(),
     getPreferencia(usuario.id),
+    fonteFinanceiro
+      ? listarVencimentosPorDia(janela.de, janela.ate, "/dashboard/workspace/calendario")
+      : Promise.resolve({}),
   ])
 
   const tarefaAberta = um(searchParams, "tarefa")
@@ -93,6 +114,7 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
           rotuloContexto="Cliente"
           placeholderBusca="Pesquisar tarefa, data, cliente, responsável…"
         />
+        {podeFinanceiro && <FonteFinanceiro ativa={fonteFinanceiro} />}
       </div>
 
       <div className="ws-conteudo">
@@ -107,6 +129,7 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
           meuUsuarioId={usuario.id}
           modoCor={pref.modo_cor}
           busca={um(searchParams, "q") ?? ""}
+          vencimentos={vencimentos}
         />
       </div>
 

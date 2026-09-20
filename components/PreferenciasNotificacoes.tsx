@@ -51,6 +51,18 @@ const ITENS: { chave: Tipo; rotulo: string; descricao: string }[] = [
     descricao:
       "Quando te atribuem uma tarefa, mudam o prazo, comentam ou mencionam você",
   },
+  {
+    chave: "conta_vence_hoje",
+    rotulo: "Conta vence hoje",
+    descricao:
+      "Uma vez, na manhã do vencimento, para cada conta a pagar ou a receber",
+  },
+  {
+    chave: "conta_atrasada",
+    rotulo: "Conta atrasada",
+    descricao:
+      "Todo dia enquanto a conta continuar vencida e não paga — para de chegar assim que você marcar como paga",
+  },
 ]
 
 /**
