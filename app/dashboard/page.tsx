@@ -1,6 +1,6 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import KPICard from "@/components/ui/KPICard"
-import GraficoHub from "@/components/GraficoHub"
+import { GraficoHubLazy } from "@/components/graficos-lazy"
 import {
   MESES,
   type Mes,
@@ -475,7 +475,7 @@ export default async function DashboardPage({
               }
             />
           </div>
-          <GraficoHub dados={faturamentoMensal} ano={ano} />
+          <GraficoHubLazy dados={faturamentoMensal} ano={ano} />
         </section>
       </main>
 

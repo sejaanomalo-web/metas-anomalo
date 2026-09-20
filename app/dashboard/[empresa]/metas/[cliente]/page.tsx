@@ -4,7 +4,7 @@ import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import TabsMetas from "@/components/TabsMetas"
 import ToggleOrigem from "@/components/ToggleOrigem"
 import CenarioReal from "@/components/CenarioReal"
-import GraficoFaturamento from "@/components/GraficoFaturamento"
+import { GraficoFaturamentoLazy } from "@/components/graficos-lazy"
 import TabelaMeses from "@/components/TabelaMeses"
 import DrawerEditarMeta from "@/components/DrawerEditarMeta"
 import { requererPermissao } from "@/lib/auth"
@@ -180,7 +180,7 @@ export default async function MetasClientePage({
             origem={origem}
           />
           {temProjecao && pontos.length > 0 ? (
-            <GraficoFaturamento dados={pontos} />
+            <GraficoFaturamentoLazy dados={pontos} />
           ) : (
             <div
               className="glass h-full flex items-center justify-center"

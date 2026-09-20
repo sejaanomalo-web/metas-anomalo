@@ -1,7 +1,7 @@
 import { formatBRL, formatNumero } from "@/lib/data"
 import MetricasTrafego from "@/components/trafego/MetricasTrafego"
 import FunilConversaoTrafego from "@/components/trafego/FunilConversaoTrafego"
-import GraficosTrafego from "@/components/trafego/GraficosTrafego"
+import { GraficosTrafegoLazy } from "@/components/graficos-lazy"
 import {
   SENTINELA_NOME,
   type AnomaliaSentinela,
@@ -42,7 +42,7 @@ export default function PainelTrafego({
       <FunilConversaoTrafego resumo={resumo} />
 
       {/* Gráficos: Evolução Mensal + Comparativo Mensal */}
-      <GraficosTrafego serie={serie} />
+      <GraficosTrafegoLazy serie={serie} />
 
       {/* Alertas / anomalias */}
       {anomalias.length > 0 && (
