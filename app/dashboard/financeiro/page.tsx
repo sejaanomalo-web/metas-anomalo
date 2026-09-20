@@ -2,8 +2,10 @@ import Link from "next/link"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import KPICard from "@/components/ui/KPICard"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
-import GraficoFluxoCaixa from "@/components/financeiro/GraficoFluxoCaixa"
-import GraficoCategorias from "@/components/financeiro/GraficoCategorias"
+import {
+  GraficoCategoriasLazy,
+  GraficoFluxoCaixaLazy,
+} from "@/components/financeiro/graficos"
 import { formatBRL, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
 import { periodoQS } from "@/lib/periodo-url"
@@ -87,6 +89,17 @@ function formatDataBR(iso: string): string {
   return `${d}/${m}/${y.slice(2)}`
 }
 
+/**
+ * Legenda do KPI. Os três casos dizem coisas diferentes e precisam de frases
+ * diferentes: ainda tem dinheiro pra andar, já andou tudo, ou não houve nada.
+ * "Tudo realizado" com R$ 0 em cima seria mentira; por isso o terceiro caso.
+ */
+function legendaPrevisto(realizado: number, previsto: number): string {
+  if (previsto > 0) return `+ ${formatBRL(previsto)} previsto`
+  if (realizado > 0) return "Tudo realizado"
+  return "Nada no período"
+}
+
 export default async function FinanceiroOverviewPage({
   searchParams,
 }: {
@@ -128,7 +141,7 @@ export default async function FinanceiroOverviewPage({
     resumo.resultado > 0 ? "success" : resumo.resultado < 0 ? "danger" : "neutral"
 
   return (
-    <main className="mx-auto px-8 py-10 space-y-10" style={{ maxWidth: 1280 }}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-10" style={{ maxWidth: 1280 }}>
       {/* Hero */}
       <div className="hero-banner">
         <p
@@ -177,44 +190,30 @@ export default async function FinanceiroOverviewPage({
           }}
         />
         <KPICard
-          label={`Receitas de ${mes}`}
+          label="Receitas"
           valor={formatBRL(resumo.total_receitas)}
           icon={<IconeArrowUp />}
           iconStatus={temReceita ? "success" : "neutral"}
-          semDados={!temReceita}
-          semDadosTexto="Nenhuma receita realizada"
-          delta={
-            resumo.receitas_previstas > 0
-              ? {
-                  texto: `+ ${formatBRL(resumo.receitas_previstas)} previsto`,
-                  status: "neutral",
-                }
-              : undefined
-          }
+          semDados={!temReceita && resumo.receitas_previstas === 0}
+          semDadosTexto="Sem receitas no período"
+          delta={{ texto: legendaPrevisto(resumo.total_receitas, resumo.receitas_previstas), status: "neutral" }}
         />
         <KPICard
-          label={`Despesas de ${mes}`}
+          label="Despesas"
           valor={formatBRL(resumo.total_despesas)}
           icon={<IconeArrowDown />}
           iconStatus={temDespesa ? "danger" : "neutral"}
-          semDados={!temDespesa}
-          semDadosTexto="Nenhuma despesa realizada"
-          delta={
-            resumo.despesas_previstas > 0
-              ? {
-                  texto: `+ ${formatBRL(resumo.despesas_previstas)} previsto`,
-                  status: "neutral",
-                }
-              : undefined
-          }
+          semDados={!temDespesa && resumo.despesas_previstas === 0}
+          semDadosTexto="Sem despesas no período"
+          delta={{ texto: legendaPrevisto(resumo.total_despesas, resumo.despesas_previstas), status: "neutral" }}
         />
         <KPICard
-          label={`Resultado de ${mes}`}
+          label="Resultado"
           valor={formatBRL(resumo.resultado)}
           icon={<IconeBalanca />}
           iconStatus={statusResultado}
           semDados={!temReceita && !temDespesa}
-          semDadosTexto="Sem movimentação no mês"
+          semDadosTexto="Sem movimentação no período"
           delta={
             resumo.qtd_lancamentos > 0
               ? {
@@ -230,12 +229,12 @@ export default async function FinanceiroOverviewPage({
 
       {/* Gráfico fluxo de caixa */}
       <section>
-        <GraficoFluxoCaixa dados={fluxo} ano={ano} />
+        <GraficoFluxoCaixaLazy dados={fluxo} ano={ano} />
       </section>
 
       {/* Divisão de gastos por categoria — dirigido pelo período global */}
       <section>
-        <GraficoCategorias
+        <GraficoCategoriasLazy
           despesas={dre.despesas}
           receitas={dre.receitas}
           totalDespesas={dre.total_despesas}

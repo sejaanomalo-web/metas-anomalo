@@ -1,6 +1,6 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import ListaContas from "@/components/financeiro/ListaContas"
-import GraficoComparativoContas from "@/components/financeiro/GraficoComparativoContas"
+import { GraficoComparativoContasLazy } from "@/components/financeiro/graficos"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { parsePeriodo } from "@/lib/periodo"
 import { periodoQS } from "@/lib/periodo-url"
@@ -34,7 +34,7 @@ export default async function ContasPage({
   const saldos = new Map(saldosLista.map((s) => [s.conta.id, s.saldo_atual]))
 
   return (
-    <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
       <div>
         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)" }}>
           Financeiro · Contas
@@ -61,7 +61,7 @@ export default async function ContasPage({
 
       <FinanceiroNav mes={mes} ano={ano} />
 
-      <GraficoComparativoContas dados={comparativo} ano={anoRef} />
+      <GraficoComparativoContasLazy dados={comparativo} ano={anoRef} />
 
       <ListaContas contas={contas} saldos={saldos} qsPeriodo={periodoQS(periodo)} />
     </main>

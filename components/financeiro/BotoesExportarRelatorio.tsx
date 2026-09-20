@@ -104,18 +104,31 @@ export default function BotoesExportarRelatorio({
   )
 }
 
+/**
+ * Separador do CSV.
+ *
+ * `;` e não `,`: no Excel configurado em português, a vírgula é o separador
+ * DECIMAL, então um arquivo separado por vírgula abre com tudo espremido numa
+ * coluna só. O `;` é o que o Excel pt-BR espera — e é por isso que os valores
+ * abaixo saem com vírgula decimal sem causar ambiguidade.
+ */
+const SEP = ";"
+
 function csvCampo(v: string | number): string {
   const s = String(v)
-  // Aspas ao redor se tem vírgula, aspas ou quebra. Aspa dupla escapa
-  // com aspa dupla (RFC 4180).
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+  if (s.includes(SEP) || s.includes(",") || s.includes('"') || s.includes("\n")) {
     return `"${s.replace(/"/g, '""')}"`
   }
   return s
 }
 
 function linhaCSV(...campos: (string | number)[]): string {
-  return campos.map(csvCampo).join(",")
+  return campos.map(csvCampo).join(SEP)
+}
+
+/** Valor com vírgula decimal, como o Excel pt-BR espera. */
+function csvValor(n: number): string {
+  return n.toFixed(2).replace(".", ",")
 }
 
 function montarCSV(
@@ -142,9 +155,9 @@ function montarCSV(
   linhas.push(linhaCSV("Categoria", "Lançamentos", "Total (R$)", "% do total"))
   for (const r of dre.receitas) {
     const pct = dre.total_receitas > 0 ? (r.total / dre.total_receitas) * 100 : 0
-    linhas.push(linhaCSV(r.categoria_nome, r.qtd, r.total.toFixed(2), `${pct.toFixed(1)}%`))
+    linhas.push(linhaCSV(r.categoria_nome, r.qtd, csvValor(r.total), `${pct.toFixed(1)}%`))
   }
-  linhas.push(linhaCSV("TOTAL RECEITAS", "", dre.total_receitas.toFixed(2), "100%"))
+  linhas.push(linhaCSV("TOTAL RECEITAS", "", csvValor(dre.total_receitas), "100%"))
   linhas.push("")
 
   // === DRE Despesas ===
@@ -152,13 +165,13 @@ function montarCSV(
   linhas.push(linhaCSV("Categoria", "Lançamentos", "Total (R$)", "% do total"))
   for (const d of dre.despesas) {
     const pct = dre.total_despesas > 0 ? (d.total / dre.total_despesas) * 100 : 0
-    linhas.push(linhaCSV(d.categoria_nome, d.qtd, d.total.toFixed(2), `${pct.toFixed(1)}%`))
+    linhas.push(linhaCSV(d.categoria_nome, d.qtd, csvValor(d.total), `${pct.toFixed(1)}%`))
   }
-  linhas.push(linhaCSV("TOTAL DESPESAS", "", dre.total_despesas.toFixed(2), "100%"))
+  linhas.push(linhaCSV("TOTAL DESPESAS", "", csvValor(dre.total_despesas), "100%"))
   linhas.push("")
 
   // === Resultado ===
-  linhas.push(linhaCSV("RESULTADO DO PERÍODO", dre.resultado.toFixed(2)))
+  linhas.push(linhaCSV("RESULTADO DO PERÍODO", csvValor(dre.resultado)))
   linhas.push("")
 
   // === Projeção 3 meses ===
@@ -167,7 +180,7 @@ function montarCSV(
     linhas.push(linhaCSV("Mês", "Receita projetada (R$)", "Despesa projetada (R$)", "Resultado (R$)"))
     for (const p of projecao) {
       linhas.push(
-        linhaCSV(p.rotulo, p.receitas.toFixed(2), p.despesas.toFixed(2), p.resultado.toFixed(2))
+        linhaCSV(p.rotulo, csvValor(p.receitas), csvValor(p.despesas), csvValor(p.resultado))
       )
     }
     linhas.push("")
@@ -178,7 +191,7 @@ function montarCSV(
   linhas.push(linhaCSV("Mês", "Receitas (R$)", "Despesas (R$)", "Resultado (R$)"))
   for (const p of fluxo) {
     linhas.push(
-      linhaCSV(rotuloMes(p.mes), p.receitas.toFixed(2), p.despesas.toFixed(2), p.resultado.toFixed(2))
+      linhaCSV(rotuloMes(p.mes), csvValor(p.receitas), csvValor(p.despesas), csvValor(p.resultado))
     )
   }
   // Totais do ano
@@ -187,9 +200,9 @@ function montarCSV(
   linhas.push(
     linhaCSV(
       "TOTAL ANO",
-      totalReceitas.toFixed(2),
-      totalDespesas.toFixed(2),
-      (totalReceitas - totalDespesas).toFixed(2)
+      csvValor(totalReceitas),
+      csvValor(totalDespesas),
+      csvValor(totalReceitas - totalDespesas)
     )
   )
 

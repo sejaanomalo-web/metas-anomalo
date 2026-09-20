@@ -1,8 +1,10 @@
 import Link from "next/link"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
-import GraficoFluxoCaixa from "@/components/financeiro/GraficoFluxoCaixa"
-import GraficoCategorias from "@/components/financeiro/GraficoCategorias"
+import {
+  GraficoCategoriasLazy,
+  GraficoFluxoCaixaLazy,
+} from "@/components/financeiro/graficos"
 import ListaMovimentacoes from "@/components/financeiro/ListaMovimentacoes"
 import KPICard from "@/components/ui/KPICard"
 import { formatBRL } from "@/lib/data"
@@ -42,7 +44,7 @@ export default async function ContaDetalhePage({
   const conta = await getContaPorId(params.id)
   if (!conta) {
     return (
-      <main className="mx-auto px-8 py-10" style={{ maxWidth: 900 }}>
+      <main className="mx-auto px-4 md:px-8 py-10" style={{ maxWidth: 900 }}>
         <h1 style={{ fontSize: 24 }}>Conta não encontrada</h1>
         <Link
           href={`/dashboard/financeiro/contas${qs ? `?${qs}` : ""}`}
@@ -100,7 +102,7 @@ export default async function ContaDetalhePage({
   const linhasDespesa = construir(despesaAcc)
 
   return (
-    <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
       <div>
         <Link
           href={`/dashboard/financeiro/contas${qs ? `?${qs}` : ""}`}
@@ -158,12 +160,12 @@ export default async function ContaDetalhePage({
       </section>
 
       <section>
-        <GraficoFluxoCaixa dados={fluxo} ano={ano} />
+        <GraficoFluxoCaixaLazy dados={fluxo} ano={ano} />
       </section>
 
       {(linhasReceita.length > 0 || linhasDespesa.length > 0) && (
         <section>
-          <GraficoCategorias
+          <GraficoCategoriasLazy
             despesas={linhasDespesa}
             receitas={linhasReceita}
             totalDespesas={realizado.saidas}

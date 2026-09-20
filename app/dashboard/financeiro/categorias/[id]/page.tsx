@@ -1,7 +1,7 @@
 import Link from "next/link"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
-import GraficoEvolucao from "@/components/financeiro/GraficoEvolucao"
+import { GraficoEvolucaoLazy } from "@/components/financeiro/graficos"
 import ListaMovimentacoes from "@/components/financeiro/ListaMovimentacoes"
 import KPICard from "@/components/ui/KPICard"
 import { formatBRL } from "@/lib/data"
@@ -73,7 +73,7 @@ export default async function CategoriaDetalhePage({
 
   if (!ehSemCategoria && !categoria) {
     return (
-      <main className="mx-auto px-8 py-10" style={{ maxWidth: 900 }}>
+      <main className="mx-auto px-4 md:px-8 py-10" style={{ maxWidth: 900 }}>
         <h1 style={{ fontSize: 24 }}>Categoria não encontrada</h1>
         <p style={{ color: "var(--text-3)", marginTop: 8, fontSize: 14 }}>
           Ela pode ter sido excluída. Os lançamentos continuam existindo, agora
@@ -124,7 +124,7 @@ export default async function CategoriaDetalhePage({
   }
 
   return (
-    <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
       <div>
         <Link
           href={`/dashboard/financeiro/categorias${qs ? `?${qs}` : ""}`}
@@ -243,7 +243,7 @@ export default async function CategoriaDetalhePage({
             ))}
           </div>
         </div>
-        <GraficoEvolucao serie={serie} destacar={ehReceita ? "receitas" : "despesas"} cor={cor} />
+        <GraficoEvolucaoLazy serie={serie} destacar={ehReceita ? "receitas" : "despesas"} cor={cor} />
       </section>
 
       <ListaMovimentacoes

@@ -1,6 +1,6 @@
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import ListaCategorias from "@/components/financeiro/ListaCategorias"
-import GraficoCategorias from "@/components/financeiro/GraficoCategorias"
+import { GraficoCategoriasLazy } from "@/components/financeiro/graficos"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { parsePeriodo } from "@/lib/periodo"
 import { periodoQS } from "@/lib/periodo-url"
@@ -25,7 +25,7 @@ export default async function CategoriasPage({
   ])
 
   return (
-    <main className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
       <div>
         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)" }}>
           Financeiro · Categorias
@@ -55,7 +55,7 @@ export default async function CategoriasPage({
 
       {/* Divisão de gastos por categoria — mesmo gráfico da Visão geral,
           dirigido pelo período global selecionado. */}
-      <GraficoCategorias
+      <GraficoCategoriasLazy
         despesas={dre.despesas}
         receitas={dre.receitas}
         totalDespesas={dre.total_despesas}
