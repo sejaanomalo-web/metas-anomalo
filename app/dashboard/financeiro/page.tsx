@@ -274,6 +274,9 @@ export default async function FinanceiroOverviewPage({
             <p style={{ fontSize: 12, color: "var(--muted-foreground)", marginTop: 4 }}>
               Empresas que tiveram faturamento reportado pelo gestor de tráfego mas a
               receita ainda não foi lançada aqui. Pode indicar venda esperando cobrança.
+              O botão abre o formulário já com a empresa e a diferença preenchidas —
+              confira o valor antes de salvar, porque faturamento operacional e
+              receita a receber nem sempre são o mesmo número.
             </p>
           </div>
           <div style={{ overflowX: "auto" }}>
@@ -284,6 +287,7 @@ export default async function FinanceiroOverviewPage({
                   <th style={{ textAlign: "right", padding: "8px 12px", fontSize: 11, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Operacional</th>
                   <th style={{ textAlign: "right", padding: "8px 12px", fontSize: 11, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Registrada</th>
                   <th style={{ textAlign: "right", padding: "8px 12px", fontSize: 11, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Δ</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -311,6 +315,27 @@ export default async function FinanceiroOverviewPage({
                     </td>
                     <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "var(--destructive)" }}>
                       {formatBRL(c.diferenca)}
+                    </td>
+                    <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                      {/* Transforma a divergência em lançamento sem redigitar
+                          o que o sistema já sabe: empresa e valor vão na URL
+                          e o formulário abre preenchido. */}
+                      <Link
+                        href={`/dashboard/financeiro/lancamentos?${periodoQS(periodo)}&novo=receita&empresa=${encodeURIComponent(c.empresa)}&valor=${c.diferenca.toFixed(2)}`}
+                        style={{
+                          display: "inline-block",
+                          padding: "4px 10px",
+                          border: "1px solid var(--accent)",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "var(--accent)",
+                          textDecoration: "none",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Lançar receita
+                      </Link>
                     </td>
                   </tr>
                 ))}

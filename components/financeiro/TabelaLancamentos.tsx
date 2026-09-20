@@ -58,6 +58,7 @@ export default function TabelaLancamentos({
   eixo,
   hrefsSituacao,
   lancDeepLink,
+  prefill,
   mesNum,
   anoAtual,
 }: {
@@ -72,6 +73,13 @@ export default function TabelaLancamentos({
   hrefsSituacao: Record<SituacaoFinanceira, string>
   /** ?lanc=<id> abre o detalhe daquele lançamento UMA vez. */
   lancDeepLink: string | null
+  /** Vindo da Conferência com o Sentinela: abre o formulário já preenchido. */
+  prefill?: {
+    tipo?: "receita" | "despesa"
+    valor?: number
+    descricao?: string
+    empresa_cliente?: string
+  } | null
   mesNum?: number
   anoAtual?: number
 }) {
@@ -105,6 +113,15 @@ export default function TabelaLancamentos({
     [lancamentos, situacao]
   )
   const rotulos = rotulosDaSituacao(situacao)
+
+  // Prefill da Conferência: abre o formulário já preenchido, uma vez só.
+  const prefillUsado = useRef(false)
+  useEffect(() => {
+    if (prefillUsado.current || !prefill) return
+    prefillUsado.current = true
+    setEditando(null)
+    setDrawerAberto(true)
+  }, [prefill])
 
   // Deep link: abre o detalhe uma única vez. Sem o ref, fechar o painel faria
   // o efeito reabrir na renderização seguinte, e o painel ficaria "grudado".
@@ -493,6 +510,7 @@ export default function TabelaLancamentos({
         contas={contas}
         empresas={empresas}
         lancamento={editando}
+        prefill={editando ? null : prefill}
         mesNum={mesNum}
         anoAtual={anoAtual}
       />

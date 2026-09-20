@@ -35,6 +35,14 @@ interface Props {
   contas: ContaFinanceira[]
   empresas: Empresa[]
   lancamento?: LancamentoFinanceiro | null
+  /** Valores sugeridos ao ABRIR um lançamento novo (não é edição).
+   *  Usado pela Conferência com o Sentinela, que já sabe empresa e valor. */
+  prefill?: {
+    tipo?: TipoLancamento
+    valor?: number
+    descricao?: string
+    empresa_cliente?: string
+  } | null
   /** Mês (1–12) e ano vigentes — usados pra materializar os lançamentos do
    *  recorrente recém-criado já no mês que a listagem está mostrando. */
   mesNum?: number
@@ -50,6 +58,7 @@ export default function LancamentoDrawer({
   contas,
   empresas,
   lancamento,
+  prefill,
   mesNum,
   anoAtual,
 }: Props) {
@@ -57,7 +66,9 @@ export default function LancamentoDrawer({
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
   const [sucesso, setSucesso] = useState<string | null>(null)
-  const [tipo, setTipo] = useState<TipoLancamento>(lancamento?.tipo ?? "despesa")
+  const [tipo, setTipo] = useState<TipoLancamento>(
+    lancamento?.tipo ?? prefill?.tipo ?? "despesa"
+  )
   // Default PREVISTO: o lançamento nasce previsto e só vira realizado
   // quando o usuário marca como pago.
   const [status, setStatus] = useState<StatusLancamento>(
@@ -459,7 +470,7 @@ export default function LancamentoDrawer({
               name="valor"
               required
               placeholder="R$ 1.234,56"
-              defaultValue={lancamento?.valor ?? null}
+              defaultValue={lancamento?.valor ?? prefill?.valor ?? null}
               className="glass-input"
               style={{ width: "100%" }}
             />
@@ -521,7 +532,7 @@ export default function LancamentoDrawer({
                   ? "Ex: Mensalidade Tato Estofados"
                   : "Ex: Aluguel escritório"
               }
-              defaultValue={lancamento?.descricao ?? ""}
+              defaultValue={lancamento?.descricao ?? prefill?.descricao ?? ""}
               className="glass-input"
               style={{ width: "100%" }}
             />
@@ -570,7 +581,7 @@ export default function LancamentoDrawer({
             <Campo label="Empresa cliente (opcional)">
               <select
                 name="empresa_cliente"
-                defaultValue={lancamento?.empresa_cliente ?? ""}
+                defaultValue={lancamento?.empresa_cliente ?? prefill?.empresa_cliente ?? ""}
                 className="glass-input"
                 style={{ width: "100%" }}
               >

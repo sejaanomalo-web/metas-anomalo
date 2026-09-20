@@ -36,6 +36,9 @@ export default async function FinanceiroLancamentosPage({
     lanc?: string
     voltar?: string
     busca?: string
+    novo?: string
+    empresa?: string
+    valor?: string
   }
 }) {
   await requererPermissao("dashboard_financeiro")
@@ -68,6 +71,22 @@ export default async function FinanceiroLancamentosPage({
     : null
 
   const busca = (searchParams?.busca ?? "").trim() || undefined
+
+  // Atalho da Conferência com o Sentinela: ?novo=receita&empresa=X&valor=Y
+  // abre o formulário já preenchido, pra transformar uma divergência em
+  // lançamento sem redigitar o que o sistema já sabe.
+  const valorPrefill = Number(searchParams?.valor)
+  const prefill =
+    searchParams?.novo === "receita" || searchParams?.novo === "despesa"
+      ? {
+          tipo: searchParams.novo as "receita" | "despesa",
+          valor: Number.isFinite(valorPrefill) && valorPrefill > 0 ? valorPrefill : undefined,
+          empresa_cliente: searchParams?.empresa || undefined,
+          descricao: searchParams?.empresa
+            ? `Mensalidade ${searchParams.empresa}`
+            : undefined,
+        }
+      : null
 
   const [resultado, categorias, contas, empresas] = await Promise.all([
     listarLancamentosDetalhado({
@@ -178,6 +197,7 @@ export default async function FinanceiroLancamentosPage({
           total: lancHref(filtroAtual("situacao=total")),
         }}
         lancDeepLink={searchParams?.lanc ?? null}
+        prefill={prefill}
         mesNum={Number(periodo.de.slice(5, 7))}
         anoAtual={Number(periodo.de.slice(0, 4))}
       />
