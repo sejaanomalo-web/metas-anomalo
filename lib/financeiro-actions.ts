@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual, temPermissao } from "./auth"
 import { parseNumeroForm } from "./parse-numero"
+import { conferirLinhasAfetadas, traduzirErroBanco } from "./financeiro-erros"
+import { proximaCorLivre } from "./financeiro-regras"
 import { type Mes } from "./data"
 import {
   mesNumero,
@@ -14,6 +16,16 @@ import {
   type Periodicidade,
 } from "./financeiro"
 import { recorrentesAMaterializar } from "./financeiro-regras"
+
+/**
+ * Invalida o financeiro E o painel. O painel mostra dinheiro do mês; se só o
+ * financeiro fosse revalidado, o número do painel continuaria velho até a
+ * próxima navegação completa.
+ */
+function revalidarFinanceiro(): void {
+  revalidatePath("/dashboard/financeiro", "layout")
+  revalidatePath("/dashboard")
+}
 
 export interface ResultadoFinanceiro {
   ok: boolean
@@ -61,6 +73,79 @@ function isoDate(v: FormDataEntryValue | null): string | null {
   return s
 }
 
+function texto(fd: FormData, campo: string): string | null {
+  return String(fd.get(campo) ?? "").trim() || null
+}
+
+/** Hoje em São Paulo. `new Date().toISOString()` daria o dia seguinte depois
+ *  das 21h, jogando o pagamento pro mês errado na virada do mês. */
+function hojeISO(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
+/**
+ * Campos que criar e editar compartilham. Devolve o payload ou a mensagem de
+ * erro — as duas actions divergiam em validação antes de existir este ponto
+ * comum (só uma checava tamanho mínimo, por exemplo).
+ */
+function lerCamposLancamento(
+  formData: FormData
+): { erro: string } | { payload: Record<string, unknown> } {
+  const tipo = String(formData.get("tipo") ?? "")
+  if (!tipoValido(tipo)) return { erro: "Tipo inválido (receita/despesa)." }
+
+  const status = String(formData.get("status") ?? "previsto")
+  if (!statusValido(status)) return { erro: "Status inválido." }
+
+  const valorParsed = parseNumeroForm(formData.get("valor"))
+  if (valorParsed.erro) return { erro: `Valor: ${valorParsed.erro}` }
+  if (valorParsed.value === null || valorParsed.value <= 0) {
+    return { erro: "Valor é obrigatório e maior que zero." }
+  }
+
+  const descricao = String(formData.get("descricao") ?? "").trim()
+  if (descricao.length < 2) {
+    return { erro: "Descrição precisa de pelo menos 2 caracteres." }
+  }
+
+  const data = isoDate(formData.get("data"))
+  if (!data) return { erro: "Data de competência inválida (use AAAA-MM-DD)." }
+
+  const data_vencimento = isoDate(formData.get("data_vencimento"))
+  let data_pagamento = isoDate(formData.get("data_pagamento"))
+
+  // R8. Realizado sem data de pagamento assume HOJE em vez de recusar o
+  // salvamento. Antes isso barrava quem só queria registrar algo já pago, e a
+  // data acabava digitada errada na pressa.
+  if (status === "realizado" && !data_pagamento) data_pagamento = hojeISO()
+  // Voltar para previsto solta a data de pagamento: um previsto com data de
+  // pagamento preenchida entraria no saldo da conta sem estar realizado.
+  if (status !== "realizado") data_pagamento = null
+
+  return {
+    payload: {
+      data,
+      data_vencimento,
+      data_pagamento,
+      tipo,
+      valor: valorParsed.value,
+      categoria_id: texto(formData, "categoria_id"),
+      conta_id: texto(formData, "conta_id"),
+      descricao,
+      observacoes: texto(formData, "observacoes"),
+      empresa_cliente: texto(formData, "empresa_cliente"),
+      origem: texto(formData, "origem"),
+      forma_pagamento: texto(formData, "forma_pagamento"),
+      status,
+    },
+  }
+}
+
 // ============================================================
 // LANCAMENTOS
 // ============================================================
@@ -74,62 +159,21 @@ export async function criarLancamentoAction(
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
 
-  const tipo = String(formData.get("tipo") ?? "")
-  if (!tipoValido(tipo)) return { ok: false, erro: "Tipo inválido (receita/despesa)." }
-
-  // Default PREVISTO: um lançamento nasce previsto e só vira realizado
-  // quando o usuário marca como pago (data de pagamento). Realizado
-  // continua disponível como escolha explícita (ex.: registrar algo já pago).
-  const status = String(formData.get("status") ?? "previsto")
-  if (!statusValido(status)) return { ok: false, erro: "Status inválido." }
-
-  const valorParsed = parseNumeroForm(formData.get("valor"))
-  if (valorParsed.erro) return { ok: false, erro: `Valor: ${valorParsed.erro}` }
-  if (valorParsed.value === null || valorParsed.value <= 0) {
-    return { ok: false, erro: "Valor é obrigatório e maior que zero." }
-  }
-
-  const data = isoDate(formData.get("data"))
-  if (!data) return { ok: false, erro: "Data inválida (use AAAA-MM-DD)." }
-
-  const data_pagamento = isoDate(formData.get("data_pagamento"))
-  const descricao = String(formData.get("descricao") ?? "").trim()
-  if (!descricao) return { ok: false, erro: "Descrição obrigatória." }
-
-  const categoria_id = String(formData.get("categoria_id") ?? "").trim() || null
-  const conta_id = String(formData.get("conta_id") ?? "").trim() || null
-  const observacoes = String(formData.get("observacoes") ?? "").trim() || null
-  const empresa_cliente = String(formData.get("empresa_cliente") ?? "").trim() || null
-
-  // Regra: status=realizado exige data_pagamento.
-  if (status === "realizado" && !data_pagamento) {
-    return { ok: false, erro: "Lançamento realizado precisa de data de pagamento." }
-  }
+  const lido = lerCamposLancamento(formData)
+  if ("erro" in lido) return { ok: false, erro: lido.erro }
 
   const { data: row, error } = await supabase
     .from("lancamento_financeiro")
-    .insert({
-      data,
-      data_pagamento,
-      tipo,
-      valor: valorParsed.value,
-      categoria_id,
-      conta_id,
-      descricao,
-      observacoes,
-      empresa_cliente,
-      status,
-      criado_por: usuarioId,
-    })
+    .insert({ ...lido.payload, criado_por: usuarioId })
     .select("id")
     .single()
 
   if (error) {
     console.error("[financeiro] criarLancamento error", error.message)
-    return { ok: false, erro: error.message }
+    return { ok: false, erro: traduzirErroBanco(error) }
   }
 
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id: row.id as string }
 }
 
@@ -145,56 +189,20 @@ export async function atualizarLancamentoAction(
   const id = String(formData.get("id") ?? "").trim()
   if (!id) return { ok: false, erro: "ID inválido." }
 
-  const tipo = String(formData.get("tipo") ?? "")
-  if (!tipoValido(tipo)) return { ok: false, erro: "Tipo inválido." }
-
-  const status = String(formData.get("status") ?? "")
-  if (!statusValido(status)) return { ok: false, erro: "Status inválido." }
-
-  const valorParsed = parseNumeroForm(formData.get("valor"))
-  if (valorParsed.erro) return { ok: false, erro: `Valor: ${valorParsed.erro}` }
-  if (valorParsed.value === null || valorParsed.value <= 0) {
-    return { ok: false, erro: "Valor é obrigatório e maior que zero." }
-  }
-
-  const data = isoDate(formData.get("data"))
-  if (!data) return { ok: false, erro: "Data inválida." }
-
-  const data_pagamento = isoDate(formData.get("data_pagamento"))
-  const descricao = String(formData.get("descricao") ?? "").trim()
-  if (!descricao) return { ok: false, erro: "Descrição obrigatória." }
-
-  if (status === "realizado" && !data_pagamento) {
-    return { ok: false, erro: "Lançamento realizado precisa de data de pagamento." }
-  }
-
-  const categoria_id = String(formData.get("categoria_id") ?? "").trim() || null
-  const conta_id = String(formData.get("conta_id") ?? "").trim() || null
-  const observacoes = String(formData.get("observacoes") ?? "").trim() || null
-  const empresa_cliente = String(formData.get("empresa_cliente") ?? "").trim() || null
+  const lido = lerCamposLancamento(formData)
+  if ("erro" in lido) return { ok: false, erro: lido.erro }
 
   const { error } = await supabase
     .from("lancamento_financeiro")
-    .update({
-      data,
-      data_pagamento,
-      tipo,
-      valor: valorParsed.value,
-      categoria_id,
-      conta_id,
-      descricao,
-      observacoes,
-      empresa_cliente,
-      status,
-    })
+    .update(lido.payload)
     .eq("id", id)
 
   if (error) {
     console.error("[financeiro] atualizarLancamento error", error.message)
-    return { ok: false, erro: error.message }
+    return { ok: false, erro: traduzirErroBanco(error) }
   }
 
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -211,7 +219,7 @@ export async function excluirLancamentoAction(id: string): Promise<ResultadoFina
     .eq("id", id)
 
   if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -235,7 +243,7 @@ export async function marcarRealizadoAction(
     .eq("id", id)
 
   if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -271,7 +279,7 @@ export async function salvarCategoriaAction(
       .update(payload)
       .eq("id", id)
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id }
   } else {
     const { data, error } = await supabase
@@ -280,9 +288,75 @@ export async function salvarCategoriaAction(
       .select("id")
       .single()
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id: data.id as string }
   }
+}
+
+/**
+ * Cria (ou reaproveita) uma categoria a partir do nome digitado no combobox.
+ *
+ * Reaproveitar é o ponto: digitar "aluguel" quando já existe "Aluguel" tem que
+ * selecionar a que existe, não criar uma segunda. Sem isso, o DRE acaba com a
+ * mesma despesa dividida em duas linhas por diferença de maiúscula.
+ *
+ * A cor não é escolhida aqui: a categoria nasce com a primeira cor livre da
+ * paleta, pra não sair tudo cinza nem repetir a cor da vizinha.
+ */
+export async function criarCategoriaRapidaAction(
+  nome: string,
+  tipo: string
+): Promise<ResultadoFinanceiro & { nome?: string; cor?: string }> {
+  const { erro } = await exigirPermissao()
+  if (erro) return { ok: false, erro }
+  if (!tipoValido(tipo)) return { ok: false, erro: "Tipo inválido." }
+
+  const limpo = nome.trim()
+  if (limpo.length < 2) {
+    return { ok: false, erro: "Nome precisa de pelo menos 2 caracteres." }
+  }
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
+
+  const { data: existentes, error: errBusca } = await supabase
+    .from("categoria_financeira")
+    .select("id, nome, cor, ativa")
+    .eq("tipo", tipo)
+  if (errBusca) return { ok: false, erro: traduzirErroBanco(errBusca) }
+
+  const lista = (existentes ?? []) as {
+    id: string
+    nome: string
+    cor: string | null
+    ativa: boolean
+  }[]
+
+  const igual = lista.find(
+    (c) => c.nome.trim().toLowerCase() === limpo.toLowerCase()
+  )
+  if (igual) {
+    // Se estava desativada, reativa: o usuário acabou de pedir por ela.
+    if (!igual.ativa) {
+      await supabase
+        .from("categoria_financeira")
+        .update({ ativa: true })
+        .eq("id", igual.id)
+    }
+    revalidarFinanceiro()
+    return { ok: true, id: igual.id, nome: igual.nome, cor: igual.cor ?? undefined }
+  }
+
+  const cor = proximaCorLivre(lista.map((c) => c.cor))
+  const { data, error } = await supabase
+    .from("categoria_financeira")
+    .insert({ nome: limpo, tipo, cor, ativa: true, ordem: 0 })
+    .select("id, nome, cor")
+    .single()
+  if (error) return { ok: false, erro: traduzirErroBanco(error) }
+
+  revalidarFinanceiro()
+  return { ok: true, id: data.id as string, nome: data.nome as string, cor: data.cor as string }
 }
 
 export async function excluirCategoriaAction(id: string): Promise<ResultadoFinanceiro> {
@@ -319,7 +393,7 @@ export async function excluirCategoriaAction(id: string): Promise<ResultadoFinan
 
   const { error } = await supabase.from("categoria_financeira").delete().eq("id", id)
   if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -361,7 +435,7 @@ export async function salvarContaAction(
       .update(payload)
       .eq("id", id)
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id }
   } else {
     const { data, error } = await supabase
@@ -370,7 +444,7 @@ export async function salvarContaAction(
       .select("id")
       .single()
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id: data.id as string }
   }
 }
@@ -397,7 +471,7 @@ export async function excluirContaAction(id: string): Promise<ResultadoFinanceir
 
   const { error } = await supabase.from("conta_financeira").delete().eq("id", id)
   if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -469,7 +543,7 @@ export async function salvarRecorrenteAction(
       .update(payload)
       .eq("id", id)
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id }
   } else {
     const { data, error } = await supabase
@@ -478,7 +552,7 @@ export async function salvarRecorrenteAction(
       .select("id")
       .single()
     if (error) return { ok: false, erro: error.message }
-    revalidatePath("/dashboard/financeiro", "layout")
+    revalidarFinanceiro()
     return { ok: true, id: data.id as string }
   }
 }
@@ -494,7 +568,7 @@ export async function excluirRecorrenteAction(id: string): Promise<ResultadoFina
   // Recorrentes inativos podem ser desativados em vez de excluídos.
   const { error } = await supabase.from("pagamento_recorrente").delete().eq("id", id)
   if (error) return { ok: false, erro: error.message }
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, id }
 }
 
@@ -656,6 +730,6 @@ export async function materializarRecorrentesDoPeriodo(
     criados += 1
   }
 
-  revalidatePath("/dashboard/financeiro", "layout")
+  revalidarFinanceiro()
   return { ok: true, criados }
 }

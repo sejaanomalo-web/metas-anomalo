@@ -20,6 +20,8 @@ import type {
 } from "@/lib/financeiro"
 import CampoInteiro from "@/components/inputs/CampoInteiro"
 import CampoMoeda from "@/components/inputs/CampoMoeda"
+import ComboboxCategoria from "./ComboboxCategoria"
+import { FORMAS_PAGAMENTO, FORMA_PAGAMENTO_PADRAO } from "@/lib/financeiro-regras"
 
 interface Empresa {
   nome: string
@@ -85,22 +87,23 @@ export default function LancamentoDrawer({
   // pra não enviar UUID de outro tipo). Sem isso, lançamentos eram
   // salvos sem conta (=> saldo não atualizava) por usuário esquecer.
   const contasAtivas = contas.filter((c) => c.ativa)
-  const categoriasIniciais = categorias.filter(
-    (c) => c.tipo === (lancamento?.tipo ?? "despesa") && c.ativa
-  )
   const [contaId, setContaId] = useState<string>(
     lancamento?.conta_id ?? contasAtivas[0]?.id ?? ""
   )
   const [categoriaId, setCategoriaId] = useState<string>(
-    lancamento?.categoria_id ?? categoriasIniciais[0]?.id ?? ""
+    lancamento?.categoria_id ?? ""
+  )
+  const [formaPagamento, setFormaPagamento] = useState<string>(
+    lancamento?.forma_pagamento ?? FORMA_PAGAMENTO_PADRAO
   )
 
   function trocarTipo(novoTipo: TipoLancamento) {
     setTipo(novoTipo)
-    // Categoria depende do tipo: reseta pra primeira do novo tipo
-    // (evita enviar UUID de categoria que não existe pra esse tipo).
-    const primeiraDoTipo = categorias.find((c) => c.tipo === novoTipo && c.ativa)
-    setCategoriaId(primeiraDoTipo?.id ?? "")
+    // R13. Trocar o tipo LIMPA a categoria. Escolher automaticamente a
+    // primeira do novo tipo parece prestativo, mas grava uma categoria que
+    // ninguém escolheu — e uma despesa classificada errado só aparece no DRE
+    // do mês seguinte, quando já é tarde.
+    setCategoriaId("")
   }
 
   if (!aberto) return null
@@ -338,35 +341,55 @@ export default function LancamentoDrawer({
                 </div>
               </div>
 
-              <Campo label="Data de competência" obrigatorio>
-                <input
-                  type="date"
-                  name="data"
-                  required
-                  defaultValue={
-                    lancamento?.data ?? new Date().toISOString().slice(0, 10)
-                  }
-                  className="glass-input"
-                  style={{ width: "100%" }}
-                />
-              </Campo>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 160px" }}>
+                  <Campo label="Competência" obrigatorio>
+                    <input
+                      type="date"
+                      name="data"
+                      required
+                      defaultValue={
+                        lancamento?.data ?? new Date().toISOString().slice(0, 10)
+                      }
+                      className="glass-input"
+                      style={{ width: "100%" }}
+                    />
+                  </Campo>
+                  <p style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>
+                    Quando o fato aconteceu.
+                  </p>
+                </div>
+                <div style={{ flex: "1 1 160px" }}>
+                  <Campo label="Vencimento">
+                    <input
+                      type="date"
+                      name="data_vencimento"
+                      defaultValue={lancamento?.data_vencimento ?? ""}
+                      className="glass-input"
+                      style={{ width: "100%" }}
+                    />
+                  </Campo>
+                  <p style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>
+                    Quando o dinheiro deve andar. Vazio = usa a competência.
+                  </p>
+                </div>
+              </div>
 
-              <Campo
-                label={
-                  status === "realizado"
-                    ? "Data de pagamento (obrigatória)"
-                    : "Data de pagamento (opcional)"
-                }
-              >
-                <input
-                  type="date"
-                  name="data_pagamento"
-                  value={dataPagamento}
-                  onChange={(e) => setDataPagamento(e.target.value)}
-                  className="glass-input"
-                  style={{ width: "100%" }}
-                />
-              </Campo>
+              {status === "realizado" && (
+                <Campo label="Data de pagamento">
+                  <input
+                    type="date"
+                    name="data_pagamento"
+                    value={dataPagamento}
+                    onChange={(e) => setDataPagamento(e.target.value)}
+                    className="glass-input"
+                    style={{ width: "100%" }}
+                  />
+                  <p style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>
+                    Vazio assume hoje.
+                  </p>
+                </Campo>
+              )}
             </>
           )}
 
@@ -442,6 +465,46 @@ export default function LancamentoDrawer({
             />
           </Campo>
 
+          {frequencia === "variavel" && (
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 160px" }}>
+                <Campo label="Forma de pagamento">
+                  <select
+                    name="forma_pagamento"
+                    value={formaPagamento}
+                    onChange={(e) => setFormaPagamento(e.target.value)}
+                    className="glass-input"
+                    style={{ width: "100%" }}
+                  >
+                    <option value="">· Não informada ·</option>
+                    {FORMAS_PAGAMENTO.map((f) => (
+                      <option key={f} value={f}>
+                        {f.charAt(0).toUpperCase() + f.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+              </div>
+              <div style={{ flex: "1 1 160px" }}>
+                <Campo label="Origem">
+                  <input
+                    type="text"
+                    name="origem"
+                    maxLength={120}
+                    defaultValue={lancamento?.origem ?? ""}
+                    placeholder={
+                      tipo === "receita"
+                        ? "Cliente, venda avulsa…"
+                        : "Fornecedor, prestador…"
+                    }
+                    className="glass-input"
+                    style={{ width: "100%" }}
+                  />
+                </Campo>
+              </div>
+            </div>
+          )}
+
           <Campo
             label={frequencia === "recorrente" ? "Nome do pagamento" : "Descrição"}
             obrigatorio
@@ -465,22 +528,12 @@ export default function LancamentoDrawer({
           </Campo>
 
           <Campo label="Categoria">
-            <select
-              name="categoria_id"
-              value={categoriaId}
-              onChange={(e) => setCategoriaId(e.target.value)}
-              className="glass-input"
-              style={{ width: "100%" }}
-            >
-              <option value="">· Sem categoria ·</option>
-              {categorias
-                .filter((c) => c.tipo === tipo && c.ativa)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome}
-                  </option>
-                ))}
-            </select>
+            <ComboboxCategoria
+              categorias={categorias}
+              tipo={tipo}
+              valor={categoriaId}
+              onChange={setCategoriaId}
+            />
           </Campo>
 
           <Campo label="Conta">
