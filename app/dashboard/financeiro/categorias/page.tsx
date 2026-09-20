@@ -3,6 +3,7 @@ import ListaCategorias from "@/components/financeiro/ListaCategorias"
 import GraficoCategorias from "@/components/financeiro/GraficoCategorias"
 import FinanceiroNav from "@/components/financeiro/FinanceiroNav"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import { listarCategorias, getDREPeriodo } from "@/lib/financeiro"
 import { requererPermissao } from "@/lib/auth"
 
@@ -50,7 +51,7 @@ export default async function CategoriasPage({
 
       <FinanceiroNav mes={mes} ano={ano} />
 
-      <ListaCategorias categorias={categorias} />
+      <ListaCategorias categorias={categorias} qsPeriodo={periodoQS(periodo)} />
 
       {/* Divisão de gastos por categoria — mesmo gráfico da Visão geral,
           dirigido pelo período global selecionado. */}
@@ -60,6 +61,7 @@ export default async function CategoriasPage({
         totalDespesas={dre.total_despesas}
         totalReceitas={dre.total_receitas}
         rotulo={periodo.rotulo}
+        qsPeriodo={periodoQS(periodo)}
       />
     </main>
   )

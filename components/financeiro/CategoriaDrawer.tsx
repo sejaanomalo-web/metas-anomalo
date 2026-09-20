@@ -2,29 +2,50 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { salvarCategoriaAction } from "@/lib/financeiro-actions"
+import type { CategoriaFinanceira } from "@/lib/financeiro"
 import {
-  salvarCategoriaAction,
-  excluirCategoriaAction,
-} from "@/lib/financeiro-actions"
-import type { CategoriaFinanceira, TipoLancamento } from "@/lib/financeiro"
+  CORES_DISPONIVEIS,
+  proximaCorLivre,
+  type TipoLancamento,
+} from "@/lib/financeiro-regras"
 import CampoInteiro from "@/components/inputs/CampoInteiro"
 
 interface Props {
   aberto: boolean
   fechar: () => void
   categoria?: CategoriaFinanceira | null
+  /** Tipo pré-selecionado ao criar (o botão "+ Nova" já sabe de qual bloco
+   *  veio — perguntar de novo seria pedir a mesma informação duas vezes). */
+  tipoInicial?: TipoLancamento
+  /** Cores já usadas: a nova nasce com a primeira livre da paleta. */
+  coresEmUso?: (string | null)[]
+  /** Pedido de exclusão. O drawer não exclui direto: quem decide é o diálogo
+   *  que conta o uso e oferece "desativar" — excluir sem saber quantos
+   *  lançamentos dependem da categoria é decidir no escuro. */
+  onPedirExclusao?: (categoria: CategoriaFinanceira) => void
 }
 
-const CORES_PADRAO = [
-  "#C9953A", "#16a34a", "#0fcc7d", "#ef4444", "#eab308", "#3974e6", "#9333ea",
-]
-
-export default function CategoriaDrawer({ aberto, fechar, categoria }: Props) {
+export default function CategoriaDrawer({
+  aberto,
+  fechar,
+  categoria,
+  tipoInicial,
+  coresEmUso = [],
+  onPedirExclusao,
+}: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
-  const [tipo, setTipo] = useState<TipoLancamento>(categoria?.tipo ?? "despesa")
-  const [cor, setCor] = useState(categoria?.cor ?? "#C9953A")
+  const [tipo, setTipo] = useState<TipoLancamento>(
+    categoria?.tipo ?? tipoInicial ?? "despesa"
+  )
+  // Categoria nova já vem com uma cor que ninguém usa: sair tudo cinza (ou
+  // tudo da mesma cor) torna o gráfico de rosca ilegível já na terceira
+  // categoria.
+  const [cor, setCor] = useState(
+    categoria?.cor || proximaCorLivre(coresEmUso)
+  )
 
   if (!aberto) return null
   const editando = !!categoria
@@ -47,16 +68,10 @@ export default function CategoriaDrawer({ aberto, fechar, categoria }: Props) {
     })
   }
 
-  async function onExcluir() {
+  function onExcluir() {
     if (!categoria) return
-    if (!confirm(`Excluir categoria "${categoria.nome}"?`)) return
-    setErro(null)
-    startTransition(async () => {
-      const r = await excluirCategoriaAction(categoria.id)
-      if (!r.ok) { setErro(r.erro ?? "Erro"); return }
-      refreshUI()
-      fechar()
-    })
+    fechar()
+    onPedirExclusao?.(categoria)
   }
 
   return (
@@ -116,7 +131,7 @@ export default function CategoriaDrawer({ aberto, fechar, categoria }: Props) {
 
           <Campo label="Cor">
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-              {CORES_PADRAO.map((c) => (
+              {CORES_DISPONIVEIS.map((c) => (
                 <button
                   key={c} type="button" onClick={() => setCor(c)}
                   aria-label={`Cor ${c}`}

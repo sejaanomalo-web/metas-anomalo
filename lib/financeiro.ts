@@ -10,6 +10,9 @@ import {
   dentroDoPeriodoPorVencimento,
   filtroPeriodoPostgREST,
   filtroVencimentoPostgREST,
+  baldesDaGranularidade,
+  janelaDaGranularidade,
+  montarSerie,
   recorrentesAMaterializar,
   rotuloMes,
   rotuloMesCurto,
@@ -17,7 +20,10 @@ import {
   somarLancamentos,
   valorNumerico,
   vencimentoEfetivo,
+  PALETA_CATEGORIAS,
+  type BaldeSerie,
   type EixoPeriodo,
+  type Granularidade,
   type LancamentoParaRegra,
   type SituacaoFinanceira,
   type TotaisFinanceiros,
@@ -57,8 +63,17 @@ export {
   SITUACOES,
 } from "./financeiro-regras"
 
+export {
+  GRANULARIDADES,
+  chaveDaGranularidade,
+  janelaDaGranularidade,
+  rotuloGranularidade,
+} from "./financeiro-regras"
+
 export type {
+  BaldeSerie,
   EixoPeriodo,
+  Granularidade,
   LancamentoParaRegra,
   Periodicidade,
   SituacaoFinanceira,
@@ -719,6 +734,277 @@ export async function getDREPeriodo(
   base.total_receitas = base.receitas.reduce((s, l) => s + l.total, 0)
   base.total_despesas = base.despesas.reduce((s, l) => s + l.total, 0)
   base.resultado = base.total_receitas - base.total_despesas
+  return base
+}
+
+// ============================================================
+// Categorias — uso, detalhe e evolução
+// ============================================================
+
+export interface UsoCategoria {
+  lancamentos: number
+  recorrentes: number
+  total: number
+}
+
+/**
+ * Quantos registros dependem de uma categoria. É o que o diálogo de exclusão
+ * mostra ANTES de perguntar: "em uso por 3 lançamentos" muda completamente a
+ * decisão de quem ia clicar em excluir sem pensar.
+ */
+export async function contarUsoCategoria(id: string): Promise<UsoCategoria> {
+  const vazio = { lancamentos: 0, recorrentes: 0, total: 0 }
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return vazio
+
+  const [lanc, rec] = await Promise.all([
+    supabase
+      .from("lancamento_financeiro")
+      .select("id", { count: "exact", head: true })
+      .eq("categoria_id", id)
+      .is("deletado_em", null),
+    supabase
+      .from("pagamento_recorrente")
+      .select("id", { count: "exact", head: true })
+      .eq("categoria_id", id),
+  ])
+
+  const lancamentos = lanc.count ?? 0
+  const recorrentes = rec.count ?? 0
+  return { lancamentos, recorrentes, total: lancamentos + recorrentes }
+}
+
+export async function getCategoriaPorId(
+  id: string
+): Promise<CategoriaFinanceira | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from("categoria_financeira")
+    .select("id, nome, tipo, parent_id, cor, ativa, ordem")
+    .eq("id", id)
+    .maybeSingle()
+  if (error) {
+    console.error("[financeiro] getCategoriaPorId error", error.message)
+    return null
+  }
+  return (data ?? null) as CategoriaFinanceira | null
+}
+
+/**
+ * Série de evolução de uma categoria (ou dos lançamentos SEM categoria,
+ * quando `categoriaId` é null) na granularidade pedida.
+ *
+ * A consulta recorta pela janela da própria granularidade — 5 anos, 12 meses,
+ * 12 semanas ou os dias do mês — e não pelo período global: o gráfico existe
+ * justamente pra olhar além do período selecionado.
+ */
+export async function getEvolucaoCategoria(opts: {
+  categoriaId: string | null
+  tipo?: TipoLancamento
+  granularidade: Granularidade
+  referencia: string
+  situacao?: SituacaoFinanceira
+}): Promise<BaldeSerie[]> {
+  const { de, ate } = janelaDaGranularidade(opts.granularidade, opts.referencia)
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return baldesDaGranularidade(opts.granularidade, opts.referencia)
+
+  let q = supabase
+    .from("lancamento_financeiro")
+    .select("tipo, valor, status, data, data_vencimento, data_pagamento")
+    .is("deletado_em", null)
+    .or(filtroPeriodoPostgREST(de, ate))
+
+  if (opts.categoriaId) q = q.eq("categoria_id", opts.categoriaId)
+  else q = q.is("categoria_id", null)
+  if (opts.tipo) q = q.eq("tipo", opts.tipo)
+
+  const { data, error } = await q
+  if (error) {
+    console.error("[financeiro] getEvolucaoCategoria error", error.message)
+    return baldesDaGranularidade(opts.granularidade, opts.referencia)
+  }
+
+  return montarSerie(
+    (data ?? []) as LancamentoParaRegra[],
+    opts.granularidade,
+    opts.referencia,
+    opts.situacao ?? "realizado"
+  )
+}
+
+/** Lançamentos de uma categoria (ou sem categoria) num período. */
+export async function listarLancamentosDaCategoria(opts: {
+  categoriaId: string | null
+  tipo?: TipoLancamento
+  de: string
+  ate: string
+  busca?: string
+}): Promise<LancamentoFinanceiro[]> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return []
+
+  let q = supabase
+    .from("lancamento_financeiro")
+    .select(COLUNAS_LANCAMENTO)
+    .is("deletado_em", null)
+    .or(filtroPeriodoPostgREST(opts.de, opts.ate))
+    .limit(LIMITE_LANCAMENTOS)
+
+  if (opts.categoriaId) q = q.eq("categoria_id", opts.categoriaId)
+  else q = q.is("categoria_id", null)
+  if (opts.tipo) q = q.eq("tipo", opts.tipo)
+  if (opts.busca) {
+    const termo = opts.busca.replace(/[%,()]/g, " ").trim()
+    if (termo) q = q.or(`descricao.ilike.%${termo}%,origem.ilike.%${termo}%`)
+  }
+
+  const { data, error } = await q
+  if (error) {
+    console.error("[financeiro] listarLancamentosDaCategoria error", error.message)
+    return []
+  }
+  const linhas = (data ?? []) as unknown as LancamentoFinanceiro[]
+  linhas.sort((a, b) => (dataDoPeriodo(a) < dataDoPeriodo(b) ? 1 : -1))
+  return linhas
+}
+
+// ============================================================
+// Contas — detalhe
+// ============================================================
+
+export async function getContaPorId(id: string): Promise<ContaFinanceira | null> {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from("conta_financeira")
+    .select("id, nome, tipo, saldo_inicial, data_saldo_inicial, ativa, ordem")
+    .eq("id", id)
+    .maybeSingle()
+  if (error) {
+    console.error("[financeiro] getContaPorId error", error.message)
+    return null
+  }
+  return (data ?? null) as ContaFinanceira | null
+}
+
+/** Movimentações de uma conta no período, já ordenadas pela regra R3. */
+export async function listarLancamentosDaConta(opts: {
+  contaId: string
+  de: string
+  ate: string
+}): Promise<LancamentoFinanceiro[]> {
+  const { lancamentos } = await listarLancamentosDetalhado({
+    de: opts.de,
+    ate: opts.ate,
+    conta_id: opts.contaId,
+  })
+  return lancamentos
+}
+
+/** Série mensal do ano de UMA conta — alimenta o gráfico do detalhe. */
+export async function getFluxoAnualDaConta(
+  contaId: string,
+  ano: number
+): Promise<PontoFluxoMensal[]> {
+  const serie: PontoFluxoMensal[] = Array.from({ length: 12 }, (_, i) => ({
+    mes: i + 1,
+    rotulo: rotuloMesCurto(i + 1),
+    receitas: 0,
+    despesas: 0,
+    resultado: 0,
+  }))
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return serie
+
+  const { data, error } = await supabase
+    .from("lancamento_financeiro")
+    .select("tipo, valor, data")
+    .is("deletado_em", null)
+    .eq("conta_id", contaId)
+    .eq("status", "realizado")
+    .gte("data", `${ano}-01-01`)
+    .lte("data", `${ano}-12-31`)
+  if (error) {
+    console.error("[financeiro] getFluxoAnualDaConta error", error.message)
+    return serie
+  }
+
+  for (const r of (data ?? []) as { tipo: TipoLancamento; valor: number | string; data: string }[]) {
+    const { mes } = anoMesDeISO(r.data)
+    const ponto = serie[mes - 1]
+    if (!ponto) continue
+    const v = valorNumerico(r.valor)
+    if (r.tipo === "receita") ponto.receitas += v
+    else ponto.despesas += v
+  }
+  for (const p of serie) p.resultado = p.receitas - p.despesas
+  return serie
+}
+
+/**
+ * Comparativo mês a mês de TODAS as contas no ano — duas barras por conta.
+ * Uma consulta só; separar por conta em memória é mais barato que N consultas.
+ */
+export interface ComparativoContas {
+  contas: { id: string; nome: string; cor: string }[]
+  meses: { mes: number; rotulo: string; valores: Record<string, { receitas: number; despesas: number }> }[]
+}
+
+export async function getComparativoContas(ano: number): Promise<ComparativoContas> {
+  const contas = await listarContas(false)
+  const meses = Array.from({ length: 12 }, (_, i) => ({
+    mes: i + 1,
+    rotulo: rotuloMesCurto(i + 1),
+    valores: Object.fromEntries(
+      contas.map((c) => [c.id, { receitas: 0, despesas: 0 }])
+    ) as Record<string, { receitas: number; despesas: number }>,
+  }))
+
+  const base: ComparativoContas = {
+    contas: contas.map((c, i) => ({
+      id: c.id,
+      nome: c.nome,
+      // Cor estável por posição — conta não tem cor no banco, e mudar de cor
+      // entre visitas tornaria o gráfico ilegível.
+      cor: PALETA_CATEGORIAS[i % PALETA_CATEGORIAS.length],
+    })),
+    meses,
+  }
+  if (contas.length === 0) return base
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return base
+
+  const { data, error } = await supabase
+    .from("lancamento_financeiro")
+    .select("conta_id, tipo, valor, data")
+    .is("deletado_em", null)
+    .not("conta_id", "is", null)
+    .eq("status", "realizado")
+    .gte("data", `${ano}-01-01`)
+    .lte("data", `${ano}-12-31`)
+  if (error) {
+    console.error("[financeiro] getComparativoContas error", error.message)
+    return base
+  }
+
+  for (const r of (data ?? []) as {
+    conta_id: string
+    tipo: TipoLancamento
+    valor: number | string
+    data: string
+  }[]) {
+    const { mes } = anoMesDeISO(r.data)
+    const balde = meses[mes - 1]?.valores[r.conta_id]
+    if (!balde) continue
+    const v = valorNumerico(r.valor)
+    if (r.tipo === "receita") balde.receitas += v
+    else balde.despesas += v
+  }
+
   return base
 }
 

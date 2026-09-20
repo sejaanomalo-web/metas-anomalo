@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts"
 import { formatBRL } from "@/lib/data"
 import type { LinhaDRE } from "@/lib/financeiro"
@@ -71,14 +72,31 @@ export default function GraficoCategorias({
   totalDespesas,
   totalReceitas,
   rotulo,
+  qsPeriodo = "",
 }: {
   despesas: LinhaDRE[]
   receitas: LinhaDRE[]
   totalDespesas: number
   totalReceitas: number
   rotulo: string
+  /** Período global, pra o detalhe abrir no mesmo recorte. */
+  qsPeriodo?: string
 }) {
+  const router = useRouter()
   const [tipo, setTipo] = useState<"despesa" | "receita">("despesa")
+
+  /**
+   * Fatia e linha levam ao detalhe da categoria. "Sem categoria" vai para a
+   * rota sentinela, que precisa do ?tipo= — sem categoria não há de onde
+   * inferir se aquele bolo é de receitas ou de despesas.
+   */
+  function abrirDetalhe(categoriaId: string | null) {
+    const p = new URLSearchParams(qsPeriodo)
+    const alvo = categoriaId ?? "sem-categoria"
+    if (!categoriaId) p.set("tipo", tipo)
+    const qs = p.toString()
+    router.push(`/dashboard/financeiro/categorias/${alvo}${qs ? `?${qs}` : ""}`)
+  }
 
   const linhas = tipo === "despesa" ? despesas : receitas
   const total = tipo === "despesa" ? totalDespesas : totalReceitas
@@ -185,9 +203,13 @@ export default function GraficoCategorias({
                   stroke="var(--card)"
                   strokeWidth={2}
                   isAnimationActive={false}
+                  onClick={(entrada: { payload?: LinhaDRE }) =>
+                    abrirDetalhe(entrada?.payload?.categoria_id ?? null)
+                  }
+                  cursor="pointer"
                 >
                   {dados.map((l, i) => (
-                    <Cell key={`${l.categoria_id ?? "null"}|${i}`} fill={l.cor} />
+                    <Cell key={`${l.categoria_id ?? "null"}|${i}`} fill={l.cor} cursor="pointer" />
                   ))}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
@@ -231,13 +253,25 @@ export default function GraficoCategorias({
           {/* Legenda detalhada */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {dados.map((l, i) => (
-              <div
+              <button
                 key={`${l.categoria_id ?? "null"}|${i}`}
+                type="button"
+                onClick={() => abrirDetalhe(l.categoria_id)}
+                title={`Ver o detalhe de ${l.categoria_nome}`}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
                   fontSize: 13,
+                  width: "100%",
+                  padding: "4px 6px",
+                  margin: "0 -6px",
+                  background: "transparent",
+                  border: "none",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  color: "var(--text-1)",
+                  textAlign: "left",
                 }}
               >
                 <span
@@ -271,7 +305,7 @@ export default function GraficoCategorias({
                 >
                   {formatBRL(l.total)}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>

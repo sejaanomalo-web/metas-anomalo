@@ -488,6 +488,143 @@ export function proximaCorLivre(coresEmUso: readonly (string | null)[]): string 
 }
 
 // ============================================================
+// Séries por granularidade (detalhe de categoria e de conta)
+// ============================================================
+
+export type Granularidade = "ano" | "mes" | "semana" | "dia"
+
+export const GRANULARIDADES: readonly Granularidade[] = ["ano", "mes", "semana", "dia"]
+
+export function rotuloGranularidade(g: Granularidade): string {
+  return g === "ano" ? "Ano" : g === "mes" ? "Mês" : g === "semana" ? "Semana" : "Dia"
+}
+
+export interface BaldeSerie {
+  /** Chave de agrupamento, usada só internamente. */
+  chave: string
+  rotulo: string
+  receitas: number
+  despesas: number
+  resultado: number
+}
+
+function somarDias(iso: string, dias: number): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + dias)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Segunda-feira da semana de uma data. Semana começando na segunda porque é
+ * como se olha semana de trabalho no Brasil — domingo no meio da semana
+ * partiria o fim de semana em dois baldes.
+ */
+export function inicioDaSemanaISO(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  const diaSemana = d.getUTCDay() // 0 = domingo
+  const recuo = diaSemana === 0 ? 6 : diaSemana - 1
+  return somarDias(iso, -recuo)
+}
+
+/**
+ * Baldes vazios de uma granularidade, terminando em `referencia`. Devolver os
+ * baldes vazios (e não só os que têm dado) é o que faz o gráfico mostrar a
+ * lacuna: um mês sem nenhuma despesa precisa aparecer como zero, não sumir e
+ * dar a impressão de que os meses são contíguos.
+ */
+export function baldesDaGranularidade(
+  g: Granularidade,
+  referencia: string
+): BaldeSerie[] {
+  const vazio = (chave: string, rotulo: string): BaldeSerie => ({
+    chave, rotulo, receitas: 0, despesas: 0, resultado: 0,
+  })
+  const { ano, mes } = anoMesDeISO(referencia)
+
+  if (g === "ano") {
+    return Array.from({ length: 5 }, (_, i) => {
+      const a = ano - 4 + i
+      return vazio(String(a), String(a))
+    })
+  }
+  if (g === "mes") {
+    return Array.from({ length: 12 }, (_, i) => {
+      // 12 meses terminando no mês de referência, atravessando a virada do ano.
+      const total = ano * 12 + (mes - 1) - (11 - i)
+      const a = Math.floor(total / 12)
+      const m = (total % 12) + 1
+      return vazio(
+        `${a}-${String(m).padStart(2, "0")}`,
+        m === 1 ? `${rotuloMesCurto(m)}/${String(a).slice(2)}` : rotuloMesCurto(m)
+      )
+    })
+  }
+  if (g === "semana") {
+    const segunda = inicioDaSemanaISO(referencia)
+    return Array.from({ length: 12 }, (_, i) => {
+      const ini = somarDias(segunda, (i - 11) * 7)
+      return vazio(ini, `${ini.slice(8, 10)}/${ini.slice(5, 7)}`)
+    })
+  }
+  // dia: os dias do mês de referência
+  const total = ultimoDiaDoMes(ano, mes)
+  return Array.from({ length: total }, (_, i) => {
+    const dia = String(i + 1).padStart(2, "0")
+    return vazio(`${ano}-${String(mes).padStart(2, "0")}-${dia}`, dia)
+  })
+}
+
+/** Em qual balde uma data cai, dada a granularidade. */
+export function chaveDaGranularidade(g: Granularidade, iso: string): string {
+  if (g === "ano") return iso.slice(0, 4)
+  if (g === "mes") return iso.slice(0, 7)
+  if (g === "semana") return inicioDaSemanaISO(iso)
+  return iso
+}
+
+/**
+ * Distribui lançamentos nos baldes, usando a data de R3. Datas fora da janela
+ * são descartadas em silêncio — é o comportamento certo: o gráfico mostra a
+ * janela pedida, não tudo que existe.
+ */
+export function montarSerie(
+  lancamentos: readonly LancamentoParaRegra[],
+  g: Granularidade,
+  referencia: string,
+  situacao: SituacaoFinanceira = "realizado"
+): BaldeSerie[] {
+  const baldes = baldesDaGranularidade(g, referencia)
+  const porChave = new Map(baldes.map((b) => [b.chave, b]))
+  for (const l of lancamentos) {
+    if (!entraNaSituacao(l.status, situacao)) continue
+    const balde = porChave.get(chaveDaGranularidade(g, dataDoPeriodo(l)))
+    if (!balde) continue
+    const v = valorNumerico(l.valor)
+    if (l.tipo === "receita") balde.receitas += v
+    else balde.despesas += v
+  }
+  for (const b of baldes) b.resultado = b.receitas - b.despesas
+  return baldes
+}
+
+/** Janela coberta por uma granularidade — vira o recorte da consulta. */
+export function janelaDaGranularidade(
+  g: Granularidade,
+  referencia: string
+): { de: string; ate: string } {
+  const baldes = baldesDaGranularidade(g, referencia)
+  const primeiro = baldes[0].chave
+  const ultimo = baldes[baldes.length - 1].chave
+  if (g === "ano") return { de: `${primeiro}-01-01`, ate: `${ultimo}-12-31` }
+  if (g === "mes") {
+    const { ano, mes } = anoMesDeISO(`${ultimo}-01`)
+    return { de: `${primeiro}-01`, ate: ultimoDiaISO(ano, mes) }
+  }
+  if (g === "semana") return { de: primeiro, ate: somarDias(ultimo, 6) }
+  return { de: primeiro, ate: ultimo }
+}
+
+// ============================================================
 // Navegação segura
 // ============================================================
 

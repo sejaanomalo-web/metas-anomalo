@@ -8,6 +8,7 @@ import { conferirLinhasAfetadas, traduzirErroBanco } from "./financeiro-erros"
 import { proximaCorLivre } from "./financeiro-regras"
 import { type Mes } from "./data"
 import {
+  contarUsoCategoria,
   mesNumero,
   rangeDoMesNumISO,
   type TipoLancamento,
@@ -359,42 +360,97 @@ export async function criarCategoriaRapidaAction(
   return { ok: true, id: data.id as string, nome: data.nome as string, cor: data.cor as string }
 }
 
-export async function excluirCategoriaAction(id: string): Promise<ResultadoFinanceiro> {
+/** O que o usuário escolheu no diálogo de exclusão. */
+export type ModoExclusaoCategoria = "desativar" | "excluir"
+
+export interface ResultadoExclusaoCategoria extends ResultadoFinanceiro {
+  /** Quantos vínculos ficaram sem categoria. */
+  soltos?: number
+}
+
+/**
+ * R9. Exclusão de categoria com as duas saídas honestas.
+ *
+ * Antes isto simplesmente BLOQUEAVA quando a categoria estava em uso, e a
+ * pessoa ficava sem opção: a categoria errada continuava na lista pra sempre.
+ * Agora o diálogo conta o uso e oferece o que realmente se quer em cada caso:
+ *
+ *   • desativar — some das listas de escolha, o histórico continua exibindo
+ *     o nome. É o recomendado, e é o que quase todo mundo quer de fato.
+ *
+ *   • excluir — os vínculos são SOLTOS (viram "Sem categoria") e a categoria
+ *     some. Nenhum lançamento é apagado: dinheiro não sai em cascata.
+ *
+ * Não é transacional (são passos sequenciais). É aceitável porque nenhum
+ * passo destrói informação: se parar no meio, sobram lançamentos sem
+ * categoria e a categoria ainda existe — estado consistente e reversível.
+ */
+export async function excluirCategoriaAction(
+  id: string,
+  modo: ModoExclusaoCategoria = "excluir"
+): Promise<ResultadoExclusaoCategoria> {
   const { erro } = await exigirPermissao()
   if (erro) return { ok: false, erro }
 
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, erro: "supabase_indisponivel" }
 
-  // Bloqueia exclusão se a categoria está em uso (lançamentos ou recorrentes).
-  const { data: lanc } = await supabase
-    .from("lancamento_financeiro")
-    .select("id")
-    .eq("categoria_id", id)
-    .is("deletado_em", null)
-    .limit(1)
-  if (lanc && lanc.length > 0) {
-    return {
-      ok: false,
-      erro: "Categoria está em uso em lançamentos. Desative em vez de excluir.",
-    }
-  }
-  const { data: rec } = await supabase
-    .from("pagamento_recorrente")
-    .select("id")
-    .eq("categoria_id", id)
-    .limit(1)
-  if (rec && rec.length > 0) {
-    return {
-      ok: false,
-      erro: "Categoria está em uso em pagamentos recorrentes. Desative em vez de excluir.",
-    }
+  if (modo === "desativar") {
+    const { data, error } = await supabase
+      .from("categoria_financeira")
+      .update({ ativa: false })
+      .eq("id", id)
+      .select("id")
+    if (error) return { ok: false, erro: traduzirErroBanco(error) }
+    const semPermissao = conferirLinhasAfetadas(data, "desativar a categoria")
+    if (semPermissao) return { ok: false, erro: semPermissao }
+    revalidarFinanceiro()
+    return { ok: true, id }
   }
 
-  const { error } = await supabase.from("categoria_financeira").delete().eq("id", id)
-  if (error) return { ok: false, erro: error.message }
+  // Solta os vínculos antes de remover. A FK é ON DELETE SET NULL, mas fazer
+  // explicitamente permite CONTAR quantos foram soltos e avisar o usuário.
+  let soltos = 0
+
+  const { data: lancSoltos, error: errLanc } = await supabase
+    .from("lancamento_financeiro")
+    .update({ categoria_id: null })
+    .eq("categoria_id", id)
+    .select("id")
+  if (errLanc) return { ok: false, erro: traduzirErroBanco(errLanc) }
+  soltos += lancSoltos?.length ?? 0
+
+  const { data: recSoltos, error: errRec } = await supabase
+    .from("pagamento_recorrente")
+    .update({ categoria_id: null })
+    .eq("categoria_id", id)
+    .select("id")
+  if (errRec) return { ok: false, erro: traduzirErroBanco(errRec) }
+  soltos += recSoltos?.length ?? 0
+
+  // `.select()` no delete não é enfeite: um delete barrado pela RLS devolve
+  // ZERO linhas SEM erro, e a tela diria "excluída" com a categoria ainda lá.
+  const { data: removidas, error } = await supabase
+    .from("categoria_financeira")
+    .delete()
+    .eq("id", id)
+    .select("id")
+  if (error) return { ok: false, erro: traduzirErroBanco(error) }
+  const semPermissao = conferirLinhasAfetadas(removidas, "excluir a categoria")
+  if (semPermissao) return { ok: false, erro: semPermissao }
+
   revalidarFinanceiro()
-  return { ok: true, id }
+  return { ok: true, id, soltos }
+}
+
+/** Contagem de uso, pro diálogo perguntar já sabendo o tamanho do estrago. */
+export async function contarUsoCategoriaAction(
+  id: string
+): Promise<{ ok: boolean; lancamentos: number; recorrentes: number; erro?: string }> {
+  const { erro } = await exigirPermissao()
+  if (erro) return { ok: false, lancamentos: 0, recorrentes: 0, erro }
+  const uso = await contarUsoCategoria(id)
+  return { ok: true, lancamentos: uso.lancamentos, recorrentes: uso.recorrentes }
 }
 
 // ============================================================

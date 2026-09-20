@@ -6,6 +6,7 @@ import GraficoFluxoCaixa from "@/components/financeiro/GraficoFluxoCaixa"
 import GraficoCategorias from "@/components/financeiro/GraficoCategorias"
 import { formatBRL, formatNumero } from "@/lib/data"
 import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 import {
   getResumoFinanceiroPeriodo,
   getFluxoCaixaAnual,
@@ -240,6 +241,7 @@ export default async function FinanceiroOverviewPage({
           totalDespesas={dre.total_despesas}
           totalReceitas={dre.total_receitas}
           rotulo={periodo.rotulo}
+          qsPeriodo={periodoQS(periodo)}
         />
       </section>
 
