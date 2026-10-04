@@ -4,6 +4,7 @@ import AtivarNotificacoes from "@/components/AtivarNotificacoes"
 import PreferenciasNotificacoes from "@/components/PreferenciasNotificacoes"
 import GerenciadorUsuarios from "@/components/GerenciadorUsuarios"
 import MeuNivelAcesso from "@/components/MeuNivelAcesso"
+import MinhaSenha from "@/components/MinhaSenha"
 import GerenciadorFormularios, {
   type FormId,
 } from "@/components/GerenciadorFormularios"
@@ -143,6 +144,9 @@ export default async function ConfiguracoesPage({
           inicial={preferencias}
           chavesPermitidas={chavesNotif}
         />
+
+        {/* Trocar a própria senha vale pra todo usuário, não só admin. */}
+        <MinhaSenha />
 
         {ehAdminReal && (
           <MeuNivelAcesso
