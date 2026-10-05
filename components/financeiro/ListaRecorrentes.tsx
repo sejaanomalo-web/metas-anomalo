@@ -71,8 +71,9 @@ export default function ListaRecorrentes({
         return
       }
       setSucesso(`"${r.nome}" foi excluído. Os lançamentos já gerados continuam lá.`)
+      // Só refresh: o reload duro que havia aqui apagava a mensagem de
+      // sucesso acima antes de dar tempo de ler.
       router.refresh()
-      setTimeout(() => window.location.reload(), 400)
     })
   }
 
@@ -101,8 +102,9 @@ export default function ListaRecorrentes({
           ? `Nenhum lançamento novo (todos já existem para ${rotuloPeriodo}).`
           : `${matResult.criados} lançamento(s) criado(s) para ${rotuloPeriodo}.`
       )
+      // Só refresh: o reload duro que havia aqui apagava a mensagem de
+      // sucesso acima antes de dar tempo de ler.
       router.refresh()
-      setTimeout(() => window.location.reload(), 400)
     })
   }
 
@@ -256,15 +258,27 @@ export default function ListaRecorrentes({
         </div>
       )}
 
-      <RecorrenteDrawer
-        aberto={drawerAberto}
-        fechar={() => setDrawerAberto(false)}
-        categorias={categorias}
-        contas={contas}
-        recorrente={editando}
-        mesAtual={mesAtual}
-        anoAtual={anoAtual}
-      />
+      {/* Renderizado só quando aberto, de propósito.
+          O drawer faz `if (!aberto) return null` DEPOIS dos hooks, então ele
+          nunca desmontava: os inicializadores de useState rodavam uma única
+          vez, no primeiro render da página — quando não havia registro
+          nenhum selecionado. Nas aberturas seguintes, tipo/status/conta/
+          categoria/cor continuavam com o valor da vez anterior, enquanto os
+          campos não controlados (descrição, valor, datas) se atualizavam
+          normalmente: o formulário abria metade certo, metade errado.
+          Montar a cada abertura garante estado novo. A animação de entrada
+          continua igual — o painel interno já era criado e destruído. */}
+      {drawerAberto && (
+        <RecorrenteDrawer
+          aberto={drawerAberto}
+          fechar={() => setDrawerAberto(false)}
+          categorias={categorias}
+          contas={contas}
+          recorrente={editando}
+          mesAtual={mesAtual}
+          anoAtual={anoAtual}
+        />
+      )}
     </>
   )
 }

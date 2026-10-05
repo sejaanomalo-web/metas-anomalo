@@ -26,8 +26,14 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // `viewportFit: "cover"` é o que LIGA o env(safe-area-inset-*) do CSS.
+  // Sem ele, todo env(safe-area-inset-*) resolve para 0 — e o app declara
+  // `statusBarStyle: "black-translucent"`, que no iOS em modo standalone
+  // faz o conteúdo começar em y=0, POR BAIXO do relógio e da ilha dinâmica.
+  // O resultado era o botão do menu e o sino ficarem embaixo da barra de
+  // status no app instalado. As compensações de notch já existiam no CSS;
+  // faltava esta linha para elas valerem alguma coisa.
+  viewportFit: "cover",
   themeColor: "#c9953a",
 }
 
@@ -48,6 +54,27 @@ export default function RootLayout({
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
           rel="stylesheet"
+        />
+        {/* Largura do menu lateral ANTES da primeira pintura.
+         *
+         * O AppShell só descobre a preferência dentro de um useEffect, então
+         * a primeira pintura saía sempre com o rail recolhido (72px). Para
+         * quem deixa o menu aberto, logo após a hidratação a largura pulava
+         * para 240px — e como `.app-main` anima `margin-left`, que é
+         * propriedade de LAYOUT, cada quadro dessa animação refazia o layout
+         * de toda a árvore à direita (tabelas, gráficos, grade do Workspace)
+         * justamente enquanto a thread ainda estava hidratando.
+         *
+         * Lendo aqui, o valor certo já vale no primeiro quadro. O try/catch
+         * cobre navegação privada e storage bloqueado, caindo no mesmo
+         * padrão de hoje (72px). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var v=localStorage.getItem('anomalo-sidebar-expandido');" +
+              "document.documentElement.style.setProperty('--rail-width'," +
+              "v==='true'?'240px':'72px')}catch(e){}",
+          }}
         />
       </head>
       {/* min-h-dvh (não min-h-screen/100vh): em mobile, vh usa a viewport

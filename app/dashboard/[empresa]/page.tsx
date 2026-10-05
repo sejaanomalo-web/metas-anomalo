@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import CenarioReal from "@/components/CenarioReal"
 import DrawerEditarMeta from "@/components/DrawerEditarMeta"
-import GraficoFaturamento from "@/components/GraficoFaturamento"
+import { GraficoFaturamentoLazy } from "@/components/graficos-lazy"
 import TabelaMeses from "@/components/TabelaMeses"
 import ToggleOrigem from "@/components/ToggleOrigem"
 import TabsMetas from "@/components/TabsMetas"
@@ -116,10 +116,6 @@ export default async function EmpresaPage({
   const ano = periodo.ano
   const origem = origemValida(searchParams?.origem)
   const temProjecao = anoTemProjecao(ano)
-  // Aba "Metas por cliente" só aparece para assessorias com clientes de
-  // tráfego (mesma regra do fluxo de Tráfego).
-  const temClientes = await empresaTemClientesTrafego(empresa.nome)
-
   const dadosHardcoded = getDadosEmpresa(empresa.slug as EmpresaSlug, ano)
 
   // Fonte unificada com o restante do dashboard: dados_diarios_log
@@ -134,13 +130,20 @@ export default async function EmpresaPage({
   // COMERCIAL (relatorios_comerciais), mapeado para o mesmo formato.
   // Assim o painel Metas compara meta vs realizado em ambas as origens.
   const ehOrganico = origem === "organico"
-  const [overrides, dadosDiarios] = await Promise.all([
+  // `empresaTemClientesTrafego` entrou neste bloco em vez de ocupar uma onda
+  // serial só para ela: ela precisa apenas de `empresa.nome`, que é o mesmo
+  // insumo das outras duas e já está resolvido aqui. Eram 5 idas ao banco em
+  // série antes do primeiro pixel; agora são 4.
+  const [overrides, dadosDiarios, temClientes] = await Promise.all([
     getMetasOverrideEmpresa(empresa.db, ano, origem),
     // Timeline diária só existe pra pago (dados_diarios_log); no orgânico
     // fica vazia (o comercial é agregado por dia via relatorios_comerciais).
     ehOrganico
       ? Promise.resolve([])
       : getDadosDiariosDoMesPorNome(empresa.nome, mes, ano, origem),
+    // Aba "Metas por cliente" só aparece para assessorias com clientes de
+    // tráfego (mesma regra do fluxo de Tráfego).
+    empresaTemClientesTrafego(empresa.nome),
   ])
 
   // Realizado por origem:
@@ -317,7 +320,7 @@ export default async function EmpresaPage({
               origem={origem}
             />
             {temProjecao && pontos.length > 0 && (
-              <GraficoFaturamento dados={pontos} />
+              <GraficoFaturamentoLazy dados={pontos} />
             )}
             {!temProjecao && (
               <div
@@ -342,7 +345,7 @@ export default async function EmpresaPage({
 
         {empresa.tipo === "diego" && temProjecao && pontos.length > 0 && (
           <section>
-            <GraficoFaturamento dados={pontos} />
+            <GraficoFaturamentoLazy dados={pontos} />
           </section>
         )}
 

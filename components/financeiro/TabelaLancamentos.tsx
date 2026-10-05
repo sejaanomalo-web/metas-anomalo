@@ -136,13 +136,21 @@ export default function TabelaLancamentos({
   }, [lancDeepLink, lancamentos])
 
   /**
-   * Refresh defensivo: router.refresh() + reload duro. O reload garante
-   * invalidação do Router Cache do Next + Service Worker do PWA — sem ele,
-   * o lançamento alterado só aparecia após refresh manual.
+   * Revalidação suave. A Server Action correspondente já chama
+   * revalidatePath, o que invalida a rota no servidor E devolve o RSC novo
+   * na resposta da própria ação — router.refresh() apenas garante que a
+   * árvore atual seja repintada com esse payload.
+   *
+   * Aqui havia um reload duro do documento 250–400ms depois. Ele abortava o
+   * refresh em voo, destruía o documento, rebaixava todo o bundle e
+   * reexecutava o layout inteiro. No app instalado (display: standalone) não
+   * existe barra de navegação, então isso aparecia como a tela de splash de
+   * volta — parecia que o aplicativo tinha fechado sozinho. O motivo alegado
+   * era o cache do Service Worker, mas public/sw.js só trata push e
+   * notificationclick: ele nunca serve HTML, logo nunca serviu HTML velho.
    */
   function refreshUI() {
     router.refresh()
-    setTimeout(() => window.location.reload(), 250)
   }
 
   /** Marca um previsto como realizado em 1 clique, com a data de hoje.
@@ -503,17 +511,29 @@ export default function TabelaLancamentos({
         />
       )}
 
-      <LancamentoDrawer
-        aberto={drawerAberto}
-        fechar={() => setDrawerAberto(false)}
-        categorias={categorias}
-        contas={contas}
-        empresas={empresas}
-        lancamento={editando}
-        prefill={editando ? null : prefill}
-        mesNum={mesNum}
-        anoAtual={anoAtual}
-      />
+      {/* Renderizado só quando aberto, de propósito.
+          O drawer faz `if (!aberto) return null` DEPOIS dos hooks, então ele
+          nunca desmontava: os inicializadores de useState rodavam uma única
+          vez, no primeiro render da página — quando não havia registro
+          nenhum selecionado. Nas aberturas seguintes, tipo/status/conta/
+          categoria/cor continuavam com o valor da vez anterior, enquanto os
+          campos não controlados (descrição, valor, datas) se atualizavam
+          normalmente: o formulário abria metade certo, metade errado.
+          Montar a cada abertura garante estado novo. A animação de entrada
+          continua igual — o painel interno já era criado e destruído. */}
+      {drawerAberto && (
+        <LancamentoDrawer
+          aberto={drawerAberto}
+          fechar={() => setDrawerAberto(false)}
+          categorias={categorias}
+          contas={contas}
+          empresas={empresas}
+          lancamento={editando}
+          prefill={editando ? null : prefill}
+          mesNum={mesNum}
+          anoAtual={anoAtual}
+        />
+      )}
     </>
   )
 }

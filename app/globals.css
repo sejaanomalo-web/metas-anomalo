@@ -489,9 +489,47 @@ table {
   .no-ds:hover {
     transform: translateY(-1px);
   }
-  .no-ds:active {
-    transform: translateY(0);
+}
+
+/* ============ Feedback de toque ============
+ *
+ * O único estado de "pressionado" do sistema (.no-ds:active) estava DENTRO
+ * do bloco @media (hover: hover) acima. Celular tem hover: none, então em
+ * telefone ele simplesmente não existia: o dedo tocava o botão e o pixel não
+ * mudava nada. Somado à ausência de fronteira de carregamento, a pessoa
+ * concluía que o toque não pegou e tocava de novo — duas navegações
+ * enfileiradas, ou a mesma ação enviada duas vezes.
+ *
+ * Fica FORA do media query porque :active é ortogonal a hover: vale para
+ * mouse e para dedo. O transform de elevação no hover continua só no
+ * desktop, onde faz sentido. */
+.no-ds:active,
+.btn-gold-filled:active,
+.btn-gold-outline:active,
+.btn-ghost:active,
+button:active {
+  transform: scale(0.97);
+  filter: brightness(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .no-ds:active,
+  .btn-gold-filled:active,
+  .btn-gold-outline:active,
+  .btn-ghost:active,
+  button:active {
+    transform: none;
   }
+}
+
+/* O realce padrão de toque do iOS é cinza e some no fundo escuro do app.
+ * Um leve dourado dá o mesmo sinal na paleta certa. */
+button,
+a,
+[role="button"],
+label,
+summary {
+  -webkit-tap-highlight-color: rgba(201, 149, 58, 0.18);
 }
 
 /* Rótulos do Funil de conversão: alinhados à direita no desktop; no mobile
@@ -596,6 +634,9 @@ table {
   left: 0;
   top: 0;
   bottom: 0;
+  /* O logo no topo do rail também ficava sob o relógio quando o drawer abria. */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   transition: width 0.2s ease, transform 0.2s ease;
   z-index: 30;
@@ -607,14 +648,28 @@ table {
 
 .app-main {
   margin-left: var(--rail-width, 72px);
-  transition: margin-left 0.2s ease;
+  /* `margin-left` é propriedade de LAYOUT: cada quadro da transição força o
+     browser a recalcular o layout de todo o conteúdo à direita — as tabelas
+     do Financeiro, a grade do Workspace, os gráficos do Tráfego. Encurtar a
+     animação reduz o número de reflows; quem pediu menos movimento no
+     sistema não paga nenhum. */
+  transition: margin-left 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-rail,
+  .app-main {
+    transition: none;
+  }
 }
 
 .app-mobile-trigger {
   display: none;
   position: fixed;
-  top: 12px;
-  left: 12px;
+  /* Sem o env(), este botão (y=12..54) ficava inteiro debaixo do relógio do
+     iPhone no app instalado — tocar nele abria a central de notificações. */
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
   z-index: 60;
   align-items: center;
   gap: 8px;
@@ -638,9 +693,11 @@ table {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  /* Sem backdrop-filter aqui de propósito. Era um blur de viewport INTEIRA
+     que o compositor refazia a cada quadro enquanto o menu desliza — é onde
+     a abertura do menu perdia quadros no celular. O escurecimento um pouco
+     mais forte dá a mesma separação visual entre drawer e fundo, de graça. */
+  background: rgba(0, 0, 0, 0.72);
   z-index: 40;
   border: none;
   cursor: pointer;
@@ -658,7 +715,10 @@ table {
   }
   .app-main {
     margin-left: 0;
-    padding-top: 56px;
+    /* Acompanha o hambúrguer, que desceu pelo safe-area. */
+    padding-top: calc(56px + env(safe-area-inset-top));
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
   .app-mobile-trigger {
     display: flex;
@@ -752,8 +812,9 @@ table {
  */
 .sino-trigger {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  /* Mesma razão do hambúrguer: ficava sob o indicador de bateria. */
+  top: calc(16px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
   width: 44px;
   height: 44px;
   display: flex;

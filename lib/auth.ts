@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { createHmac, scryptSync, timingSafeEqual } from "crypto"
@@ -332,10 +333,18 @@ export async function requererAdmin(): Promise<UsuarioSessao> {
 
 /**
  * Retorna o usuário da sessão atual com os campos da tabela usuarios.
+ *
+ * Memoizada com `cache()` do React: o layout do /dashboard chama esta função
+ * e TODA página chama de novo no primeiro await (via requererPermissao), o
+ * que eram dois SELECT idênticos em série na mesma renderização — e mais um
+ * por Server Component aninhado. O `cache()` deduplica DENTRO de uma mesma
+ * requisição do servidor, não entre requisições: cada navegação continua
+ * lendo do banco uma vez, então nenhum dado fica velho e um usuário
+ * desativado no meio da sessão continua sendo barrado na navegação seguinte.
  * null se não autenticado / cookie inválido / usuário não existe ou foi
  * desativado. Inclui papel e permissoes pra checagem RBAC nas pages.
  */
-export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
+export const getUsuarioAtual = cache(async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
   const usuarioId = getUsuarioIdSync()
   if (!usuarioId) return null
   const supabase = getSupabaseAdmin()
@@ -417,7 +426,7 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
     visao,
     permissoes: permissoesDaVisao(visao, visaoPermissoes),
   }
-}
+})
 
 /**
  * Compara senha em texto puro contra hash scrypt no formato

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ANOS_DISPONIVEIS, MESES, type Ano, type Mes } from "@/lib/data"
 import type { ModoPeriodo } from "@/lib/periodo"
@@ -80,6 +81,38 @@ export default function SeletorPeriodoGlobal({
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
+  /**
+   * Navegação como transição, e não como troca abrupta.
+   *
+   * Duas coisas estavam erradas aqui, e este seletor aparece em 20 telas:
+   *
+   * 1. O `router.push` era chamado cru. Sem transição não existe
+   *    `isPending`, então não havia como esmaecer nada nem indicar que o
+   *    período estava carregando — e como as páginas são force-dynamic, a
+   *    tela ficava idêntica durante todo o tempo das consultas novas.
+   *
+   * 2. Os <select> eram controlados por prop do SERVIDOR. O valor só muda
+   *    quando o payload novo chega, então no instante seguinte ao onChange
+   *    o React repintava o dropdown com o valor ANTIGO: o mês "voltava
+   *    sozinho" e a pessoa concluía que o clique não pegou.
+   *
+   * O estado local resolve (2) e o useTransition resolve (1). É o mesmo
+   * padrão que components/workspace/CalendarioTarefas.tsx já usa em
+   * `startNav`, inclusive o esmaecimento enquanto pendente.
+   */
+  const [navPending, startNav] = useTransition()
+  const [mesLocal, setMesLocal] = useState<Mes>(mesAtual)
+  const [anoLocal, setAnoLocal] = useState<Ano>(anoAtual)
+
+  // Ressincroniza quando o período muda por FORA daqui: botão voltar do
+  // browser, link do rail que já carrega ?mes=, ou outra navegação.
+  useEffect(() => {
+    setMesLocal(mesAtual)
+  }, [mesAtual])
+  useEffect(() => {
+    setAnoLocal(anoAtual)
+  }, [anoAtual])
+
   const modoRaw = searchParams.get("modo")
   const modo: ModoPeriodo =
     modoRaw === "dia" || modoRaw === "intervalo" ? modoRaw : "mes"
@@ -89,7 +122,9 @@ export default function SeletorPeriodoGlobal({
   const ate = searchParams.get("ate") || fallback.ate
 
   function push(params: URLSearchParams) {
-    router.push(`${pathname}?${params.toString()}`)
+    startNav(() => {
+      router.push(`${pathname}?${params.toString()}`)
+    })
   }
 
   function setModo(novo: ModoPeriodo) {
@@ -142,7 +177,17 @@ export default function SeletorPeriodoGlobal({
   return (
     // Mobile: tudo alinhado à esquerda (items-start) pra ficar organizado
     // junto do título. Desktop (lg+): volta pro topo à direita (items-end).
-    <div className="flex flex-col items-start lg:items-end gap-2">
+    <div
+      className="flex flex-col items-start lg:items-end gap-2"
+      // Esmaece enquanto a navegação está em voo — o mesmo sinal que o
+      // calendário do Workspace já dá. Sem isso, trocar o período não muda
+      // nada na tela durante o tempo das consultas novas.
+      style={{
+        opacity: navPending ? 0.55 : 1,
+        transition: "opacity 0.15s ease",
+      }}
+      aria-busy={navPending}
+    >
       {/* Alternador de modo */}
       <div className="flex items-center gap-1">
         {(["mes", "dia", "intervalo"] as ModoPeriodo[]).map((m) => (
@@ -162,8 +207,12 @@ export default function SeletorPeriodoGlobal({
       {modo === "mes" && (
         <div className="flex items-center gap-2">
           <select
-            value={mesAtual}
-            onChange={(e) => atualizarMesAno("mes", e.target.value)}
+            value={mesLocal}
+            disabled={navPending}
+            onChange={(e) => {
+              setMesLocal(e.target.value as Mes)
+              atualizarMesAno("mes", e.target.value)
+            }}
             className="glass-input"
             style={estiloInput}
           >
@@ -174,8 +223,12 @@ export default function SeletorPeriodoGlobal({
             ))}
           </select>
           <select
-            value={anoAtual}
-            onChange={(e) => atualizarMesAno("ano", e.target.value)}
+            value={anoLocal}
+            disabled={navPending}
+            onChange={(e) => {
+              setAnoLocal(Number(e.target.value) as Ano)
+              atualizarMesAno("ano", e.target.value)
+            }}
             className="glass-input"
             style={estiloInput}
           >

@@ -8,7 +8,7 @@ import {
   useState,
 } from "react"
 import { useRouter } from "next/navigation"
-import { dispararSentinelaDia } from "@/lib/sentinela-trigger"
+import type { ResultadoSentinelaDia } from "@/lib/sentinela-trigger"
 
 /**
  * Provider do "Atualizar dados" do Tráfego que roda em SEGUNDO PLANO.
@@ -80,7 +80,20 @@ export default function SentinelaRefreshProvider({
     setEstado({ fase: "rodando", pct: 20, etapa: "Chamando a Sentinela…" })
     const inicio = Date.now()
 
-    const resultado = await dispararSentinelaDia()
+    // Route Handler, não Server Action: o Next serializa Server Actions e
+    // router.refresh() numa fila única por aba, e esta coleta leva de 30 a
+    // 60 segundos. Como ela dispara sozinha ao abrir o Tráfego, a fila
+    // travada deixava TODO clique que salva (em qualquer aba) sem resposta
+    // por até um minuto. Um fetch comum não entra nessa fila.
+    const resultado: ResultadoSentinelaDia = await fetch(
+      "/api/sentinela/coletar",
+      { method: "POST" }
+    )
+      .then((r) => r.json())
+      .catch((e) => ({
+        ok: false,
+        erro: e instanceof Error ? e.message : "Falha de rede ao chamar a Sentinela.",
+      }))
 
     if (!resultado.ok && resultado.semSecret) {
       setEstado({
