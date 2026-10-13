@@ -43,6 +43,9 @@ export interface DiaDetalhado {
 }
 
 const MESES_NUM: Record<Mes, number> = {
+  Janeiro: 1,
+  Fevereiro: 2,
+  "Março": 3,
   Abril: 4,
   Maio: 5,
   Junho: 6,

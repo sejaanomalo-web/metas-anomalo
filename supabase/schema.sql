@@ -11,7 +11,7 @@ create table if not exists public.dados_reais (
     empresa in ('a2_marketing','f2_sports','f2_moveis','hato','aton','diego')
   ),
   mes text not null check (
-    mes in ('Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro')
+    mes in ('Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro')
   ),
   ano int not null default 2026,
   investimento_real numeric,
@@ -32,7 +32,7 @@ create table if not exists public.comissionamento (
   id uuid primary key default uuid_generate_v4(),
   colaborador text not null check (colaborador in ('felipe','vinicius','emanuel')),
   mes text not null check (
-    mes in ('Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro')
+    mes in ('Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro')
   ),
   ano int not null default 2026,
   entregas_validas int,

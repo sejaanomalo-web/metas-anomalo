@@ -29,6 +29,9 @@ const estiloInput: React.CSSProperties = {
 const optionStyle: React.CSSProperties = { background: "#121826" }
 
 const MES_NUM: Record<Mes, number> = {
+  Janeiro: 1,
+  Fevereiro: 2,
+  "Março": 3,
   Abril: 4,
   Maio: 5,
   Junho: 6,

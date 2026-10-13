@@ -53,6 +53,9 @@ const TRACO = "—"
 
 // Mês-número (1..12) -> nome canônico do dashboard (Abril..Dezembro).
 const MES_NOME: Record<number, Mes> = {
+  1: "Janeiro",
+  2: "Fevereiro",
+  3: "Março",
   4: "Abril",
   5: "Maio",
   6: "Junho",

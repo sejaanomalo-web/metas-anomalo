@@ -19,6 +19,9 @@ import {
 
 const MES_NUM_COMERCIAL: Record<Mes, number> = {
   Abril: 4,
+  Janeiro: 1,
+  Fevereiro: 2,
+  "Março": 3,
   Maio: 5,
   Junho: 6,
   Julho: 7,

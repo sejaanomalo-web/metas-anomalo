@@ -259,10 +259,9 @@ export async function getPainelMetasCliente(
 // do tráfego (pago) e do comercial (orgânico), como o dashboard da empresa.
 // ============================================================
 
-// Abril=4 … Dezembro=12 → índice em MESES (que começa em Abril). Jan–Mar
-// não existem em MESES (mesma convenção do resto do app) e são ignorados.
+// Janeiro=1 … Dezembro=12 → índice em MESES.
 function mesPorNumero(m: number): Mes | undefined {
-  return MESES[m - 4]
+  return MESES[m - 1]
 }
 
 const zeroOuNum = (n: number) => (n > 0 ? n : null)

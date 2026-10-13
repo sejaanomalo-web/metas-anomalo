@@ -48,7 +48,7 @@ function derivarPeriodoDaData(
   if (!Number.isFinite(ano) || !Number.isFinite(mesNum)) return null
   // Tabela mes_num → nome (mesma usada em lib/data.ts MES_NUM)
   const nomes: Record<number, Mes> = {
-    4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
     9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
   }
   const mes = nomes[mesNum]

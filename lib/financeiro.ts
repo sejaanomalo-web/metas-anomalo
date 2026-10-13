@@ -201,12 +201,12 @@ const COLUNAS_LANCAMENTO =
 // Helpers
 // ============================================================
 
-// O tipo `Mes` do app cobre só Abril–Dezembro (range operacional do
-// produto). Janeiro/Fevereiro/Março existem no CHECK do Postgres mas
-// não são geráveis pelo seletor — futuros se a Anômalo expandir o
-// range, ajustar `lib/data.ts` MESES e este map em conjunto.
+// Mesmo mapeamento de `lib/data.ts` MES_NUM (Janeiro–Dezembro).
 const MES_NUM: Record<Mes, number> = {
   Abril: 4, Maio: 5, Junho: 6, Julho: 7, Agosto: 8,
+  Janeiro: 1,
+  Fevereiro: 2,
+  "Março": 3,
   Setembro: 9, Outubro: 10, Novembro: 11, Dezembro: 12,
 }
 
