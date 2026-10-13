@@ -190,7 +190,7 @@ export default async function EmpresaPage({
     .filter((x): x is DadosReais => x !== null)
 
   // Para empresas sem projeções hardcoded (adicionadas via UI), gera
-  // skeleton com 9 meses vazios para que gráfico e tabela apareçam.
+  // skeleton com os 12 meses vazios para que gráfico e tabela apareçam.
   const baseDados =
     dadosHardcoded.length > 0
       ? dadosHardcoded

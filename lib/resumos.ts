@@ -139,6 +139,9 @@ function mesAtual(): { mes: Mes; ano: number; hoje: Date } {
   const idx = hoje.getMonth() + 1
   const mesNomes: Record<number, Mes> = {
     4: "Abril",
+    1: "Janeiro",
+    2: "Fevereiro",
+    3: "Março",
     5: "Maio",
     6: "Junho",
     7: "Julho",

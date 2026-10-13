@@ -1,4 +1,7 @@
 export const MESES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
   "Abril",
   "Maio",
   "Junho",
@@ -12,7 +15,9 @@ export const MESES = [
 
 export type Mes = (typeof MESES)[number]
 
-export const ANOS_DISPONIVEIS = [2026, 2027, 2028, 2029, 2030] as const
+export const ANOS_DISPONIVEIS = [
+  2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035,
+] as const
 export type Ano = (typeof ANOS_DISPONIVEIS)[number]
 export const ANO_PADRAO: Ano = 2026
 // Ano que possui dados projetados hardcoded em lib/data.ts
@@ -47,14 +52,13 @@ const NOMES_MES_PT: Record<number, string> = {
 }
 
 /**
- * Mês atual em BRT, mapeado para a lista MESES (Abril–Dezembro).
- * Janeiro/Fevereiro/Março caem em Abril como menor opção disponível.
+ * Mês atual em BRT (Janeiro–Dezembro).
  */
 export function mesAtual(): Mes {
   const hoje = hojeBRL()
   const nome = NOMES_MES_PT[hoje.getMonth() + 1]
   if (nome && (MESES as readonly string[]).includes(nome)) return nome as Mes
-  return "Abril"
+  return "Janeiro"
 }
 
 /**
@@ -663,6 +667,9 @@ export function subtituloDaEmpresa(empresa: EmpresaMeta): string {
 }
 
 export const MES_NUM: Record<Mes, number> = {
+  Janeiro: 1,
+  Fevereiro: 2,
+  "Março": 3,
   Abril: 4,
   Maio: 5,
   Junho: 6,

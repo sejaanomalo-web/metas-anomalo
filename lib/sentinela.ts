@@ -635,8 +635,7 @@ function rangeDoMesISO(
   }
 }
 
-/** Inverso de MES_NUM: data ISO → Mes (Abril..Dezembro) ou null se mês
- *  cair fora da nossa janela (Jan/Fev/Mar). */
+/** Inverso de MES_NUM: data ISO → Mes (null se a data for inválida). */
 function dataISOParaMes(isoDate: string): Mes | null {
   const m = parseInt(isoDate.slice(5, 7), 10)
   if (!Number.isFinite(m)) return null
@@ -895,7 +894,7 @@ export async function getResumoPorIntervaloDaEmpresa(
   return agregarLinhas(empresaNome, linhas)
 }
 
-/** Map<Mes, resumo> dos 9 meses (Abril..Dezembro) do ano pra uma empresa.
+/** Map<Mes, resumo> dos 12 meses do ano pra uma empresa.
  *  Substitui o array DadosReais[] que getDadosReais devolvia. */
 export async function getResumoAnualDaEmpresa(
   empresaNome: string,
