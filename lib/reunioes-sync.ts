@@ -207,6 +207,40 @@ export async function reprocessarPendentes(db: SupabaseClient, limite = 50): Pro
   return { total: (data ?? []).length, ok, falhas }
 }
 
+/**
+ * Conclui encerramentos que ficaram pela metade: reunião já cancelada/recusada
+ * no registro, tarefa ainda com cara de ativa (sync_status != 'ok'). Não fala
+ * com o Cal.com — só com o banco. Usado pelo "Sincronizar agora" e pelo
+ * "Tentar de novo".
+ */
+export async function repararEncerramentosPendentes(db: SupabaseClient): Promise<{ reparadas: number; erros: number }> {
+  const repo = repoSupabase(db)
+  let reparadas = 0
+  let erros = 0
+  const { data: meias, error } = await db
+    .from("reunioes_agendamentos")
+    .select("booking_uid")
+    .eq("provedor", "calcom")
+    .in("status", ["cancelada", "rejeitada"])
+    .neq("sync_status", "ok")
+    .not("tarefa_id", "is", null)
+    .limit(50)
+  if (error) throw new Error(`Falha ao ler encerramentos pendentes: ${error.message}`)
+  for (const { booking_uid } of (meias ?? []) as { booking_uid: string }[]) {
+    try {
+      const r = await repararEncerramento(repo, booking_uid)
+      if (r.reparado) {
+        reparadas++
+        await logSync(db, "info", "reconciliacao", `Reserva ${booking_uid}: ${r.resultado}.`, { detalhes: { booking_uid } })
+      }
+    } catch (e) {
+      erros++
+      await logSync(db, "erro", "reconciliacao", `Falha ao concluir o encerramento de ${booking_uid}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500))
+    }
+  }
+  return { reparadas, erros }
+}
+
 // ============================================================
 // Reconciliação com GET /v2/bookings
 // ============================================================
@@ -308,26 +342,9 @@ export async function reconciliar(db: SupabaseClient): Promise<{
     }
 
     // ---------- 3) encerramentos pela metade ----------
-    const { data: meias } = await db
-      .from("reunioes_agendamentos")
-      .select("booking_uid")
-      .eq("provedor", "calcom")
-      .in("status", ["cancelada", "rejeitada"])
-      .neq("sync_status", "ok")
-      .not("tarefa_id", "is", null)
-      .limit(50)
-    for (const { booking_uid } of (meias ?? []) as { booking_uid: string }[]) {
-      try {
-        const r = await repararEncerramento(repo, booking_uid)
-        if (r.reparado) {
-          reparadas++
-          await logSync(db, "info", "reconciliacao", `Reserva ${booking_uid}: ${r.resultado}.`, { detalhes: { booking_uid } })
-        }
-      } catch (e) {
-        erros++
-        await logSync(db, "erro", "reconciliacao", `Falha ao concluir o encerramento de ${booking_uid}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500))
-      }
-    }
+    const rep = await repararEncerramentosPendentes(db)
+    reparadas += rep.reparadas
+    erros += rep.erros
 
     const reproc = await reprocessarPendentes(db)
     const mensagem =

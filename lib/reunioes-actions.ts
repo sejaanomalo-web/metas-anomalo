@@ -50,7 +50,7 @@ import {
   validarPeriodos,
   type BloqueioDisp,
 } from "./reunioes-nucleo"
-import { lerIntegracao, logSync, reconciliar, reprocessarPendentes, type Integracao } from "./reunioes-sync"
+import { lerIntegracao, logSync, reconciliar, repararEncerramentosPendentes, reprocessarPendentes, type Integracao } from "./reunioes-sync"
 import { hojeISO } from "./workspace-datas"
 import { ehAdminNoModulo } from "./acesso-admin"
 import { cancelarReuniaoPeloWorkspace, podeCancelarReuniao } from "./reunioes-cancelar"
@@ -246,9 +246,27 @@ export async function reprocessarAction(): Promise<ResultadoReunioes> {
   if (!usuario) return { ok: false, erro }
   const d = await db()
   const r = await reprocessarPendentes(d)
-  await logSync(d, r.falhas > 0 ? "aviso" : "info", "reprocessar", `Reprocessados ${r.ok}/${r.total} eventos.`, { atorId: usuario.id })
-  revalidatePath(ROTA)
-  return { ok: r.falhas === 0, mensagem: `${r.ok} de ${r.total} eventos reprocessados.`, erro: r.falhas > 0 ? `${r.falhas} continuam com erro.` : undefined }
+  // "Tentar de novo" também conclui reuniões canceladas cuja tarefa ficou
+  // com cara de ativa — é o item que aparece em "aguardando sincronização".
+  let rep = { reparadas: 0, erros: 0 }
+  try {
+    rep = await repararEncerramentosPendentes(d)
+  } catch (e) {
+    rep.erros++
+    await logSync(d, "erro", "reprocessar", msg(e), { atorId: usuario.id })
+  }
+  const falhas = r.falhas + rep.erros
+  await logSync(
+    d, falhas > 0 ? "aviso" : "info", "reprocessar",
+    `Reprocessados ${r.ok}/${r.total} eventos; ${rep.reparadas} encerramentos concluídos.`,
+    { atorId: usuario.id }
+  )
+  revalidatePath("/dashboard/workspace", "layout")
+  return {
+    ok: falhas === 0,
+    mensagem: `${r.ok} de ${r.total} eventos reprocessados; ${rep.reparadas} reunião(ões) cancelada(s) retirada(s) do calendário.`,
+    erro: falhas > 0 ? `${falhas} continuam com erro — veja o log.` : undefined,
+  }
 }
 
 /** Pausar/retomar: para de importar SEM apagar nada (histórico intacto). */
