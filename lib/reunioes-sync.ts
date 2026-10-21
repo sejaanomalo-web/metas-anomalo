@@ -4,10 +4,10 @@
 
 import { createHash } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { calListarBookings, calcomConfigurado, ErroCalcom } from "./calcom"
+import { calBuscarBooking, calListarBookings, calcomConfigurado, ErroCalcom } from "./calcom"
 import { assinaturaCalValida } from "./reunioes-assinatura"
 import { normalizarBookingCal, normalizarWebhookCal } from "./reunioes-nucleo"
-import { processarEvento } from "./reunioes-processar"
+import { processarEvento, repararEncerramento } from "./reunioes-processar"
 import { repoSupabase } from "./reunioes-repo"
 
 export interface Integracao {
@@ -168,7 +168,15 @@ export async function processarEventoGravado(
       .from("reunioes_integracoes")
       .update({ ultima_sincronizacao_em: new Date().toISOString() })
       .eq("id", integ.id)
-    if (!r.ignorado) {
+    if (norm.evento.gatilho === "BOOKING_CANCELLED") {
+      await logSync(
+        db, "info", "webhook",
+        r.ignorado
+          ? "Cancelamento recebido do Cal.com: a reunião já estava cancelada."
+          : `Cancelamento recebido do Cal.com: ${r.resultado}.`,
+        { detalhes: { booking_uid: norm.evento.uid } }
+      )
+    } else if (!r.ignorado) {
       await logSync(db, "info", "webhook", `${norm.evento.gatilho}: ${r.resultado}`, { detalhes: { booking_uid: norm.evento.uid } })
     }
     return { http: 200, corpo: { ok: true, resultado: r.resultado } }
@@ -207,6 +215,14 @@ export async function reprocessarPendentes(db: SupabaseClient, limite = 50): Pro
  * Pergunta ao Cal.com o que existe e aplica pela MESMA máquina de estados.
  * Cobre webhook perdido (deploy no meio, Cal.com fora do ar). Idempotente.
  * Janela: reservas que começam de 7 dias atrás até o futuro.
+ *
+ * Três passos:
+ *  1. listagens (upcoming / unconfirmed / cancelled);
+ *  2. toda reunião ATIVA aqui que não apareceu nas listagens é consultada
+ *     UMA A UMA (GET /v2/bookings/{uid}) — sumir de uma listagem não prova
+ *     cancelamento, e uma 404 não cancela nada (só avisa);
+ *  3. encerramentos que ficaram pela metade (reunião cancelada, tarefa ainda
+ *     com cara de ativa) são concluídos.
  */
 export async function reconciliar(db: SupabaseClient): Promise<{
   lidos: number
@@ -227,6 +243,8 @@ export async function reconciliar(db: SupabaseClient): Promise<{
   const afterStart = new Date(Date.now() - 7 * 86_400_000).toISOString()
   const repo = repoSupabase(db)
   let lidos = 0, aplicados = 0, ignorados = 0, erros = 0
+  let verificadas = 0, reparadas = 0
+  const vistos = new Set<string>()
 
   try {
     // Ordem importa pouco (a máquina é tolerante), mas processar cancelados
@@ -239,6 +257,7 @@ export async function reconciliar(db: SupabaseClient): Promise<{
         for (const b of r.data) {
           const ev = normalizarBookingCal(b)
           if (!ev) continue
+          vistos.add(ev.uid)
           lidos++
           try {
             const res = await processarEvento(repo, ev)
@@ -253,8 +272,67 @@ export async function reconciliar(db: SupabaseClient): Promise<{
         cursor = r.nextCursor
       }
     }
+    // ---------- 2) ativas aqui que a listagem não trouxe ----------
+    const { data: ativas, error: errAtivas } = await db
+      .from("reunioes_agendamentos")
+      .select("booking_uid")
+      .eq("provedor", "calcom")
+      .in("status", ["solicitada", "confirmada"])
+      .gte("inicio", afterStart)
+      .order("inicio")
+      .limit(100)
+    if (errAtivas) throw new Error(`Falha ao ler reuniões ativas: ${errAtivas.message}`)
+    const faltando = ((ativas ?? []) as { booking_uid: string }[]).map((a) => a.booking_uid).filter((u) => !vistos.has(u)).slice(0, 50)
+    for (const uid of faltando) {
+      try {
+        const ev = normalizarBookingCal(await calBuscarBooking(uid))
+        verificadas++
+        if (!ev) {
+          await logSync(db, "aviso", "reconciliacao", `Reserva ${uid}: resposta do Cal.com sem dados reconhecíveis; mantida como está.`)
+          continue
+        }
+        const res = await processarEvento(repo, ev)
+        if (res.ignorado) ignorados++
+        else {
+          aplicados++
+          await logSync(db, "info", "reconciliacao", `Reserva ${uid} conferida individualmente: ${res.resultado}.`, { detalhes: { booking_uid: uid } })
+        }
+      } catch (e) {
+        if (e instanceof ErroCalcom && e.httpStatus === 404) {
+          await logSync(db, "aviso", "reconciliacao", `Reserva ${uid} não encontrada no Cal.com. Mantida como está — confira manualmente.`, { detalhes: { booking_uid: uid } })
+        } else {
+          erros++
+          await logSync(db, "erro", "reconciliacao", `Falha ao consultar reserva ${uid}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500), { detalhes: { booking_uid: uid } })
+        }
+      }
+    }
+
+    // ---------- 3) encerramentos pela metade ----------
+    const { data: meias } = await db
+      .from("reunioes_agendamentos")
+      .select("booking_uid")
+      .eq("provedor", "calcom")
+      .in("status", ["cancelada", "rejeitada"])
+      .neq("sync_status", "ok")
+      .not("tarefa_id", "is", null)
+      .limit(50)
+    for (const { booking_uid } of (meias ?? []) as { booking_uid: string }[]) {
+      try {
+        const r = await repararEncerramento(repo, booking_uid)
+        if (r.reparado) {
+          reparadas++
+          await logSync(db, "info", "reconciliacao", `Reserva ${booking_uid}: ${r.resultado}.`, { detalhes: { booking_uid } })
+        }
+      } catch (e) {
+        erros++
+        await logSync(db, "erro", "reconciliacao", `Falha ao concluir o encerramento de ${booking_uid}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500))
+      }
+    }
+
     const reproc = await reprocessarPendentes(db)
-    const mensagem = `Reconciliação: ${lidos} reservas lidas, ${aplicados} aplicadas, ${ignorados} já em dia, ${erros} com erro. Eventos reprocessados: ${reproc.ok}/${reproc.total}.`
+    const mensagem =
+      `Reconciliação: ${lidos} reservas lidas, ${verificadas} conferidas uma a uma, ${aplicados} aplicadas, ` +
+      `${reparadas} encerramentos concluídos, ${ignorados} já em dia, ${erros} com erro. Eventos reprocessados: ${reproc.ok}/${reproc.total}.`
     await db
       .from("reunioes_integracoes")
       .update({ status: "conectado", ultima_sincronizacao_em: new Date().toISOString(), ultimo_erro: erros > 0 ? mensagem : null })

@@ -3,13 +3,16 @@
 import { useState } from "react"
 import { definirBloqueioTarefaAction } from "@/lib/reunioes-actions"
 import { ROTULO_STATUS, urlSegura, type StatusReuniao } from "@/lib/reunioes-nucleo"
+import type { ReuniaoDaTarefa } from "@/lib/reunioes"
+import CancelarReuniao from "./CancelarReuniao"
 import { Mensagem, useAcao } from "./ui"
 
 const DURACOES = [15, 30, 45, 60, 90, 120, 180, 240]
 
 /**
  * Bloco extra no detalhe da tarefa:
- *   • tarefa que É reunião do Cal.com → status + "Entrar na reunião";
+ *   • tarefa que É reunião do Cal.com → status + "Entrar na reunião" +
+ *     "Cancelar reunião" (responsável ou admin; o servidor confere de novo);
  *   • tarefa comum → opção "Bloqueia agenda de reuniões" (desligada por
  *     padrão: tarefa de trabalho não ocupa a agenda pública).
  */
@@ -18,11 +21,13 @@ export default function BlocoReuniaoTarefa({
   temHorario,
   reuniao,
   bloqueio,
+  podeCancelar = false,
 }: {
   tarefaId: string
   temHorario: boolean
-  reuniao: { status: StatusReuniao; link: string | null; local: string | null } | null
+  reuniao: (Pick<ReuniaoDaTarefa, "link" | "local"> & Partial<ReuniaoDaTarefa> & { status: StatusReuniao }) | null
   bloqueio: { duracao_min: number } | null
+  podeCancelar?: boolean
 }) {
   const { pendente, resultado, rodar } = useAcao()
   const [duracao, setDuracao] = useState(bloqueio?.duracao_min ?? 60)
@@ -48,6 +53,14 @@ export default function BlocoReuniaoTarefa({
         ) : ativa ? (
           <span style={{ fontSize: 11, color: "var(--text-4)" }}>link ainda não disponível</span>
         ) : null}
+        {ativa && podeCancelar && reuniao.id && (
+          <CancelarReuniao
+            agendamentoId={reuniao.id}
+            participante={reuniao.participante ?? null}
+            tipo={reuniao.tipo ?? null}
+            inicio={reuniao.inicio ?? null}
+          />
+        )}
       </div>
     )
   }

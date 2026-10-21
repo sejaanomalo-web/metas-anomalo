@@ -222,6 +222,22 @@ export async function calListarBookings(q: {
   return { data: Array.isArray(r.data) ? r.data : [], nextCursor: r.pagination?.nextCursor ?? null }
 }
 
+/** GET /v2/bookings/{uid} — estado real de UMA reserva. É o que confirma um
+ *  cancelamento quando a resposta se perdeu, e o que a reconciliação usa pra
+ *  não confundir "não veio na listagem" com "foi cancelada". */
+export async function calBuscarBooking(uid: string): Promise<unknown> {
+  return (await chamar<Envelope<unknown>>("GET", `/v2/bookings/${encodeURIComponent(uid)}`, { versao: VERSOES.booking })).data
+}
+
+/** POST /v2/bookings/{uid}/cancel — cancela a reserva no Cal.com (que então
+ *  libera o horário, apaga o evento do calendário conectado e avisa o
+ *  participante). Não é o "decline" de reserva pendente. */
+export async function calCancelarBooking(uid: string, motivo: string | null): Promise<unknown> {
+  const corpo: Record<string, unknown> = {}
+  if (motivo) corpo.cancellationReason = motivo
+  return (await chamar<Envelope<unknown>>("POST", `/v2/bookings/${encodeURIComponent(uid)}/cancel`, { versao: VERSOES.booking, corpo })).data
+}
+
 // ============================================================
 // Webhooks (do usuário)
 // ============================================================

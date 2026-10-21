@@ -171,9 +171,27 @@ export async function carregarPainelReunioes(opts: {
   }
 }
 
-/** Para o detalhe da tarefa: a reunião vinculada (se houver) e o bloqueio. */
+/** Reunião vinculada a uma tarefa, como o detalhe da tarefa precisa. */
+export interface ReuniaoDaTarefa {
+  /** id INTERNO do agendamento — é o que o botão "Cancelar reunião" envia. */
+  id: string
+  status: AgendamentoTela["status"]
+  link: string | null
+  local: string | null
+  inicio: string | null
+  participante: string | null
+  tipo: string | null
+  responsavelId: string | null
+}
+
+/**
+ * Para o detalhe da tarefa: a reunião vinculada (se houver) e o bloqueio.
+ *
+ * Reagendamento deixa DUAS linhas apontando pra mesma tarefa (o UID antigo
+ * 'reagendada' e o novo). Vale a ativa; sem ativa, a mais recente.
+ */
 export async function reuniaoDaTarefa(tarefaId: string): Promise<{
-  reuniao: { status: AgendamentoTela["status"]; link: string | null; local: string | null; inicio: string | null } | null
+  reuniao: ReuniaoDaTarefa | null
   bloqueio: { duracao_min: number } | null
   disponivel: boolean
 }> {
@@ -181,17 +199,32 @@ export async function reuniaoDaTarefa(tarefaId: string): Promise<{
   if (!db) return { reuniao: null, bloqueio: null, disponivel: false }
   const [r, b] = await Promise.all([
     db.from("reunioes_agendamentos")
-      .select("status, link_reuniao, local_rotulo, inicio, updated_at")
+      .select("id, status, link_reuniao, local_rotulo, inicio, participante_nome, tipo_id, responsavel_id, updated_at")
       .eq("tarefa_id", tarefaId)
       .order("updated_at", { ascending: false })
-      .limit(1),
+      .limit(5),
     db.from("ws_tarefa_bloqueios").select("duracao_min").eq("tarefa_id", tarefaId).maybeSingle(),
   ])
   // Tabelas ausentes (migration não aplicada) → o bloco simplesmente não aparece.
   if (r.error || b.error) return { reuniao: null, bloqueio: null, disponivel: false }
-  const linha = (r.data ?? [])[0] as { status: AgendamentoTela["status"]; link_reuniao: string | null; local_rotulo: string | null; inicio: string | null } | undefined
+  type Linha = {
+    id: string; status: AgendamentoTela["status"]; link_reuniao: string | null; local_rotulo: string | null
+    inicio: string | null; participante_nome: string | null; tipo_id: string | null; responsavel_id: string | null
+  }
+  const linhas = (r.data ?? []) as Linha[]
+  const linha = linhas.find((l) => l.status === "confirmada" || l.status === "solicitada") ?? linhas[0]
+  let tipo: string | null = null
+  if (linha?.tipo_id) {
+    const { data } = await db.from("reunioes_tipos").select("nome").eq("id", linha.tipo_id).maybeSingle()
+    tipo = (data?.nome as string | undefined) ?? null
+  }
   return {
-    reuniao: linha ? { status: linha.status, link: linha.link_reuniao, local: linha.local_rotulo, inicio: linha.inicio } : null,
+    reuniao: linha
+      ? {
+          id: linha.id, status: linha.status, link: linha.link_reuniao, local: linha.local_rotulo, inicio: linha.inicio,
+          participante: linha.participante_nome, tipo, responsavelId: linha.responsavel_id,
+        }
+      : null,
     bloqueio: (b.data as { duracao_min: number } | null) ?? null,
     disponivel: true,
   }

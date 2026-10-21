@@ -38,6 +38,8 @@
 | `lib/reunioes-assinatura.ts` | HMAC-SHA256 do webhook |
 | `lib/calcom.ts` | Cliente da API v2 (só servidor) |
 | `lib/reunioes-actions.ts` | Server Actions da aba (admin) e do bloqueio de tarefa |
+| `lib/reunioes-cancelar.ts` | Cancelar pelo Workspace: confirma no Cal.com antes de mexer no Workspace; trata timeout, falha parcial e cliques simultâneos |
+| `lib/reunioes-guarda.ts` | Impede excluir/arquivar tarefa que é reunião ativa sem cancelar a reserva |
 | `lib/acesso-admin.ts` | Quem administra: papel REAL admin + Workspace visível na visão atual (visão simplificada esconde módulos, não tira o cargo) |
 | `lib/reunioes.ts`, `lib/reunioes-tipos.ts` | Leituras e tipos de tela |
 | `app/api/reunioes/calcom/webhook/route.ts` | Webhook |
@@ -92,6 +94,35 @@ O Cal.com cria um **UID novo** e informa o antigo em `rescheduleUid` (webhook) o
 
 ## 6. Cancelamento e recusa
 
+Cancelar em qualquer um dos dois lados leva ao mesmo estado final.
+
+**Pelo Cal.com** (organizador ou participante cancela a reserva): chega o webhook `BOOKING_CANCELLED`, e o Workspace encerra a tarefa ligada ao booking UID. Isso vale **mesmo que a tarefa esteja na lixeira**.
+
+**Pelo Workspace** (botão **Cancelar reunião** no detalhe da tarefa e em Reuniões → Próximas reuniões):
+
+1. Confirmação com participante, tipo, data, horário e um motivo opcional. O motivo vai para o participante; sem motivo, vai "Reunião cancelada pela equipe ANÔMALO.".
+2. O servidor lê a reserva pelo **id interno** (o browser nunca informa o UID) e confere a permissão: o responsável pela reunião ou um admin do Workspace.
+3. `POST /v2/bookings/{uid}/cancel` (versão 2026-02-25). O Cal.com libera o horário, remove o evento do calendário conectado (inclusive o Meet) e avisa o participante.
+4. Só depois da confirmação o Workspace encerra a tarefa, registrando quem cancelou e a origem "workspace".
+5. O webhook `BOOKING_CANCELLED` que chega em seguida encontra a reunião já cancelada e é ignorado, sem nova chamada ao Cal.com.
+
+| Situação | O que acontece |
+|---|---|
+| Cal.com recusa e a reserva segue ativa | Erro na tela; nada muda em nenhum dos dois lados. |
+| Resposta perdida (timeout) | Consulta `GET /v2/bookings/{uid}`. Se já está cancelada, conclui sem repetir o POST. |
+| Cal.com fora do ar também na consulta | **"Cancelamento pendente de confirmação"**: a reunião **continua ativa** aqui até confirmar. |
+| Cal.com cancelou, mas o banco falhou | A tela diz isso. **Sincronizar agora** conclui o encerramento. |
+| Dois cliques ou duas pessoas ao mesmo tempo | Um único cancelamento; o outro vê "já estava cancelada". |
+
+**Excluir ou arquivar** uma tarefa que é reunião **ativa** do Cal.com é recusado com orientação: excluir só aqui deixaria a reserva ativa no Cal.com. Tarefas comuns não mudam.
+
+**O que NÃO é cancelamento de reserva:**
+- Apagar o evento direto no Google Calendar: a reserva continua ativa no Cal.com.
+- Excluir um tipo de evento: as reservas existentes continuam e não são canceladas em massa.
+- Reagendar: gera um UID novo, e a mesma tarefa muda de horário.
+- Recusar uma solicitação pendente (`BOOKING_REJECTED`): a tarefa fica `[Recusada]`.
+
+Efeitos sobre a tarefa encerrada:
 - A tarefa é **arquivada**: sai do Calendário e continua visível no Arquivo.
 - O título passa a ser `[Cancelada] …` (ou `[Recusada] …`), e a descrição recebe Status e Motivo.
 - O histórico fica em `reunioes_agendamentos` e na atividade da tarefa.
@@ -143,7 +174,12 @@ O status "Publicado" só aparece quando a API confirma. Se algo falhar, a tela m
 
 ## 11. Google Calendar e Meet
 
-Não são usados. Se um dia quiser o Meet, instale o app Google Meet no Cal.com e troque o "Local" do tipo para Google Meet. A API recusa essa opção se o app não estiver instalado, e a tela mostra o erro.
+O Google Calendar não é a agenda de trabalho; essa agenda é o Workspace.
+
+Os tipos de reunião podem usar **Google Meet** como local, desde que o app Google Meet esteja instalado no Cal.com. Funcionamento:
+- O link do Meet chega no webhook e aparece na tarefa como "Entrar na reunião", só enquanto a reunião está ativa.
+- **Cancelar sempre pela reserva** (Cal.com ou botão do Workspace). O Cal.com cuida do evento de calendário e da sala.
+- Apagar o evento direto no Google Calendar **não** cancela a reserva.
 
 ## 12. Como testar uma reserva (validação real — pendente até haver credenciais)
 
@@ -151,7 +187,12 @@ Não são usados. Se um dia quiser o Meet, instale o app Google Meet no Cal.com 
 2. Em segundos, o Calendário do Workspace mostra `09:30 - Reunião com João Silva` na quarta. No detalhe, aparece **Entrar na reunião**.
 3. Abra o link do tipo **Marketing**: a quarta 09:30 **não** pode aparecer livre (teste I).
 4. Reagende para sexta 14:00: a tarefa muda de dia e o título vira `14:00 - …`, sem duplicar.
-5. Cancele: a tarefa some do Calendário e aparece no Arquivo como `[Cancelada] …`.
+5. Cancele pelo **Cal.com** (app.cal.com → Bookings → Cancel): em segundos a tarefa some do Calendário e aparece no Arquivo como `[Cancelada] …`. Em Reuniões → Histórico aparece "Cancelamento recebido do Cal.com".
+5b. Faça outra reserva de teste e cancele pelo **Workspace** (detalhe da tarefa → **Cancelar reunião** → **Confirmar cancelamento**). Confira:
+   - em app.cal.com → Bookings → Canceled, a reserva aparece cancelada;
+   - na página pública, o mesmo dia e horário voltam a ficar livres (se nada mais bloquear);
+   - o Histórico mostra "Reunião cancelada no Workspace e sincronizada com o Cal.com".
+5c. Tente mandar para a lixeira uma tarefa de reunião ativa: deve aparecer a orientação para usar "Cancelar reunião".
 6. Mude uma janela em Disponibilidade e publique. No Cal.com, confira em **Availability** (teste J). Confira também se o override "dia indisponível" (`00:00–00:00`) aparece como indisponível.
 7. Marque uma tarefa manual com horário como "Bloqueia agenda" e confira, após a releitura do feed, que o horário sumiu da página pública.
 

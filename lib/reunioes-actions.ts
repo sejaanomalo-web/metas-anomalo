@@ -22,6 +22,8 @@ import {
   calAtualizarEventType,
   calAtualizarSchedule,
   calAtualizarWebhook,
+  calBuscarBooking,
+  calCancelarBooking,
   calcomConfigurado,
   calCriarEventType,
   calCriarOoo,
@@ -51,6 +53,8 @@ import {
 import { lerIntegracao, logSync, reconciliar, reprocessarPendentes, type Integracao } from "./reunioes-sync"
 import { hojeISO } from "./workspace-datas"
 import { ehAdminNoModulo } from "./acesso-admin"
+import { cancelarReuniaoPeloWorkspace, podeCancelarReuniao } from "./reunioes-cancelar"
+import { repoSupabase } from "./reunioes-repo"
 
 export interface ResultadoReunioes {
   ok: boolean
@@ -683,6 +687,67 @@ export async function salvarDisponibilidadeAction(fd: FormData): Promise<Resulta
   return erros.length
     ? { ok: false, erro: `Salvo no Workspace, mas parte não foi publicada: ${erros.join(" | ")}` }
     : { ok: true, mensagem: "Salvo e publicado no Cal.com." }
+}
+
+// ============================================================
+// Cancelar reunião pelo Workspace
+// ============================================================
+
+/** O Cal.com mostra o motivo ao participante. Sem motivo digitado, vai um
+ *  texto neutro (alguns event types exigem motivo quando quem cancela é o
+ *  anfitrião). */
+const MOTIVO_PADRAO = "Reunião cancelada pela equipe ANÔMALO."
+
+/**
+ * "Cancelar reunião" (detalhe da tarefa e Próximas reuniões).
+ *
+ * Recebe o id INTERNO do agendamento — o booking UID sai do banco, nunca do
+ * browser. Pode cancelar: o responsável pela reunião ou um admin do
+ * Workspace (lib/acesso-admin.ts). O resto do fluxo, com confirmação real no
+ * Cal.com e tratamento de falha parcial, está em lib/reunioes-cancelar.ts.
+ */
+export async function cancelarReuniaoAction(fd: FormData): Promise<ResultadoReunioes> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const db = getSupabaseAdmin()
+  if (!db) return { ok: false, erro: "Banco indisponível." }
+
+  const id = String(fd.get("agendamento_id") ?? "")
+  if (!ehUuid(id)) return { ok: false, erro: "Reunião inválida." }
+
+  const { data: ag, error } = await db
+    .from("reunioes_agendamentos")
+    .select("id, booking_uid, status, responsavel_id, provedor")
+    .eq("id", id)
+    .maybeSingle()
+  if (error) return { ok: false, erro: "Não foi possível ler a reunião. Tente de novo." }
+  if (!ag || ag.provedor !== "calcom") return { ok: false, erro: "Reunião não encontrada." }
+
+  if (!podeCancelarReuniao(usuario, (ag.responsavel_id as string | null) ?? null)) return { ok: false, erro: "Só o responsável pela reunião ou um administrador pode cancelá-la." }
+
+  if (ag.status !== "solicitada" && ag.status !== "confirmada") {
+    return { ok: true, mensagem: "Esta reunião já não está ativa — nada a cancelar." }
+  }
+  if (!calcomConfigurado()) return { ok: false, erro: "O Cal.com não está configurado no servidor. Nada foi cancelado." }
+  const integ = await lerIntegracao(db)
+  if (!integ || integ.status === "desconectado") {
+    return { ok: false, erro: "A integração com o Cal.com está desconectada. Nada foi cancelado." }
+  }
+
+  const motivo = limparTexto(fd.get("motivo"), 300) ?? MOTIVO_PADRAO
+  const r = await cancelarReuniaoPeloWorkspace(
+    {
+      repo: repoSupabase(db),
+      cal: { cancelar: calCancelarBooking, buscar: calBuscarBooking },
+      log: (nivel, mensagem, detalhes) => logSync(db, nivel, "cancelamento", mensagem, { detalhes, atorId: usuario.id }),
+    },
+    ag.booking_uid as string,
+    { atorId: usuario.id, motivo }
+  )
+
+  revalidatePath("/dashboard/workspace", "layout")
+  const ok = r.estado === "cancelada" || r.estado === "ja_cancelada"
+  return ok ? { ok: true, mensagem: r.mensagem } : { ok: false, erro: r.mensagem }
 }
 
 // ============================================================

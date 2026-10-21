@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { formatarDataHora, ROTULO_STATUS, urlSegura } from "@/lib/reunioes-nucleo"
 import type { AgendamentoTela, EstadoConexao } from "@/lib/reunioes-tipos"
+import CancelarReuniao from "./CancelarReuniao"
 
 const COR_STATUS: Record<AgendamentoTela["status"], string> = {
   solicitada: "#C9953A",
@@ -17,10 +18,14 @@ export default function ListaReunioes({
   proximas,
   encerradas,
   estado,
+  meuId,
+  souAdmin,
 }: {
   proximas: AgendamentoTela[]
   encerradas: AgendamentoTela[]
   estado: EstadoConexao
+  meuId: string
+  souAdmin: boolean
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -35,7 +40,9 @@ export default function ListaReunioes({
               : "Nenhuma reunião agendada daqui pra frente."}
           </p>
         ) : (
-          proximas.map((a) => <CartaoReuniao key={a.id} a={a} />)
+          proximas.map((a) => (
+            <CartaoReuniao key={a.id} a={a} podeCancelar={souAdmin || (a.responsavel_id !== null && a.responsavel_id === meuId)} />
+          ))
         )}
       </section>
 
@@ -51,7 +58,7 @@ export default function ListaReunioes({
   )
 }
 
-function CartaoReuniao({ a, apagado }: { a: AgendamentoTela; apagado?: boolean }) {
+function CartaoReuniao({ a, apagado, podeCancelar = false }: { a: AgendamentoTela; apagado?: boolean; podeCancelar?: boolean }) {
   const link = urlSegura(a.link_reuniao)
   return (
     <article
@@ -98,6 +105,10 @@ function CartaoReuniao({ a, apagado }: { a: AgendamentoTela; apagado?: boolean }
           >
             Abrir tarefa
           </Link>
+        )}
+        {/* Só decide se o botão aparece; a action confere de novo. */}
+        {!apagado && podeCancelar && (a.status === "confirmada" || a.status === "solicitada") && (
+          <CancelarReuniao agendamentoId={a.id} participante={a.participante_nome} tipo={a.tipo_nome} inicio={a.inicio} />
         )}
       </div>
     </article>

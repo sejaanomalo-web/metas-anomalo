@@ -60,8 +60,10 @@ export type Gatilho =
   | "BOOKING_LOCATION_UPDATED"
   | "MEETING_ENDED"
   | "RECONCILIACAO"
+  /** Cancelamento pedido pelo botão do Workspace e confirmado pela API. */
+  | "WORKSPACE"
 
-export const GATILHOS_ASSINADOS: readonly Exclude<Gatilho, "RECONCILIACAO">[] = [
+export const GATILHOS_ASSINADOS: readonly Exclude<Gatilho, "RECONCILIACAO" | "WORKSPACE">[] = [
   "BOOKING_CREATED",
   "BOOKING_REQUESTED",
   "BOOKING_RESCHEDULED",
@@ -312,7 +314,7 @@ export function normalizarWebhookCal(corpo: unknown): ResultadoNormalizacao {
     urlSegura(videoCallData?.url) ??
     urlSegura(p.location)
 
-  const g = gatilho as Exclude<Gatilho, "RECONCILIACAO">
+  const g = gatilho as Exclude<Gatilho, "RECONCILIACAO" | "WORKSPACE">
   let statusAlvo: StatusReuniao | null
   switch (g) {
     case "BOOKING_CREATED":
