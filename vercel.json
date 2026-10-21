@@ -27,6 +27,10 @@
     {
       "path": "/api/leads/reconciliar",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/reunioes/reconciliar",
+      "schedule": "30 10 * * *"
     }
   ]
 }
