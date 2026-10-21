@@ -33,7 +33,7 @@ export * from "./workspace-tipos"
 export const COLUNAS_TAREFA =
   "id, titulo, descricao, tarefa_pai_id, responsavel_id, criado_por, prazo_em, " +
   "prazo_hora, inicio_em, prioridade, concluida_em, concluida_por, recorrencia, " +
-  "ordem, versao, arquivada_em, excluida_em, created_at, updated_at"
+  "ordem, versao, arquivada_em, excluida_em, created_at, updated_at, source_gid"
 
 export const COLUNAS_CONTEXTO =
   "id, nome, tipo, empresa_nome, cliente_id, cor, foto_url, grupo_id, ordem, arquivado_em"

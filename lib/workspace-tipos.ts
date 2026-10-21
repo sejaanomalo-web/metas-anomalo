@@ -132,6 +132,27 @@ export interface Tarefa {
   excluida_em: string | null
   created_at: string
   updated_at: string
+  /** Origem externa: gid do Asana, ou `calcom:<booking uid>` nas reuniões
+   *  importadas do Cal.com. Opcional porque tarefa montada no browser
+   *  (otimista) não tem. */
+  source_gid?: string | null
+}
+
+/**
+ * Prefixo de horário do cartão do Calendário ("09:00 ").
+ *
+ * Reunião do Cal.com já nasce com o horário no título ("09:00 - Reunião com
+ * Fulano", lib/reunioes-nucleo.ts › tituloReuniao) — o cartão então não repete.
+ * Só pula o prefixo quando as DUAS coisas batem: a origem estruturada é o
+ * Cal.com E o título começa com exatamente o mesmo HH:mm do prazo. Qualquer
+ * divergência (alguém mudou a hora no Workspace, título "[Cancelada] …") mantém
+ * o prefixo, como em toda tarefa manual.
+ */
+export function prefixoHoraCalendario(t: Pick<Tarefa, "titulo" | "prazo_hora" | "source_gid">): string {
+  if (!t.prazo_hora) return ""
+  const hhmm = t.prazo_hora.slice(0, 5)
+  if (t.source_gid?.startsWith("calcom:") && t.titulo.startsWith(`${hhmm} - `)) return ""
+  return `${hhmm} `
 }
 
 /** Uma pessoa atribuída à tarefa, já com o que o avatar precisa. */
