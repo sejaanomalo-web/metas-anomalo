@@ -25,7 +25,7 @@ import {
   criarTarefaAction,
   reordenarDiaAction,
 } from "@/lib/workspace-actions"
-import { type TarefaComRelacoes } from "@/lib/workspace-tipos"
+import { prefixoHoraCalendario, type TarefaComRelacoes } from "@/lib/workspace-tipos"
 import { corDaTarefa, estiloCartao } from "@/lib/workspace-cores"
 import Avatares from "./Avatares"
 import VencimentosDoDia from "./VencimentosDoDia"
@@ -1053,7 +1053,7 @@ function CartaoTarefa({
       </span>
       {!compacto && <Avatares pessoas={tarefa.responsaveis} tamanho={26} max={3} />}
       <span className={compacto ? "ws-pill-titulo-1l" : "ws-pill-titulo"}>
-        {tarefa.prazo_hora ? `${tarefa.prazo_hora.slice(0, 5)} ` : ""}
+        {prefixoHoraCalendario(tarefa)}
         {tarefa.titulo}
       </span>
     </div>
