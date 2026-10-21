@@ -2,7 +2,7 @@ import Link from "next/link"
 import { requererPermissao } from "@/lib/auth"
 import { getPreferencia, listarAbas } from "@/lib/workspace"
 import { carregarPainelReunioes, COR_CONEXAO, ROTULO_CONEXAO } from "@/lib/reunioes"
-import { acessoReunioes, ROTULO_VISAO } from "@/lib/reunioes-tipos"
+import { ehAdminNoModulo } from "@/lib/acesso-admin"
 import WorkspaceNav from "@/components/workspace/WorkspaceNav"
 import WorkspaceRealtime from "@/components/workspace/WorkspaceRealtime"
 import DrawerServidor from "@/components/workspace/DrawerServidor"
@@ -37,8 +37,9 @@ type Secao = (typeof SECOES)[number]["id"]
  */
 export default async function ReunioesPage({ searchParams }: { searchParams: SP }) {
   const usuario = await requererPermissao("workspace")
-  const acesso = acessoReunioes(usuario)
-  const souAdmin = acesso.podeAdministrar
+  // Admin REAL (papel no banco) com o Workspace visível — vale também numa
+  // visão simplificada. As actions checam de novo.
+  const souAdmin = ehAdminNoModulo(usuario, "workspace")
   const bruto = Array.isArray(searchParams.secao) ? searchParams.secao[0] : searchParams.secao
   const secao: Secao = SECOES.some((s) => s.id === bruto) ? (bruto as Secao) : "proximas"
   const tarefaAberta = Array.isArray(searchParams.tarefa) ? searchParams.tarefa[0] : searchParams.tarefa
@@ -106,25 +107,6 @@ export default async function ReunioesPage({ searchParams }: { searchParams: SP 
       </div>
 
       <div className="ws-conteudo">
-        {acesso.motivo === "visao_simplificada" && (
-          <section
-            role="status"
-            className="glass"
-            style={{ padding: 12, borderRadius: 10, maxWidth: 640, marginBottom: 12, border: "1px solid rgba(201,149,58,0.45)" }}
-          >
-            <p style={{ fontSize: 12, color: "var(--text-1)", margin: 0, fontWeight: 600 }}>
-              Você é administrador, mas está na visão simplificada &quot;{ROTULO_VISAO[usuario.visao ?? ""] ?? usuario.visao}&quot;.
-            </p>
-            <p style={{ fontSize: 12, color: "var(--text-3)", margin: "4px 0 0" }}>
-              Nessa visão os controles de administrador ficam desligados no app inteiro, inclusive aqui. Para conectar o
-              Cal.com, volte ao acesso completo em{" "}
-              <Link href="/dashboard/configuracoes" style={{ color: "var(--accent)" }}>
-                Configurações → Meu nível de acesso
-              </Link>
-              .
-            </p>
-          </section>
-        )}
         {!painel.migracaoAplicada ? (
           <section className="glass" style={{ padding: 16, borderRadius: 10, maxWidth: 640 }}>
             <h3 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 6px", color: "var(--text-1)" }}>

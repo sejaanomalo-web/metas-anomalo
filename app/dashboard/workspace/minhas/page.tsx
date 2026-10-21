@@ -5,6 +5,7 @@ import WorkspaceNav from "@/components/workspace/WorkspaceNav"
 import WorkspaceRealtime from "@/components/workspace/WorkspaceRealtime"
 import ListaTarefas from "@/components/workspace/ListaTarefas"
 import DrawerServidor from "@/components/workspace/DrawerServidor"
+import { ehAdminNoModulo } from "@/lib/acesso-admin"
 
 export const dynamic = "force-dynamic"
 
@@ -107,7 +108,7 @@ export default async function MinhasPage({ searchParams }: { searchParams: SP })
       </div>
 
       {tarefaAberta && (
-        <DrawerServidor tarefaId={tarefaAberta} souAdmin={usuario.papel === "admin"} />
+        <DrawerServidor tarefaId={tarefaAberta} souAdmin={ehAdminNoModulo(usuario, "workspace")} />
       )}
     </main>
   )

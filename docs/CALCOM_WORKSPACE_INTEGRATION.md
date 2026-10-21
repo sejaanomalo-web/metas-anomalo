@@ -38,6 +38,7 @@
 | `lib/reunioes-assinatura.ts` | HMAC-SHA256 do webhook |
 | `lib/calcom.ts` | Cliente da API v2 (só servidor) |
 | `lib/reunioes-actions.ts` | Server Actions da aba (admin) e do bloqueio de tarefa |
+| `lib/acesso-admin.ts` | Quem administra: papel REAL admin + Workspace visível na visão atual (visão simplificada esconde módulos, não tira o cargo) |
 | `lib/reunioes.ts`, `lib/reunioes-tipos.ts` | Leituras e tipos de tela |
 | `app/api/reunioes/calcom/webhook/route.ts` | Webhook |
 | `app/api/reunioes/reconciliar/route.ts` | Cron diário (`vercel.json`, 10:30 UTC = 07:30 BRT) |

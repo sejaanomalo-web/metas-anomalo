@@ -22,6 +22,7 @@ import FiltrosTarefas from "@/components/workspace/FiltrosTarefas"
 import CalendarioTarefas from "@/components/workspace/CalendarioTarefas"
 import DrawerServidor from "@/components/workspace/DrawerServidor"
 import FonteFinanceiro from "@/components/workspace/FonteFinanceiro"
+import { ehAdminNoModulo } from "@/lib/acesso-admin"
 
 export const dynamic = "force-dynamic"
 
@@ -134,7 +135,7 @@ export default async function CalendarioPage({ searchParams }: { searchParams: S
       </div>
 
       {tarefaAberta && (
-        <DrawerServidor tarefaId={tarefaAberta} souAdmin={usuario.papel === "admin"} />
+        <DrawerServidor tarefaId={tarefaAberta} souAdmin={ehAdminNoModulo(usuario, "workspace")} />
       )}
     </main>
   )
