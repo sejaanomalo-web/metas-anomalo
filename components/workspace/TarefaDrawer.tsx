@@ -46,6 +46,9 @@ interface Props {
   /** Id do usuário logado — decide quem vê "Editar"/"Apagar" no comentário.
    *  A permissão real é checada de novo na server action. */
   meuId: string | null
+  /** Linha extra no fim dos campos (ex.: reunião do Cal.com / bloqueio de
+   *  agenda), montada no servidor por DrawerServidor. */
+  extra?: React.ReactNode
 }
 
 /** Verde do "Today/Completed" do Asana. */
@@ -467,6 +470,8 @@ export default function TarefaDrawer(props: Props) {
                 )}
               </div>
             </CampoLinha>
+
+            {props.extra}
           </section>
 
           {/* ---------- Descrição ---------- */}
@@ -719,7 +724,7 @@ export default function TarefaDrawer(props: Props) {
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
                 {atividade.map((e) => (
                   <p key={e.id} style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>
-                    <strong style={{ color: "var(--text-3)", fontWeight: 600 }}>{e.ator_nome ?? "—"}</strong>{" "}
+                    <strong style={{ color: "var(--text-3)", fontWeight: 600 }}>{e.ator_nome ?? (e.mudanca?.origem === "calcom" ? "Cal.com" : "—")}</strong>{" "}
                     {rotuloEvento(e.evento)} ·{" "}
                     {new Date(e.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                   </p>
@@ -1306,6 +1311,12 @@ function rotuloEvento(evento: string): string {
     case "restaurada": return "restaurou"
     case "excluida": return "mandou para a lixeira"
     case "comentario": return "comentou"
+    case "reuniao_atualizada": return "atualizou a reunião (Cal.com)"
+    case "reuniao_reagendada": return "reagendou a reunião (Cal.com)"
+    case "reuniao_cancelada": return "cancelou a reunião (Cal.com)"
+    case "reuniao_rejeitada": return "recusou a reunião (Cal.com)"
+    case "bloqueio_agenda_ligado": return "passou a bloquear a agenda de reuniões"
+    case "bloqueio_agenda_desligado": return "deixou de bloquear a agenda de reuniões"
     default: return evento
   }
 }

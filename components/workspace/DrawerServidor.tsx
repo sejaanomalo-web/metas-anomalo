@@ -8,7 +8,9 @@ import {
 } from "@/lib/workspace"
 import { hojeISO } from "@/lib/workspace-datas"
 import { getUsuarioIdSync } from "@/lib/auth"
+import { reuniaoDaTarefa } from "@/lib/reunioes"
 import TarefaDrawer from "./TarefaDrawer"
+import BlocoReuniaoTarefa from "./reunioes/BlocoReuniaoTarefa"
 
 /**
  * Carrega no SERVIDOR tudo que o detalhe da tarefa precisa e monta o drawer.
@@ -37,12 +39,15 @@ export default async function DrawerServidor({
   // action, que é o que vale.
   const meuId = getUsuarioIdSync()
 
-  const [subtarefas, comentarios, atividade, contextos, usuarios] = await Promise.all([
+  const [subtarefas, comentarios, atividade, contextos, usuarios, reuniao] = await Promise.all([
     listarSubtarefas(tarefa.id),
     listarComentarios(tarefa.id),
     listarAtividade(tarefa.id),
     listarContextos(),
     listarUsuariosAtivos(),
+    // Reunião do Cal.com vinculada / bloqueio de agenda. Sem a migration das
+    // Reuniões, `disponivel` volta false e o bloco simplesmente não aparece.
+    reuniaoDaTarefa(tarefa.id),
   ])
 
   // O seletor "Projetos" espelha a aba Clientes. Contextos internos importados
@@ -65,6 +70,16 @@ export default async function DrawerServidor({
       hoje={hojeISO()}
       souAdmin={souAdmin}
       meuId={meuId}
+      extra={
+        reuniao.disponivel && !tarefa.tarefa_pai_id ? (
+          <BlocoReuniaoTarefa
+            tarefaId={tarefa.id}
+            temHorario={Boolean(tarefa.prazo_em && tarefa.prazo_hora)}
+            reuniao={reuniao.reuniao}
+            bloqueio={reuniao.bloqueio}
+          />
+        ) : undefined
+      }
     />
   )
 }
