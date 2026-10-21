@@ -764,7 +764,7 @@ export async function cancelarReuniaoAction(fd: FormData): Promise<ResultadoReun
   )
 
   revalidatePath("/dashboard/workspace", "layout")
-  const ok = r.estado === "cancelada" || r.estado === "ja_cancelada"
+  const ok = r.estado === "cancelada" || r.estado === "ja_cancelada" || r.estado === "removida_no_cal"
   return ok ? { ok: true, mensagem: r.mensagem } : { ok: false, erro: r.mensagem }
 }
 

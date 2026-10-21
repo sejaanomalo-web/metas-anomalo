@@ -43,6 +43,9 @@ export type EstadoCancelamento =
   | "parcial"
   /** Não deu pra saber se o Cal.com cancelou. Nada foi tirado da agenda. */
   | "pendente"
+  /** A reserva não existe mais no Cal.com (404 no cancelamento E na
+   *  consulta): nada a cancelar lá; a reunião sai do Workspace. */
+  | "removida_no_cal"
   /** O Cal.com recusou / estava fora. Nada mudou em lugar nenhum. */
   | "erro"
 
@@ -72,11 +75,26 @@ function encerradoNoCal(booking: unknown): EventoReuniao | null {
   return ev && ev.statusAlvo && ehTerminal(ev.statusAlvo) ? ev : null
 }
 
-/** Evento de cancelamento quando não deu pra ler o booking de volta (mas o
- *  POST /cancel respondeu 200 — isso já é a confirmação). */
-function eventoLocal(ag: AgendamentoGravado, motivo: string | null): EventoReuniao {
+/** Motivo gravado quando a reserva sumiu do Cal.com sem BOOKING_CANCELLED. */
+export const MOTIVO_REMOVIDA_NO_CAL = "A reserva não existe mais no Cal.com (removida lá sem aviso de cancelamento)."
+
+/** Reserva que o Cal.com diz não conhecer: 404 com a nossa própria chave. */
+export function ehNaoEncontrada(e: unknown): boolean {
+  return statusHttp(e) === 404
+}
+
+/**
+ * Evento de encerramento montado com o que já sabemos — quando não dá (ou não
+ * precisa) ler o booking de volta: o POST /cancel respondeu 200, ou a reserva
+ * não existe mais no Cal.com.
+ */
+export function eventoEncerramentoLocal(
+  ag: AgendamentoGravado,
+  motivo: string | null,
+  gatilho: "WORKSPACE" | "RECONCILIACAO" = "WORKSPACE"
+): EventoReuniao {
   return {
-    gatilho: "WORKSPACE",
+    gatilho,
     uid: ag.booking_uid,
     bookingId: null,
     eventTypeId: null,
@@ -121,12 +139,32 @@ export async function cancelarReuniaoPeloWorkspace(
     try {
       booking = await cal.buscar(uid)
     } catch (e2) {
+      // 404 nas DUAS chamadas = o Cal.com não conhece mais esta reserva (foi
+      // removida lá sem disparar BOOKING_CANCELLED — caso real de
+      // 2026-10-21). Não há o que cancelar no Cal.com; quem clicou quer a
+      // reunião fora da agenda, então ela sai do Workspace.
+      if (ehNaoEncontrada(e) && ehNaoEncontrada(e2)) {
+        try {
+          await processarEvento(repo, eventoEncerramentoLocal(ag, MOTIVO_REMOVIDA_NO_CAL), 0, { atorId: opts.atorId, origem: "workspace" })
+        } catch (e3) {
+          await log("erro", `Reserva inexistente no Cal.com, mas o Workspace não foi atualizado: ${mensagemDe(e3)}`, detalhes)
+          return { estado: "parcial", mensagem: "A reserva não existe mais no Cal.com, mas o Workspace não conseguiu se atualizar. Tente de novo em instantes." }
+        }
+        await log("info", "Reserva não existe mais no Cal.com; reunião retirada do Workspace.", { ...detalhes, ator_id: opts.atorId })
+        return {
+          estado: "removida_no_cal",
+          mensagem: "Esta reserva já não existe no Cal.com (foi removida lá). A reunião foi retirada do calendário; o histórico foi preservado.",
+        }
+      }
       await repo.atualizarAgendamento(
         uid,
         { sync_status: "pendente", sync_erro: `Cancelamento pedido pelo Workspace sem confirmação do Cal.com (${mensagemDe(e)}).` },
         ag.status
       )
-      await log("aviso", "Cancelamento pendente de confirmação: o Cal.com não respondeu e a reserva não pôde ser consultada.", {
+      const respondeu = statusHttp(e2) !== null
+      await log("aviso", respondeu
+        ? `Cancelamento pendente de confirmação: o Cal.com respondeu erro (${statusHttp(e2)}) ao consultar a reserva.`
+        : "Cancelamento pendente de confirmação: o Cal.com não respondeu e a reserva não pôde ser consultada.", {
         ...detalhes, erro_cancelar: mensagemDe(e), erro_consultar: mensagemDe(e2),
       })
       return {
@@ -165,7 +203,7 @@ export async function cancelarReuniaoPeloWorkspace(
   }
   const evento: EventoReuniao = confirmado
     ? { ...confirmado, gatilho: "WORKSPACE", motivoCancelamento: confirmado.motivoCancelamento ?? opts.motivo }
-    : eventoLocal(ag, opts.motivo)
+    : eventoEncerramentoLocal(ag, opts.motivo)
 
   // ---------- 3) aplica no Workspace pela MESMA máquina de estados ----------
   try {
