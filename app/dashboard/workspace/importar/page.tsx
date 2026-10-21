@@ -1,4 +1,6 @@
-import { requererAdmin } from "@/lib/auth"
+import { redirect } from "next/navigation"
+import { requererPermissao } from "@/lib/auth"
+import { ehAdminNoModulo } from "@/lib/acesso-admin"
 import { getSupabaseAdmin } from "@/lib/supabase"
 import { clienteDisplayName, type ClienteTrafego } from "@/lib/clientes"
 import WorkspaceNav from "@/components/workspace/WorkspaceNav"
@@ -12,14 +14,16 @@ import MapeamentoImportacao, {
 export const dynamic = "force-dynamic"
 
 /**
- * Tela de mapeamento da importação do Asana. requererAdmin (não a permissão
- * 'workspace'): decidir quem é quem reatribui autoria de 1.588 tarefas, e
+ * Tela de mapeamento da importação do Asana. Admin REAL com o Workspace
+ * visível (lib/acesso-admin.ts), não só a permissão 'workspace': decidir quem
+ * é quem reatribui autoria de 1.588 tarefas, e
  * descartar um projeto arquiva uma pasta inteira.
  *
  * Só aparece quando existe algo importado — antes disso não há o que decidir.
  */
 export default async function ImportarPage() {
-  await requererAdmin()
+  const usuario = await requererPermissao("workspace")
+  if (!ehAdminNoModulo(usuario, "workspace")) redirect("/dashboard/workspace")
   const db = getSupabaseAdmin()
 
   if (!db) {

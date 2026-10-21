@@ -15,6 +15,7 @@ import CriacaoRapida from "@/components/workspace/CriacaoRapida"
 import FiltrosTarefas from "@/components/workspace/FiltrosTarefas"
 import ListaTarefas, { type Agrupamento } from "@/components/workspace/ListaTarefas"
 import DrawerServidor from "@/components/workspace/DrawerServidor"
+import { ehAdminNoModulo } from "@/lib/acesso-admin"
 
 export const dynamic = "force-dynamic"
 
@@ -152,7 +153,7 @@ export default async function WorkspacePage({
       </div>
 
       {tarefaAberta && (
-        <DrawerServidor tarefaId={tarefaAberta} souAdmin={usuario.papel === "admin"} />
+        <DrawerServidor tarefaId={tarefaAberta} souAdmin={ehAdminNoModulo(usuario, "workspace")} />
       )}
     </main>
   )

@@ -13,6 +13,7 @@ import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual, type UsuarioSessao } from "./auth"
 import { exigirWorkspace } from "./workspace-acesso"
+import { ehAdminNoModulo } from "./acesso-admin"
 import { criarNotificacao } from "./notificacoes"
 import { ehDataISOValida, normalizarHora, proximaOcorrencia } from "./workspace-datas"
 import { extrairMencoes } from "./workspace-markdown"
@@ -86,7 +87,7 @@ function podeGerenciar(usuario: UsuarioSessao, tarefa: {
   responsavel_id: string | null
   responsaveis_ids?: string[]
 }): boolean {
-  if (usuario.papel === "admin") return true
+  if (ehAdminNoModulo(usuario, "workspace")) return true
   if (tarefa.criado_por === usuario.id) return true
   if (tarefa.responsavel_id === usuario.id) return true
   if (tarefa.responsaveis_ids?.includes(usuario.id)) return true
@@ -1273,7 +1274,7 @@ export async function excluirDefinitivoAction(
 ): Promise<ResultadoWorkspace> {
   const usuario = await getUsuarioAtual()
   if (!usuario) return { ok: false, erro: "Sessão expirada." }
-  if (usuario.papel !== "admin") {
+  if (!ehAdminNoModulo(usuario, "workspace")) {
     return { ok: false, erro: "Só um admin pode excluir definitivamente." }
   }
   const db = getSupabaseAdmin()
@@ -1491,7 +1492,7 @@ export async function editarComentarioAction(
     .eq("id", id)
     .maybeSingle()
   if (!c || c.excluido_em) return { ok: false, erro: "Comentário não encontrado." }
-  if (usuario.papel !== "admin" && c.autor_id !== usuario.id) {
+  if (!ehAdminNoModulo(usuario, "workspace") && c.autor_id !== usuario.id) {
     return { ok: false, erro: "Só o autor pode editar o comentário." }
   }
 
@@ -1526,7 +1527,7 @@ export async function excluirComentarioAction(
     .eq("id", id)
     .maybeSingle()
   if (!c) return { ok: false, erro: "Comentário não encontrado." }
-  if (usuario.papel !== "admin" && c.autor_id !== usuario.id) {
+  if (!ehAdminNoModulo(usuario, "workspace") && c.autor_id !== usuario.id) {
     return { ok: false, erro: "Só o autor pode apagar o comentário." }
   }
 
@@ -1555,7 +1556,7 @@ export async function alternarSeguidorAction(
   // gerencia a própria inscrição.
   const alvoBruto = opcional(formData, "usuario_id")
   const alvo = alvoBruto && ehUuid(alvoBruto) ? alvoBruto : usuario.id
-  if (alvo !== usuario.id && usuario.papel !== "admin") {
+  if (alvo !== usuario.id && !ehAdminNoModulo(usuario, "workspace")) {
     return { ok: false, erro: "Você só pode gerenciar a sua própria inscrição." }
   }
 

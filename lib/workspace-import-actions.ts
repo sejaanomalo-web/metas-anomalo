@@ -14,6 +14,7 @@
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual } from "./auth"
+import { ehAdminNoModulo } from "./acesso-admin"
 
 export interface ResultadoMapeamento {
   ok: boolean
@@ -24,11 +25,11 @@ const ROTA = "/dashboard/workspace/importar"
 
 /** Mapeamento é ferramenta destrutiva o bastante (arquiva contexto, reatribui
  *  autoria de 1.588 tarefas) pra exigir admin de verdade, não só a permissão
- *  'workspace'. Mesmo critério de requererAdmin no resto do app. */
+ *  'workspace': admin REAL com o Workspace visível (lib/acesso-admin.ts). */
 async function exigirAdmin(): Promise<{ ok: true } | { ok: false; erro: string }> {
   const usuario = await getUsuarioAtual()
   if (!usuario) return { ok: false, erro: "Sessão expirada." }
-  if (usuario.papel !== "admin") {
+  if (!ehAdminNoModulo(usuario, "workspace")) {
     return { ok: false, erro: "Só um admin pode mexer no mapeamento." }
   }
   return { ok: true }

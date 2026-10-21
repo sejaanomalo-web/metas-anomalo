@@ -5,8 +5,9 @@
 // =============================================================================
 //
 // PERMISSÃO: integração, tipos e disponibilidade mexem em credencial externa e
-// na agenda pública da agência — só ADMIN (papel efetivo === 'admin', mesmo
-// critério de requererAdmin). Quem tem Workspace só VÊ a aba e pode marcar uma
+// na agenda pública da agência — só ADMIN REAL com o Workspace visível na visão
+// atual (lib/acesso-admin.ts): a visão simplificada esconde módulos, não tira o
+// cargo. Quem tem Workspace só VÊ a aba e pode marcar uma
 // tarefa como "bloqueia agenda". Nada aqui confia em id vindo do browser sem
 // validar.
 
@@ -49,7 +50,7 @@ import {
 } from "./reunioes-nucleo"
 import { lerIntegracao, logSync, reconciliar, reprocessarPendentes, type Integracao } from "./reunioes-sync"
 import { hojeISO } from "./workspace-datas"
-import { acessoReunioes } from "./reunioes-tipos"
+import { ehAdminNoModulo } from "./acesso-admin"
 
 export interface ResultadoReunioes {
   ok: boolean
@@ -81,11 +82,7 @@ function msg(e: unknown): string {
 async function exigirAdmin(): Promise<{ usuario: UsuarioSessao | null; erro?: string }> {
   const usuario = await getUsuarioAtual()
   if (!usuario) return { usuario: null, erro: "Sessão expirada. Entre de novo." }
-  const acesso = acessoReunioes(usuario)
-  if (acesso.motivo === "visao_simplificada") {
-    return { usuario: null, erro: "Você está numa visão simplificada. Volte ao acesso completo em Configurações → Meu nível de acesso." }
-  }
-  if (!acesso.podeAdministrar) return { usuario: null, erro: "Só administradores alteram a integração e a agenda pública." }
+  if (!ehAdminNoModulo(usuario, "workspace")) return { usuario: null, erro: "Só administradores alteram a integração e a agenda pública." }
   return { usuario }
 }
 
