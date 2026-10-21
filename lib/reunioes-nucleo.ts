@@ -909,3 +909,27 @@ export function montarIcs(bloqueios: { id: string; data: string; hora: string; d
   linhas.push("END:VCALENDAR")
   return linhas.join("\r\n") + "\r\n"
 }
+
+// ============================================================
+// Reserva que sumiu do Cal.com (404 sem BOOKING_CANCELLED)
+// ============================================================
+
+const PREFIXO_SUMIDA = "Reserva não encontrada no Cal.com desde "
+const INTERVALO_SUMIDA_MS = 30 * 60_000
+
+/**
+ * A reconciliação recebeu 404 ao consultar uma reserva ativa. 1ª vez: marca
+ * (sync_erro guarda desde quando). Conferência seguinte, 30 min+ depois e
+ * ainda 404: encerra. Assim um soluço da API nunca cancela nada, e uma
+ * reserva removida no Cal.com não fica presa no Workspace pra sempre.
+ */
+export function decidirReservaSumida(
+  syncErroAtual: string | null,
+  agora: Date
+): { acao: "marcar"; marca: string } | { acao: "aguardar" } | { acao: "encerrar" } {
+  const desde = syncErroAtual?.startsWith(PREFIXO_SUMIDA) ? Date.parse(syncErroAtual.slice(PREFIXO_SUMIDA.length, PREFIXO_SUMIDA.length + 24)) : NaN
+  if (!Number.isFinite(desde)) {
+    return { acao: "marcar", marca: `${PREFIXO_SUMIDA}${agora.toISOString()} (sem aviso de cancelamento). Nova conferência em 30 min.` }
+  }
+  return agora.getTime() - desde >= INTERVALO_SUMIDA_MS ? { acao: "encerrar" } : { acao: "aguardar" }
+}

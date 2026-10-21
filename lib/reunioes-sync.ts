@@ -8,6 +8,8 @@ import { calBuscarBooking, calListarBookings, calcomConfigurado, ErroCalcom } fr
 import { assinaturaCalValida } from "./reunioes-assinatura"
 import { normalizarBookingCal, normalizarWebhookCal } from "./reunioes-nucleo"
 import { processarEvento, repararEncerramento } from "./reunioes-processar"
+import { eventoEncerramentoLocal, MOTIVO_REMOVIDA_NO_CAL } from "./reunioes-cancelar"
+import { decidirReservaSumida } from "./reunioes-nucleo"
 import { repoSupabase } from "./reunioes-repo"
 
 export interface Integracao {
@@ -333,7 +335,20 @@ export async function reconciliar(db: SupabaseClient): Promise<{
         }
       } catch (e) {
         if (e instanceof ErroCalcom && e.httpStatus === 404) {
-          await logSync(db, "aviso", "reconciliacao", `Reserva ${uid} não encontrada no Cal.com. Mantida como está — confira manualmente.`, { detalhes: { booking_uid: uid } })
+          // Reserva removida no Cal.com sem BOOKING_CANCELLED. Um 404 isolado
+          // pode ser soluço da API: só encerra quando a 2ª conferência, com
+          // pelo menos 30 min de intervalo, confirma.
+          const ag = await repo.buscarAgendamento(uid)
+          const { data: linha } = await db.from("reunioes_agendamentos").select("sync_erro").eq("provedor", "calcom").eq("booking_uid", uid).maybeSingle()
+          const d = decidirReservaSumida((linha?.sync_erro as string | null) ?? null, new Date())
+          if (ag && d.acao === "encerrar") {
+            const res = await processarEvento(repo, eventoEncerramentoLocal(ag, MOTIVO_REMOVIDA_NO_CAL, "RECONCILIACAO"))
+            aplicados++
+            await logSync(db, "info", "reconciliacao", `Reserva ${uid} continua inexistente no Cal.com (2ª conferência): ${res.resultado}.`, { detalhes: { booking_uid: uid } })
+          } else if (ag && d.acao === "marcar") {
+            await repo.atualizarAgendamento(uid, { sync_status: "pendente", sync_erro: d.marca }, ag.status)
+            await logSync(db, "aviso", "reconciliacao", `Reserva ${uid} não encontrada no Cal.com. Se continuar assim na próxima conferência (30 min+), sai do Workspace.`, { detalhes: { booking_uid: uid } })
+          }
         } else {
           erros++
           await logSync(db, "erro", "reconciliacao", `Falha ao consultar reserva ${uid}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500), { detalhes: { booking_uid: uid } })

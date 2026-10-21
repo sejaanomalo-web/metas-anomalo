@@ -9,7 +9,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { normalizarBookingCal } from "./reunioes-nucleo"
+import { decidirReservaSumida, normalizarBookingCal } from "./reunioes-nucleo"
 import { processarEvento, repararEncerramento } from "./reunioes-processar"
 import { cancelarReuniaoPeloWorkspace, podeCancelarReuniao, type CalParaCancelar } from "./reunioes-cancelar"
 import { tarefaEhReuniaoAtiva } from "./reunioes-guarda"
@@ -308,4 +308,40 @@ test("11: Google Meet — reunião com Meet é cancelada como qualquer outra e o
   assert.equal(m.ativas().length, 0)
   // A tela só mostra "Entrar na reunião" para status ativo (BlocoReuniaoTarefa/ListaReunioes).
   assert.equal(m.agend.get(UID)?.status, "cancelada")
+})
+
+// ---------------------------------------------------------------------------
+// Reserva removida no Cal.com sem BOOKING_CANCELLED (caso real de 2026-10-21)
+// ---------------------------------------------------------------------------
+
+test("removida no Cal.com: 'Cancelar reunião' com 404 no cancelamento E na consulta retira do Workspace (sem ficar pendente)", async () => {
+  const { m, tarefa } = await reuniaoCriada()
+  m.tarefas.get(tarefa.id)!.excluida_em = "2026-11-02T12:55:00.000Z" // estava na lixeira, como no caso real
+  const nf = new ErroHttp("Cal.com POST → 404 (não encontrado): Booking not found", 404)
+  const f = calFalso({ cancelarFalha: nf, buscarFalha: new ErroHttp("Cal.com GET → 404", 404) })
+  const r = await cancelarReuniaoPeloWorkspace({ repo: m.repo, cal: f.cal, log }, UID, { atorId: BRUNO, motivo: null })
+  assert.equal(r.estado, "removida_no_cal")
+  assert.equal(m.agend.get(UID)?.status, "cancelada")
+  assert.equal(m.agend.get(UID)?.sync_status, "ok")
+  assert.equal(m.tarefas.get(tarefa.id)!.titulo, "[Cancelada] 09:30 - Reunião com João Silva")
+  assert.ok(m.tarefas.get(tarefa.id)!.arquivada_em)
+})
+
+test("404 só no cancelamento, mas a consulta responde que está ativa → erro, nada muda", async () => {
+  const { m } = await reuniaoCriada()
+  const f = calFalso({ cancelarFalha: new ErroHttp("404", 404) })
+  const r = await cancelarReuniaoPeloWorkspace({ repo: m.repo, cal: f.cal, log }, UID, { atorId: BRUNO, motivo: null })
+  assert.equal(r.estado, "erro")
+  assert.equal(m.ativas().length, 1)
+})
+
+test("reconciliação: 1º 404 só marca; 2º 404 antes de 30 min aguarda; depois de 30 min encerra", () => {
+  const t0 = new Date("2026-10-21T19:00:00.000Z")
+  const d1 = decidirReservaSumida(null, t0)
+  assert.equal(d1.acao, "marcar")
+  const marca = (d1 as { marca: string }).marca
+  assert.equal(decidirReservaSumida(marca, new Date("2026-10-21T19:10:00.000Z")).acao, "aguardar")
+  assert.equal(decidirReservaSumida(marca, new Date("2026-10-21T19:31:00.000Z")).acao, "encerrar")
+  // Outro erro qualquer gravado antes não conta como 1ª conferência.
+  assert.equal(decidirReservaSumida("Cancelamento pedido pelo Workspace sem confirmação", t0).acao, "marcar")
 })
