@@ -119,7 +119,7 @@ export default async function ReunioesPage({ searchParams }: { searchParams: SP 
             </p>
           </section>
         ) : secao === "proximas" ? (
-          <ListaReunioes proximas={painel.proximas} encerradas={painel.encerradas} estado={integ.estado} />
+          <ListaReunioes proximas={painel.proximas} encerradas={painel.encerradas} estado={integ.estado} meuId={usuario.id} souAdmin={souAdmin} />
         ) : secao === "tipos" ? (
           <TiposReuniao
             tipos={painel.tipos}

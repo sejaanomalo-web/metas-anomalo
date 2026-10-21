@@ -98,6 +98,7 @@ export interface AgendamentoTela {
   participante_telefone: string | null
   tipo_nome: string | null
   origem_comercial: string | null
+  responsavel_id: string | null
   responsavel_nome: string | null
   link_reuniao: string | null
   local_rotulo: string | null

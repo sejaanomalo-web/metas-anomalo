@@ -33,6 +33,7 @@ export interface AgendamentoGravado extends AgendamentoAtual {
   fim: string | null
   local_rotulo: string | null
   descricao_gerada: string | null
+  sync_status: "ok" | "pendente" | "erro"
 }
 
 export interface TipoParaProcessar {
@@ -45,8 +46,13 @@ export interface TipoParaProcessar {
 }
 
 export interface TarefaLida {
+  titulo: string
   descricao: string | null
   arquivada_em: string | null
+  /** Lixeira do Workspace. A tarefa ainda existe e PRECISA receber o
+   *  cancelamento — senão quem a restaurar vê uma reunião cancelada como
+   *  ativa (foi exatamente o caso de 2026-10-21). */
+  excluida_em: string | null
   concluida_em: string | null
   versao: number
 }
@@ -100,12 +106,26 @@ export interface RepoReunioes {
     responsavelId: string | null
     contextoId: string | null
   }): Promise<string>
+  /** A tarefa, INCLUSIVE na lixeira. null só se ela foi apagada de vez.
+   *  Erro de banco LANÇA — nunca vira "não existe". */
   lerTarefa(id: string): Promise<TarefaLida | null>
+  /** Existe OUTRO booking ativo (solicitada/confirmada) usando esta tarefa?
+   *  Reagendamento faz dois UIDs apontarem pra mesma tarefa: encerrar pelo
+   *  UID velho não pode derrubar a reunião nova. */
+  outroAtivoNaTarefa(tarefaId: string, excetoUid: string): Promise<boolean>
   atualizarTarefa(id: string, patch: Record<string, unknown>): Promise<void>
-  registrarAtividade(tarefaId: string, evento: string, mudanca: Record<string, unknown>): Promise<void>
+  /** atorId null = sistema (webhook/reconciliação). */
+  registrarAtividade(tarefaId: string, evento: string, mudanca: Record<string, unknown>, atorId?: string | null): Promise<void>
   ping(tarefaId: string): Promise<void>
   notificar(usuarioIds: string[], titulo: string, mensagem: string, tarefaId: string): Promise<void>
   log(nivel: "info" | "aviso" | "erro", acao: string, mensagem: string, detalhes?: Record<string, unknown>): Promise<void>
+}
+
+/** Quem disparou: o Cal.com (webhook/reconciliação) ou uma pessoa no
+ *  Workspace (botão "Cancelar reunião"). Vai pro histórico da tarefa. */
+export interface ContextoProcessamento {
+  atorId?: string | null
+  origem?: "calcom" | "workspace"
 }
 
 export interface ResultadoProcessamento {
@@ -149,9 +169,12 @@ const PRESERVAR_SE_NULO = [
 export async function processarEvento(
   repo: RepoReunioes,
   eventoBruto: EventoReuniao,
-  tentativa = 0
+  tentativa = 0,
+  contexto: ContextoProcessamento = {}
 ): Promise<ResultadoProcessamento> {
   const avisos: string[] = []
+  const origem = contexto.origem ?? "calcom"
+  const atorId = contexto.atorId ?? null
   const atual = await repo.buscarAgendamento(eventoBruto.uid)
   const anterior = eventoBruto.reagendadoDeUid
     ? await repo.buscarAgendamento(eventoBruto.reagendadoDeUid)
@@ -160,6 +183,12 @@ export async function processarEvento(
   const plano = decidir(evento, atual, anterior)
 
   if (plano.ignorado || !plano.principal) {
+    // Cancelamento repetido de algo cujo encerramento ficou pela metade (a
+    // tarefa não foi arquivada): a reentrega é a chance de terminar o serviço.
+    if (atual && (atual.status === "cancelada" || atual.status === "rejeitada") && atual.sync_status !== "ok") {
+      const r = await repararEncerramento(repo, atual.booking_uid)
+      if (r.reparado) return { ignorado: false, resultado: r.resultado, tarefaId: atual.tarefa_id, avisos }
+    }
     return { ignorado: plano.ignorado, resultado: plano.resultado, tarefaId: atual?.tarefa_id ?? null, avisos }
   }
   const status = plano.principal.status
@@ -213,7 +242,7 @@ export async function processarEvento(
     const r = await repo.inserirAgendamento(linhaBase())
     if (r === "conflito") {
       if (tentativa >= 2) throw new Error("Conflito persistente ao gravar agendamento.")
-      return processarEvento(repo, eventoBruto, tentativa + 1)
+      return processarEvento(repo, eventoBruto, tentativa + 1, contexto)
     }
   } else {
     // Evento posterior (ex.: cancelamento) costuma vir sem estes campos; null
@@ -223,7 +252,7 @@ export async function processarEvento(
     const ok = await repo.atualizarAgendamento(evento.uid, patch, atual.status)
     if (!ok) {
       if (tentativa >= 2) throw new Error("Agendamento mudou durante o processamento.")
-      return processarEvento(repo, eventoBruto, tentativa + 1)
+      return processarEvento(repo, eventoBruto, tentativa + 1, contexto)
     }
   }
 
@@ -275,7 +304,7 @@ export async function processarEvento(
         contextoId: tipo?.contexto_id ?? null,
       })
       descricaoGerada = novaDescricao
-      await repo.registrarAtividade(tarefaId, "criada", { origem: "calcom", booking_uid: evento.uid, status })
+      await repo.registrarAtividade(tarefaId, "criada", { origem, booking_uid: evento.uid, status }, atorId)
       await repo.ping(tarefaId)
       if (responsavelId) {
         await repo.notificar(
@@ -285,12 +314,20 @@ export async function processarEvento(
           tarefaId
         )
       }
+    } else if (acao.acao === "encerrar" && (await repo.outroAtivoNaTarefa(acao.tarefaId, evento.uid))) {
+      // A tarefa já pertence a um booking NOVO e ativo (reagendamento): o
+      // cancelamento do UID velho fica só no registro dele.
+      tarefaId = acao.tarefaId
+      avisos.push("Cancelamento de um horário antigo (reagendado); a reunião ativa não foi alterada.")
     } else if (acao.acao === "atualizar" || acao.acao === "encerrar") {
       tarefaId = acao.tarefaId
       const t = await repo.lerTarefa(tarefaId)
       if (!t) {
-        avisos.push("A tarefa vinculada não existe mais; nada a atualizar.")
+        avisos.push("A tarefa vinculada foi apagada de vez do Workspace; o registro da reunião foi atualizado mesmo assim.")
       } else {
+        if (t.excluida_em && acao.acao === "atualizar") {
+          avisos.push("A tarefa desta reunião está na lixeira do Workspace; restaure-a para vê-la no Calendário.")
+        }
         const inicio = evento.inicio
         const patch: Record<string, unknown> = { versao: t.versao + 1 }
         if (inicio) {
@@ -319,13 +356,15 @@ export async function processarEvento(
           acao.acao === "encerrar" ? `reuniao_${status}` :
           plano.anterior ? "reuniao_reagendada" : "reuniao_atualizada"
         await repo.registrarAtividade(tarefaId, evento_, {
-          origem: "calcom",
+          origem,
           booking_uid: evento.uid,
           status,
+          ...(acao.acao === "encerrar" && evento.motivoCancelamento ? { motivo: evento.motivoCancelamento } : {}),
           ...(patch.prazo_em ? { prazo: { para: patch.prazo_em, hora: patch.prazo_hora } } : {}),
-        })
+        }, atorId)
         await repo.ping(tarefaId)
-        const destinatario = responsavelId ? [responsavelId] : []
+        // Quem cancelou pelo Workspace não precisa ser avisado do próprio clique.
+        const destinatario = responsavelId && responsavelId !== atorId ? [responsavelId] : []
         if (destinatario.length > 0 && (acao.acao === "encerrar" || plano.anterior)) {
           await repo.notificar(
             destinatario,
@@ -350,4 +389,49 @@ export async function processarEvento(
 
   for (const a of avisos) await repo.log("aviso", "processar", a, { booking_uid: evento.uid })
   return { ignorado: false, resultado: plano.resultado, tarefaId, avisos }
+}
+
+/**
+ * Termina um encerramento que ficou pela metade: o booking já está
+ * cancelado/recusado no nosso registro, mas a tarefa continua com cara de
+ * reunião ativa (não arquivada ou sem o "[Cancelada]" no título).
+ *
+ * Origem real (2026-10-21): a tarefa foi pra lixeira do Workspace minutos
+ * antes do cancelamento no Cal.com; a leitura antiga ignorava a lixeira, o
+ * webhook achou que a tarefa "não existia" e não encerrou nada. Chamado pela
+ * reentrega do webhook e pelo "Sincronizar agora". Idempotente.
+ */
+export async function repararEncerramento(
+  repo: RepoReunioes,
+  uid: string
+): Promise<{ reparado: boolean; resultado: string }> {
+  const ag = await repo.buscarAgendamento(uid)
+  if (!ag || (ag.status !== "cancelada" && ag.status !== "rejeitada")) {
+    return { reparado: false, resultado: "nada a reparar" }
+  }
+  const marcarOk = () => repo.atualizarAgendamento(uid, { sync_status: "ok", sync_erro: null }, ag.status)
+
+  if (!ag.tarefa_id || (await repo.outroAtivoNaTarefa(ag.tarefa_id, uid))) {
+    await marcarOk()
+    return { reparado: false, resultado: "sem tarefa a encerrar" }
+  }
+  const t = await repo.lerTarefa(ag.tarefa_id)
+  if (!t) {
+    await marcarOk()
+    return { reparado: false, resultado: "tarefa apagada de vez" }
+  }
+
+  const titulo = ag.inicio ? tituloReuniao(ag.inicio, ag.participante_nome ?? "Participante", ag.status) : t.titulo
+  if (t.arquivada_em && t.titulo === titulo) {
+    await marcarOk()
+    return { reparado: false, resultado: "já encerrada" }
+  }
+
+  const patch: Record<string, unknown> = { versao: t.versao + 1, titulo }
+  if (!t.arquivada_em) patch.arquivada_em = new Date().toISOString()
+  await repo.atualizarTarefa(ag.tarefa_id, patch)
+  await repo.registrarAtividade(ag.tarefa_id, `reuniao_${ag.status}`, { origem: "calcom", booking_uid: uid, status: ag.status, reparo: true })
+  await repo.ping(ag.tarefa_id)
+  await marcarOk()
+  return { reparado: true, resultado: `encerramento concluído (reunião ${ag.status})` }
 }

@@ -14,6 +14,7 @@ import { getSupabaseAdmin } from "./supabase"
 import { getUsuarioAtual, type UsuarioSessao } from "./auth"
 import { exigirWorkspace } from "./workspace-acesso"
 import { ehAdminNoModulo } from "./acesso-admin"
+import { AVISO_TAREFA_REUNIAO, tarefaEhReuniaoAtiva } from "./reunioes-guarda"
 import { criarNotificacao } from "./notificacoes"
 import { ehDataISOValida, normalizarHora, proximaOcorrencia } from "./workspace-datas"
 import { extrairMencoes } from "./workspace-markdown"
@@ -1195,6 +1196,7 @@ export async function arquivarTarefaAction(
   const atual = await buscarTarefa(id)
   if (!atual) return { ok: false, erro: "Tarefa não encontrada." }
   if (!podeGerenciar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
+  if (arquivar && (await tarefaEhReuniaoAtiva(db, id))) return { ok: false, erro: AVISO_TAREFA_REUNIAO }
 
   const { error } = await db
     .from("ws_tarefas")
@@ -1225,6 +1227,7 @@ export async function excluirTarefaAction(
   const atual = await buscarTarefa(id)
   if (!atual) return { ok: false, erro: "Tarefa não encontrada." }
   if (!podeGerenciar(usuario, atual)) return { ok: false, erro: "Sem permissão." }
+  if (await tarefaEhReuniaoAtiva(db, id)) return { ok: false, erro: AVISO_TAREFA_REUNIAO }
 
   const { error } = await db
     .from("ws_tarefas")
@@ -1287,6 +1290,7 @@ export async function excluirDefinitivoAction(
   if (!atual.excluida_em) {
     return { ok: false, erro: "Mande a tarefa para a lixeira antes de apagar de vez." }
   }
+  if (await tarefaEhReuniaoAtiva(db, id)) return { ok: false, erro: AVISO_TAREFA_REUNIAO }
 
   const { error } = await db.from("ws_tarefas").delete().eq("id", id)
   if (error) {

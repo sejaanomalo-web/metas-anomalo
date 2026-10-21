@@ -14,7 +14,7 @@ import type { StatusReuniao } from "./reunioes-nucleo"
 
 const COLUNAS_AGEND =
   "id, booking_uid, status, tarefa_id, ultimo_evento_em, inicio, fim, link_reuniao, local_rotulo, " +
-  "tipo_id, responsavel_id, participante_nome, participante_email, participante_telefone, descricao_gerada"
+  "tipo_id, responsavel_id, participante_nome, participante_email, participante_telefone, descricao_gerada, sync_status"
 
 const COLUNAS_TIPO = "id, nome, campanha_rotulo, origem_comercial, responsavel_id, contexto_id"
 
@@ -126,13 +126,28 @@ export function repoSupabase(db: SupabaseClient): RepoReunioes {
     },
 
     async lerTarefa(id) {
-      const { data } = await db
+      // SEM filtro de lixeira: tarefa excluída (soft) ainda precisa receber o
+      // cancelamento. E erro de banco lança — antes ele virava "a tarefa não
+      // existe" e o encerramento era pulado em silêncio.
+      const { data, error } = await db
         .from("ws_tarefas")
-        .select("descricao, arquivada_em, concluida_em, versao")
+        .select("titulo, descricao, arquivada_em, excluida_em, concluida_em, versao")
         .eq("id", id)
-        .is("excluida_em", null)
         .maybeSingle()
+      if (error) throw new Error(`lerTarefa: ${error.message}`)
       return (data as TarefaLida | null) ?? null
+    },
+
+    async outroAtivoNaTarefa(tarefaId, excetoUid) {
+      const { data, error } = await db
+        .from("reunioes_agendamentos")
+        .select("id")
+        .eq("tarefa_id", tarefaId)
+        .in("status", ["solicitada", "confirmada"])
+        .neq("booking_uid", excetoUid)
+        .limit(1)
+      if (error) throw new Error(`outroAtivoNaTarefa: ${error.message}`)
+      return (data ?? []).length > 0
     },
 
     async atualizarTarefa(id, patch) {
@@ -140,8 +155,8 @@ export function repoSupabase(db: SupabaseClient): RepoReunioes {
       if (error) throw new Error(`atualizarTarefa: ${error.message}`)
     },
 
-    async registrarAtividade(tarefaId, evento, mudanca) {
-      const { error } = await db.from("ws_atividade").insert({ tarefa_id: tarefaId, ator_id: null, evento, mudanca })
+    async registrarAtividade(tarefaId, evento, mudanca, atorId) {
+      const { error } = await db.from("ws_atividade").insert({ tarefa_id: tarefaId, ator_id: atorId ?? null, evento, mudanca })
       if (error) console.error("[reunioes] atividade", error.message)
     },
 

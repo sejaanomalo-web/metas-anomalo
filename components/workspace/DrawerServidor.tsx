@@ -77,6 +77,8 @@ export default async function DrawerServidor({
             temHorario={Boolean(tarefa.prazo_em && tarefa.prazo_hora)}
             reuniao={reuniao.reuniao}
             bloqueio={reuniao.bloqueio}
+            // Só decide se o botão aparece; cancelarReuniaoAction confere de novo.
+            podeCancelar={souAdmin || Boolean(meuId && reuniao.reuniao?.responsavelId === meuId)}
           />
         ) : undefined
       }
