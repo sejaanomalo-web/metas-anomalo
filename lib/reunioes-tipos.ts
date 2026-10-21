@@ -33,6 +33,33 @@ export const COR_CONEXAO: Record<EstadoConexao, string> = {
   desconectado: "#8a93a3",
 }
 
+/**
+ * Quem administra a aba Reuniões (integração, tipos, disponibilidade).
+ *
+ * Mesmo critério de requererAdmin: papel EFETIVO === 'admin'. Um admin que
+ * escolheu uma visão simplificada em Configurações → "Meu nível de acesso"
+ * fica com papel efetivo != admin de propósito (os gates de admin se fecham
+ * em todo o app). Aqui NÃO furamos isso — só devolvemos o motivo, pra tela
+ * dizer "você está numa visão simplificada" em vez de "só administradores",
+ * que soa como se a pessoa não fosse admin.
+ */
+export type MotivoAcessoReunioes = "admin" | "visao_simplificada" | "sem_papel_admin"
+
+export const ROTULO_VISAO: Record<string, string> = {
+  gestor_trafego: "Gestor de tráfego",
+  comercial: "Comercial",
+  custom: "Escolher as interfaces",
+}
+
+export function acessoReunioes(u: { papel: string; papelReal: string; visao: string | null }): {
+  podeAdministrar: boolean
+  motivo: MotivoAcessoReunioes
+} {
+  if (u.papel === "admin") return { podeAdministrar: true, motivo: "admin" }
+  if (u.papelReal === "admin" && u.visao) return { podeAdministrar: false, motivo: "visao_simplificada" }
+  return { podeAdministrar: false, motivo: "sem_papel_admin" }
+}
+
 export interface IntegracaoTela {
   estado: EstadoConexao
   sincronizacaoAtiva: boolean

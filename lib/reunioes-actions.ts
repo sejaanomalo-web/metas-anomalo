@@ -49,6 +49,7 @@ import {
 } from "./reunioes-nucleo"
 import { lerIntegracao, logSync, reconciliar, reprocessarPendentes, type Integracao } from "./reunioes-sync"
 import { hojeISO } from "./workspace-datas"
+import { acessoReunioes } from "./reunioes-tipos"
 
 export interface ResultadoReunioes {
   ok: boolean
@@ -80,7 +81,11 @@ function msg(e: unknown): string {
 async function exigirAdmin(): Promise<{ usuario: UsuarioSessao | null; erro?: string }> {
   const usuario = await getUsuarioAtual()
   if (!usuario) return { usuario: null, erro: "Sessão expirada. Entre de novo." }
-  if (usuario.papel !== "admin") return { usuario: null, erro: "Só administradores alteram a integração e a agenda pública." }
+  const acesso = acessoReunioes(usuario)
+  if (acesso.motivo === "visao_simplificada") {
+    return { usuario: null, erro: "Você está numa visão simplificada. Volte ao acesso completo em Configurações → Meu nível de acesso." }
+  }
+  if (!acesso.podeAdministrar) return { usuario: null, erro: "Só administradores alteram a integração e a agenda pública." }
   return { usuario }
 }
 
