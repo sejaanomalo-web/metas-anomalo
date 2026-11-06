@@ -1,0 +1,285 @@
+import { test } from "node:test"
+import assert from "node:assert/strict"
+import {
+  agrupamentosDisponiveis,
+  dataValida,
+  evolucaoDoFunil,
+  formatarPct,
+  gerarBaldes,
+  hojeBRT,
+  navegarPeriodo,
+  parsePeriodoFunil,
+  periodoDaData,
+  periodoIntervalo,
+  resolverAgrupamento,
+  resumirFunil,
+} from "./funil-calculo"
+import type { EtapaFunil, LancamentoFunil } from "./funil-tipos"
+
+const ETAPAS: EtapaFunil[] = [
+  { id: "a", nome: "Leads" },
+  { id: "b", nome: "Responderam" },
+  { id: "c", nome: "Reuniões" },
+  { id: "d", nome: "Contratos" },
+]
+
+function lanc(
+  data: string,
+  valores: Record<string, number>,
+  extra: Partial<LancamentoFunil> = {}
+): LancamentoFunil {
+  return {
+    id: `${data}-${JSON.stringify(valores)}`,
+    funil_id: "f",
+    data,
+    investimento: 0,
+    valores,
+    perdidos: 0,
+    faturamento: 0,
+    observacoes: null,
+    criado_por: null,
+    created_at: "",
+    ...extra,
+  }
+}
+
+test("dataValida recusa data que não existe", () => {
+  assert.equal(dataValida("2026-02-28"), true)
+  assert.equal(dataValida("2028-02-29"), true)
+  assert.equal(dataValida("2026-02-29"), false)
+  assert.equal(dataValida("2026-13-01"), false)
+  assert.equal(dataValida("06/11/2026"), false)
+  assert.equal(dataValida(null), false)
+})
+
+test("hojeBRT usa o fuso de São Paulo, não UTC", () => {
+  // 01h de 7/nov em UTC ainda é 22h de 6/nov em São Paulo.
+  assert.equal(hojeBRT(new Date("2026-11-07T01:00:00Z")), "2026-11-06")
+})
+
+test("semana vai de segunda a domingo", () => {
+  // 06/11/2026 é sexta.
+  const sexta = periodoDaData("semana", "2026-11-06")
+  assert.equal(sexta.de, "2026-11-02")
+  assert.equal(sexta.ate, "2026-11-08")
+  assert.equal(sexta.rotulo, "02 – 08 nov 2026")
+  // Domingo pertence à semana que começou na segunda anterior.
+  assert.equal(periodoDaData("semana", "2026-11-08").de, "2026-11-02")
+  assert.equal(periodoDaData("semana", "2026-11-02").de, "2026-11-02")
+})
+
+test("semana que cruza o ano sai com as duas datas", () => {
+  const p = periodoDaData("semana", "2026-12-31")
+  assert.equal(p.de, "2026-12-28")
+  assert.equal(p.ate, "2027-01-03")
+  assert.equal(p.rotulo, "28 dez 2026 – 03 jan 2027")
+})
+
+test("mês e ano cobrem o período inteiro", () => {
+  const fev = periodoDaData("mes", "2028-02-10")
+  assert.equal(fev.de, "2028-02-01")
+  assert.equal(fev.ate, "2028-02-29")
+  assert.equal(fev.rotulo, "Fevereiro 2028")
+  const ano = periodoDaData("ano", "2026-06-15")
+  assert.equal(ano.de, "2026-01-01")
+  assert.equal(ano.ate, "2026-12-31")
+})
+
+test("parsePeriodoFunil cobre os formatos da URL", () => {
+  const hoje = "2026-11-06"
+  assert.equal(parsePeriodoFunil({}, hoje).rotulo, "Novembro 2026")
+  assert.equal(
+    parsePeriodoFunil({ modo: "semana", de: "2026-11-06" }, hoje).de,
+    "2026-11-02"
+  )
+  assert.equal(
+    parsePeriodoFunil({ modo: "dia", de: "2026-11-01", ate: "2026-11-30" }, hoje).ate,
+    "2026-11-01"
+  )
+  // Formato do seletor global das outras telas.
+  assert.equal(
+    parsePeriodoFunil({ mes: "Março", ano: "2026" }, hoje).de,
+    "2026-03-01"
+  )
+  // Intervalo invertido é corrigido.
+  const inv = parsePeriodoFunil(
+    { modo: "intervalo", de: "2026-11-10", ate: "2026-11-01" },
+    hoje
+  )
+  assert.equal(inv.de, "2026-11-01")
+  assert.equal(inv.ate, "2026-11-10")
+  // Lixo na URL cai no mês corrente em vez de quebrar.
+  assert.equal(
+    parsePeriodoFunil({ modo: "semana", de: "abc" }, hoje).rotulo,
+    "Novembro 2026"
+  )
+  assert.equal(
+    parsePeriodoFunil({ modo: "intervalo", de: "2026-11-01" }, hoje).modo,
+    "mes"
+  )
+})
+
+test("navegarPeriodo anda um período inteiro", () => {
+  assert.equal(navegarPeriodo(periodoDaData("dia", "2026-03-01"), -1).de, "2026-02-28")
+  assert.equal(navegarPeriodo(periodoDaData("semana", "2026-11-06"), 1).de, "2026-11-09")
+  // Vindo de um mês de 31 dias não pode pular fevereiro.
+  assert.equal(navegarPeriodo(periodoDaData("mes", "2026-01-31"), 1).rotulo, "Fevereiro 2026")
+  assert.equal(navegarPeriodo(periodoDaData("mes", "2026-01-15"), -1).rotulo, "Dezembro 2025")
+  assert.equal(navegarPeriodo(periodoDaData("ano", "2026-06-01"), 1).rotulo, "2027")
+  const i = navegarPeriodo(periodoIntervalo("2026-11-01", "2026-11-10"), 1)
+  assert.equal(i.de, "2026-11-11")
+  assert.equal(i.ate, "2026-11-20")
+})
+
+test("baldes semanais são contíguos e recortados no período", () => {
+  const b = gerarBaldes("2026-11-01", "2026-11-30", "semana")
+  assert.deepEqual(
+    b.map((x) => [x.de, x.ate]),
+    [
+      ["2026-11-01", "2026-11-01"], // 1/nov é domingo: semana recortada
+      ["2026-11-02", "2026-11-08"],
+      ["2026-11-09", "2026-11-15"],
+      ["2026-11-16", "2026-11-22"],
+      ["2026-11-23", "2026-11-29"],
+      ["2026-11-30", "2026-11-30"],
+    ]
+  )
+  assert.equal(b[1].rotulo, "02 – 08 nov")
+  // Fatia de um dia só não repete a data.
+  assert.equal(b[0].rotulo, "01 nov")
+  assert.equal(b[5].rotulo, "30 nov")
+})
+
+test("baldes mensais e diários", () => {
+  const m = gerarBaldes("2026-01-01", "2026-12-31", "mes")
+  assert.equal(m.length, 12)
+  assert.equal(m[1].ate, "2026-02-28")
+  assert.equal(m[0].rotulo, "Jan 2026")
+  assert.equal(gerarBaldes("2026-11-02", "2026-11-08", "dia").length, 7)
+})
+
+test("agrupamento: padrão pelo tamanho e 'por dia' só em período curto", () => {
+  const ano = periodoDaData("ano", "2026-01-01")
+  const mes = periodoDaData("mes", "2026-11-01")
+  const semana = periodoDaData("semana", "2026-11-06")
+  assert.equal(resolverAgrupamento(undefined, ano), "mes")
+  assert.equal(resolverAgrupamento(undefined, mes), "semana")
+  assert.equal(resolverAgrupamento(undefined, semana), "dia")
+  assert.equal(resolverAgrupamento("dia", mes), "dia")
+  assert.deepEqual(agrupamentosDisponiveis(ano), ["semana", "mes"])
+  // Pedido que não cabe, ou lixo, volta para o padrão.
+  assert.equal(resolverAgrupamento("dia", ano), "mes")
+  assert.equal(resolverAgrupamento("xyz", mes), "semana")
+})
+
+test("resumirFunil soma e calcula as conversões entre etapas", () => {
+  const r = resumirFunil(ETAPAS, [
+    lanc("2026-11-01", { a: 60, b: 30, c: 6, d: 1 }, { investimento: 600 }),
+    lanc("2026-11-02", { a: 40, b: 10, c: 4, d: 1 }, {
+      investimento: 400,
+      perdidos: 3,
+      faturamento: 5000,
+    }),
+  ])
+  assert.deepEqual(r.etapas.map((e) => e.valor), [100, 40, 10, 2])
+  assert.equal(r.etapas[0].conversaoAnterior, null)
+  assert.equal(r.etapas[1].conversaoAnterior, 0.4)
+  assert.equal(r.etapas[2].conversaoAnterior, 0.25)
+  assert.equal(r.etapas[3].conversaoAnterior, 0.2)
+  assert.equal(r.etapas[3].conversaoTopo, 0.02)
+  assert.equal(r.investimento, 1000)
+  assert.equal(r.etapas[0].custo, 10)
+  assert.equal(r.etapas[3].custo, 500)
+  assert.equal(r.fechados, 2)
+  assert.equal(r.perdidos, 3)
+  assert.equal(r.taxaFechamento, 0.4)
+  assert.equal(r.retorno, 5)
+  assert.equal(r.registros, 2)
+})
+
+test("o gargalo é o passo com a menor conversão", () => {
+  const r = resumirFunil(ETAPAS, [lanc("2026-11-01", { a: 100, b: 10, c: 8, d: 4 })])
+  assert.equal(r.gargalo?.indice, 1)
+  assert.equal(r.gargalo?.de, "Leads")
+  assert.equal(r.gargalo?.para, "Responderam")
+  assert.equal(r.gargalo?.taxa, 0.1)
+})
+
+test("gargalo: empate fica com o passo mais ao topo", () => {
+  const r = resumirFunil(ETAPAS, [lanc("2026-11-01", { a: 100, b: 50, c: 25, d: 20 })])
+  assert.equal(r.gargalo?.indice, 1)
+})
+
+test("gargalo: etapa zerada depois de uma com volume é 0%", () => {
+  const r = resumirFunil(ETAPAS, [lanc("2026-11-01", { a: 100, b: 50, c: 0, d: 0 })])
+  assert.equal(r.gargalo?.indice, 2)
+  assert.equal(r.gargalo?.taxa, 0)
+  // Sem volume na anterior não há taxa, em vez de divisão por zero.
+  assert.equal(r.etapas[3].conversaoAnterior, null)
+})
+
+test("gargalo: sem queda não existe, mesmo com conversão acima de 100%", () => {
+  const r = resumirFunil(ETAPAS, [lanc("2026-11-01", { a: 10, b: 10, c: 12, d: 12 })])
+  assert.equal(r.gargalo, null)
+  assert.equal(r.etapas[2].conversaoAnterior, 1.2)
+})
+
+test("funil sem lançamentos não gera NaN nem gargalo", () => {
+  const r = resumirFunil(ETAPAS, [])
+  assert.equal(r.registros, 0)
+  assert.equal(r.gargalo, null)
+  assert.equal(r.taxaFechamento, null)
+  assert.equal(r.retorno, null)
+  for (const e of r.etapas) {
+    assert.equal(e.valor, 0)
+    assert.equal(e.conversaoAnterior, null)
+    assert.equal(e.custo, null)
+  }
+})
+
+test("etapa excluída some da conta e etapa nova começa zerada", () => {
+  const r = resumirFunil(
+    [{ id: "a", nome: "Leads" }, { id: "novo", nome: "Nova" }],
+    [lanc("2026-11-01", { a: 5, antiga: 99 })]
+  )
+  assert.deepEqual(r.etapas.map((e) => e.valor), [5, 0])
+})
+
+test("dado estranho no jsonb não contamina a soma", () => {
+  const r = resumirFunil(ETAPAS, [
+    lanc("2026-11-01", { a: "7" as unknown as number, b: -3, c: NaN }),
+  ])
+  assert.deepEqual(r.etapas.map((e) => e.valor), [7, 0, 0, 0])
+})
+
+test("numeric como string (formato do PostgREST) soma como número", () => {
+  const r = resumirFunil(ETAPAS, [
+    lanc("2026-11-01", { a: 1 }, { investimento: "1234.50" as unknown as number }),
+    lanc("2026-11-02", { a: 1 }, { investimento: "0.50" as unknown as number }),
+  ])
+  assert.equal(r.investimento, 1235)
+})
+
+test("evolução separa por balde e bate com o total do período", () => {
+  const lancamentos = [
+    lanc("2026-11-02", { a: 10, b: 5 }),
+    lanc("2026-11-08", { a: 10, b: 1 }), // domingo: mesma semana
+    lanc("2026-11-09", { a: 30, b: 3 }), // segunda: semana seguinte
+  ]
+  const baldes = gerarBaldes("2026-11-02", "2026-11-15", "semana")
+  const ev = evolucaoDoFunil(ETAPAS, lancamentos, baldes)
+  assert.equal(ev.length, 2)
+  assert.equal(ev[0].resumo.etapas[0].valor, 20)
+  assert.equal(ev[0].resumo.etapas[1].conversaoAnterior, 0.3)
+  assert.equal(ev[1].resumo.etapas[0].valor, 30)
+  const total = ev.reduce((s, x) => s + x.resumo.etapas[0].valor, 0)
+  assert.equal(total, resumirFunil(ETAPAS, lancamentos).etapas[0].valor)
+})
+
+test("formatarPct usa vírgula e até 1 casa", () => {
+  assert.equal(formatarPct(0.625), "62,5%")
+  assert.equal(formatarPct(1), "100%")
+  assert.equal(formatarPct(0), "0%")
+  assert.equal(formatarPct(1 / 3), "33,3%")
+  assert.equal(formatarPct(null), "—")
+})
