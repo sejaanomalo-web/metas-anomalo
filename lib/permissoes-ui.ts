@@ -39,7 +39,7 @@ export const CHAVES_UI: {
   {
     chave: "dashboard_comercial",
     rotulo: "Comercial",
-    descricao: "/dashboard/comercial (funil + relatórios do comercial)",
+    descricao: "/dashboard/comercial (funis próprios de cada usuário)",
   },
   {
     chave: "dashboard_financeiro",

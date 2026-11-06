@@ -254,7 +254,9 @@ function SidebarRail({
   const trafegoAtivo = ehRotaTrafego(pathname)
   const financeiroAtivo = pathname.startsWith("/dashboard/financeiro")
   const comercialAtivo =
-    pathname === "/dashboard/comercial" || pathname.endsWith("/comercial")
+    pathname === "/dashboard/comercial" ||
+    pathname.startsWith("/dashboard/comercial/") ||
+    pathname.endsWith("/comercial")
   const crmAtivo =
     pathname === "/dashboard/crm" || pathname.startsWith("/dashboard/crm/")
   const workspaceAtivo = pathname.startsWith("/dashboard/workspace")
