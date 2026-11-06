@@ -1,11 +1,11 @@
 /* Layout dos funis comerciais. Fica em um módulo para valer só nestas telas. */
 
-/* ── Hero ─────────────────────────────────────────────────────────────────── */
+/* ── Hero: mesma estrutura do Caixa ───────────────────────────────────────── */
 .heroTopo {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px 24px;
+  gap: 16px;
   flex-wrap: wrap;
   margin-top: 6px;
 }
@@ -16,53 +16,6 @@
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 16px;
-}
-
-.seletor {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  width: 380px;
-  max-width: 100%;
-}
-.seletorModos {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-}
-.seletorNavegacao {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.seletorCampos {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
-.seletorCampos > * {
-  flex: 1 1 0;
-  min-width: 0;
-}
-/* Mês precisa de espaço para "Novembro" inteiro; sem espaço, o ano desce. */
-.seletorCampos select {
-  flex: 3 1 130px;
-}
-.seletorCampos select + select {
-  flex: 1 0 88px;
-}
-.seletorHoje {
-  min-height: 34px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: right;
 }
 
 /* ── Escolha do funil e ações ─────────────────────────────────────────────── */
@@ -169,6 +122,125 @@
   color: var(--accent);
   background: rgba(201, 149, 58, 0.08);
   border: 1px solid rgba(201, 149, 58, 0.45);
+}
+
+/* ── Fonte de demanda ─────────────────────────────────────────────────────── */
+.fontes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+.fonte {
+  min-height: 62px;
+  min-width: 0;
+  padding: 10px 14px;
+  text-align: left;
+  color: var(--text-2);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.fonte[aria-pressed="true"] {
+  color: var(--text-1);
+  background: rgba(201, 149, 58, 0.14);
+  border-color: var(--accent);
+}
+.fonte span {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.fonte strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+.opcoesFonte {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.opcaoFonte {
+  position: relative;
+  min-height: 40px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.opcaoFonte[data-ativa="true"] {
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.opcaoFonte input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.opcaoFonte:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Comparação entre fontes: tabela no desktop, cartões no celular ───────── */
+.comparativoTabela {
+  overflow-x: auto;
+  padding: 4px;
+}
+.comparativoTabela table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.comparativoTabela th,
+.comparativoTabela td {
+  padding: 10px 12px;
+  font-size: 13px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--card-border);
+}
+.comparativoTabela thead th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: normal;
+  border-top: none;
+  vertical-align: bottom;
+}
+.comparativoTabela th:first-child {
+  text-align: left;
+}
+.linkFonte {
+  min-height: 32px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.comparativoCartoes {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
 }
 
 /* ── Indicadores ──────────────────────────────────────────────────────────── */
@@ -363,19 +435,6 @@
 }
 
 @media (max-width: 767px) {
-  /* Mais largura útil: o hero padrão gasta 60px só em respiro lateral. */
-  .hero.hero {
-    padding: 18px 16px;
-  }
-  .hero h1 {
-    font-size: 28px !important;
-  }
-  .seletor {
-    width: 100%;
-  }
-  .seletorHoje {
-    text-align: center;
-  }
   .heroRodape > label,
   .heroRodape > label select {
     flex: 1;
@@ -383,7 +442,7 @@
   }
 
   .painel {
-    padding: 16px;
+    padding: 18px;
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "info"
@@ -404,7 +463,7 @@
   }
 
   .kpi {
-    padding: 14px;
+    padding: 16px;
   }
   .kpi p:last-child {
     font-size: 20px;
@@ -416,10 +475,12 @@
     grid-column: 1 / -1;
   }
 
-  .evolucaoTabela {
+  .evolucaoTabela,
+  .comparativoTabela {
     display: none;
   }
-  .evolucaoCartoes {
+  .evolucaoCartoes,
+  .comparativoCartoes {
     display: grid;
   }
 
@@ -428,13 +489,3 @@
   }
 }
 
-/* Celular pequeno: "Intervalo" não pode estourar a própria coluna. */
-@media (max-width: 360px) {
-  .seletorModos {
-    grid-template-columns: 0.7fr 1.1fr 0.7fr 0.7fr 1.2fr;
-  }
-  .seletorModos button {
-    font-size: 11px !important;
-    padding-inline: 0 !important;
-  }
-}

@@ -18,6 +18,9 @@ await db.exec(sql) // precisa poder rodar de novo sem erro
 const sql2 = await readFile('supabase/migrations/20261107_funil_lancamentos_importacao.sql', 'utf8')
 await db.exec(sql2)
 await db.exec(sql2)
+const sql3 = await readFile('supabase/migrations/20261108_funis_fontes_demanda.sql', 'utf8')
+await db.exec(sql3)
+await db.exec(sql3)
 console.log('ok  migrations aplicam e são idempotentes')
 
 const { rows: [a] } = await db.query(`insert into usuarios (nome) values ('A') returning id`)
@@ -77,6 +80,21 @@ assert.equal(naData[0].n, 3)
 console.log('ok  lançamentos manuais na mesma data não colidem')
 await recusa('origem de importação desconhecida', '23514', () => db.query(
   `insert into funil_lancamentos (funil_id, data, origem_importacao) values ($1, '2026-11-11', 'google')`, [f.id]))
+
+// Fontes de demanda.
+const { rows: [semFonte] } = await db.query(`select fontes from funis_comerciais where id = $1`, [f.id])
+assert.deepEqual(semFonte.fontes.map((x) => x.id), ['trafego', 'indicacao', 'prospeccao'])
+console.log('ok  funil existente recebe as 3 fontes padrão')
+const { rows: [padrao] } = await lancar({ data: '2026-11-12' })
+const { rows: [lidoFonte] } = await db.query(`select fonte from funil_lancamentos where id = $1`, [padrao.id])
+assert.equal(lidoFonte.fonte, 'trafego')
+console.log('ok  lançamento antigo ou sem fonte conta como tráfego')
+await db.query(`insert into funil_lancamentos (funil_id, data, fonte) values ($1, '2026-11-10', 'indicacao')`, [f.id])
+console.log('ok  indicação na mesma data de uma importação não colide')
+await recusa('importado fora de tráfego', '23514', () => db.query(
+  `insert into funil_lancamentos (funil_id, data, fonte, origem_importacao) values ($1, '2026-11-13', 'indicacao', 'meta')`, [f.id]))
+await recusa('funil sem nenhuma fonte', '23514', () => db.query(
+  `update funis_comerciais set fontes = '[]'::jsonb where id = $1`, [f.id]))
 
 // Excluir quem lançou mantém o número (SET NULL), sem violar nenhum CHECK.
 await db.query(`delete from usuarios where id = $1`, [b.id])

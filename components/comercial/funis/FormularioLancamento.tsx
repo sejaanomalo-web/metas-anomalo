@@ -4,12 +4,19 @@ import { useState, useTransition } from "react"
 import CampoInteiro from "@/components/inputs/CampoInteiro"
 import CampoMoeda from "@/components/inputs/CampoMoeda"
 import { salvarLancamentoAction } from "@/lib/funis-comerciais-actions"
-import type { FunilComercial, LancamentoFunil } from "@/lib/funil-tipos"
+import {
+  FONTE_TRAFEGO,
+  fonteDoLancamento,
+  fontesDoFunil,
+  type FunilComercial,
+  type LancamentoFunil,
+} from "@/lib/funil-tipos"
 import ModalComercial, {
   MensagemErro,
   estiloCampo,
   estiloRotulo,
 } from "./ModalComercial"
+import estilos from "./funis.module.css"
 
 const grade: React.CSSProperties = {
   display: "grid",
@@ -22,15 +29,23 @@ export default function FormularioLancamento({
   funil,
   lancamento,
   dataPadrao,
+  fontePadrao,
   fechar,
   aoSalvar,
 }: {
   funil: FunilComercial
   lancamento?: LancamentoFunil
   dataPadrao: string
+  /** Fonte aberta na tela: é o palpite inicial de quem lança. */
+  fontePadrao?: string | null
   fechar: () => void
   aoSalvar: () => void
 }) {
+  const fontes = fontesDoFunil(funil)
+  const importado = Boolean(lancamento?.origem_importacao)
+  const [fonte, setFonte] = useState(
+    lancamento ? fonteDoLancamento(lancamento) : fontePadrao ?? FONTE_TRAFEGO
+  )
   const [erro, setErro] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -57,6 +72,35 @@ export default function FormularioLancamento({
         <input type="hidden" name="funil_id" value={funil.id} />
         {lancamento && <input type="hidden" name="id" value={lancamento.id} />}
 
+        <fieldset style={{ border: "none", padding: 0, margin: "0 0 14px" }}>
+          <legend style={{ ...estiloRotulo, padding: 0 }}>Fonte da demanda</legend>
+          {importado ? (
+            <p style={{ marginTop: 6, fontSize: 13, color: "var(--text-2)" }}>
+              Veio do arquivo do Meta, então fica em{" "}
+              {fontes.find((f) => f.id === FONTE_TRAFEGO)?.nome ?? "Tráfego"}.
+            </p>
+          ) : (
+            <div className={estilos.opcoesFonte}>
+              {fontes.map((f) => (
+                <label
+                  key={f.id}
+                  className={estilos.opcaoFonte}
+                  data-ativa={fonte === f.id}
+                >
+                  <input
+                    type="radio"
+                    name="fonte"
+                    value={f.id}
+                    checked={fonte === f.id}
+                    onChange={() => setFonte(f.id)}
+                  />
+                  {f.nome}
+                </label>
+              ))}
+            </div>
+          )}
+        </fieldset>
+
         <div style={grade}>
           <label style={estiloRotulo}>
             Data
@@ -71,7 +115,9 @@ export default function FormularioLancamento({
             />
           </label>
           <label style={estiloRotulo}>
-            Valor investido no tráfego
+            {fonte === FONTE_TRAFEGO
+              ? "Valor investido no tráfego"
+              : "Custo desta fonte (opcional)"}
             <CampoMoeda
               name="investimento"
               className="glass-input"

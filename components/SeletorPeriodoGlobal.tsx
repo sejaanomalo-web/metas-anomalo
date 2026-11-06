@@ -255,7 +255,8 @@ export default function SeletorPeriodoGlobal({
       )}
 
       {modo === "intervalo" && (
-        <div className="flex items-center gap-2">
+        // Quebra de linha: no celular, os dois campos de data não cabem lado a lado.
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="date"
             value={de}

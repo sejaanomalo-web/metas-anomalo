@@ -4,11 +4,16 @@ import { useRef, useState, useTransition } from "react"
 import { salvarFunilAction } from "@/lib/funis-comerciais-actions"
 import {
   ETAPAS_PADRAO,
+  FONTES_PADRAO,
+  FONTE_TRAFEGO,
   MAX_ETAPAS,
+  MAX_FONTES,
+  MAX_NOME_FONTE,
   MAX_NOME_ETAPA,
   MAX_NOME_FUNIL,
   MIN_ETAPAS,
   type FunilComercial,
+  fontesDoFunil,
 } from "@/lib/funil-tipos"
 import ModalComercial, {
   MensagemErro,
@@ -53,6 +58,13 @@ export default function FormularioFunil({
       ? funil.etapas.map((e) => ({ chave: e.id, id: e.id, nome: e.nome }))
       : ETAPAS_PADRAO.map((n) => ({ chave: novaChave(), nome: n }))
   )
+  const [fontes, setFontes] = useState<LinhaEtapa[]>(() =>
+    (funil ? fontesDoFunil(funil) : [...FONTES_PADRAO]).map((f) => ({
+      chave: f.id,
+      id: f.id,
+      nome: f.nome,
+    }))
+  )
   const [erro, setErro] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -79,6 +91,7 @@ export default function FormularioFunil({
         nome,
         descricao,
         etapas: etapas.map((e) => ({ id: e.id, nome: e.nome })),
+        fontes: fontes.map((f) => ({ id: f.id, nome: f.nome })),
       })
       if (!r.ok || !r.id) {
         setErro(r.erro ?? "Não foi possível salvar.")
@@ -218,6 +231,76 @@ export default function FormularioFunil({
             }
           >
             + Adicionar etapa
+          </button>
+        </fieldset>
+
+        <fieldset style={{ marginTop: 18, border: "none", padding: 0 }}>
+          <legend style={{ ...estiloRotulo, padding: 0 }}>Fontes de demanda</legend>
+          <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>
+            Todas usam as mesmas etapas. Tráfego fica sempre, porque a importação
+            do Meta entra nela.
+          </p>
+          <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0 }}>
+            {fontes.map((fonte, i) => (
+              <li
+                key={fonte.chave}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginTop: i === 0 ? 0 : 6,
+                }}
+              >
+                <input
+                  className="glass-input"
+                  aria-label={`Nome da fonte ${i + 1}`}
+                  style={{ flex: 1, minWidth: 0, padding: "8px 12px", fontSize: 13 }}
+                  value={fonte.nome}
+                  maxLength={MAX_NOME_FONTE}
+                  required
+                  onChange={(e) =>
+                    setFontes((atual) =>
+                      atual.map((x) =>
+                        x.chave === fonte.chave
+                          ? { ...x, nome: e.target.value }
+                          : x
+                      )
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  style={{
+                    ...estiloBotaoEtapa,
+                    opacity: fonte.id === FONTE_TRAFEGO ? 0.35 : 1,
+                  }}
+                  disabled={fonte.id === FONTE_TRAFEGO}
+                  aria-label={`Remover fonte ${fonte.nome || i + 1}`}
+                  onClick={() =>
+                    setFontes((atual) =>
+                      atual.filter((x) => x.chave !== fonte.chave)
+                    )
+                  }
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{
+              marginTop: 10,
+              padding: "9px 14px",
+              opacity: fontes.length >= MAX_FONTES ? 0.45 : 1,
+            }}
+            disabled={fontes.length >= MAX_FONTES}
+            onClick={() =>
+              setFontes((atual) => [...atual, { chave: novaChave(), nome: "" }])
+            }
+          >
+            + Adicionar fonte
           </button>
         </fieldset>
 

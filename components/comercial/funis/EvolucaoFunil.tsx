@@ -1,4 +1,3 @@
-import Link from "next/link"
 import { formatBRL, formatNumero } from "@/lib/data"
 import {
   AGRUPAMENTOS,
@@ -34,12 +33,12 @@ export default function EvolucaoFunil({
   linhas,
   agrupamento,
   disponiveis,
-  hrefAgrupamento,
+  aoEscolher,
 }: {
   linhas: { balde: BaldePeriodo; resumo: ResumoFunil }[]
   agrupamento: AgrupamentoFunil
   disponiveis: AgrupamentoFunil[]
-  hrefAgrupamento: (a: AgrupamentoFunil) => string
+  aoEscolher: (a: AgrupamentoFunil) => void
 }) {
   const etapas = linhas[0]?.resumo.etapas ?? []
 
@@ -49,18 +48,18 @@ export default function EvolucaoFunil({
         {AGRUPAMENTOS.filter((a) => disponiveis.includes(a.valor)).map((a) => {
           const ativo = a.valor === agrupamento
           return (
-            <Link
+            <button
               key={a.valor}
-              href={hrefAgrupamento(a.valor)}
-              scroll={false}
-              aria-current={ativo ? "true" : undefined}
-              className="no-ds"
+              type="button"
+              aria-pressed={ativo}
+              onClick={() => aoEscolher(a.valor)}
               style={{
                 padding: "8px 12px",
+                minHeight: 36,
                 fontSize: 12,
                 fontWeight: 600,
                 borderRadius: 8,
-                textDecoration: "none",
+                cursor: "pointer",
                 color: ativo ? "#000" : "var(--text-2)",
                 background: ativo ? "var(--accent)" : "transparent",
                 border: ativo
@@ -69,7 +68,7 @@ export default function EvolucaoFunil({
               }}
             >
               {a.rotulo}
-            </Link>
+            </button>
           )
         })}
       </div>
@@ -126,7 +125,7 @@ export default function EvolucaoFunil({
         )}
       </ul>
 
-      <div className={`glass ${estilos.evolucaoTabela}`}>
+      <div data-evolucao className={`glass ${estilos.evolucaoTabela}`}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>

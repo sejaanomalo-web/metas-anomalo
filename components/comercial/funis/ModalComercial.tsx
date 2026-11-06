@@ -74,7 +74,8 @@ export default function ModalComercial({
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "center",
-        padding: 16,
+        padding:
+          "max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom))",
         overflowY: "auto",
       }}
     >
