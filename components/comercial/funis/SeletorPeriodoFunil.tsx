@@ -13,6 +13,7 @@ import {
   type ModoPeriodoFunil,
   type PeriodoFunil,
 } from "@/lib/funil-calculo"
+import estilos from "./funis.module.css"
 
 const NOMES_MES = [
   "Janeiro",
@@ -31,15 +32,16 @@ const NOMES_MES = [
 
 const estiloCampo: React.CSSProperties = {
   padding: "8px 10px",
-  minHeight: 38,
+  minHeight: 40,
   fontSize: 12,
   fontWeight: 500,
   color: "var(--text-2)",
 }
 
 const estiloSeta: React.CSSProperties = {
-  width: 38,
-  height: 38,
+  width: 40,
+  height: 40,
+  flexShrink: 0,
   fontSize: 16,
   color: "var(--text-2)",
   background: "transparent",
@@ -49,8 +51,8 @@ const estiloSeta: React.CSSProperties = {
 }
 
 const botaoModo = (ativo: boolean): React.CSSProperties => ({
-  padding: "8px 12px",
-  minHeight: 36,
+  padding: "8px 4px",
+  minHeight: 38,
   fontSize: 12,
   fontWeight: 600,
   borderRadius: 8,
@@ -147,14 +149,13 @@ export default function SeletorPeriodoFunil({
     </select>
   )
 
+  const contemHoje = hoje >= local.de && hoje <= local.ate
+
   return (
     <div
       aria-busy={pendente}
+      className={estilos.seletor}
       style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-end",
-        gap: 8,
         opacity: pendente ? 0.65 : 1,
         transition: "opacity 0.15s ease",
       }}
@@ -162,7 +163,7 @@ export default function SeletorPeriodoFunil({
       <div
         role="group"
         aria-label="Tipo de período"
-        style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}
+        className={estilos.seletorModos}
       >
         {MODOS_PERIODO.map((m) => (
           <button
@@ -177,15 +178,7 @@ export default function SeletorPeriodoFunil({
         ))}
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          flexWrap: "wrap",
-          justifyContent: "flex-end",
-        }}
-      >
+      <div className={estilos.seletorNavegacao}>
         <button
           type="button"
           aria-label="Período anterior"
@@ -195,6 +188,7 @@ export default function SeletorPeriodoFunil({
           ‹
         </button>
 
+        <div className={estilos.seletorCampos}>
         {(local.modo === "dia" || local.modo === "semana") && (
           <input
             type="date"
@@ -263,6 +257,7 @@ export default function SeletorPeriodoFunil({
             />
           </>
         )}
+        </div>
 
         <button
           type="button"
@@ -273,16 +268,18 @@ export default function SeletorPeriodoFunil({
           ›
         </button>
 
-        {local.modo !== "intervalo" && (
-          <button
-            type="button"
-            style={botaoModo(false)}
-            onClick={() => ir(periodoDaData(local.modo, hoje))}
-          >
-            Hoje
-          </button>
-        )}
       </div>
+
+      {/* Só faz sentido quando o período na tela não inclui hoje. */}
+      {local.modo !== "intervalo" && !contemHoje && (
+        <button
+          type="button"
+          className={estilos.seletorHoje}
+          onClick={() => ir(periodoDaData(local.modo, hoje))}
+        >
+          Voltar para hoje
+        </button>
+      )}
     </div>
   )
 }

@@ -32,6 +32,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SEM_ACESSO = "Você não tem acesso a este funil."
 const MIGRATION_PENDENTE =
   "O banco ainda não tem as tabelas dos funis. Aplique a migration 20261106_comercial_funis."
+const MIGRATION_IMPORTACAO_PENDENTE =
+  "O banco ainda não está pronto para importar. Aplique a migration 20261107_funil_lancamentos_importacao."
+
+/** Coluna ou índice da importação ainda não existem no banco. */
+function faltaMigrationImportacao(erro: { code?: string } | null): boolean {
+  return (
+    erro?.code === "42703" || // coluna inexistente
+    erro?.code === "PGRST204" || // coluna fora do cache do PostgREST
+    erro?.code === "42P10" // ON CONFLICT sem índice único correspondente
+  )
+}
 
 async function usuarioDoComercial(): Promise<UsuarioSessao | null> {
   const usuario = await getUsuarioAtual()
@@ -307,7 +318,13 @@ export async function salvarLancamentoAction(
     : await supabase
         .from("funil_lancamentos")
         .insert({ ...campos, funil_id: funil.id, criado_por: usuario.id })
-  if (error) return erroDeGravacao("salvar lancamento", error)
+  if (error) {
+    // Só linha importada colide: cada data aceita uma importação por funil.
+    if (error.code === "23505") {
+      return { ok: false, erro: "Já existe uma importação do Meta nessa data." }
+    }
+    return erroDeGravacao("salvar lancamento", error)
+  }
   revalidar()
   return { ok: true }
 }
@@ -339,6 +356,227 @@ export async function excluirLancamentoAction(
     .delete()
     .eq("id", id)
   if (error) return erroDeGravacao("excluir lancamento", error)
+  revalidar()
+  return { ok: true }
+}
+
+// ── Importação de arquivo do Meta ───────────────────────────────────────────
+
+export interface ConferenciaImportacao extends ResultadoFunil {
+  /** Datas que já têm linha importada: serão atualizadas, sem somar. */
+  jaImportadas?: string[]
+  /** Datas com lançamento manual com gasto: o investimento pode contar 2x. */
+  comInvestimentoManual?: string[]
+}
+
+export interface EntradaImportacao {
+  funilId: string
+  arquivo: string
+  campanhas: string[]
+  dias: {
+    data: string
+    investimento: number | null
+    valores: Record<string, number>
+  }[]
+}
+
+const LIMITE_DIAS = 1500
+
+/** Só lê: mostra na revisão o que a importação vai encontrar no funil. */
+export async function conferirImportacaoAction(
+  funilId: string,
+  datas: string[]
+): Promise<ConferenciaImportacao> {
+  const usuario = await usuarioDoComercial()
+  if (!usuario) return { ok: false, erro: SEM_ACESSO }
+  const funil = await buscarFunil(funilId)
+  if (!funil || !podeMexerNoFunil(usuario, funil)) {
+    return { ok: false, erro: SEM_ACESSO }
+  }
+  if (
+    !Array.isArray(datas) ||
+    datas.length > LIMITE_DIAS ||
+    !datas.every(dataValida)
+  ) {
+    return { ok: false, erro: "Datas inválidas." }
+  }
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+  const { data, error } = await supabase
+    .from("funil_lancamentos")
+    .select("data, investimento, origem_importacao")
+    .eq("funil_id", funil.id)
+    .in("data", datas)
+    .limit(LIMITE_DIAS * 4)
+  if (error) {
+    if (faltaMigrationImportacao(error)) {
+      return { ok: false, erro: MIGRATION_IMPORTACAO_PENDENTE }
+    }
+    return erroDeGravacao("conferir importacao", error)
+  }
+  const linhas = (data ?? []) as {
+    data: string
+    investimento: number
+    origem_importacao: string | null
+  }[]
+  return {
+    ok: true,
+    jaImportadas: linhas.filter((l) => l.origem_importacao).map((l) => l.data),
+    comInvestimentoManual: Array.from(
+      new Set(
+        linhas
+          .filter((l) => !l.origem_importacao && Number(l.investimento) > 0)
+          .map((l) => l.data)
+      )
+    ),
+  }
+}
+
+/**
+ * Grava os totais por data em um único upsert. Reimportar a mesma data atualiza
+ * a linha em vez de somar. Etapas fora deste arquivo, perdidos e faturamento são
+ * mantidos, para não apagar o que foi completado à mão nem o gasto trazido por
+ * outro arquivo.
+ */
+export async function importarLancamentosAction(
+  entrada: EntradaImportacao
+): Promise<ResultadoFunil & { novas?: number; atualizadas?: number }> {
+  const usuario = await usuarioDoComercial()
+  if (!usuario) return { ok: false, erro: SEM_ACESSO }
+  const funil = await buscarFunil(entrada?.funilId)
+  if (!funil || !podeMexerNoFunil(usuario, funil)) {
+    return { ok: false, erro: SEM_ACESSO }
+  }
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+
+  const dias = entrada?.dias
+  if (!Array.isArray(dias) || dias.length === 0) {
+    return { ok: false, erro: "Nada para importar." }
+  }
+  if (dias.length > LIMITE_DIAS) {
+    return { ok: false, erro: `Limite de ${LIMITE_DIAS} datas por importação.` }
+  }
+
+  const idsEtapas = new Set(funil.etapas.map((e) => e.id))
+  const vistas = new Set<string>()
+  for (const dia of dias) {
+    if (!dataValida(dia?.data) || vistas.has(dia.data)) {
+      return { ok: false, erro: "O arquivo tem uma data inválida ou repetida." }
+    }
+    vistas.add(dia.data)
+    const inv = dia.investimento
+    if (inv !== null && (typeof inv !== "number" || !(inv >= 0) || inv >= 1e12)) {
+      return { ok: false, erro: `Investimento inválido em ${dia.data}.` }
+    }
+    for (const [etapa, n] of Object.entries(dia.valores ?? {})) {
+      if (
+        !idsEtapas.has(etapa) ||
+        !Number.isInteger(n) ||
+        n < 0 ||
+        n > MAX_VALOR_ETAPA
+      ) {
+        return { ok: false, erro: `Valor inválido em ${dia.data}.` }
+      }
+    }
+  }
+
+  const { data: existentes, error: erroLeitura } = await supabase
+    .from("funil_lancamentos")
+    .select("data, investimento, valores, perdidos, faturamento, observacoes")
+    .eq("funil_id", funil.id)
+    .eq("origem_importacao", "meta")
+    .in("data", Array.from(vistas))
+    .limit(LIMITE_DIAS)
+  if (erroLeitura) {
+    if (faltaMigrationImportacao(erroLeitura)) {
+      return { ok: false, erro: MIGRATION_IMPORTACAO_PENDENTE }
+    }
+    return erroDeGravacao("ler importacao", erroLeitura)
+  }
+  type Existente = {
+    data: string
+    investimento: number
+    valores: Record<string, number>
+    perdidos: number
+    faturamento: number
+    observacoes: string | null
+  }
+  const porData = new Map(
+    ((existentes ?? []) as Existente[]).map((l) => [l.data, l])
+  )
+
+  const detalhe = {
+    arquivo: String(entrada.arquivo ?? "").slice(0, 200),
+    campanhas: (Array.isArray(entrada.campanhas) ? entrada.campanhas : [])
+      .slice(0, 100)
+      .map((c) => String(c).slice(0, 200)),
+  }
+  const agora = new Date().toISOString()
+  const linhas = dias.map((dia) => {
+    const atual = porData.get(dia.data)
+    return {
+      funil_id: funil.id,
+      data: dia.data,
+      origem_importacao: "meta",
+      investimento: dia.investimento ?? Number(atual?.investimento ?? 0),
+      valores: { ...(atual?.valores ?? {}), ...dia.valores },
+      perdidos: atual?.perdidos ?? 0,
+      faturamento: Number(atual?.faturamento ?? 0),
+      observacoes: atual?.observacoes ?? null,
+      detalhe_importacao: detalhe,
+      criado_por: usuario.id,
+      updated_at: agora,
+    }
+  })
+
+  const { error } = await supabase
+    .from("funil_lancamentos")
+    .upsert(linhas, { onConflict: "funil_id,data,origem_importacao" })
+  if (error) {
+    if (faltaMigrationImportacao(error)) {
+      return { ok: false, erro: MIGRATION_IMPORTACAO_PENDENTE }
+    }
+    return erroDeGravacao("importar", error)
+  }
+  revalidar()
+  return {
+    ok: true,
+    novas: dias.length - porData.size,
+    atualizadas: porData.size,
+  }
+}
+
+/** Desfaz importações: apaga as linhas importadas do funil em um período. */
+export async function excluirImportadosAction(
+  funilId: string,
+  de: string,
+  ate: string
+): Promise<ResultadoFunil> {
+  const usuario = await usuarioDoComercial()
+  if (!usuario) return { ok: false, erro: SEM_ACESSO }
+  const funil = await buscarFunil(funilId)
+  if (!funil || !podeMexerNoFunil(usuario, funil)) {
+    return { ok: false, erro: SEM_ACESSO }
+  }
+  if (!dataValida(de) || !dataValida(ate)) {
+    return { ok: false, erro: "Período inválido." }
+  }
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return { ok: false, erro: "Supabase indisponível." }
+  const { error } = await supabase
+    .from("funil_lancamentos")
+    .delete()
+    .eq("funil_id", funil.id)
+    .eq("origem_importacao", "meta")
+    .gte("data", de)
+    .lte("data", ate)
+  if (error) {
+    if (faltaMigrationImportacao(error)) {
+      return { ok: false, erro: MIGRATION_IMPORTACAO_PENDENTE }
+    }
+    return erroDeGravacao("excluir importados", error)
+  }
   revalidar()
   return { ok: true }
 }

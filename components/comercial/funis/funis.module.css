@@ -1,0 +1,440 @@
+/* Layout dos funis comerciais. Fica em um módulo para valer só nestas telas. */
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
+.heroTopo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.heroRodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.seletor {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 380px;
+  max-width: 100%;
+}
+.seletorModos {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.seletorNavegacao {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.seletorCampos {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.seletorCampos > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Mês precisa de espaço para "Novembro" inteiro; sem espaço, o ano desce. */
+.seletorCampos select {
+  flex: 3 1 130px;
+}
+.seletorCampos select + select {
+  flex: 1 0 88px;
+}
+.seletorHoje {
+  min-height: 34px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: right;
+}
+
+/* ── Escolha do funil e ações ─────────────────────────────────────────────── */
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.chips::-webkit-scrollbar {
+  display: none;
+}
+.chip,
+.chipNovo {
+  flex-shrink: 0;
+  max-width: 260px;
+  min-height: 42px;
+  padding: 9px 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.chip {
+  color: var(--text-2);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+}
+.chip[aria-pressed="true"] {
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.chipNovo {
+  color: var(--accent);
+  background: transparent;
+  border: 1px dashed rgba(201, 149, 58, 0.55);
+}
+
+.painel {
+  margin-top: 12px;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "info gerir"
+    "acoes gerir";
+  gap: 14px 20px;
+  align-items: start;
+}
+.painelInfo {
+  grid-area: info;
+  min-width: 0;
+}
+.painelInfo h2 {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.painelInfo p {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.painelGerir {
+  grid-area: gerir;
+  display: flex;
+  gap: 6px;
+}
+.painelAcoes {
+  grid-area: acoes;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.botaoLeve,
+.botaoPrimario,
+.botaoSecundario {
+  min-height: 44px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.botaoLeve {
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--input-border);
+}
+.botaoPrimario {
+  color: #000;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+}
+.botaoSecundario {
+  color: var(--accent);
+  background: rgba(201, 149, 58, 0.08);
+  border: 1px solid rgba(201, 149, 58, 0.45);
+}
+
+/* ── Indicadores ──────────────────────────────────────────────────────────── */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.kpi {
+  padding: 16px 18px;
+  min-width: 0;
+}
+.kpi p:first-child {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.kpi p:last-child {
+  margin-top: 8px;
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ── Resultado abaixo do funil ────────────────────────────────────────────── */
+.resultados {
+  max-width: 760px;
+  margin: 14px auto 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* ── Evolução: tabela no desktop, cartões no celular ──────────────────────── */
+.evolucaoTabela {
+  overflow-x: auto;
+  padding: 4px;
+}
+.evolucaoCartoes {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+}
+.evolucaoVazia {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-3);
+  border: 1px dashed var(--card-border);
+  border-radius: 10px;
+}
+.evolucaoCartao {
+  padding: 14px 16px;
+}
+.evolucaoTopo {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.evolucaoTopo span {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.evolucaoCartao dl {
+  margin: 10px 0 0;
+  display: grid;
+  gap: 6px;
+}
+.evolucaoCartao dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.evolucaoCartao dt {
+  color: var(--text-2);
+  min-width: 0;
+}
+.evolucaoCartao dd {
+  margin: 0;
+  flex-shrink: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.taxa,
+.taxaGargalo {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.taxaGargalo {
+  color: #fca5a5;
+}
+
+/* ── Importação ───────────────────────────────────────────────────────────── */
+.grade2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.resumoImportacao {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.resumoImportacao > div {
+  padding: 10px 12px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.resumoImportacao span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.resumoImportacao strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.listaCampanhas {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+}
+.listaCampanhas label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.listaCampanhas label + label {
+  border-top: 1px solid var(--card-border);
+}
+.listaCampanhas label span:first-of-type {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.previa {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+}
+.previa table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.previa th,
+.previa td {
+  padding: 8px 10px;
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.previa th:first-child,
+.previa td:first-child {
+  text-align: left;
+}
+.previa thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-1);
+  font-weight: 600;
+  color: var(--text-2);
+}
+.previa tbody tr {
+  border-top: 1px solid var(--card-border);
+}
+
+@media (max-width: 1023px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  /* Mais largura útil: o hero padrão gasta 60px só em respiro lateral. */
+  .hero.hero {
+    padding: 18px 16px;
+  }
+  .hero h1 {
+    font-size: 28px !important;
+  }
+  .seletor {
+    width: 100%;
+  }
+  .seletorHoje {
+    text-align: center;
+  }
+  .heroRodape > label,
+  .heroRodape > label select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .painel {
+    padding: 16px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "info"
+      "acoes"
+      "gerir";
+    gap: 12px;
+  }
+  .painelAcoes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .botaoPrimario,
+  .botaoSecundario {
+    padding: 10px 8px;
+  }
+  .painelGerir > * {
+    flex: 1;
+  }
+
+  .kpi {
+    padding: 14px;
+  }
+  .kpi p:last-child {
+    font-size: 20px;
+  }
+  .resultados {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .resultados > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .evolucaoTabela {
+    display: none;
+  }
+  .evolucaoCartoes {
+    display: grid;
+  }
+
+  .grade2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Celular pequeno: "Intervalo" não pode estourar a própria coluna. */
+@media (max-width: 360px) {
+  .seletorModos {
+    grid-template-columns: 0.7fr 1.1fr 0.7fr 0.7fr 1.2fr;
+  }
+  .seletorModos button {
+    font-size: 11px !important;
+    padding-inline: 0 !important;
+  }
+}

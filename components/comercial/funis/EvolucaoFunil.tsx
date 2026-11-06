@@ -7,6 +7,7 @@ import {
   type BaldePeriodo,
   type ResumoFunil,
 } from "@/lib/funil-calculo"
+import estilos from "./funis.module.css"
 
 const celula: React.CSSProperties = {
   padding: "10px 12px",
@@ -73,7 +74,59 @@ export default function EvolucaoFunil({
         })}
       </div>
 
-      <div className="glass" style={{ overflowX: "auto", padding: 4 }}>
+      {/* Celular: um cartão por fatia, porque 8 colunas não cabem na largura. */}
+      <ul className={estilos.evolucaoCartoes}>
+        {linhas.map(({ balde, resumo }) =>
+          resumo.registros === 0 ? (
+            <li key={balde.de} className={estilos.evolucaoVazia}>
+              <span>{balde.rotulo}</span>
+              <span>sem lançamentos</span>
+            </li>
+          ) : (
+            <li key={balde.de} className={`glass ${estilos.evolucaoCartao}`}>
+              <div className={estilos.evolucaoTopo}>
+                <strong>{balde.rotulo}</strong>
+                <span>{formatBRL(resumo.investimento)}</span>
+              </div>
+              <dl>
+                {resumo.etapas.map((e, i) => (
+                  <div key={e.id}>
+                    <dt>{e.nome}</dt>
+                    <dd>
+                      {formatNumero(e.valor)}
+                      {i > 0 && (
+                        <span
+                          className={
+                            resumo.gargalo?.indice === i
+                              ? estilos.taxaGargalo
+                              : estilos.taxa
+                          }
+                        >
+                          {formatarPct(e.conversaoAnterior)}
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                ))}
+                {resumo.perdidos > 0 && (
+                  <div>
+                    <dt>Perdidos</dt>
+                    <dd>{formatNumero(resumo.perdidos)}</dd>
+                  </div>
+                )}
+                {resumo.faturamento > 0 && (
+                  <div>
+                    <dt>Faturamento</dt>
+                    <dd>{formatBRL(resumo.faturamento)}</dd>
+                  </div>
+                )}
+              </dl>
+            </li>
+          )
+        )}
+      </ul>
+
+      <div className={`glass ${estilos.evolucaoTabela}`}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>

@@ -1,7 +1,7 @@
 import Link from "next/link"
 import AbasArea from "@/components/AbasArea"
 import SeletorPeriodoFunil from "@/components/comercial/funis/SeletorPeriodoFunil"
-import KPICard from "@/components/ui/KPICard"
+import estilos from "@/components/comercial/funis/funis.module.css"
 import { requererAdmin, requererPermissao } from "@/lib/auth"
 import { formatBRL, formatNumero } from "@/lib/data"
 import {
@@ -81,20 +81,11 @@ export default async function TimeFunisPage({
 
   return (
     <main className="mx-auto px-4 sm:px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
-      <div className="hero-banner">
+      <div className={`hero-banner ${estilos.hero}`}>
         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-2)" }}>
           Comercial · Time
         </p>
-        <div
-          style={{
-            marginTop: 6,
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
+        <div className={estilos.heroTopo}>
           <h1 style={{ fontSize: 34 }}>{periodo.rotulo}</h1>
           <SeletorPeriodoFunil periodo={periodo} hoje={hoje} />
         </div>
@@ -132,17 +123,17 @@ export default async function TimeFunisPage({
         </div>
       ) : (
         <>
-          <section
-            aria-label="Total do time no período"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-              gap: 14,
-            }}
-          >
-            <KPICard label="Investido pelo time" valor={formatBRL(investido)} />
-            <KPICard label="Contratos perdidos" valor={formatNumero(perdidos)} />
-            <KPICard label="Faturamento gerado" valor={formatBRL(faturado)} />
+          <section aria-label="Total do time no período" className={estilos.kpis}>
+            {[
+              { rotulo: "Investido pelo time", valor: formatBRL(investido) },
+              { rotulo: "Contratos perdidos", valor: formatNumero(perdidos) },
+              { rotulo: "Faturamento gerado", valor: formatBRL(faturado) },
+            ].map((k) => (
+              <div key={k.rotulo} className={`glass ${estilos.kpi}`}>
+                <p>{k.rotulo}</p>
+                <p>{k.valor}</p>
+              </div>
+            ))}
           </section>
 
           {pessoas.map((p) => (

@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useState, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { excluirFunilAction } from "@/lib/funis-comerciais-actions"
@@ -11,22 +12,10 @@ import ModalComercial, {
   estiloCampo,
   estiloRotulo,
 } from "./ModalComercial"
+import estilos from "./funis.module.css"
 
-const estiloChip = (ativo: boolean): React.CSSProperties => ({
-  padding: "9px 14px",
-  minHeight: 40,
-  fontSize: 13,
-  fontWeight: 600,
-  borderRadius: 10,
-  cursor: "pointer",
-  color: ativo ? "#000" : "var(--text-2)",
-  background: ativo ? "var(--accent)" : "var(--card-bg)",
-  border: ativo
-    ? "1px solid var(--accent)"
-    : "1px solid var(--card-border)",
-})
-
-const estiloAcao: React.CSSProperties = { padding: "10px 14px" }
+// Só baixa o leitor de arquivos quando alguém abre a importação.
+const ImportarMeta = dynamic(() => import("./ImportarMeta"), { ssr: false })
 
 /**
  * Faixa de controle do funil: troca de funil, criar, editar, excluir e o botão
@@ -50,7 +39,7 @@ export default function BarraFunis({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [modal, setModal] = useState<
-    "novo" | "editar" | "excluir" | "lancar" | null
+    "novo" | "editar" | "excluir" | "lancar" | "importar" | null
   >(null)
   const [navegando, startNav] = useTransition()
 
@@ -73,25 +62,17 @@ export default function BarraFunis({
     <div
       aria-busy={navegando}
       style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        flexWrap: "wrap",
         opacity: navegando ? 0.6 : 1,
         transition: "opacity 0.15s ease",
       }}
     >
-      <div
-        role="group"
-        aria-label="Funis"
-        style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
-      >
+      <div role="group" aria-label="Funis" className={estilos.chips}>
         {funis.map((f) => (
           <button
             key={f.id}
             type="button"
-            style={estiloChip(f.id === selecionado?.id)}
+            className={estilos.chip}
+            title={f.nome}
             aria-pressed={f.id === selecionado?.id}
             onClick={() => irParaFunil(f.id)}
           >
@@ -100,8 +81,7 @@ export default function BarraFunis({
         ))}
         <button
           type="button"
-          className="btn-ghost"
-          style={estiloAcao}
+          className={estilos.chipNovo}
           onClick={() => setModal("novo")}
         >
           + Novo funil
@@ -109,31 +89,43 @@ export default function BarraFunis({
       </div>
 
       {selecionado && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="btn-gold-outline"
-            style={estiloAcao}
-            onClick={() => setModal("editar")}
-          >
-            Editar funil
-          </button>
-          <button
-            type="button"
-            className="btn-gold-outline"
-            style={estiloAcao}
-            onClick={() => setModal("excluir")}
-          >
-            Excluir funil
-          </button>
-          <button
-            type="button"
-            className="btn-gold-filled"
-            style={estiloAcao}
-            onClick={() => setModal("lancar")}
-          >
-            + Lançar números
-          </button>
+        <div className={`glass ${estilos.painel}`}>
+          <div className={estilos.painelInfo}>
+            <h2>{selecionado.nome}</h2>
+            {selecionado.descricao && <p>{selecionado.descricao}</p>}
+          </div>
+          <div className={estilos.painelAcoes}>
+            <button
+              type="button"
+              className={estilos.botaoPrimario}
+              onClick={() => setModal("lancar")}
+            >
+              + Lançar números
+            </button>
+            <button
+              type="button"
+              className={estilos.botaoSecundario}
+              onClick={() => setModal("importar")}
+            >
+              Importar do Meta
+            </button>
+          </div>
+          <div className={estilos.painelGerir}>
+            <button
+              type="button"
+              className={estilos.botaoLeve}
+              onClick={() => setModal("editar")}
+            >
+              Editar funil
+            </button>
+            <button
+              type="button"
+              className={estilos.botaoLeve}
+              onClick={() => setModal("excluir")}
+            >
+              Excluir funil
+            </button>
+          </div>
         </div>
       )}
 
@@ -162,6 +154,26 @@ export default function BarraFunis({
           aoSalvar={() => {
             setModal(null)
             router.refresh()
+          }}
+        />
+      )}
+      {modal === "importar" && selecionado && (
+        <ImportarMeta
+          funil={selecionado}
+          fechar={() => setModal(null)}
+          aoImportar={(de, ate) => {
+            setModal(null)
+            // Mostra o período importado, mesmo que seja outro mês.
+            const params = new URLSearchParams(searchParams.toString())
+            params.set("funil", selecionado.id)
+            params.set("modo", "intervalo")
+            params.set("de", de)
+            params.set("ate", ate)
+            params.delete("agrupar")
+            startNav(() => {
+              router.push(`${pathname}?${params.toString()}`, { scroll: false })
+              router.refresh()
+            })
           }}
         />
       )}

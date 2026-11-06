@@ -19,6 +19,8 @@ const RAMPA: [number, number, number][] = [
 
 /** Barra mais estreita, em %: abaixo disso o texto não cabe. */
 const LARGURA_MINIMA = 34
+/** Última barra do funil vazio. */
+const LARGURA_VAZIA = 52
 
 function corDaEtapa(indice: number, total: number): string {
   const pos = total <= 1 ? 0 : (indice / (total - 1)) * (RAMPA.length - 1)
@@ -47,8 +49,11 @@ export default function FunilCamadas({ resumo }: { resumo: ResumoFunil }) {
       }}
     >
       {resumo.etapas.map((etapa, i) => {
-        const largura =
-          LARGURA_MINIMA + (etapa.valor / maior) * (100 - LARGURA_MINIMA)
+        // Sem dados, o funil mantém a forma afunilada, em vez de barras iguais.
+        const largura = semDados
+          ? 100 -
+            (i / Math.max(resumo.etapas.length - 1, 1)) * (100 - LARGURA_VAZIA)
+          : LARGURA_MINIMA + (etapa.valor / maior) * (100 - LARGURA_MINIMA)
         const cor = corDaEtapa(i, resumo.etapas.length)
         const ehGargalo = resumo.gargalo?.indice === i
         const detalhes = [
@@ -75,11 +80,13 @@ export default function FunilCamadas({ resumo }: { resumo: ResumoFunil }) {
                 }}
               >
                 <span aria-hidden>↓</span>
-                <span>
-                  {etapa.conversaoAnterior === null
-                    ? "sem base para calcular"
-                    : `${formatarPct(etapa.conversaoAnterior)} avançaram`}
-                </span>
+                {!semDados && (
+                  <span>
+                    {etapa.conversaoAnterior === null
+                      ? "etapa anterior sem volume"
+                      : `${formatarPct(etapa.conversaoAnterior)} avançaram`}
+                  </span>
+                )}
                 {ehGargalo && (
                   <span
                     style={{
@@ -99,7 +106,7 @@ export default function FunilCamadas({ resumo }: { resumo: ResumoFunil }) {
             <div
               data-etapa={etapa.nome}
               style={{
-                width: semDados ? "100%" : `${largura}%`,
+                width: `${largura}%`,
                 minWidth: "min(240px, 100%)",
                 minHeight: 60,
                 padding: "11px 18px",

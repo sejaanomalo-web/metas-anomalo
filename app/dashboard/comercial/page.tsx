@@ -5,7 +5,7 @@ import FunilCamadas from "@/components/comercial/funis/FunilCamadas"
 import ListaLancamentos from "@/components/comercial/funis/ListaLancamentos"
 import SeletorPeriodoFunil from "@/components/comercial/funis/SeletorPeriodoFunil"
 import SeletorUsuarioFunil from "@/components/comercial/funis/SeletorUsuarioFunil"
-import KPICard from "@/components/ui/KPICard"
+import estilos from "@/components/comercial/funis/funis.module.css"
 import SectionHeader from "@/components/ui/SectionHeader"
 import { requererPermissao } from "@/lib/auth"
 import { formatBRL, formatNumero } from "@/lib/data"
@@ -106,34 +106,16 @@ export default async function ComercialPage({
       className="mx-auto px-4 sm:px-8 py-10 space-y-8"
       style={{ maxWidth: 1280 }}
     >
-      <div className="hero-banner">
+      <div className={`hero-banner ${estilos.hero}`}>
         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-2)" }}>
           Comercial · {vendoOutraPessoa ? dono.nome : "Minha interface"}
         </p>
-        <div
-          style={{
-            marginTop: 6,
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
+        <div className={estilos.heroTopo}>
           <h1 style={{ fontSize: 34 }}>{periodo.rotulo}</h1>
           <SeletorPeriodoFunil periodo={periodo} hoje={hoje} />
         </div>
         {ehAdmin && (
-          <div
-            style={{
-              marginTop: 16,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
+          <div className={estilos.heroRodape}>
             <AbasArea
               itens={[
                 {
@@ -193,48 +175,45 @@ export default async function ComercialPage({
             </div>
           ) : (
             <>
-              {funil.descricao && (
-                <p style={{ fontSize: 14, color: "var(--text-2)", marginTop: -12 }}>
-                  {funil.descricao}
-                </p>
-              )}
-
-              <section
-                aria-label="Indicadores do período"
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-                  gap: 14,
-                }}
-              >
-                <KPICard
-                  label="Investido no tráfego"
-                  valor={semDados ? "—" : formatBRL(resumo.investimento)}
-                />
-                <KPICard
-                  label={`Custo por ${primeira?.nome ?? "etapa"}`}
-                  valor={primeira?.custo != null ? formatBRL(primeira.custo) : "—"}
-                />
-                <KPICard
-                  label={`Custo por ${ultima?.nome ?? "etapa"}`}
-                  valor={ultima?.custo != null ? formatBRL(ultima.custo) : "—"}
-                />
-                <KPICard
-                  label="Retorno sobre o investido"
-                  valor={
-                    resumo.retorno !== null
-                      ? `${resumo.retorno.toLocaleString("pt-BR", {
-                          maximumFractionDigits: 2,
-                        })}x`
-                      : "—"
-                  }
-                />
+              <section aria-label="Indicadores do período" className={estilos.kpis}>
+                {[
+                  {
+                    rotulo: "Investido no tráfego",
+                    valor: semDados ? "—" : formatBRL(resumo.investimento),
+                  },
+                  {
+                    rotulo: `Custo por ${primeira?.nome ?? "etapa"}`,
+                    valor: primeira?.custo != null ? formatBRL(primeira.custo) : "—",
+                  },
+                  {
+                    rotulo: `Custo por ${ultima?.nome ?? "etapa"}`,
+                    valor: ultima?.custo != null ? formatBRL(ultima.custo) : "—",
+                  },
+                  {
+                    rotulo: "Retorno sobre o investido",
+                    valor:
+                      resumo.retorno !== null
+                        ? `${resumo.retorno.toLocaleString("pt-BR", {
+                            maximumFractionDigits: 2,
+                          })}x`
+                        : "—",
+                  },
+                ].map((k) => (
+                  <div key={k.rotulo} className={`glass ${estilos.kpi}`}>
+                    <p>{k.rotulo}</p>
+                    <p>{k.valor}</p>
+                  </div>
+                ))}
               </section>
 
               <section>
                 <SectionHeader
-                  titulo={funil.nome}
-                  descricao="Porcentagem entre as etapas, somando os lançamentos do período"
+                  titulo="Funil do período"
+                  descricao={
+                    semDados
+                      ? "Ainda sem números neste período. Lance à mão ou importe do Meta."
+                      : "Porcentagem entre as etapas, somando os lançamentos do período"
+                  }
                 />
                 {resumo.gargalo && (
                   <p
@@ -257,15 +236,8 @@ export default async function ComercialPage({
                 )}
                 <FunilCamadas resumo={resumo} />
 
-                <div
-                  style={{
-                    maxWidth: 760,
-                    margin: "14px auto 0",
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-                    gap: 10,
-                  }}
-                >
+                {!semDados && (
+                <div className={estilos.resultados}>
                   {[
                     {
                       rotulo: "Contratos perdidos",
@@ -301,8 +273,10 @@ export default async function ComercialPage({
                     </div>
                   ))}
                 </div>
+                )}
               </section>
 
+              {!semDados && (
               <section>
                 <SectionHeader
                   titulo="Evolução no período"
@@ -315,6 +289,7 @@ export default async function ComercialPage({
                   hrefAgrupamento={hrefAgrupamento}
                 />
               </section>
+              )}
 
               <section>
                 <SectionHeader
@@ -325,6 +300,8 @@ export default async function ComercialPage({
                   funil={funil}
                   lancamentos={lancamentos}
                   dataPadrao={dataPadrao}
+                  de={periodo.de}
+                  ate={periodo.ate}
                 />
               </section>
             </>

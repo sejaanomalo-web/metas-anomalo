@@ -30,6 +30,9 @@ export interface LancamentoFunil {
   observacoes: string | null
   criado_por: string | null
   created_at: string
+  /** null/ausente = lançado à mão. 'meta' = veio de arquivo do Gerenciador. */
+  origem_importacao?: "meta" | null
+  detalhe_importacao?: { arquivo?: string; campanhas?: string[] } | null
 }
 
 export interface ResultadoFunil {

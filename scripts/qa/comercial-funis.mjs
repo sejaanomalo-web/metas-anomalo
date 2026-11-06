@@ -46,6 +46,7 @@ const tables = {
   relatorios_comerciais: [{ id: randomUUID(), empresa: 'Legado SA', colaborador_id: BIA, colaborador_nome: 'Bia Comercial', data: '2026-11-02', origem: 'organico', ligacoes: 0, mensagens: 321, retorno_mensagens: 0, qualificados: 0, reunioes_agendadas: 0, reunioes_realizadas: 0, no_shows: 0, propostas_enviadas: 0, contratos_fechados: 0, faturamento_gerado: 0, observacoes: null }],
 }
 let tabelasAusentes = false
+let importacaoAusente = false
 const TABELAS_FUNIS = new Set(['funis_comerciais', 'funil_lancamentos'])
 const escritas = []
 
@@ -60,7 +61,10 @@ const server = createServer(async (req, res) => {
   if (tabelasAusentes && TABELAS_FUNIS.has(table)) {
     return responderErro(res, 404, { code: 'PGRST205', message: `Could not find the table 'public.${table}' in the schema cache` })
   }
-  const reservado = ['select', 'order', 'limit', 'offset', 'columns']
+  if (importacaoAusente && table === 'funil_lancamentos' && url.search.includes('origem_importacao')) {
+    return responderErro(res, 400, { code: '42703', message: 'column origem_importacao does not exist' })
+  }
+  const reservado = ['select', 'order', 'limit', 'offset', 'columns', 'on_conflict']
   const matches = (row) => [...url.searchParams].every(([key, expr]) => {
     if (reservado.includes(key)) return true
     const value = row[key]
@@ -79,7 +83,16 @@ const server = createServer(async (req, res) => {
     const nomeRepetido = (candidato, ignorarId) => (tables.funis_comerciais ?? []).some((f) =>
       f.id !== ignorarId && f.usuario_id === candidato.usuario_id &&
       f.nome.trim().toLowerCase() === candidato.nome.trim().toLowerCase())
-    if (req.method === 'POST') {
+    if (req.method === 'POST' && url.searchParams.has('on_conflict')) {
+      const chaves = url.searchParams.get('on_conflict').split(',')
+      rows = (Array.isArray(data) ? data : [data]).map((r) => {
+        const atual = (tables[table] ?? []).find((x) => chaves.every((k) => x[k] != null && x[k] === r[k]))
+        if (atual) return Object.assign(atual, r)
+        const novo = { id: randomUUID(), created_at: new Date().toISOString(), ...r }
+        ;(tables[table] ??= []).push(novo)
+        return novo
+      })
+    } else if (req.method === 'POST') {
       const novos = (Array.isArray(data) ? data : [data]).map((r) => ({ id: randomUUID(), created_at: new Date().toISOString(), ...r }))
       if (table === 'funis_comerciais' && novos.some((n) => nomeRepetido(n))) {
         return responderErro(res, 409, { code: '23505', message: 'duplicate key' })
@@ -203,6 +216,61 @@ try {
     await page.waitForLoadState('networkidle')
   }
   const funisDe = (id) => tables.funis_comerciais.filter((f) => f.usuario_id === id)
+
+  /**
+   * Confere o layout pela geometria: nada se sobrepõe, nada estoura a tela e
+   * nenhum botão corta o próprio texto. É o que pega margem negativa e quebra
+   * de linha ruim, que os testes de conteúdo não enxergam.
+   */
+  async function conferirLayout(page, contexto) {
+    const problemas = await page.evaluate(() => {
+      const achados = []
+      const estouro = document.documentElement.scrollWidth - window.innerWidth
+      if (estouro > 0) achados.push(`estouro horizontal de ${estouro}px`)
+      const visivel = (el) => {
+        const r = el.getBoundingClientRect()
+        const c = getComputedStyle(el)
+        return r.width > 0 && r.height > 0 && c.visibility !== 'hidden' && c.display !== 'none'
+      }
+      const nome = (el) => `${el.tagName.toLowerCase()}"${(el.innerText || el.getAttribute('aria-label') || '').trim().slice(0, 30)}"`
+      const itens = [...document.querySelectorAll('main button, main a, main h1, main h2, main h3, main p, main select, main input, main td, main th, main dt, main dd')].filter(visivel)
+      for (let i = 0; i < itens.length; i++) {
+        const a = itens[i]
+        const ra = a.getBoundingClientRect()
+        if (ra.right > window.innerWidth + 1 && !a.closest('[class*="chips"], table')) achados.push(`${nome(a)} sai pela direita`)
+        if (a.tagName === 'BUTTON' && a.scrollWidth > a.clientWidth + 1 && !a.closest('[class*="chips"]')) achados.push(`${nome(a)} corta o texto`)
+        for (let j = i + 1; j < itens.length; j++) {
+          const b = itens[j]
+          if (a.contains(b) || b.contains(a)) continue
+          const rb = b.getBoundingClientRect()
+          const x = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left)
+          const y = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top)
+          if (x > 2 && y > 2) achados.push(`${nome(a)} sobrepõe ${nome(b)}`)
+        }
+      }
+      return achados
+    })
+    assert.deepEqual(problemas, [], `Layout quebrado: ${contexto}`)
+  }
+
+  /** Mesma tela em desktop, tablet, celular e celular pequeno. */
+  async function conferirLarguras(page, url, contexto) {
+    const original = page.viewportSize()
+    for (const width of [1440, 820, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 })
+      await ir(page, url)
+      await conferirLayout(page, `${contexto} em ${width}px`)
+    }
+    await page.setViewportSize(original)
+  }
+
+  function arquivoCsv(nome, conteudo) {
+    return { name: nome, mimeType: 'text/csv', buffer: Buffer.from(conteudo) }
+  }
+  async function enviarArquivo(page, arquivo) {
+    await page.getByRole('button', { name: 'Importar do Meta' }).click()
+    await dialogo(page).getByLabel('Arquivo exportado (.csv ou .xlsx)').setInputFiles(arquivo)
+  }
 
   // ── Bia: interface própria, sem nada do Caio ─────────────────────────────
   const bia = await abrirSessao(BIA)
@@ -403,6 +471,204 @@ try {
   await bia.page.locator('[data-etapa="Leads do Meta"]', { hasText: '100' }).waitFor()
   ok('funis separados: nome repetido recusado, mínimo de 2 etapas e números que não se misturam')
 
+  // Layout com descrição: o caso do print em que o texto cobria os botões.
+  await bia.page.getByRole('button', { name: '+ Novo funil' }).click()
+  await campo(bia.page, 'Nome do funil').fill('Campanha com um nome bem comprido para testar a quebra de linha')
+  await campo(bia.page, 'Descrição (opcional)').fill('Processo comercial para fechamento de planos de Marketing, com texto longo o bastante para quebrar em mais de uma linha no celular.')
+  await dialogo(bia.page).getByRole('button', { name: 'Criar funil' }).click()
+  await fechou(bia.page)
+  await bia.page.waitForURL(/funil=/)
+  const funilLongo = funisDe(BIA).find((f) => f.nome.startsWith('Campanha com um nome'))
+  await bia.page.waitForLoadState('networkidle')
+  const URL_LONGO = `${COMERCIAL}?${NOV}&funil=${funilLongo.id}`
+  await conferirLarguras(bia.page, URL_LONGO, 'funil vazio com descrição')
+  await conferirLarguras(bia.page, `${COMERCIAL}?${NOV}&funil=${mkt.id}`, 'funil com números')
+  await conferirLarguras(bia.page, `${COMERCIAL}?modo=intervalo&de=2026-03-01&ate=2026-11-30&funil=${mkt.id}`, 'intervalo')
+  await conferirLarguras(bia.page, `${COMERCIAL}?modo=mes&de=2025-01-01&ate=2025-01-31&funil=${mkt.id}`, 'período sem hoje')
+  ok('layout sem sobreposição nem estouro em 1440, 820, 390 e 320px, com descrição longa')
+  if (shots) {
+    await bia.page.setViewportSize({ width: 1440, height: 1000 })
+    await ir(bia.page, URL_LONGO)
+    await bia.page.screenshot({ path: `${shots}/5-vazio-desktop.png`, fullPage: true })
+    await bia.page.setViewportSize({ width: 390, height: 844 })
+    await ir(bia.page, URL_LONGO)
+    await bia.page.screenshot({ path: `${shots}/6-vazio-celular.png`, fullPage: true })
+    await ir(bia.page, `${COMERCIAL}?${NOV}&funil=${mkt.id}`)
+    await bia.page.screenshot({ path: `${shots}/7-numeros-celular.png`, fullPage: true })
+    await bia.page.setViewportSize({ width: 1440, height: 1000 })
+  }
+
+  // Importação: relatório de campanhas com dia, duas campanhas e linha de resumo.
+  const CSV_META = '\uFEFF' + [
+    'Dia,Nome da campanha,Alcance,Impressões,Resultados,Indicador de resultados,Custo por resultados,Valor usado (BRL),Início dos relatórios,Término dos relatórios',
+    ',,9000,20000,41,,,1041.00,2026-10-01,2026-10-31',
+    '2026-10-05,[MKT] Leads,1000,2000,20,actions:lead,5.00,100.50,2026-10-01,2026-10-31',
+    '2026-10-05,[SIS] Sistema,800,1500,5,actions:lead,9.00,45.00,2026-10-01,2026-10-31',
+    '2026-10-12,[MKT] Leads,1200,2500,16,actions:lead,6.00,96.00,2026-10-01,2026-10-31',
+  ].join('\n')
+  const importarEm = funilLongo
+  await ir(bia.page, URL_LONGO)
+  await enviarArquivo(bia.page, arquivoCsv('meta-outubro.csv', CSV_META))
+  const dlg = dialogo(bia.page)
+  await dlg.getByText('Relatório de campanhas').waitFor()
+  const primeiraEtapa = importarEm.etapas[0]
+  assert.match(await dlg.getByLabel(primeiraEtapa.nome, { exact: true }).locator('option:checked').innerText(), /^Resultados/)
+  assert.equal(await dlg.getByLabel('Valor investido').locator('option:checked').innerText(), 'Valor usado (BRL)')
+  assert.equal(await dlg.getByLabel('Data', { exact: true }).locator('option:checked').innerText(), 'Dia')
+  assert.match(await dlg.getByLabel(primeiraEtapa.nome, { exact: true }).locator('option:checked').innerText(), /Resultados \(41\)/)
+  const opcoes = await dlg.getByLabel(primeiraEtapa.nome, { exact: true }).locator('option').allInnerTexts()
+  assert.ok(!opcoes.some((o) => /Alcance|Custo/.test(o)), 'Alcance e custo não podem ser opção')
+  let textoDlg = await dlg.innerText()
+  assert.match(textoDlg, /1 linha\(s\) ficaram de fora/)
+  assert.match(textoDlg, /R\$\s*241,50|R\$\s*241,5/)
+  if (shots) await bia.page.screenshot({ path: `${shots}/8-importar-desktop.png` })
+  const antesDeImportar = tables.funil_lancamentos.length
+  await dlg.getByLabel(/\[SIS\] Sistema/).uncheck()
+  await dlg.getByText(/Campanhas deste funil \(1 de 2\)/).waitFor()
+  textoDlg = await dlg.innerText()
+  assert.match(textoDlg, /R\$\s*196,5/)
+  assert.equal(tables.funil_lancamentos.length, antesDeImportar, 'ler o arquivo não pode gravar')
+  ok('importação: reconhece as colunas, ignora o resumo, não oferece Alcance e só lê sem gravar')
+
+  await dlg.getByRole('button', { name: 'Importar 2 data(s)' }).click()
+  await fechou(bia.page)
+  await bia.page.waitForURL(/modo=intervalo.*de=2026-10-05/)
+  await bia.page.getByRole('heading', { name: '05 – 12 out 2026' }).waitFor()
+  await bia.page.locator(`[data-etapa="${primeiraEtapa.nome}"]`, { hasText: '36' }).waitFor()
+  const importadas = () => tables.funil_lancamentos.filter((l) => l.funil_id === importarEm.id && l.origem_importacao === 'meta')
+  assert.equal(importadas().length, 2)
+  assert.equal(importadas().find((l) => l.data === '2026-10-05').investimento, 100.5)
+  assert.deepEqual(importadas()[0].detalhe_importacao, { arquivo: 'meta-outubro.csv', campanhas: ['[MKT] Leads'] })
+  assert.match(await texto(bia.page), /Importado do Meta/)
+  assert.match(await texto(bia.page), /Investido no tráfego\s+R\$\s*196/)
+  ok('importa os totais por data, leva para o período importado e marca a origem')
+
+  // Completar à mão e reimportar: não soma e não apaga o que foi completado.
+  await bia.page.getByRole('button', { name: 'Editar lançamento de 05 out 2026' }).click()
+  await campo(bia.page, importarEm.etapas[1].nome).fill('9')
+  await campo(bia.page, 'Contratos perdidos').fill('1')
+  await dialogo(bia.page).getByRole('button', { name: 'Salvar', exact: true }).click()
+  await fechou(bia.page)
+  await bia.page.locator(`[data-etapa="${importarEm.etapas[1].nome}"]`, { hasText: '9' }).waitFor()
+  await enviarArquivo(bia.page, arquivoCsv('meta-outubro.csv', CSV_META))
+  await dlg.getByText(/2 data\(s\) já foram importadas e\s+serão atualizadas/).waitFor({ timeout: 20000 })
+  await dlg.getByLabel(/\[SIS\] Sistema/).uncheck()
+  await dlg.getByRole('button', { name: 'Importar 2 data(s)' }).click()
+  await fechou(bia.page)
+  await bia.page.waitForLoadState('networkidle')
+  assert.equal(importadas().length, 2, 'reimportar não pode duplicar')
+  const reimportada = importadas().find((l) => l.data === '2026-10-05')
+  assert.equal(reimportada.valores[primeiraEtapa.id], 20)
+  assert.equal(reimportada.valores[importarEm.etapas[1].id], 9)
+  assert.equal(reimportada.perdidos, 1)
+  assert.equal(reimportada.investimento, 100.5)
+  ok('reimportar atualiza sem somar e preserva o que foi completado à mão')
+
+  // Aviso de gasto em dobro com lançamento manual na mesma data.
+  await ir(bia.page, `${COMERCIAL}?modo=intervalo&de=2026-10-01&ate=2026-10-31&funil=${importarEm.id}`)
+  await lancar(bia.page, { [primeiraEtapa.nome]: 1 }, { data: '2026-10-20', investimento: '1000' })
+  await enviarArquivo(bia.page, arquivoCsv('m.csv', 'Dia,Nome da campanha,Resultados,Valor usado (BRL)\n2026-10-20,A,1,10'))
+  await dlg.getByText(/investimento lançado à mão/).waitFor({ timeout: 20000 })
+  await bia.page.keyboard.press('Escape'); await fechou(bia.page)
+  ok('avisa quando o gasto pode contar em dobro com lançamento manual')
+
+  // XLSX de verdade, lido pela biblioteca no navegador (com Web Worker).
+  const { zipSync, strToU8 } = await import('fflate')
+  const celula = (ref, v) => typeof v === 'number'
+    ? `<c r="${ref}"><v>${v}</v></c>`
+    : `<c r="${ref}" t="inlineStr"><is><t>${v}</t></is></c>`
+  const linhasXlsx = [
+    ['Day', 'Campaign name', 'Results', 'Result indicator', 'Amount spent (BRL)'],
+    ['2026-09-01', 'XLSX Camp', 7, 'actions:lead', 70.25],
+    ['2026-09-02', 'XLSX Camp', 3, 'actions:lead', 30],
+  ]
+  const folha = linhasXlsx.map((l, i) => `<row r="${i + 1}">${l.map((v, c) => celula(`${'ABCDE'[c]}${i + 1}`, v)).join('')}</row>`).join('')
+  const xlsx = zipSync({
+    '[Content_Types].xml': strToU8('<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'),
+    '_rels/.rels': strToU8('<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'),
+    'xl/workbook.xml': strToU8('<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Raw Data Report" sheetId="1" r:id="rId1"/></sheets></workbook>'),
+    'xl/_rels/workbook.xml.rels': strToU8('<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'),
+    'xl/worksheets/sheet1.xml': strToU8(`<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${folha}</sheetData></worksheet>`),
+  })
+  await enviarArquivo(bia.page, { name: 'meta-setembro.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(xlsx) })
+  await dlg.getByText(/Relatório de campanhas: 2 linhas/).waitFor({ timeout: 20000 })
+  await dlg.getByRole('button', { name: 'Importar 2 data(s)' }).click()
+  await fechou(bia.page)
+  await bia.page.getByRole('heading', { name: '01 – 02 set 2026' }).waitFor()
+  await bia.page.locator(`[data-etapa="${primeiraEtapa.nome}"]`, { hasText: '10' }).waitFor()
+  assert.equal(importadas().find((l) => l.data === '2026-09-01').investimento, 70.25)
+  ok('lê um .xlsx real no navegador')
+
+  // Leads em UTF-16 com tabulação: não pode levar dado pessoal para o servidor.
+  const tsv = 'id\tcreated_time\tcampaign_name\tfull_name\temail\nl:1\t2026-10-05T10:00:00-03:00\t[MKT] Leads\tFulana Teste\tfulana@x.test\nl:2\t2026-10-05T11:00:00-03:00\t[MKT] Leads\tBeltrana Teste\tbeltrana@x.test\n'
+  const corposDeRede = []
+  const escutaRede = (req) => { if (req.method() === 'POST') corposDeRede.push(req.postData() ?? '') }
+  bia.page.on('request', escutaRede)
+  await enviarArquivo(bia.page, { name: 'leads.csv', mimeType: 'text/csv', buffer: Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(tsv, 'utf16le')]) })
+  await dlg.getByText(/Arquivo de leads: 2 leads/).waitFor({ timeout: 20000 })
+  assert.equal(await dlg.getByLabel('Valor investido').count(), 0)
+  await dlg.getByRole('button', { name: 'Importar 1 data(s)' }).click()
+  await fechou(bia.page)
+  await bia.page.waitForLoadState('networkidle')
+  bia.page.off('request', escutaRede)
+  const dosLeads = importadas().find((l) => l.data === '2026-10-05')
+  assert.equal(dosLeads.valores[primeiraEtapa.id], 2)
+  assert.equal(dosLeads.investimento, 100.5, 'arquivo de leads não pode zerar o gasto')
+  assert.ok(corposDeRede.length > 0)
+  assert.doesNotMatch(corposDeRede.join('') + JSON.stringify(tables.funil_lancamentos), /Fulana|Beltrana|x\.test/)
+  ok('arquivo de leads em UTF-16: conta por data, mantém o gasto e não envia dado pessoal')
+
+  // Arquivo inválido, e o estado sem a migration nova.
+  await enviarArquivo(bia.page, arquivoCsv('qualquer.csv', 'foo,bar\n1,2'))
+  await dlg.getByRole('alert').waitFor()
+  assert.match(await dlg.getByRole('alert').innerText(), /Não reconheci as colunas/)
+  importacaoAusente = true
+  await dlg.getByLabel('Arquivo exportado (.csv ou .xlsx)').setInputFiles(arquivoCsv('m.csv', 'Dia,Nome da campanha,Resultados,Valor usado (BRL)\n2026-08-01,A,1,10'))
+  await dlg.getByText(/20261107_funil_lancamentos_importacao/).waitFor({ timeout: 20000 })
+  importacaoAusente = false
+  await bia.page.keyboard.press('Escape'); await fechou(bia.page)
+  ok('arquivo inválido e migration pendente explicam o problema, sem gravar')
+
+  // Layout com a importação aberta, no celular.
+  await bia.page.setViewportSize({ width: 390, height: 844 })
+  await ir(bia.page, URL_LONGO)
+  await enviarArquivo(bia.page, arquivoCsv('meta-outubro.csv', CSV_META))
+  await dlg.getByText('Relatório de campanhas').waitFor()
+  const caixaImportar = await dlg.boundingBox()
+  assert.ok(caixaImportar.x >= 0 && caixaImportar.x + caixaImportar.width <= 390)
+  const estouroDialogo = await dlg.evaluate((el) => el.scrollWidth - el.clientWidth)
+  assert.ok(estouroDialogo <= 0, `Diálogo estoura ${estouroDialogo}px`)
+  if (shots) await bia.page.screenshot({ path: `${shots}/9-importar-celular.png` })
+  await bia.page.keyboard.press('Escape'); await fechou(bia.page)
+  await bia.page.setViewportSize({ width: 1440, height: 1000 })
+  ok('importação cabe na tela do celular')
+
+  // Sessão trocada na importação: a tela é da Bia, o cookie é do Caio.
+  const escritasAntesImport = escritas.length
+  await ir(bia.page, URL_LONGO)
+  await enviarArquivo(bia.page, arquivoCsv('invasao.csv', 'Dia,Nome da campanha,Resultados,Valor usado (BRL)\n2026-07-01,A,1,10'))
+  await dlg.getByText(/Relatório de campanhas/).waitFor()
+  await bia.ctx.clearCookies(); await bia.ctx.addCookies(cookieDe(CAIO))
+  await dlg.getByRole('button', { name: 'Importar 1 data(s)' }).click()
+  await dlg.getByRole('alert').waitFor()
+  assert.match(await dlg.getByRole('alert').innerText(), /não tem acesso/)
+  await bia.page.keyboard.press('Escape'); await fechou(bia.page)
+  await bia.ctx.clearCookies(); await bia.ctx.addCookies(cookieDe(BIA))
+  assert.equal(escritas.length, escritasAntesImport)
+  ok('importar no funil de outra pessoa é recusado pelo servidor')
+
+  // Desfazer em lote só leva os importados.
+  await ir(bia.page, `${COMERCIAL}?modo=intervalo&de=2026-10-01&ate=2026-10-31&funil=${importarEm.id}`)
+  await bia.page.getByRole('button', { name: /Excluir importados do período \(2\)/ }).click()
+  await dlg.getByRole('button', { name: 'Excluir importados' }).click()
+  await fechou(bia.page)
+  await bia.page.waitForLoadState('networkidle')
+  const doFunil = tables.funil_lancamentos.filter((l) => l.funil_id === importarEm.id)
+  assert.equal(doFunil.filter((l) => l.data.startsWith('2026-10') && l.origem_importacao).length, 0)
+  assert.equal(doFunil.filter((l) => l.data === '2026-10-20' && !l.origem_importacao).length, 1, 'manual fica')
+  assert.equal(doFunil.filter((l) => l.data.startsWith('2026-09')).length, 2, 'fora do período fica')
+  ok('excluir importados remove só os do período e mantém os manuais')
+
   // Isolamento pela URL.
   await ir(bia.page, `${COMERCIAL}?${NOV}&usuario=${CAIO}&funil=${FUNIL_CAIO}`)
   t = await texto(bia.page)
@@ -508,6 +774,8 @@ try {
   assert.match(await ana.page.locator('[data-pessoa="Bia Comercial"]').innerText(), /Funil de marketing[\s\S]*R\$\s*1\.000/)
   assert.match(t, /Investido pelo time\s+R\$\s*1\.777/)
   if (shots) await ana.page.screenshot({ path: `${shots}/2-time.png`, fullPage: true })
+  await conferirLarguras(ana.page, `${COMERCIAL}/time?${NOV}`, 'Time')
+  await ir(ana.page, `${COMERCIAL}/time?${NOV}`)
   await ana.page.getByRole('link', { name: 'Funil secreto do Caio' }).click()
   await ana.page.locator('[data-etapa="Topo Caio"]', { hasText: '70' }).waitFor()
   ok('Time mostra todos com acesso, totais corretos e abre o funil da pessoa')

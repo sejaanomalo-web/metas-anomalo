@@ -15,7 +15,10 @@ await db.exec(`
 const sql = await readFile('supabase/migrations/20261106_comercial_funis.sql', 'utf8')
 await db.exec(sql)
 await db.exec(sql) // precisa poder rodar de novo sem erro
-console.log('ok  migration aplica e é idempotente')
+const sql2 = await readFile('supabase/migrations/20261107_funil_lancamentos_importacao.sql', 'utf8')
+await db.exec(sql2)
+await db.exec(sql2)
+console.log('ok  migrations aplicam e são idempotentes')
 
 const { rows: [a] } = await db.query(`insert into usuarios (nome) values ('A') returning id`)
 const { rows: [b] } = await db.query(`insert into usuarios (nome) values ('B') returning id`)
@@ -55,6 +58,25 @@ const { rows: [lido] } = await db.query(`select investimento, valores from funil
 assert.equal(Number(lido.investimento), 1234.56)
 assert.equal(lido.valores.x, 5)
 console.log('ok  grava e lê centavos e valores')
+
+// Importação: mesmo comando que o supabase-js gera em .upsert({ onConflict }).
+const upsert = (data, inv) => db.query(
+  `insert into funil_lancamentos (funil_id, data, investimento, origem_importacao) values ($1, $2, $3, 'meta')
+   on conflict (funil_id, data, origem_importacao) do update set investimento = excluded.investimento`,
+  [f.id, data, inv])
+await upsert('2026-11-10', 100)
+await upsert('2026-11-10', 250)
+const { rows: importadas } = await db.query(`select investimento from funil_lancamentos where data = '2026-11-10'`)
+assert.equal(importadas.length, 1)
+assert.equal(Number(importadas[0].investimento), 250)
+console.log('ok  reimportar a mesma data atualiza, sem duplicar')
+await lancar({ data: '2026-11-10' })
+await lancar({ data: '2026-11-10' })
+const { rows: naData } = await db.query(`select count(*)::int as n from funil_lancamentos where data = '2026-11-10'`)
+assert.equal(naData[0].n, 3)
+console.log('ok  lançamentos manuais na mesma data não colidem')
+await recusa('origem de importação desconhecida', '23514', () => db.query(
+  `insert into funil_lancamentos (funil_id, data, origem_importacao) values ($1, '2026-11-11', 'google')`, [f.id]))
 
 // Excluir quem lançou mantém o número (SET NULL), sem violar nenhum CHECK.
 await db.query(`delete from usuarios where id = $1`, [b.id])
