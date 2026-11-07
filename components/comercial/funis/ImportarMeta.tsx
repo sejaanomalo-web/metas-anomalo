@@ -284,7 +284,8 @@ export default function ImportarMeta({
           <p style={{ marginTop: 12, fontSize: 13, color: "var(--text-2)" }}>
             {planilha.tipo === "leads"
               ? `Arquivo de leads: ${formatNumero(planilha.linhas.length)} leads. Ele não traz gasto, então o investimento já lançado em cada data fica como está.`
-              : `Relatório de campanhas: ${formatNumero(planilha.linhas.length)} linhas.`}
+              : `Relatório de campanhas: ${formatNumero(planilha.linhas.length)} linhas.`}{" "}
+            Entra na fonte de tráfego.
           </p>
 
           <h3 style={tituloBloco}>Colunas do arquivo</h3>

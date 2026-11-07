@@ -1,0 +1,37 @@
+.faixa {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .faixa {
+    display: block;
+    position: fixed;
+    inset: 0 0 auto 0;
+    /* Abaixo do menu e do sino (z 60) e dos diálogos, acima do conteúdo. */
+    z-index: 45;
+    /* Os botões terminam em 60px mais a área do relógio. */
+    height: calc(68px + env(safe-area-inset-top));
+    background: linear-gradient(
+      to bottom,
+      var(--bg, #000) calc(100% - 10px),
+      transparent
+    );
+    pointer-events: none;
+  }
+}
+
+/* Desktop estreito: o sino chega ao canto do conteúdo e encostaria no hero. */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .area {
+    padding-top: 24px;
+  }
+}
+
+@media print {
+  .faixa {
+    display: none;
+  }
+  .area {
+    padding-top: 0;
+  }
+}

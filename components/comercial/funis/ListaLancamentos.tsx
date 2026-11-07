@@ -8,7 +8,12 @@ import {
   excluirLancamentoAction,
 } from "@/lib/funis-comerciais-actions"
 import { formatarDataCurta } from "@/lib/funil-calculo"
-import type { FunilComercial, LancamentoFunil } from "@/lib/funil-tipos"
+import {
+  fonteDoLancamento,
+  fontesDoFunil,
+  type FunilComercial,
+  type LancamentoFunil,
+} from "@/lib/funil-tipos"
 import FormularioLancamento from "./FormularioLancamento"
 import ModalComercial, { MensagemErro } from "./ModalComercial"
 
@@ -33,6 +38,8 @@ export default function ListaLancamentos({
   dataPadrao,
   de,
   ate,
+  fontePadrao,
+  mensagemVazia = "Nenhum lançamento neste período.",
 }: {
   funil: FunilComercial
   lancamentos: LancamentoFunil[]
@@ -40,6 +47,8 @@ export default function ListaLancamentos({
   /** Período na tela: limita o "excluir importados". */
   de: string
   ate: string
+  fontePadrao?: string | null
+  mensagemVazia?: string
 }) {
   const router = useRouter()
   const [editando, setEditando] = useState<LancamentoFunil | null>(null)
@@ -55,7 +64,7 @@ export default function ListaLancamentos({
         className="glass"
         style={{ padding: 18, fontSize: 13, color: "var(--text-3)" }}
       >
-        Nenhum lançamento neste período.
+        {mensagemVazia}
       </p>
     )
   }
@@ -74,6 +83,9 @@ export default function ListaLancamentos({
     })
   }
 
+  const fontes = fontesDoFunil(funil)
+  const nomeDaFonte = (l: LancamentoFunil) =>
+    fontes.find((f) => f.id === fonteDoLancamento(l))?.nome ?? "Sem fonte"
   const totalImportados = lancamentos.filter((l) => l.origem_importacao).length
 
   function confirmarExclusaoImportados() {
@@ -136,6 +148,20 @@ export default function ListaLancamentos({
                       {` · ${formatBRL(Number(l.investimento))} investidos`}
                     </span>
                   )}
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--text-2)",
+                      border: "1px solid var(--input-border)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {nomeDaFonte(l)}
+                  </span>
                   {l.origem_importacao && (
                     <span
                       style={{
@@ -205,6 +231,7 @@ export default function ListaLancamentos({
           funil={funil}
           lancamento={editando}
           dataPadrao={dataPadrao}
+          fontePadrao={fontePadrao}
           fechar={() => setEditando(null)}
           aoSalvar={() => {
             setEditando(null)

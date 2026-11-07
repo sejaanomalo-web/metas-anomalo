@@ -8,14 +8,19 @@ import { parseNumeroForm } from "./parse-numero"
 import { getSupabaseAdmin } from "./supabase"
 import { erroDeTabelaAusente } from "./funis-comerciais"
 import {
+  FONTES_PADRAO,
+  FONTE_TRAFEGO,
   MAX_ETAPAS,
+  MAX_FONTES,
   MAX_NOME_ETAPA,
+  MAX_NOME_FONTE,
   MAX_NOME_FUNIL,
   MAX_OBSERVACOES,
   MAX_VALOR_ETAPA,
   MIN_ETAPAS,
   type EtapaFunil,
   type FunilComercial,
+  fontesDoFunil,
   type ResultadoFunil,
 } from "./funil-tipos"
 
@@ -34,14 +39,21 @@ const MIGRATION_PENDENTE =
   "O banco ainda não tem as tabelas dos funis. Aplique a migration 20261106_comercial_funis."
 const MIGRATION_IMPORTACAO_PENDENTE =
   "O banco ainda não está pronto para importar. Aplique a migration 20261107_funil_lancamentos_importacao."
+const MIGRATION_FONTES_PENDENTE =
+  "O banco ainda não tem as fontes de demanda. Aplique a migration 20261108_funis_fontes_demanda."
 
-/** Coluna ou índice da importação ainda não existem no banco. */
-function faltaMigrationImportacao(erro: { code?: string } | null): boolean {
-  return (
+/** Mensagem de migration pendente, ou null se o erro é de outra natureza. */
+function migrationPendente(
+  erro: { code?: string; message?: string } | null
+): string | null {
+  const faltaAlgo =
     erro?.code === "42703" || // coluna inexistente
     erro?.code === "PGRST204" || // coluna fora do cache do PostgREST
     erro?.code === "42P10" // ON CONFLICT sem índice único correspondente
-  )
+  if (!faltaAlgo) return null
+  return /fonte/i.test(erro?.message ?? "")
+    ? MIGRATION_FONTES_PENDENTE
+    : MIGRATION_IMPORTACAO_PENDENTE
 }
 
 async function usuarioDoComercial(): Promise<UsuarioSessao | null> {
@@ -81,6 +93,8 @@ function erroDeGravacao(
   error: { code?: string; message: string }
 ): ResultadoFunil {
   if (erroDeTabelaAusente(error)) return { ok: false, erro: MIGRATION_PENDENTE }
+  const pendente = migrationPendente(error)
+  if (pendente) return { ok: false, erro: pendente }
   console.error(`[funis] ${contexto} error`, error.message)
   return { ok: false, erro: "Não foi possível salvar. Tente de novo." }
 }
@@ -95,6 +109,7 @@ export interface EntradaFunil {
   nome: string
   descricao?: string
   etapas: { id?: string; nome: string }[]
+  fontes?: { id?: string; nome: string }[]
 }
 
 /**
@@ -102,36 +117,41 @@ export interface EntradaFunil {
  * liga a etapa aos números lançados. Qualquer outro recebe um id novo gerado
  * aqui.
  */
-function normalizarEtapas(
+function normalizarLista(
   entrada: unknown,
-  idsExistentes: Set<string>
-): { etapas: EtapaFunil[] } | { erro: string } {
-  if (!Array.isArray(entrada)) return { erro: "Etapas inválidas." }
-  if (entrada.length < MIN_ETAPAS) {
-    return { erro: `O funil precisa de pelo menos ${MIN_ETAPAS} etapas.` }
+  idsExistentes: Set<string>,
+  regra: { min: number; max: number; maxNome: number; singular: string; plural: string }
+): { itens: EtapaFunil[] } | { erro: string } {
+  if (!Array.isArray(entrada)) return { erro: `${regra.plural} inválidas.` }
+  if (entrada.length < regra.min) {
+    return { erro: `O funil precisa de pelo menos ${regra.min} ${regra.plural.toLowerCase()}.` }
   }
-  if (entrada.length > MAX_ETAPAS) {
-    return { erro: `O funil pode ter no máximo ${MAX_ETAPAS} etapas.` }
+  if (entrada.length > regra.max) {
+    return { erro: `O funil pode ter no máximo ${regra.max} ${regra.plural.toLowerCase()}.` }
   }
   const nomes = new Set<string>()
   const ids = new Set<string>()
-  const etapas: EtapaFunil[] = []
+  const itens: EtapaFunil[] = []
   for (const bruta of entrada as { id?: unknown; nome?: unknown }[]) {
     const nome = String(bruta?.nome ?? "").trim()
-    if (!nome) return { erro: "Dê um nome para todas as etapas." }
-    if (nome.length > MAX_NOME_ETAPA) {
-      return { erro: `Nome de etapa com mais de ${MAX_NOME_ETAPA} caracteres.` }
+    if (!nome) {
+      return { erro: `Dê um nome para todas as ${regra.plural.toLowerCase()}.` }
+    }
+    if (nome.length > regra.maxNome) {
+      return { erro: `Nome de ${regra.singular} com mais de ${regra.maxNome} caracteres.` }
     }
     const chave = nome.toLocaleLowerCase("pt-BR")
-    if (nomes.has(chave)) return { erro: `A etapa "${nome}" está repetida.` }
+    if (nomes.has(chave)) {
+      return { erro: `A ${regra.singular} "${nome}" está repetida.` }
+    }
     nomes.add(chave)
     const idBruto = typeof bruta?.id === "string" ? bruta.id : ""
     const id =
       idsExistentes.has(idBruto) && !ids.has(idBruto) ? idBruto : randomUUID()
     ids.add(id)
-    etapas.push({ id, nome })
+    itens.push({ id, nome })
   }
-  return { etapas }
+  return { itens }
 }
 
 export async function salvarFunilAction(
@@ -156,11 +176,67 @@ export async function salvarFunilAction(
     }
   }
 
-  const normalizadas = normalizarEtapas(
+  const normalizadas = normalizarLista(
     entrada?.etapas,
-    new Set((existente?.etapas ?? []).map((e) => e.id))
+    new Set((existente?.etapas ?? []).map((e) => e.id)),
+    {
+      min: MIN_ETAPAS,
+      max: MAX_ETAPAS,
+      maxNome: MAX_NOME_ETAPA,
+      singular: "etapa",
+      plural: "Etapas",
+    }
   )
   if ("erro" in normalizadas) return { ok: false, erro: normalizadas.erro }
+
+  // Os ids padrão valem sempre, para uma fonte removida poder voltar a mesma.
+  const fontesAtuais = existente ? fontesDoFunil(existente) : [...FONTES_PADRAO]
+  const normalizadasFontes = normalizarLista(
+    entrada?.fontes ?? fontesAtuais,
+    new Set([...fontesAtuais, ...FONTES_PADRAO].map((f) => f.id)),
+    {
+      min: 1,
+      max: MAX_FONTES,
+      maxNome: MAX_NOME_FONTE,
+      singular: "fonte",
+      plural: "Fontes",
+    }
+  )
+  if ("erro" in normalizadasFontes) {
+    return { ok: false, erro: normalizadasFontes.erro }
+  }
+  const fontes = normalizadasFontes.itens
+  if (!fontes.some((f) => f.id === FONTE_TRAFEGO)) {
+    return {
+      ok: false,
+      erro: "A fonte de tráfego não pode ser removida: a importação do Meta entra nela.",
+    }
+  }
+
+  // Fonte com lançamento não sai: os números ficariam sem fonte para filtrar.
+  if (existente) {
+    const removidas = fontesAtuais.filter(
+      (f) => !fontes.some((n) => n.id === f.id)
+    )
+    if (removidas.length > 0) {
+      const { data: emUso, error: erroUso } = await supabase
+        .from("funil_lancamentos")
+        .select("fonte")
+        .eq("funil_id", existente.id)
+        .in("fonte", removidas.map((f) => f.id))
+        .limit(1)
+      if (erroUso) return erroDeGravacao("conferir fontes", erroUso)
+      const usada = removidas.find(
+        (f) => f.id === (emUso as { fonte: string }[] | null)?.[0]?.fonte
+      )
+      if (usada) {
+        return {
+          ok: false,
+          erro: `A fonte "${usada.nome}" tem lançamentos. Mude a fonte deles antes de removê-la.`,
+        }
+      }
+    }
+  }
 
   const consulta = existente
     ? supabase
@@ -168,7 +244,8 @@ export async function salvarFunilAction(
         .update({
           nome,
           descricao,
-          etapas: normalizadas.etapas,
+          etapas: normalizadas.itens,
+          fontes,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existente.id)
@@ -182,7 +259,8 @@ export async function salvarFunilAction(
             : usuario.id,
         nome,
         descricao,
-        etapas: normalizadas.etapas,
+        etapas: normalizadas.itens,
+        fontes,
       })
   const { data, error } = await consulta.select("id").single()
   if (error) {
@@ -247,6 +325,7 @@ export async function salvarLancamentoAction(
 
   const lancamentoId = String(formData.get("id") ?? "").trim()
   let funilId = String(formData.get("funil_id") ?? "").trim()
+  let importado = false
 
   // Na edição, o funil vem do registro gravado. Um funil_id enviado pelo
   // formulário permitiria mover o lançamento para o funil de outra pessoa.
@@ -254,12 +333,14 @@ export async function salvarLancamentoAction(
     if (!UUID.test(lancamentoId)) return { ok: false, erro: SEM_ACESSO }
     const { data, error } = await supabase
       .from("funil_lancamentos")
-      .select("funil_id")
+      .select("funil_id, origem_importacao")
       .eq("id", lancamentoId)
       .maybeSingle()
     if (error) return erroDeGravacao("buscar lancamento", error)
     if (!data) return { ok: false, erro: "Esse lançamento não existe mais." }
-    funilId = (data as { funil_id: string }).funil_id
+    const linha = data as { funil_id: string; origem_importacao: string | null }
+    funilId = linha.funil_id
+    importado = Boolean(linha.origem_importacao)
   }
 
   const funil = await buscarFunil(funilId)
@@ -269,6 +350,14 @@ export async function salvarLancamentoAction(
 
   const data = String(formData.get("data") ?? "").trim()
   if (!dataValida(data)) return { ok: false, erro: "Informe uma data válida." }
+
+  // O que veio do arquivo do Meta é tráfego e continua sendo.
+  const fonte = importado
+    ? FONTE_TRAFEGO
+    : String(formData.get("fonte") ?? "").trim() || FONTE_TRAFEGO
+  if (!fontesDoFunil(funil).some((f) => f.id === fonte)) {
+    return { ok: false, erro: "Escolha uma fonte de demanda válida." }
+  }
 
   const investimento = moedaDoForm(formData.get("investimento"), "Investimento")
   if ("erro" in investimento) return { ok: false, erro: investimento.erro }
@@ -299,6 +388,7 @@ export async function salvarLancamentoAction(
 
   const campos = {
     data,
+    fonte,
     investimento: investimento.valor,
     faturamento: faturamento.valor,
     perdidos,
@@ -404,20 +494,18 @@ export async function conferirImportacaoAction(
   if (!supabase) return { ok: false, erro: "Supabase indisponível." }
   const { data, error } = await supabase
     .from("funil_lancamentos")
-    .select("data, investimento, origem_importacao")
+    .select("data, investimento, origem_importacao, fonte")
     .eq("funil_id", funil.id)
     .in("data", datas)
     .limit(LIMITE_DIAS * 4)
   if (error) {
-    if (faltaMigrationImportacao(error)) {
-      return { ok: false, erro: MIGRATION_IMPORTACAO_PENDENTE }
-    }
     return erroDeGravacao("conferir importacao", error)
   }
   const linhas = (data ?? []) as {
     data: string
     investimento: number
     origem_importacao: string | null
+    fonte: string
   }[]
   return {
     ok: true,
@@ -425,7 +513,12 @@ export async function conferirImportacaoAction(
     comInvestimentoManual: Array.from(
       new Set(
         linhas
-          .filter((l) => !l.origem_importacao && Number(l.investimento) > 0)
+          .filter(
+            (l) =>
+              !l.origem_importacao &&
+              l.fonte === FONTE_TRAFEGO &&
+              Number(l.investimento) > 0
+          )
           .map((l) => l.data)
       )
     ),
@@ -489,9 +582,6 @@ export async function importarLancamentosAction(
     .in("data", Array.from(vistas))
     .limit(LIMITE_DIAS)
   if (erroLeitura) {
-    if (faltaMigrationImportacao(erroLeitura)) {
-      return { ok: false, erro: MIGRATION_IMPORTACAO_PENDENTE }
-    }
     return erroDeGravacao("ler importacao", erroLeitura)
   }
   type Existente = {
@@ -519,6 +609,7 @@ export async function importarLancamentosAction(
       funil_id: funil.id,
       data: dia.data,
       origem_importacao: "meta",
+      fonte: FONTE_TRAFEGO,
       investimento: dia.investimento ?? Number(atual?.investimento ?? 0),
       valores: { ...(atual?.valores ?? {}), ...dia.valores },
       perdidos: atual?.perdidos ?? 0,
@@ -534,9 +625,6 @@ export async function importarLancamentosAction(
     .from("funil_lancamentos")
     .upsert(linhas, { onConflict: "funil_id,data,origem_importacao" })
   if (error) {
-    if (faltaMigrationImportacao(error)) {
-      return { ok: false, erro: MIGRATION_IMPORTACAO_PENDENTE }
-    }
     return erroDeGravacao("importar", error)
   }
   revalidar()
@@ -572,9 +660,6 @@ export async function excluirImportadosAction(
     .gte("data", de)
     .lte("data", ate)
   if (error) {
-    if (faltaMigrationImportacao(error)) {
-      return { ok: false, erro: MIGRATION_IMPORTACAO_PENDENTE }
-    }
     return erroDeGravacao("excluir importados", error)
   }
   revalidar()

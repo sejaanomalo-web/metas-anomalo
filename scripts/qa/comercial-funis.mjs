@@ -47,6 +47,7 @@ const tables = {
 }
 let tabelasAusentes = false
 let importacaoAusente = false
+let fontesAusentes = false
 const TABELAS_FUNIS = new Set(['funis_comerciais', 'funil_lancamentos'])
 const escritas = []
 
@@ -63,6 +64,12 @@ const server = createServer(async (req, res) => {
   }
   if (importacaoAusente && table === 'funil_lancamentos' && url.search.includes('origem_importacao')) {
     return responderErro(res, 400, { code: '42703', message: 'column origem_importacao does not exist' })
+  }
+  if (fontesAusentes && TABELAS_FUNIS.has(table)) {
+    const corpo = ['POST', 'PATCH'].includes(req.method)
+    if (url.search.includes('fonte') || corpo) {
+      return responderErro(res, 400, { code: 'PGRST204', message: "Could not find the 'fonte' column" })
+    }
   }
   const reservado = ['select', 'order', 'limit', 'offset', 'columns', 'on_conflict']
   const matches = (row) => [...url.searchParams].every(([key, expr]) => {
@@ -93,7 +100,8 @@ const server = createServer(async (req, res) => {
         return novo
       })
     } else if (req.method === 'POST') {
-      const novos = (Array.isArray(data) ? data : [data]).map((r) => ({ id: randomUUID(), created_at: new Date().toISOString(), ...r }))
+      const padrao = table === 'funil_lancamentos' ? { fonte: 'trafego' } : {}
+      const novos = (Array.isArray(data) ? data : [data]).map((r) => ({ id: randomUUID(), created_at: new Date().toISOString(), ...padrao, ...r }))
       if (table === 'funis_comerciais' && novos.some((n) => nomeRepetido(n))) {
         return responderErro(res, 409, { code: '23505', message: 'duplicate key' })
       }
@@ -161,7 +169,7 @@ child.stdout.on('data', (b) => { log += b })
 child.stderr.on('data', (b) => { log += b })
 const base = `http://127.0.0.1:${port}`
 const COMERCIAL = '/dashboard/comercial'
-const NOV = 'modo=mes&de=2026-11-01&ate=2026-11-30'
+const NOV = 'mes=Novembro&ano=2026'
 const shots = process.env.QA_SCREENSHOTS
 if (shots) await mkdir(shots, { recursive: true })
 
@@ -196,6 +204,14 @@ try {
     const r = await page.goto(base + url, { waitUntil: 'networkidle', timeout: 90000 })
     assert.ok(r.status() < 400, `${url}: HTTP ${r.status()}`)
     assert.equal(await page.getByRole('heading', { name: /Não foi possível carregar esta página|Algo quebrou aqui/ }).count(), 0, `Boundary de erro em ${url}`)
+    await abrirSecoes(page)
+  }
+  /** Evolução e Lançamentos começam recolhidas: abre as que estiverem fechadas. */
+  async function abrirSecoes(page) {
+    const fechadas = page.locator('main button[aria-expanded="false"]')
+    for (let i = await fechadas.count(); i > 0; i--) {
+      await fechadas.first().click()
+    }
   }
   const texto = (page) => page.locator('main').innerText()
   const valorEtapa = (page, nome) => page.locator(`[data-etapa="${nome}"]`).innerText()
@@ -206,14 +222,16 @@ try {
 
   async function lancar(page, numeros, extras = {}) {
     await page.getByRole('button', { name: '+ Lançar números' }).click()
+    if (extras.fonte) await dialogo(page).getByRole('radio', { name: extras.fonte, exact: true }).check()
     await campo(page, 'Data').fill(extras.data)
-    if (extras.investimento) await campo(page, 'Valor investido no tráfego').fill(extras.investimento)
+    if (extras.investimento) await campo(page, extras.fonte && extras.fonte !== 'Tráfego' ? 'Custo desta fonte (opcional)' : 'Valor investido no tráfego').fill(extras.investimento)
     for (const [nome, v] of Object.entries(numeros)) await campo(page, nome).fill(String(v))
     if (extras.perdidos) await campo(page, 'Contratos perdidos').fill(String(extras.perdidos))
     if (extras.faturamento) await campo(page, 'Faturamento gerado').fill(extras.faturamento)
     await dialogo(page).getByRole('button', { name: 'Lançar', exact: true }).click()
     await fechou(page)
     await page.waitForLoadState('networkidle')
+    await abrirSecoes(page)
   }
   const funisDe = (id) => tables.funis_comerciais.filter((f) => f.usuario_id === id)
 
@@ -233,11 +251,18 @@ try {
         return r.width > 0 && r.height > 0 && c.visibility !== 'hidden' && c.display !== 'none'
       }
       const nome = (el) => `${el.tagName.toLowerCase()}"${(el.innerText || el.getAttribute('aria-label') || '').trim().slice(0, 30)}"`
+      // Faixa que rola de lado de propósito não conta como estouro.
+      const temRolagemPropria = (el) => {
+        for (let p = el.parentElement; p; p = p.parentElement) {
+          if (['auto', 'scroll'].includes(getComputedStyle(p).overflowX)) return true
+        }
+        return false
+      }
       const itens = [...document.querySelectorAll('main button, main a, main h1, main h2, main h3, main p, main select, main input, main td, main th, main dt, main dd')].filter(visivel)
       for (let i = 0; i < itens.length; i++) {
         const a = itens[i]
         const ra = a.getBoundingClientRect()
-        if (ra.right > window.innerWidth + 1 && !a.closest('[class*="chips"], table')) achados.push(`${nome(a)} sai pela direita`)
+        if (ra.right > window.innerWidth + 1 && !temRolagemPropria(a)) achados.push(`${nome(a)} sai pela direita`)
         if (a.tagName === 'BUTTON' && a.scrollWidth > a.clientWidth + 1 && !a.closest('[class*="chips"]')) achados.push(`${nome(a)} corta o texto`)
         for (let j = i + 1; j < itens.length; j++) {
           const b = itens[j]
@@ -248,6 +273,18 @@ try {
           if (x > 2 && y > 2) achados.push(`${nome(a)} sobrepõe ${nome(b)}`)
         }
       }
+      // Menu e sino são fixos: com a página no topo, nada pode ficar sob eles.
+      for (const seletor of ['.app-mobile-trigger', '.sino-trigger']) {
+        const flutuante = document.querySelector(seletor)
+        if (!flutuante || !visivel(flutuante)) continue
+        const f = flutuante.getBoundingClientRect()
+        for (const el of [...document.querySelectorAll('main .hero-banner, main .glass, main button, main h1, main h2, main p')].filter(visivel)) {
+          const r = el.getBoundingClientRect()
+          const x = Math.min(f.right, r.right) - Math.max(f.left, r.left)
+          const y = Math.min(f.bottom, r.bottom) - Math.max(f.top, r.top)
+          if (x > 0 && y > 0) achados.push(`${seletor} cobre ${nome(el)}`)
+        }
+      }
       return achados
     })
     assert.deepEqual(problemas, [], `Layout quebrado: ${contexto}`)
@@ -256,7 +293,7 @@ try {
   /** Mesma tela em desktop, tablet, celular e celular pequeno. */
   async function conferirLarguras(page, url, contexto) {
     const original = page.viewportSize()
-    for (const width of [1440, 820, 390, 320]) {
+    for (const width of [1440, 1100, 820, 390, 320]) {
       await page.setViewportSize({ width, height: 900 })
       await ir(page, url)
       await conferirLayout(page, `${contexto} em ${width}px`)
@@ -284,7 +321,7 @@ try {
 
   await bia.page.getByRole('button', { name: '+ Novo funil' }).click()
   await campo(bia.page, 'Nome do funil').fill('Funil de marketing')
-  assert.equal(await dialogo(bia.page).getByRole('listitem').count(), 6)
+  assert.equal(await dialogo(bia.page).locator('ol > li').count(), 6)
   await dialogo(bia.page).getByRole('button', { name: 'Criar funil' }).click()
   await fechou(bia.page)
   await bia.page.waitForURL(/funil=/)
@@ -340,6 +377,40 @@ try {
   assert.ok(await largura('Leads gerados') > await largura('Responderam'))
   assert.ok(await largura('Responderam') > await largura('Contratos fechados'))
   ok('camadas afunilam e mostram %, gargalo, custos, retorno e taxa de fechamento corretos')
+
+  // Evolução e Lançamentos: recolhidas por padrão, com resumo, e a escolha fica salva.
+  await bia.page.evaluate(() => localStorage.clear())
+  await bia.page.goto(base + `${COMERCIAL}?${NOV}`, { waitUntil: 'networkidle' })
+  const botaoEvolucao = bia.page.getByRole('button', { name: /Evolução no período/ })
+  const botaoLancamentos = bia.page.getByRole('button', { name: /Lançamentos/ })
+  assert.equal(await botaoEvolucao.getAttribute('aria-expanded'), 'false')
+  assert.equal(await botaoLancamentos.getAttribute('aria-expanded'), 'false')
+  assert.match(await botaoEvolucao.innerText(), /6 semanas · 1 com lançamentos/)
+  assert.match(await botaoLancamentos.innerText(), /1 lançamento · R\$\s*1\.000 investidos/)
+  assert.equal(await bia.page.locator('[data-evolucao]').count(), 0)
+  assert.equal(await bia.page.locator('[data-lancamento]').count(), 0)
+  if (shots) await bia.page.screenshot({ path: `${shots}/15-recolhidas-desktop.png`, fullPage: true })
+  await botaoEvolucao.click()
+  await bia.page.locator('[data-evolucao]').waitFor()
+  assert.equal(await botaoEvolucao.getAttribute('aria-expanded'), 'true')
+  assert.match(await botaoEvolucao.innerText(), /Compare dia a dia/)
+  await bia.page.reload({ waitUntil: 'networkidle' })
+  await bia.page.locator('[data-evolucao]').waitFor()
+  assert.equal(await botaoLancamentos.getAttribute('aria-expanded'), 'false')
+  await botaoEvolucao.click()
+  assert.equal(await bia.page.locator('[data-evolucao]').count(), 0)
+  await botaoLancamentos.focus()
+  await bia.page.keyboard.press('Enter')
+  await bia.page.locator('[data-lancamento]').first().waitFor()
+  await bia.page.keyboard.press('Space')
+  assert.equal(await bia.page.locator('[data-lancamento]').count(), 0)
+  if (shots) {
+    await bia.page.setViewportSize({ width: 390, height: 844 })
+    await bia.page.reload({ waitUntil: 'networkidle' })
+    await bia.page.screenshot({ path: `${shots}/16-recolhidas-celular.png`, fullPage: true })
+    await bia.page.setViewportSize({ width: 1440, height: 1000 })
+  }
+  ok('Evolução e Lançamentos recolhidas com resumo; abrem pela setinha ou teclado e lembram a escolha')
   if (shots) await bia.page.screenshot({ path: `${shots}/1-funil-desktop.png`, fullPage: true })
 
   // Filtros de data.
@@ -349,53 +420,48 @@ try {
   assert.match(await valorEtapa(bia.page, 'Leads gerados'), /140/)
   ok('o mês soma só os lançamentos do mês')
 
-  await bia.page.getByRole('button', { name: 'Semana', exact: true }).click()
-  await bia.page.waitForURL(/modo=semana/)
-  await bia.page.waitForLoadState('networkidle')
-  assert.match(bia.page.url(), /de=2026-11-02/)
-  await bia.page.getByRole('heading', { name: '02 – 08 nov 2026' }).waitFor()
-  assert.match(await valorEtapa(bia.page, 'Leads gerados'), /100/)
-  ok('Semana filtra de segunda a domingo, partindo de hoje')
+  // Filtro enxuto: só Mês, Dia e Intervalo, o mesmo seletor do Caixa.
+  const modos = bia.page.locator('main .hero-banner button')
+  assert.deepEqual(await modos.allInnerTexts(), ['Mês', 'Dia', 'Intervalo'])
+  assert.equal(await bia.page.getByRole('button', { name: 'Semana', exact: true }).count(), 0)
+  assert.equal(await bia.page.getByRole('button', { name: 'Ano', exact: true }).count(), 0)
+  ok('filtro de período enxuto: Mês, Dia e Intervalo')
 
-  await bia.page.getByRole('button', { name: 'Próximo período' }).click()
-  await bia.page.getByRole('heading', { name: '09 – 15 nov 2026' }).waitFor()
+  // Trocar o mês pelo seletor mantém o funil na URL.
+  await bia.page.locator('main .hero-banner select').first().selectOption('Março')
+  await bia.page.getByRole('heading', { name: /Março 2026/ }).waitFor()
   await bia.page.waitForLoadState('networkidle')
-  assert.match(await valorEtapa(bia.page, 'Leads gerados'), /40/)
-  assert.match(bia.page.url(), /funil=|modo=semana/)
-  ok('a seta avança uma semana inteira')
+  assert.match(await valorEtapa(bia.page, 'Leads gerados'), /\b7\b/)
+  ok('trocar o mês pelo seletor funciona e mantém o funil')
 
-  await ir(bia.page, `${COMERCIAL}?modo=dia&de=2026-11-03&ate=2026-11-03`)
+  await ir(bia.page, `${COMERCIAL}?modo=dia&de=2026-11-03`)
   assert.match(await valorEtapa(bia.page, 'Leads gerados'), /100/)
-  await ir(bia.page, `${COMERCIAL}?modo=dia&de=2026-11-04&ate=2026-11-04`)
+  await ir(bia.page, `${COMERCIAL}?modo=dia&de=2026-11-04`)
   assert.match(await texto(bia.page), /Nenhum lançamento neste período/)
   ok('Dia filtra um dia exato, e dia vazio não quebra')
 
-  await ir(bia.page, `${COMERCIAL}?${NOV}`)
-  await bia.page.getByRole('button', { name: 'Ano', exact: true }).click()
-  await bia.page.getByRole('heading', { name: '2026', exact: true }).waitFor()
-  await bia.page.waitForLoadState('networkidle')
+  await ir(bia.page, `${COMERCIAL}?modo=intervalo&de=2026-01-01&ate=2026-12-31`)
   assert.match(await valorEtapa(bia.page, 'Leads gerados'), /147/)
-  assert.equal(await bia.page.locator('tbody tr').count(), 12)
-  assert.equal(await bia.page.getByRole('link', { name: 'Por dia' }).count(), 0)
-  ok('Ano soma tudo, abre por mês e não oferece "por dia"')
+  assert.equal(await bia.page.locator('[data-evolucao] tbody tr').count(), 12)
+  assert.equal(await bia.page.getByRole('button', { name: 'Por dia' }).count(), 0)
+  ok('Intervalo de um ano soma tudo, abre por mês e não oferece "por dia"')
 
   await ir(bia.page, `${COMERCIAL}?modo=intervalo&de=2026-03-01&ate=2026-11-05`)
   assert.match(await valorEtapa(bia.page, 'Leads gerados'), /107/)
-  await bia.page.getByLabel('Até').fill('2026-11-30')
+  await bia.page.locator('main .hero-banner input[type="date"]').nth(1).fill('2026-11-30')
   await bia.page.waitForURL(/ate=2026-11-30/)
   await bia.page.waitForLoadState('networkidle')
-  assert.match(await valorEtapa(bia.page, 'Leads gerados'), /147/)
+  await bia.page.locator('[data-etapa="Leads gerados"]', { hasText: '147' }).waitFor()
   ok('Intervalo funciona pela URL e pelos campos de data')
 
   // Semana a semana.
   await ir(bia.page, `${COMERCIAL}?${NOV}`)
-  const linhas = bia.page.locator('tbody tr')
+  const linhas = bia.page.locator('[data-evolucao] tbody tr')
   assert.equal(await linhas.count(), 6)
-  assert.match(await bia.page.locator('tbody tr', { hasText: '02 – 08 nov' }).innerText(), /100[\s\S]*50[\s\S]*50%/)
-  assert.match(await bia.page.locator('tbody tr', { hasText: '09 – 15 nov' }).innerText(), /40[\s\S]*30[\s\S]*75%/)
-  await bia.page.getByRole('link', { name: 'Por dia' }).click()
+  assert.match(await bia.page.locator('[data-evolucao] tbody tr', { hasText: '02 – 08 nov' }).innerText(), /100[\s\S]*50[\s\S]*50%/)
+  assert.match(await bia.page.locator('[data-evolucao] tbody tr', { hasText: '09 – 15 nov' }).innerText(), /40[\s\S]*30[\s\S]*75%/)
+  await bia.page.getByRole('button', { name: 'Por dia' }).click()
   await bia.page.waitForURL(/agrupar=dia/)
-  await bia.page.waitForLoadState('networkidle')
   assert.equal(await linhas.count(), 30)
   ok('evolução semana a semana com %, e troca para por dia')
 
@@ -416,7 +482,7 @@ try {
   await dialogo(bia.page).getByRole('button', { name: 'Salvar', exact: true }).click()
   await fechou(bia.page)
   await bia.page.locator('[data-etapa="Leads gerados"]', { hasText: '100' }).waitFor()
-  await ir(bia.page, `${COMERCIAL}?modo=mes&de=2026-12-01&ate=2026-12-31`)
+  await ir(bia.page, `${COMERCIAL}?mes=Dezembro&ano=2026`)
   await bia.page.getByRole('button', { name: 'Excluir lançamento de 01 dez 2026' }).click()
   await dialogo(bia.page).getByRole('button', { name: 'Excluir lançamento' }).click()
   await fechou(bia.page)
@@ -458,10 +524,10 @@ try {
   await dialogo(bia.page).getByRole('alert').waitFor()
   assert.match(await dialogo(bia.page).getByRole('alert').innerText(), /Já existe um funil/)
   await campo(bia.page, 'Nome do funil').fill('Só o sistema')
-  while (await dialogo(bia.page).getByRole('listitem').count() > 2) {
-    await dialogo(bia.page).getByRole('button', { name: /^Remover / }).first().click()
+  while (await dialogo(bia.page).locator('ol > li').count() > 2) {
+    await dialogo(bia.page).getByRole('button', { name: /^Remover (?!fonte)/ }).first().click()
   }
-  assert.equal(await dialogo(bia.page).getByRole('button', { name: /^Remover / }).first().isDisabled(), true)
+  assert.equal(await dialogo(bia.page).getByRole('button', { name: /^Remover (?!fonte)/ }).first().isDisabled(), true)
   await dialogo(bia.page).getByRole('button', { name: 'Criar funil' }).click()
   await fechou(bia.page)
   await bia.page.waitForLoadState('networkidle')
@@ -484,7 +550,7 @@ try {
   await conferirLarguras(bia.page, URL_LONGO, 'funil vazio com descrição')
   await conferirLarguras(bia.page, `${COMERCIAL}?${NOV}&funil=${mkt.id}`, 'funil com números')
   await conferirLarguras(bia.page, `${COMERCIAL}?modo=intervalo&de=2026-03-01&ate=2026-11-30&funil=${mkt.id}`, 'intervalo')
-  await conferirLarguras(bia.page, `${COMERCIAL}?modo=mes&de=2025-01-01&ate=2025-01-31&funil=${mkt.id}`, 'período sem hoje')
+  await conferirLarguras(bia.page, `${COMERCIAL}?mes=Janeiro&ano=2025&funil=${mkt.id}`, 'período sem hoje')
   ok('layout sem sobreposição nem estouro em 1440, 820, 390 e 320px, com descrição longa')
   if (shots) {
     await bia.page.setViewportSize({ width: 1440, height: 1000 })
@@ -497,6 +563,141 @@ try {
     await bia.page.screenshot({ path: `${shots}/7-numeros-celular.png`, fullPage: true })
     await bia.page.setViewportSize({ width: 1440, height: 1000 })
   }
+
+  // Fontes de demanda: mesmo funil, sem ir ao servidor para alternar.
+  const fontesFunil = funisDe(BIA).find((f) => f.nome === 'Só o sistema')
+  await ir(bia.page, `${COMERCIAL}?${NOV}&funil=${fontesFunil.id}`)
+  const [topoNome, fundoNome] = fontesFunil.etapas.map((e) => e.nome)
+  assert.deepEqual(fontesFunil.fontes.map((f) => f.id), ['trafego', 'indicacao', 'prospeccao'])
+  await lancar(bia.page, { [topoNome]: 100, [fundoNome]: 2 }, { data: '2026-11-03', investimento: '100000', faturamento: '200000' })
+  await lancar(bia.page, { [topoNome]: 10, [fundoNome]: 5 }, { data: '2026-11-04', fonte: 'Indicação', faturamento: '900000', perdidos: 1 })
+  await lancar(bia.page, { [topoNome]: 50, [fundoNome]: 1 }, { data: '2026-11-05', fonte: 'Prospecção fria' })
+  const lancsFontes = tables.funil_lancamentos.filter((l) => l.funil_id === fontesFunil.id)
+  assert.deepEqual(lancsFontes.map((l) => l.fonte).sort(), ['indicacao', 'prospeccao', 'trafego'])
+  ok('lançar registra a fonte escolhida')
+
+  await bia.page.locator(`[data-etapa="${topoNome}"]`, { hasText: '160' }).waitFor()
+  const seletorFontes = bia.page.getByRole('group', { name: 'Filtrar por fonte' })
+  assert.match(await seletorFontes.getByRole('button', { name: /Todas as fontes/, pressed: true }).innerText(), /160/)
+  assert.match(await seletorFontes.getByRole('button', { name: /Indicação/ }).innerText(), /10/)
+  t = await texto(bia.page)
+  assert.match(t, /Comparação entre fontes/)
+  assert.match(await bia.page.locator('tbody tr', { hasText: 'Indicação' }).first().innerText(), /10[\s\S]*5[\s\S]*50%/)
+  ok('a visão geral soma as fontes e compara lado a lado, no mesmo funil')
+
+  // Trocar de fonte não pode gerar nenhuma requisição: é o que torna instantâneo.
+  const requisicoes = []
+  // Só conta dado do próprio app: navegação e fetch de RSC ou de action.
+  const espiaRede = (r) => {
+    const u = new URL(r.url())
+    if (u.hostname === '127.0.0.1' && ['document', 'fetch', 'xhr'].includes(r.resourceType())) requisicoes.push(r.url())
+  }
+  bia.page.on('request', espiaRede)
+  await seletorFontes.getByRole('button', { name: /Indicação/ }).click()
+  await bia.page.locator(`[data-etapa="${topoNome}"]`, { hasText: '10' }).waitFor({ timeout: 300 })
+  await bia.page.waitForURL(/fonte=indicacao/, { timeout: 300 })
+  t = await texto(bia.page)
+  assert.match(await passo(bia.page, fundoNome), /50% avançaram/)
+  assert.match(t, /Funil · Indicação/)
+  assert.match(t, /Nenhum|Custo por/)
+  assert.doesNotMatch(t, /Comparação entre fontes/)
+  assert.match(t, /Investido\s+R\$\s*0/)
+  assert.match(t, /Faturamento gerado\s+R\$\s*9\.000/)
+  assert.equal(await bia.page.locator('[data-lancamento]').count(), 1)
+  await seletorFontes.getByRole('button', { name: /Tráfego/ }).click()
+  await bia.page.locator(`[data-etapa="${topoNome}"]`, { hasText: '100' }).waitFor({ timeout: 300 })
+  assert.match(await passo(bia.page, fundoNome), /2% avançaram/)
+  assert.match(await texto(bia.page), /Investido no tráfego\s+R\$\s*1\.000/)
+  assert.match(await texto(bia.page), /Custo por .*\s+R\$\s*500/)
+  await seletorFontes.getByRole('button', { name: /Prospecção fria/ }).click()
+  await bia.page.locator(`[data-etapa="${topoNome}"]`, { hasText: '50' }).waitFor({ timeout: 300 })
+  await bia.page.getByRole('button', { name: 'Por semana' }).click()
+  await bia.page.waitForURL(/agrupar=semana/, { timeout: 300 })
+  await bia.page.waitForTimeout(150)
+  bia.page.off('request', espiaRede)
+  assert.deepEqual(requisicoes, [], 'trocar fonte ou agrupamento não pode ir ao servidor')
+  ok('alternar fonte recalcula funil, %, gargalo e custos na hora, com 0 requisições')
+
+  // A fonte sobrevive a recarregar e a trocar o período, e pré-seleciona o lançamento.
+  await bia.page.reload({ waitUntil: 'networkidle' })
+  await seletorFontes.getByRole('button', { name: /Prospecção fria/, pressed: true }).waitFor()
+  await bia.page.getByRole('button', { name: '+ Lançar números' }).click()
+  assert.equal(await dialogo(bia.page).getByRole('radio', { name: 'Prospecção fria', exact: true }).isChecked(), true)
+  assert.equal(await campo(bia.page, 'Custo desta fonte (opcional)').count(), 1)
+  await bia.page.keyboard.press('Escape'); await fechou(bia.page)
+  await bia.page.locator('main .hero-banner select').first().selectOption('Outubro')
+  await bia.page.getByRole('heading', { name: /Outubro 2026/ }).waitFor()
+  await bia.page.waitForLoadState('networkidle')
+  assert.match(bia.page.url(), /fonte=prospeccao/)
+  assert.match(await texto(bia.page), /Sem números de Prospecção fria neste período/)
+  await ir(bia.page, `${COMERCIAL}?${NOV}&funil=${fontesFunil.id}&fonte=inexistente`)
+  await seletorFontes.getByRole('button', { name: /Todas as fontes/, pressed: true }).waitFor()
+  ok('a fonte sobrevive a recarregar e a trocar o período; fonte inválida cai em Todas')
+
+  // Mudar a fonte de um lançamento já feito.
+  await bia.page.getByRole('button', { name: 'Editar lançamento de 05 nov 2026' }).click()
+  await dialogo(bia.page).getByRole('radio', { name: 'Indicação', exact: true }).check()
+  await dialogo(bia.page).getByRole('button', { name: 'Salvar', exact: true }).click()
+  await fechou(bia.page)
+  await seletorFontes.getByRole('button', { name: /Indicação/ }).locator('strong', { hasText: '60' }).waitFor()
+  ok('editar um lançamento muda a fonte dele')
+
+  // Editar as fontes do funil: renomear, adicionar e remover.
+  await bia.page.getByRole('button', { name: 'Editar funil' }).click()
+  const dlgFonte = dialogo(bia.page)
+  assert.equal(await dlgFonte.getByRole('button', { name: 'Remover fonte Tráfego' }).isDisabled(), true)
+  await dlgFonte.getByLabel('Nome da fonte 2').fill('Indicação de cliente')
+  await dlgFonte.getByRole('button', { name: '+ Adicionar fonte' }).click()
+  await dlgFonte.getByLabel('Nome da fonte 4').fill('Eventos')
+  await dlgFonte.getByRole('button', { name: 'Remover fonte Indicação de cliente' }).click()
+  await dlgFonte.getByRole('button', { name: 'Salvar funil' }).click()
+  await dlgFonte.getByRole('alert').waitFor()
+  assert.match(await dlgFonte.getByRole('alert').innerText(), /tem lançamentos/)
+  assert.equal(fontesFunil.fontes.length, 3, 'fonte com lançamento não pode sair')
+  await bia.page.keyboard.press('Escape'); await fechou(bia.page)
+
+  await bia.page.getByRole('button', { name: 'Editar funil' }).click()
+  await dlgFonte.getByLabel('Nome da fonte 2').fill('Indicação de cliente')
+  await dlgFonte.getByRole('button', { name: 'Remover fonte Prospecção fria' }).click()
+  await dlgFonte.getByRole('button', { name: '+ Adicionar fonte' }).click()
+  await dlgFonte.getByLabel('Nome da fonte 3').fill('Eventos')
+  await dlgFonte.getByRole('button', { name: 'Salvar funil' }).click()
+  await fechou(bia.page)
+  await seletorFontes.getByRole('button', { name: /Eventos/ }).waitFor()
+  assert.deepEqual(fontesFunil.fontes.map((f) => f.nome), ['Tráfego', 'Indicação de cliente', 'Eventos'])
+  assert.equal(fontesFunil.fontes[1].id, 'indicacao', 'renomear mantém o vínculo com os lançamentos')
+  await seletorFontes.getByRole('button', { name: /Indicação de cliente/ }).locator('strong', { hasText: '60' }).waitFor()
+  ok('fontes editáveis: renomear mantém os números, Tráfego é fixa e fonte em uso não sai')
+
+  // Layout com o seletor de fontes em todas as larguras.
+  await conferirLarguras(bia.page, `${COMERCIAL}?${NOV}&funil=${fontesFunil.id}`, 'funil com fontes')
+  await conferirLarguras(bia.page, `${COMERCIAL}?${NOV}&funil=${fontesFunil.id}&fonte=trafego`, 'uma fonte aberta')
+  ok('seletor de fontes e comparação sem sobreposição nem estouro nas 5 larguras')
+  if (shots) {
+    await bia.page.setViewportSize({ width: 1440, height: 1000 })
+    await ir(bia.page, `${COMERCIAL}?${NOV}&funil=${fontesFunil.id}`)
+    await bia.page.screenshot({ path: `${shots}/10-fontes-desktop.png`, fullPage: true })
+    await bia.page.setViewportSize({ width: 390, height: 844 })
+    await ir(bia.page, `${COMERCIAL}?${NOV}&funil=${fontesFunil.id}`)
+    await bia.page.screenshot({ path: `${shots}/11-fontes-celular.png`, fullPage: true })
+    await bia.page.screenshot({ path: `${shots}/12-topo-celular.png` })
+    await bia.page.evaluate(() => window.scrollTo(0, 57))
+    await bia.page.screenshot({ path: `${shots}/13-rolado-celular.png` })
+    await bia.page.getByRole('button', { name: '+ Lançar números' }).click()
+    await bia.page.screenshot({ path: `${shots}/14-lancar-celular.png` })
+    await bia.page.keyboard.press('Escape'); await fechou(bia.page)
+    await bia.page.setViewportSize({ width: 1440, height: 1000 })
+  }
+
+  // Sem a migration de fontes, salvar explica o que falta em vez de quebrar.
+  fontesAusentes = true
+  await bia.page.getByRole('button', { name: '+ Lançar números' }).click()
+  await campo(bia.page, topoNome).fill('1')
+  await dialogo(bia.page).getByRole('button', { name: 'Lançar', exact: true }).click()
+  await dialogo(bia.page).getByText(/20261108_funis_fontes_demanda/).waitFor()
+  fontesAusentes = false
+  await bia.page.keyboard.press('Escape'); await fechou(bia.page)
+  ok('sem a migration de fontes, gravar explica o que falta')
 
   // Importação: relatório de campanhas com dia, duas campanhas e linha de resumo.
   const CSV_META = '\uFEFF' + [
@@ -533,18 +734,21 @@ try {
   await dlg.getByRole('button', { name: 'Importar 2 data(s)' }).click()
   await fechou(bia.page)
   await bia.page.waitForURL(/modo=intervalo.*de=2026-10-05/)
-  await bia.page.getByRole('heading', { name: '05 – 12 out 2026' }).waitFor()
+  await bia.page.getByRole('heading', { name: /05 out – 12 out/ }).waitFor()
   await bia.page.locator(`[data-etapa="${primeiraEtapa.nome}"]`, { hasText: '36' }).waitFor()
   const importadas = () => tables.funil_lancamentos.filter((l) => l.funil_id === importarEm.id && l.origem_importacao === 'meta')
   assert.equal(importadas().length, 2)
+  assert.ok(importadas().every((l) => l.fonte === 'trafego'))
   assert.equal(importadas().find((l) => l.data === '2026-10-05').investimento, 100.5)
   assert.deepEqual(importadas()[0].detalhe_importacao, { arquivo: 'meta-outubro.csv', campanhas: ['[MKT] Leads'] })
   assert.match(await texto(bia.page), /Importado do Meta/)
-  assert.match(await texto(bia.page), /Investido no tráfego\s+R\$\s*196/)
+  assert.match(await texto(bia.page), /Investido\s+R\$\s*196/)
   ok('importa os totais por data, leva para o período importado e marca a origem')
 
   // Completar à mão e reimportar: não soma e não apaga o que foi completado.
   await bia.page.getByRole('button', { name: 'Editar lançamento de 05 out 2026' }).click()
+  assert.equal(await dialogo(bia.page).getByRole('radio').count(), 0, 'importado fica em tráfego')
+  await dialogo(bia.page).getByText(/Veio do arquivo do Meta/).waitFor()
   await campo(bia.page, importarEm.etapas[1].nome).fill('9')
   await campo(bia.page, 'Contratos perdidos').fill('1')
   await dialogo(bia.page).getByRole('button', { name: 'Salvar', exact: true }).click()
@@ -594,7 +798,7 @@ try {
   await dlg.getByText(/Relatório de campanhas: 2 linhas/).waitFor({ timeout: 20000 })
   await dlg.getByRole('button', { name: 'Importar 2 data(s)' }).click()
   await fechou(bia.page)
-  await bia.page.getByRole('heading', { name: '01 – 02 set 2026' }).waitFor()
+  await bia.page.getByRole('heading', { name: /01 set – 02 set/ }).waitFor()
   await bia.page.locator(`[data-etapa="${primeiraEtapa.nome}"]`, { hasText: '10' }).waitFor()
   assert.equal(importadas().find((l) => l.data === '2026-09-01').investimento, 70.25)
   ok('lê um .xlsx real no navegador')
@@ -772,12 +976,18 @@ try {
   assert.doesNotMatch(t, /Dani/)
   assert.match(await ana.page.locator('[data-pessoa="Caio Comercial"]').innerText(), /Funil secreto do Caio[\s\S]*777/)
   assert.match(await ana.page.locator('[data-pessoa="Bia Comercial"]').innerText(), /Funil de marketing[\s\S]*R\$\s*1\.000/)
-  assert.match(t, /Investido pelo time\s+R\$\s*1\.777/)
+  assert.match(t, /Investido pelo time\s+R\$\s*2\.777/)
+  const porFonteTime = await ana.page.locator('[data-por-fonte]').innerText()
+  assert.match(porFonteTime, /Tráfego\s+R\$\s*2\.777/)
+  assert.match(porFonteTime, /Indicação de cliente\s+R\$\s*0/)
   if (shots) await ana.page.screenshot({ path: `${shots}/2-time.png`, fullPage: true })
   await conferirLarguras(ana.page, `${COMERCIAL}/time?${NOV}`, 'Time')
+  await conferirLarguras(ana.page, `/dashboard/financeiro?${NOV}`, 'Caixa')
+  ok('Time mostra o total por fonte; Time e Caixa livres do menu e do sino nas 5 larguras')
   await ir(ana.page, `${COMERCIAL}/time?${NOV}`)
   await ana.page.getByRole('link', { name: 'Funil secreto do Caio' }).click()
   await ana.page.locator('[data-etapa="Topo Caio"]', { hasText: '70' }).waitFor()
+  await abrirSecoes(ana.page)
   ok('Time mostra todos com acesso, totais corretos e abre o funil da pessoa')
 
   await ana.page.getByRole('button', { name: 'Editar lançamento de 04 nov 2026' }).click()

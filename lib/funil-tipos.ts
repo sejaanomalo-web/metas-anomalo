@@ -6,6 +6,9 @@ export interface EtapaFunil {
   nome: string
 }
 
+/** De onde a demanda vem: tráfego, indicação, prospecção fria... */
+export type FonteFunil = EtapaFunil
+
 export interface FunilComercial {
   id: string
   usuario_id: string
@@ -13,6 +16,8 @@ export interface FunilComercial {
   descricao: string | null
   /** Ordem do array = ordem no funil. A última etapa é o fechamento. */
   etapas: EtapaFunil[]
+  /** Ausente antes da migration 20261108: valem as fontes padrão. */
+  fontes?: FonteFunil[]
   created_at: string
   updated_at: string
 }
@@ -25,6 +30,8 @@ export interface LancamentoFunil {
   investimento: number
   /** Mapa id da etapa → quantidade. */
   valores: Record<string, number>
+  /** Id da fonte de demanda. Ausente antes da migration 20261108. */
+  fonte?: string
   perdidos: number
   faturamento: number
   observacoes: string | null
@@ -51,6 +58,27 @@ export const ETAPAS_PADRAO: readonly string[] = [
   "Contratos fechados",
 ]
 
+/** Id fixo: é onde entra a importação do Meta, então não pode ser removida. */
+export const FONTE_TRAFEGO = "trafego"
+
+export const FONTES_PADRAO: readonly FonteFunil[] = [
+  { id: FONTE_TRAFEGO, nome: "Tráfego" },
+  { id: "indicacao", nome: "Indicação" },
+  { id: "prospeccao", nome: "Prospecção fria" },
+]
+
+export function fontesDoFunil(funil: { fontes?: FonteFunil[] | null }): FonteFunil[] {
+  return funil.fontes && funil.fontes.length > 0
+    ? funil.fontes
+    : [...FONTES_PADRAO]
+}
+
+export function fonteDoLancamento(l: { fonte?: string | null }): string {
+  return l.fonte || FONTE_TRAFEGO
+}
+
+export const MAX_FONTES = 8
+export const MAX_NOME_FONTE = 40
 export const MIN_ETAPAS = 2
 export const MAX_ETAPAS = 12
 export const MAX_NOME_FUNIL = 80

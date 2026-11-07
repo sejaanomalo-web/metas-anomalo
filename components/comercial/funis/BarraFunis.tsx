@@ -4,7 +4,7 @@ import dynamic from "next/dynamic"
 import { useState, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { excluirFunilAction } from "@/lib/funis-comerciais-actions"
-import type { FunilComercial } from "@/lib/funil-tipos"
+import { fontesDoFunil, type FunilComercial } from "@/lib/funil-tipos"
 import FormularioFunil from "./FormularioFunil"
 import FormularioLancamento from "./FormularioLancamento"
 import ModalComercial, {
@@ -42,6 +42,12 @@ export default function BarraFunis({
     "novo" | "editar" | "excluir" | "lancar" | "importar" | null
   >(null)
   const [navegando, startNav] = useTransition()
+
+  const fonteNaUrl = searchParams.get("fonte")
+  const fontePadrao =
+    selecionado && fontesDoFunil(selecionado).some((f) => f.id === fonteNaUrl)
+      ? fonteNaUrl
+      : null
 
   function irParaFunil(id: string | null) {
     const params = new URLSearchParams(searchParams.toString())
@@ -150,6 +156,7 @@ export default function BarraFunis({
         <FormularioLancamento
           funil={selecionado}
           dataPadrao={dataPadrao}
+          fontePadrao={fontePadrao}
           fechar={() => setModal(null)}
           aoSalvar={() => {
             setModal(null)
@@ -169,7 +176,10 @@ export default function BarraFunis({
             params.set("modo", "intervalo")
             params.set("de", de)
             params.set("ate", ate)
+            params.delete("mes")
+            params.delete("ano")
             params.delete("agrupar")
+            params.delete("fonte") // para o que entrou aparecer, em qualquer filtro
             startNav(() => {
               router.push(`${pathname}?${params.toString()}`, { scroll: false })
               router.refresh()

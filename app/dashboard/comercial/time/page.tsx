@@ -1,21 +1,18 @@
 import Link from "next/link"
 import AbasArea from "@/components/AbasArea"
-import SeletorPeriodoFunil from "@/components/comercial/funis/SeletorPeriodoFunil"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import estilos from "@/components/comercial/funis/funis.module.css"
 import { requererAdmin, requererPermissao } from "@/lib/auth"
 import { formatBRL, formatNumero } from "@/lib/data"
-import {
-  formatarPct,
-  hojeBRT,
-  parsePeriodoFunil,
-  periodoParaParams,
-  resumirFunil,
-} from "@/lib/funil-calculo"
+import { formatarPct, resumirFunil, resumirPorFonte } from "@/lib/funil-calculo"
+import { fontesDoFunil } from "@/lib/funil-tipos"
 import {
   listarFunis,
   listarLancamentos,
   listarUsuariosComercial,
 } from "@/lib/funis-comerciais"
+import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 
 export const dynamic = "force-dynamic"
 
@@ -48,9 +45,8 @@ export default async function TimeFunisPage({
   await requererPermissao("dashboard_comercial")
   await requererAdmin()
 
-  const hoje = hojeBRT()
-  const periodo = parsePeriodoFunil(searchParams, hoje)
-  const paramsPeriodo = new URLSearchParams(periodoParaParams(periodo))
+  const periodo = parsePeriodo(searchParams)
+  const paramsPeriodo = new URLSearchParams(periodoQS(periodo))
 
   const [usuarios, { funis, tabelaAusente }] = await Promise.all([
     listarUsuariosComercial(),
@@ -79,15 +75,38 @@ export default async function TimeFunisPage({
   const faturado = resumos.reduce((s, r) => s + r.faturamento, 0)
   const perdidos = resumos.reduce((s, r) => s + r.perdidos, 0)
 
+  // Fontes de funis diferentes se somam pelo nome. Etapas não entram, porque
+  // cada funil tem as suas: só o que é comum a todos.
+  const porFonte = new Map<
+    string,
+    { investido: number; fechados: number; perdidos: number; faturado: number }
+  >()
+  for (const f of funis) {
+    const doFunil = lancamentos.filter((l) => l.funil_id === f.id)
+    for (const { fonte, resumo } of resumirPorFonte(f.etapas, fontesDoFunil(f), doFunil)) {
+      const linha = porFonte.get(fonte.nome) ?? {
+        investido: 0,
+        fechados: 0,
+        perdidos: 0,
+        faturado: 0,
+      }
+      linha.investido += resumo.investimento
+      linha.fechados += resumo.fechados
+      linha.perdidos += resumo.perdidos
+      linha.faturado += resumo.faturamento
+      porFonte.set(fonte.nome, linha)
+    }
+  }
+
   return (
-    <main className="mx-auto px-4 sm:px-8 py-10 space-y-8" style={{ maxWidth: 1280 }}>
-      <div className={`hero-banner ${estilos.hero}`}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-10" style={{ maxWidth: 1280 }}>
+      <div className="hero-banner">
         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-2)" }}>
-          Comercial · Time
+          Comercial
         </p>
         <div className={estilos.heroTopo}>
-          <h1 style={{ fontSize: 34 }}>{periodo.rotulo}</h1>
-          <SeletorPeriodoFunil periodo={periodo} hoje={hoje} />
+          <h1 style={{ fontSize: 36 }}>Time · {periodo.rotulo}</h1>
+          <SeletorPeriodoGlobal mesAtual={periodo.mes} anoAtual={periodo.ano} />
         </div>
         <div style={{ marginTop: 16 }}>
           <AbasArea
@@ -135,6 +154,43 @@ export default async function TimeFunisPage({
               </div>
             ))}
           </section>
+
+          {porFonte.size > 0 && (
+            <section data-por-fonte>
+              <h2 style={{ fontSize: 18, marginBottom: 10 }}>Por fonte de demanda</h2>
+              <div className="glass" style={{ overflowX: "auto", padding: 4 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th scope="col" style={{ ...titulo, textAlign: "left" }}>
+                        Fonte
+                      </th>
+                      <th scope="col" style={titulo}>Investido</th>
+                      <th scope="col" style={titulo}>Fechados</th>
+                      <th scope="col" style={titulo}>Perdidos</th>
+                      <th scope="col" style={titulo}>Faturamento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from(porFonte, ([nome, l]) => (
+                      <tr key={nome}>
+                        <th
+                          scope="row"
+                          style={{ ...celula, textAlign: "left", fontWeight: 600 }}
+                        >
+                          {nome}
+                        </th>
+                        <td style={celula}>{formatBRL(l.investido)}</td>
+                        <td style={celula}>{formatNumero(l.fechados)}</td>
+                        <td style={celula}>{formatNumero(l.perdidos)}</td>
+                        <td style={celula}>{formatBRL(l.faturado)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {pessoas.map((p) => (
             <section key={p.id} data-pessoa={p.nome}>

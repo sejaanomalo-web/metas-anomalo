@@ -1,7 +1,13 @@
-import type { EtapaFunil, LancamentoFunil } from "./funil-tipos"
+import {
+  fonteDoLancamento,
+  type EtapaFunil,
+  type FonteFunil,
+  type LancamentoFunil,
+} from "./funil-tipos"
 
 /**
- * Regras puras dos funis comerciais: período, agrupamento e conversões.
+ * Regras puras dos funis comerciais: agrupamento, fontes e conversões. O período
+ * vem do parsePeriodo global, o mesmo das outras telas.
  *
  * Não acessa banco nem relógio. "Hoje" sempre chega por parâmetro, o que
  * mantém servidor e cliente de acordo e permite testar qualquer data. Datas são
@@ -74,155 +80,23 @@ export function formatarDataCurta(iso: string): string {
   return rotuloCurto(iso, true)
 }
 
-// ── Período ─────────────────────────────────────────────────────────────────
+// ── Semana e mês ────────────────────────────────────────────────────────────
 
-export type ModoPeriodoFunil = "dia" | "semana" | "mes" | "ano" | "intervalo"
-
-export const MODOS_PERIODO: { valor: ModoPeriodoFunil; rotulo: string }[] = [
-  { valor: "dia", rotulo: "Dia" },
-  { valor: "semana", rotulo: "Semana" },
-  { valor: "mes", rotulo: "Mês" },
-  { valor: "ano", rotulo: "Ano" },
-  { valor: "intervalo", rotulo: "Intervalo" },
-]
-
-export interface PeriodoFunil {
-  modo: ModoPeriodoFunil
-  de: string
-  ate: string
-  rotulo: string
-}
-
-/** Segunda-feira da semana da data. A semana vai de segunda a domingo. */
-function segundaDaSemana(iso: string): string {
+/** Domingo da semana da data. A semana vai de segunda a domingo. */
+function domingoDaSemana(iso: string): string {
   const diaSemana = paraUTC(iso).getUTCDay() // 0 = domingo
-  return somarDias(iso, diaSemana === 0 ? -6 : 1 - diaSemana)
+  return somarDias(iso, diaSemana === 0 ? 0 : 7 - diaSemana)
 }
 
-function rotuloIntervalo(de: string, ate: string): string {
-  if (de === ate) return rotuloCurto(de, true)
-  if (de.slice(0, 7) === ate.slice(0, 7)) {
-    return `${de.slice(8, 10)} – ${rotuloCurto(ate, true)}`
-  }
-  if (de.slice(0, 4) === ate.slice(0, 4)) {
-    return `${rotuloCurto(de)} – ${rotuloCurto(ate, true)}`
-  }
-  return `${rotuloCurto(de, true)} – ${rotuloCurto(ate, true)}`
-}
-
-/** Período do modo que contém a data-âncora. Intervalo é um dia só aqui. */
-export function periodoDaData(
-  modo: ModoPeriodoFunil,
-  ancora: string
-): PeriodoFunil {
-  const ano = parseInt(ancora.slice(0, 4), 10)
-  const mes = parseInt(ancora.slice(5, 7), 10)
-  switch (modo) {
-    case "semana": {
-      const de = segundaDaSemana(ancora)
-      const ate = somarDias(de, 6)
-      return { modo, de, ate, rotulo: rotuloIntervalo(de, ate) }
-    }
-    case "mes":
-      return {
-        modo,
-        de: `${ano}-${pad(mes)}-01`,
-        ate: `${ano}-${pad(mes)}-${pad(ultimoDiaDoMes(ano, mes))}`,
-        rotulo: `${NOMES_MES[mes - 1]} ${ano}`,
-      }
-    case "ano":
-      return {
-        modo,
-        de: `${ano}-01-01`,
-        ate: `${ano}-12-31`,
-        rotulo: String(ano),
-      }
-    default:
-      return { modo, de: ancora, ate: ancora, rotulo: rotuloCurto(ancora, true) }
-  }
-}
-
-export function periodoIntervalo(de: string, ate: string): PeriodoFunil {
-  const [ini, fim] = de <= ate ? [de, ate] : [ate, de]
-  return {
-    modo: "intervalo",
-    de: ini,
-    ate: fim,
-    rotulo: rotuloIntervalo(ini, fim),
-  }
-}
-
-/**
- * Lê o período da URL. Aceita também ?mes=&ano=, formato do seletor global
- * usado nas outras telas, então quem chega de lá cai no mês certo.
- * Sem nada válido: mês corrente.
- */
-export function parsePeriodoFunil(
-  params: {
-    modo?: string
-    de?: string
-    ate?: string
-    mes?: string
-    ano?: string
-  },
-  hoje: string
-): PeriodoFunil {
-  const de = dataValida(params.de) ? params.de : null
-  const ate = dataValida(params.ate) ? params.ate : null
-  const modo = params.modo
-
-  if (modo === "intervalo" && de && ate) return periodoIntervalo(de, ate)
-  if ((modo === "dia" || modo === "semana" || modo === "mes" || modo === "ano") && de) {
-    return periodoDaData(modo, de)
-  }
-
-  const idxMes = NOMES_MES.indexOf(params.mes ?? "")
-  const ano = parseInt(params.ano ?? "", 10)
-  if (idxMes >= 0 && ano >= 2000 && ano <= 2100) {
-    return periodoDaData("mes", `${ano}-${pad(idxMes + 1)}-01`)
-  }
-  return periodoDaData("mes", hoje)
-}
-
-/** Período anterior (-1) ou seguinte (+1). Intervalo anda o próprio tamanho. */
-export function navegarPeriodo(p: PeriodoFunil, delta: -1 | 1): PeriodoFunil {
-  switch (p.modo) {
-    case "dia":
-      return periodoDaData("dia", somarDias(p.de, delta))
-    case "semana":
-      return periodoDaData("semana", somarDias(p.de, 7 * delta))
-    case "mes": {
-      const d = paraUTC(p.de)
-      d.setUTCMonth(d.getUTCMonth() + delta)
-      return periodoDaData("mes", paraISO(d))
-    }
-    case "ano":
-      return periodoDaData(
-        "ano",
-        `${parseInt(p.de.slice(0, 4), 10) + delta}-01-01`
-      )
-    case "intervalo": {
-      const dias = diasEntre(p.de, p.ate) + 1
-      return periodoIntervalo(
-        somarDias(p.de, dias * delta),
-        somarDias(p.ate, dias * delta)
-      )
-    }
-  }
+function fimDoMes(iso: string): string {
+  const ano = parseInt(iso.slice(0, 4), 10)
+  const mes = parseInt(iso.slice(5, 7), 10)
+  return `${iso.slice(0, 7)}-${pad(ultimoDiaDoMes(ano, mes))}`
 }
 
 /** Diferença em dias de `de` até `ate`. */
 function diasEntre(de: string, ate: string): number {
   return Math.round((paraUTC(ate).getTime() - paraUTC(de).getTime()) / 86_400_000)
-}
-
-/** Parâmetros de URL que representam o período. */
-export function periodoParaParams(p: {
-  modo: ModoPeriodoFunil
-  de: string
-  ate: string
-}): { modo: string; de: string; ate: string } {
-  return { modo: p.modo, de: p.de, ate: p.ate }
 }
 
 // ── Agrupamento (evolução: semana a semana etc.) ────────────────────────────
@@ -238,7 +112,9 @@ export const AGRUPAMENTOS: { valor: AgrupamentoFunil; rotulo: string }[] = [
 /** Acima disto, uma linha por dia deixa de ser legível. */
 const MAX_DIAS_AGRUPAR_POR_DIA = 62
 
-export function agrupamentosDisponiveis(p: PeriodoFunil): AgrupamentoFunil[] {
+type Intervalo = { de: string; ate: string }
+
+export function agrupamentosDisponiveis(p: Intervalo): AgrupamentoFunil[] {
   const dias = diasEntre(p.de, p.ate) + 1
   return AGRUPAMENTOS.map((a) => a.valor).filter((a) =>
     a === "dia" ? dias <= MAX_DIAS_AGRUPAR_POR_DIA : true
@@ -247,8 +123,8 @@ export function agrupamentosDisponiveis(p: PeriodoFunil): AgrupamentoFunil[] {
 
 /** Usa o pedido na URL quando cabe; senão escolhe conforme o tamanho do período. */
 export function resolverAgrupamento(
-  pedido: string | undefined,
-  p: PeriodoFunil
+  pedido: string | null | undefined,
+  p: Intervalo
 ): AgrupamentoFunil {
   const disponiveis = agrupamentosDisponiveis(p)
   if (disponiveis.includes(pedido as AgrupamentoFunil)) {
@@ -276,8 +152,8 @@ export function gerarBaldes(
   while (cursor <= ate) {
     let fim: string
     if (agrupamento === "dia") fim = cursor
-    else if (agrupamento === "semana") fim = periodoDaData("semana", cursor).ate
-    else fim = periodoDaData("mes", cursor).ate
+    else if (agrupamento === "semana") fim = domingoDaSemana(cursor)
+    else fim = fimDoMes(cursor)
     if (fim > ate) fim = ate
 
     let rotulo: string
@@ -403,6 +279,27 @@ export function resumirFunil(
     gargalo,
     registros: lancamentos.length,
   }
+}
+
+/** Só os lançamentos da fonte. Sem fonte (null): todos. */
+export function filtrarPorFonte(
+  lancamentos: LancamentoFunil[],
+  fonte: string | null
+): LancamentoFunil[] {
+  if (!fonte) return lancamentos
+  return lancamentos.filter((l) => fonteDoLancamento(l) === fonte)
+}
+
+/** Mesma conta para cada fonte, na ordem do funil, para comparar lado a lado. */
+export function resumirPorFonte(
+  etapas: EtapaFunil[],
+  fontes: FonteFunil[],
+  lancamentos: LancamentoFunil[]
+): { fonte: FonteFunil; resumo: ResumoFunil }[] {
+  return fontes.map((fonte) => ({
+    fonte,
+    resumo: resumirFunil(etapas, filtrarPorFonte(lancamentos, fonte.id)),
+  }))
 }
 
 /** Resumo de cada fatia do período, na ordem cronológica. */

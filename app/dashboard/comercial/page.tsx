@@ -1,32 +1,19 @@
 import AbasArea from "@/components/AbasArea"
+import SeletorPeriodoGlobal from "@/components/SeletorPeriodoGlobal"
 import BarraFunis from "@/components/comercial/funis/BarraFunis"
-import EvolucaoFunil from "@/components/comercial/funis/EvolucaoFunil"
-import FunilCamadas from "@/components/comercial/funis/FunilCamadas"
-import ListaLancamentos from "@/components/comercial/funis/ListaLancamentos"
-import SeletorPeriodoFunil from "@/components/comercial/funis/SeletorPeriodoFunil"
+import PainelFunil from "@/components/comercial/funis/PainelFunil"
 import SeletorUsuarioFunil from "@/components/comercial/funis/SeletorUsuarioFunil"
 import estilos from "@/components/comercial/funis/funis.module.css"
-import SectionHeader from "@/components/ui/SectionHeader"
 import { requererPermissao } from "@/lib/auth"
-import { formatBRL, formatNumero } from "@/lib/data"
-import {
-  agrupamentosDisponiveis,
-  evolucaoDoFunil,
-  formatarPct,
-  gerarBaldes,
-  hojeBRT,
-  parsePeriodoFunil,
-  periodoParaParams,
-  resolverAgrupamento,
-  resumirFunil,
-  type AgrupamentoFunil,
-} from "@/lib/funil-calculo"
+import { hojeBRT } from "@/lib/funil-calculo"
 import {
   contarLancamentos,
   listarFunis,
   listarLancamentos,
   listarUsuariosComercial,
 } from "@/lib/funis-comerciais"
+import { parsePeriodo } from "@/lib/periodo"
+import { periodoQS } from "@/lib/periodo-url"
 
 export const dynamic = "force-dynamic"
 
@@ -35,6 +22,8 @@ export const dynamic = "force-dynamic"
  * só os próprios funis. Admin pode abrir a de qualquer pessoa (?usuario=). O
  * ?usuario= de quem não é admin é ignorado, e o ?funil= só vale para um funil
  * da lista daquela pessoa, então trocar o id na URL não abre funil alheio.
+ *
+ * O filtro de período é o seletor global, o mesmo do Caixa e das outras telas.
  */
 export default async function ComercialPage({
   searchParams,
@@ -47,14 +36,13 @@ export default async function ComercialPage({
     ano?: string
     funil?: string
     usuario?: string
-    agrupar?: string
   }
 }) {
   const usuario = await requererPermissao("dashboard_comercial")
   const ehAdmin = usuario.papel === "admin"
 
   const hoje = hojeBRT()
-  const periodo = parsePeriodoFunil(searchParams, hoje)
+  const periodo = parsePeriodo(searchParams)
 
   const usuariosDoTime = ehAdmin ? await listarUsuariosComercial() : []
   const dono =
@@ -73,61 +61,38 @@ export default async function ComercialPage({
         contarLancamentos(funil.id),
       ])
     : [[], 0]
-  const resumo = funil ? resumirFunil(funil.etapas, lancamentos) : null
 
-  const agrupamento = resolverAgrupamento(searchParams.agrupar, periodo)
-  const evolucao = funil
-    ? evolucaoDoFunil(
-        funil.etapas,
-        lancamentos,
-        gerarBaldes(periodo.de, periodo.ate, agrupamento)
-      )
-    : []
-
-  // Parâmetros que acompanham os links internos da tela.
-  const paramsBase = new URLSearchParams(periodoParaParams(periodo))
-  if (vendoOutraPessoa) paramsBase.set("usuario", dono.id)
-  const hrefAgrupamento = (a: AgrupamentoFunil) => {
-    const p = new URLSearchParams(paramsBase)
-    if (funil) p.set("funil", funil.id)
-    p.set("agrupar", a)
-    return `/dashboard/comercial?${p.toString()}`
-  }
+  const paramsAba = new URLSearchParams(periodoQS(periodo))
+  if (vendoOutraPessoa) paramsAba.set("usuario", dono.id)
 
   // Lançar dentro do período que está na tela: hoje se couber, senão o início.
   const dataPadrao = hoje >= periodo.de && hoje <= periodo.ate ? hoje : periodo.de
 
-  const primeira = resumo?.etapas[0]
-  const ultima = resumo?.etapas[resumo.etapas.length - 1]
-  const semDados = !resumo || resumo.registros === 0
-
   return (
-    <main
-      className="mx-auto px-4 sm:px-8 py-10 space-y-8"
-      style={{ maxWidth: 1280 }}
-    >
-      <div className={`hero-banner ${estilos.hero}`}>
+    <main className="mx-auto px-4 md:px-8 py-10 space-y-10" style={{ maxWidth: 1280 }}>
+      <div className="hero-banner">
         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text-2)" }}>
           Comercial · {vendoOutraPessoa ? dono.nome : "Minha interface"}
         </p>
         <div className={estilos.heroTopo}>
-          <h1 style={{ fontSize: 34 }}>{periodo.rotulo}</h1>
-          <SeletorPeriodoFunil periodo={periodo} hoje={hoje} />
+          <h1 style={{ fontSize: 36 }}>Comercial · {periodo.rotulo}</h1>
+          <SeletorPeriodoGlobal mesAtual={periodo.mes} anoAtual={periodo.ano} />
         </div>
+        <p style={{ fontSize: 14, color: "var(--text-2)", marginTop: 10 }}>
+          Funis, fontes de demanda e gargalos do período.
+        </p>
         {ehAdmin && (
           <div className={estilos.heroRodape}>
             <AbasArea
               itens={[
                 {
                   label: "Funis",
-                  href: `/dashboard/comercial?${paramsBase.toString()}`,
+                  href: `/dashboard/comercial?${paramsAba.toString()}`,
                   ativo: true,
                 },
                 {
                   label: "Time",
-                  href: `/dashboard/comercial/time?${new URLSearchParams(
-                    periodoParaParams(periodo)
-                  ).toString()}`,
+                  href: `/dashboard/comercial/time?${periodoQS(periodo)}`,
                   ativo: false,
                 },
                 {
@@ -161,7 +126,7 @@ export default async function ComercialPage({
             dataPadrao={dataPadrao}
           />
 
-          {!funil || !resumo ? (
+          {!funil ? (
             <div className="glass" style={{ padding: 28, textAlign: "center" }}>
               <h2 style={{ fontSize: 18 }}>
                 {vendoOutraPessoa
@@ -174,137 +139,14 @@ export default async function ComercialPage({
               </p>
             </div>
           ) : (
-            <>
-              <section aria-label="Indicadores do período" className={estilos.kpis}>
-                {[
-                  {
-                    rotulo: "Investido no tráfego",
-                    valor: semDados ? "—" : formatBRL(resumo.investimento),
-                  },
-                  {
-                    rotulo: `Custo por ${primeira?.nome ?? "etapa"}`,
-                    valor: primeira?.custo != null ? formatBRL(primeira.custo) : "—",
-                  },
-                  {
-                    rotulo: `Custo por ${ultima?.nome ?? "etapa"}`,
-                    valor: ultima?.custo != null ? formatBRL(ultima.custo) : "—",
-                  },
-                  {
-                    rotulo: "Retorno sobre o investido",
-                    valor:
-                      resumo.retorno !== null
-                        ? `${resumo.retorno.toLocaleString("pt-BR", {
-                            maximumFractionDigits: 2,
-                          })}x`
-                        : "—",
-                  },
-                ].map((k) => (
-                  <div key={k.rotulo} className={`glass ${estilos.kpi}`}>
-                    <p>{k.rotulo}</p>
-                    <p>{k.valor}</p>
-                  </div>
-                ))}
-              </section>
-
-              <section>
-                <SectionHeader
-                  titulo="Funil do período"
-                  descricao={
-                    semDados
-                      ? "Ainda sem números neste período. Lance à mão ou importe do Meta."
-                      : "Porcentagem entre as etapas, somando os lançamentos do período"
-                  }
-                />
-                {resumo.gargalo && (
-                  <p
-                    role="status"
-                    style={{
-                      maxWidth: 760,
-                      margin: "0 auto 14px",
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      fontSize: 13,
-                      color: "#fecaca",
-                      background: "rgba(239,68,68,0.10)",
-                      border: "1px solid rgba(239,68,68,0.35)",
-                    }}
-                  >
-                    Maior gargalo: de <strong>{resumo.gargalo.de}</strong> para{" "}
-                    <strong>{resumo.gargalo.para}</strong>, só{" "}
-                    {formatarPct(resumo.gargalo.taxa)} avançaram.
-                  </p>
-                )}
-                <FunilCamadas resumo={resumo} />
-
-                {!semDados && (
-                <div className={estilos.resultados}>
-                  {[
-                    {
-                      rotulo: "Contratos perdidos",
-                      valor: semDados ? "—" : formatNumero(resumo.perdidos),
-                    },
-                    {
-                      rotulo: "Taxa de fechamento",
-                      valor: formatarPct(resumo.taxaFechamento),
-                      nota: "fechados ÷ (fechados + perdidos)",
-                    },
-                    {
-                      rotulo: "Faturamento gerado",
-                      valor: semDados ? "—" : formatBRL(resumo.faturamento),
-                    },
-                  ].map((c) => (
-                    <div key={c.rotulo} className="glass" style={{ padding: "14px 16px" }}>
-                      <p style={{ fontSize: 12, color: "var(--text-2)" }}>{c.rotulo}</p>
-                      <p
-                        style={{
-                          marginTop: 4,
-                          fontSize: 20,
-                          fontWeight: 700,
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {c.valor}
-                      </p>
-                      {c.nota && (
-                        <p style={{ marginTop: 2, fontSize: 11, color: "var(--text-3)" }}>
-                          {c.nota}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                )}
-              </section>
-
-              {!semDados && (
-              <section>
-                <SectionHeader
-                  titulo="Evolução no período"
-                  descricao="Compare dia a dia, semana a semana ou mês a mês"
-                />
-                <EvolucaoFunil
-                  linhas={evolucao}
-                  agrupamento={agrupamento}
-                  disponiveis={agrupamentosDisponiveis(periodo)}
-                  hrefAgrupamento={hrefAgrupamento}
-                />
-              </section>
-              )}
-
-              <section>
-                <SectionHeader
-                  titulo="Lançamentos"
-                  descricao="O que foi registrado no período, por data"
-                />
-                <ListaLancamentos
-                  funil={funil}
-                  lancamentos={lancamentos}
-                  dataPadrao={dataPadrao}
-                  de={periodo.de}
-                  ate={periodo.ate}
-                />
-              </section>
-            </>
+            <PainelFunil
+              key={funil.id}
+              funil={funil}
+              lancamentos={lancamentos}
+              de={periodo.de}
+              ate={periodo.ate}
+              dataPadrao={dataPadrao}
+            />
           )}
         </>
       )}
