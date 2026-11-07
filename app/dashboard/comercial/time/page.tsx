@@ -35,7 +35,7 @@ const titulo: React.CSSProperties = {
 /**
  * Visão do admin sobre todas as interfaces comerciais. Cada funil tem as
  * próprias etapas, então só o que é comum entre eles entra no total do time:
- * investimento, perdidos e faturamento.
+ * investimento, perdidos e total contratado.
  */
 export default async function TimeFunisPage({
   searchParams,
@@ -72,14 +72,15 @@ export default async function TimeFunisPage({
   }))
   const resumos = pessoas.flatMap((p) => p.funis.map((f) => f.resumo))
   const investido = resumos.reduce((s, r) => s + r.investimento, 0)
-  const faturado = resumos.reduce((s, r) => s + r.faturamento, 0)
-  const perdidos = resumos.reduce((s, r) => s + r.perdidos, 0)
+  const primeiroMes = resumos.reduce((s, r) => s + r.faturamento, 0)
+  const recorrencia = resumos.reduce((s, r) => s + r.recorrencia, 0)
+  const contratado = resumos.reduce((s, r) => s + r.totalContratado, 0)
 
   // Fontes de funis diferentes se somam pelo nome. Etapas não entram, porque
   // cada funil tem as suas: só o que é comum a todos.
   const porFonte = new Map<
     string,
-    { investido: number; fechados: number; perdidos: number; faturado: number }
+    { investido: number; fechados: number; perdidos: number; contratado: number }
   >()
   for (const f of funis) {
     const doFunil = lancamentos.filter((l) => l.funil_id === f.id)
@@ -88,12 +89,12 @@ export default async function TimeFunisPage({
         investido: 0,
         fechados: 0,
         perdidos: 0,
-        faturado: 0,
+        contratado: 0,
       }
       linha.investido += resumo.investimento
       linha.fechados += resumo.fechados
       linha.perdidos += resumo.perdidos
-      linha.faturado += resumo.faturamento
+      linha.contratado += resumo.totalContratado
       porFonte.set(fonte.nome, linha)
     }
   }
@@ -145,8 +146,9 @@ export default async function TimeFunisPage({
           <section aria-label="Total do time no período" className={estilos.kpis}>
             {[
               { rotulo: "Investido pelo time", valor: formatBRL(investido) },
-              { rotulo: "Contratos perdidos", valor: formatNumero(perdidos) },
-              { rotulo: "Faturamento gerado", valor: formatBRL(faturado) },
+              { rotulo: "Entrada no 1º mês", valor: formatBRL(primeiroMes) },
+              { rotulo: "Recorrência mensal", valor: formatBRL(recorrencia) },
+              { rotulo: "Total contratado", valor: formatBRL(contratado) },
             ].map((k) => (
               <div key={k.rotulo} className={`glass ${estilos.kpi}`}>
                 <p>{k.rotulo}</p>
@@ -168,7 +170,7 @@ export default async function TimeFunisPage({
                       <th scope="col" style={titulo}>Investido</th>
                       <th scope="col" style={titulo}>Fechados</th>
                       <th scope="col" style={titulo}>Perdidos</th>
-                      <th scope="col" style={titulo}>Faturamento</th>
+                      <th scope="col" style={titulo}>Contratado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -183,7 +185,7 @@ export default async function TimeFunisPage({
                         <td style={celula}>{formatBRL(l.investido)}</td>
                         <td style={celula}>{formatNumero(l.fechados)}</td>
                         <td style={celula}>{formatNumero(l.perdidos)}</td>
-                        <td style={celula}>{formatBRL(l.faturado)}</td>
+                        <td style={celula}>{formatBRL(l.contratado)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -214,7 +216,7 @@ export default async function TimeFunisPage({
                         <th scope="col" style={titulo}>Topo</th>
                         <th scope="col" style={titulo}>Fechados</th>
                         <th scope="col" style={titulo}>Perdidos</th>
-                        <th scope="col" style={titulo}>Faturamento</th>
+                        <th scope="col" style={titulo}>Contratado</th>
                         <th scope="col" style={{ ...titulo, textAlign: "left" }}>
                           Maior gargalo
                         </th>
@@ -244,7 +246,7 @@ export default async function TimeFunisPage({
                             </td>
                             <td style={celula}>{formatNumero(resumo.fechados)}</td>
                             <td style={celula}>{formatNumero(resumo.perdidos)}</td>
-                            <td style={celula}>{formatBRL(resumo.faturamento)}</td>
+                            <td style={celula}>{formatBRL(resumo.totalContratado)}</td>
                             <td style={{ ...celula, textAlign: "left" }}>
                               {resumo.gargalo
                                 ? `${resumo.gargalo.de} → ${resumo.gargalo.para} (${formatarPct(resumo.gargalo.taxa)})`

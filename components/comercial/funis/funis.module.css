@@ -276,6 +276,80 @@
   gap: 10px;
 }
 
+.resultadoNota {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ── Contratos fechados no formulário de lançamento ──────────────────────── */
+.contratos {
+  display: grid;
+  gap: 10px;
+}
+
+.contrato {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 10px;
+}
+
+.contratoTopo {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.contratoRemover {
+  flex: none;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: transparent;
+  cursor: pointer;
+}
+
+.contratoGrade {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 84px;
+  gap: 10px;
+}
+
+.contratoTotal {
+  font-size: 12px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.contratoTotal span {
+  color: var(--text-3);
+}
+
+.contratosRodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.contratosRodape p {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+@media (max-width: 479px) {
+  .contratoGrade {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
 /* ── Evolução: tabela no desktop, cartões no celular ──────────────────────── */
 .evolucaoTabela {
   overflow-x: auto;
@@ -470,9 +544,6 @@
   }
   .resultados {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .resultados > :last-child {
-    grid-column: 1 / -1;
   }
 
   .evolucaoTabela,

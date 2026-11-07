@@ -8,11 +8,12 @@ import {
   formatarPct,
   gerarBaldes,
   hojeBRT,
+  normalizarContratos,
   resolverAgrupamento,
   resumirFunil,
   resumirPorFonte,
 } from "./funil-calculo"
-import type { EtapaFunil, LancamentoFunil } from "./funil-tipos"
+import { contratosDoLancamento, totalDoContrato, type EtapaFunil, type LancamentoFunil } from "./funil-tipos"
 
 const ETAPAS: EtapaFunil[] = [
   { id: "a", nome: "Leads" },
@@ -255,5 +256,66 @@ test("resumo por fonte: a mesma estrutura de funil, e o total bate", () => {
   assert.equal(
     r.reduce((s, x) => s + x.resumo.etapas[0].valor, 0),
     total.etapas[0].valor
+  )
+})
+
+test("contratos com 1ª parcela diferente: 1º mês, recorrência e total", () => {
+  // Exemplo real: 3.847 na 1ª (produto extra) + 2 × 1.147; 997 × 3; 600 × 3.
+  const r = resumirFunil(ETAPAS, [
+    lanc("2026-11-03", { a: 5, d: 3 }, {
+      investimento: 97,
+      faturamento: 5444,
+      contratos: [
+        { cliente: "A", primeira: 3847, mensal: 1147, meses: 3 },
+        { primeira: 997, mensal: 997, meses: 3 },
+        { primeira: 600, mensal: 600, meses: 3 },
+      ],
+    }),
+  ])
+  assert.equal(r.faturamento, 5444)
+  assert.equal(r.recorrencia, 2744)
+  assert.equal(r.totalContratado, 6141 + 2991 + 1800)
+  assert.equal(r.contratos, 3)
+  assert.equal(r.ticketMedio, 10932 / 3)
+  assert.equal(r.retorno, 10932 / 97)
+  assert.equal(r.retornoPrimeiroMes, 5444 / 97)
+})
+
+test("lançamento antigo só com faturamento vale como contrato de 1 mês", () => {
+  assert.deepEqual(contratosDoLancamento({ faturamento: 900 }), [
+    { primeira: 900, mensal: 0, meses: 1 },
+  ])
+  assert.deepEqual(contratosDoLancamento({ faturamento: 0, contratos: [] }), [])
+  const r = resumirFunil(ETAPAS, [lanc("2026-11-01", { a: 1 }, { faturamento: 900 })])
+  assert.equal(r.totalContratado, 900)
+  assert.equal(r.recorrencia, 0)
+  assert.equal(r.contratos, 1)
+  assert.equal(totalDoContrato({ primeira: 3847, mensal: 1147, meses: 3 }), 6141)
+})
+
+test("normalizarContratos valida e completa a lista do formulário", () => {
+  const ok = normalizarContratos(
+    JSON.stringify([
+      { cliente: "  Loja X ", primeira: 3847, mensal: 1147, meses: 3 },
+      { primeira: 997, mensal: null, meses: 3 }, // demais em branco = igual à 1ª
+      { primeira: 500, mensal: 200, meses: 1 }, // 1 mês: não há demais parcelas
+      { primeira: null, mensal: null, meses: 0 }, // linha vazia é ignorada
+    ])
+  )
+  assert.ok("contratos" in ok)
+  assert.deepEqual(ok.contratos, [
+    { cliente: "Loja X", primeira: 3847, mensal: 1147, meses: 3 },
+    { primeira: 997, mensal: 997, meses: 3 },
+    { primeira: 500, mensal: 0, meses: 1 },
+  ])
+  assert.deepEqual(normalizarContratos(null), { contratos: [] })
+  assert.ok("erro" in normalizarContratos("{x"))
+  assert.ok("erro" in normalizarContratos(JSON.stringify({ a: 1 })))
+  assert.ok("erro" in normalizarContratos(JSON.stringify([{ primeira: -1, meses: 3 }])))
+  assert.ok("erro" in normalizarContratos(JSON.stringify([{ primeira: 10, meses: 0 }])))
+  assert.ok("erro" in normalizarContratos(JSON.stringify([{ primeira: 10, meses: 61 }])))
+  assert.ok("erro" in normalizarContratos(JSON.stringify([{ primeira: 10, meses: 2.5 }])))
+  assert.ok(
+    "erro" in normalizarContratos(JSON.stringify(Array(51).fill({ primeira: 1, meses: 1 })))
   )
 })

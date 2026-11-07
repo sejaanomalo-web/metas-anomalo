@@ -6,11 +6,13 @@ import CampoMoeda from "@/components/inputs/CampoMoeda"
 import { salvarLancamentoAction } from "@/lib/funis-comerciais-actions"
 import {
   FONTE_TRAFEGO,
+  contratosDoLancamento,
   fonteDoLancamento,
   fontesDoFunil,
   type FunilComercial,
   type LancamentoFunil,
 } from "@/lib/funil-tipos"
+import EditorContratos from "./EditorContratos"
 import ModalComercial, {
   MensagemErro,
   estiloCampo,
@@ -145,8 +147,20 @@ export default function FormularioLancamento({
           ))}
         </div>
 
-        <h3 style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>Resultado</h3>
-        <div style={{ ...grade, marginTop: 10 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>
+          Contratos fechados
+        </h3>
+        <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-3)" }}>
+          Valor de cada contrato. Se a 1ª parcela for diferente das outras, informe
+          as duas.
+        </p>
+        <div style={{ marginTop: 10 }}>
+          <EditorContratos
+            iniciais={lancamento ? contratosDoLancamento(lancamento) : []}
+          />
+        </div>
+
+        <div style={{ ...grade, marginTop: 14 }}>
           <label style={estiloRotulo}>
             Contratos perdidos
             <CampoInteiro
@@ -155,15 +169,6 @@ export default function FormularioLancamento({
               style={estiloCampo}
               placeholder="0"
               defaultValue={lancamento?.perdidos || undefined}
-            />
-          </label>
-          <label style={estiloRotulo}>
-            Faturamento gerado
-            <CampoMoeda
-              name="faturamento"
-              className="glass-input"
-              style={estiloCampo}
-              defaultValue={lancamento?.faturamento || undefined}
             />
           </label>
         </div>

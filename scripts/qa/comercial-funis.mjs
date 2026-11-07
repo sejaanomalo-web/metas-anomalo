@@ -48,6 +48,7 @@ const tables = {
 let tabelasAusentes = false
 let importacaoAusente = false
 let fontesAusentes = false
+let contratosAusentes = false
 const TABELAS_FUNIS = new Set(['funis_comerciais', 'funil_lancamentos'])
 const escritas = []
 
@@ -64,6 +65,9 @@ const server = createServer(async (req, res) => {
   }
   if (importacaoAusente && table === 'funil_lancamentos' && url.search.includes('origem_importacao')) {
     return responderErro(res, 400, { code: '42703', message: 'column origem_importacao does not exist' })
+  }
+  if (contratosAusentes && table === 'funil_lancamentos' && ['POST', 'PATCH'].includes(req.method)) {
+    return responderErro(res, 400, { code: 'PGRST204', message: "Could not find the 'contratos' column of 'funil_lancamentos' in the schema cache" })
   }
   if (fontesAusentes && TABELAS_FUNIS.has(table)) {
     const corpo = ['POST', 'PATCH'].includes(req.method)
@@ -227,7 +231,16 @@ try {
     if (extras.investimento) await campo(page, extras.fonte && extras.fonte !== 'Tráfego' ? 'Custo desta fonte (opcional)' : 'Valor investido no tráfego').fill(extras.investimento)
     for (const [nome, v] of Object.entries(numeros)) await campo(page, nome).fill(String(v))
     if (extras.perdidos) await campo(page, 'Contratos perdidos').fill(String(extras.perdidos))
-    if (extras.faturamento) await campo(page, 'Faturamento gerado').fill(extras.faturamento)
+    // Faturamento simples = um contrato de 1 mês com esse valor.
+    const contratos = extras.contratos ?? (extras.faturamento ? [{ primeira: extras.faturamento, meses: '1' }] : [])
+    for (const [i, c] of contratos.entries()) {
+      await dialogo(page).getByRole('button', { name: '+ Adicionar contrato' }).click()
+      const bloco = dialogo(page).locator(`[data-contrato="${i + 1}"]`)
+      if (c.cliente) await bloco.getByLabel(/cliente/).fill(c.cliente)
+      await bloco.getByLabel('1ª parcela').fill(c.primeira)
+      if (c.mensal) await bloco.getByLabel('Demais parcelas').fill(c.mensal)
+      if (c.meses) await bloco.getByLabel('Meses').fill(c.meses)
+    }
     await dialogo(page).getByRole('button', { name: 'Lançar', exact: true }).click()
     await fechou(page)
     await page.waitForLoadState('networkidle')
@@ -602,7 +615,7 @@ try {
   assert.match(t, /Nenhum|Custo por/)
   assert.doesNotMatch(t, /Comparação entre fontes/)
   assert.match(t, /Investido\s+R\$\s*0/)
-  assert.match(t, /Faturamento gerado\s+R\$\s*9\.000/)
+  assert.match(t, /Entrada no 1º mês\s+R\$\s*9\.000/)
   assert.equal(await bia.page.locator('[data-lancamento]').count(), 1)
   await seletorFontes.getByRole('button', { name: /Tráfego/ }).click()
   await bia.page.locator(`[data-etapa="${topoNome}"]`, { hasText: '100' }).waitFor({ timeout: 300 })
@@ -698,6 +711,87 @@ try {
   fontesAusentes = false
   await bia.page.keyboard.press('Escape'); await fechou(bia.page)
   ok('sem a migration de fontes, gravar explica o que falta')
+
+  // Contratos com parcelas: 1ª parcela diferente das demais (produto extra).
+  const DEZ = 'mes=Dezembro&ano=2026'
+  await ir(bia.page, `${COMERCIAL}?${DEZ}&funil=${fontesFunil.id}`)
+  await bia.page.getByRole('button', { name: '+ Lançar números' }).click()
+  await campo(bia.page, 'Data').fill('2026-12-02')
+  await campo(bia.page, 'Valor investido no tráfego').fill('9700')
+  await campo(bia.page, topoNome).fill('5')
+  await campo(bia.page, fundoNome).fill('3')
+  const adicionar = dialogo(bia.page).getByRole('button', { name: '+ Adicionar contrato' })
+  const contratosDoTeste = [
+    { cliente: 'Loja Centro', primeira: '384700', mensal: '114700' },
+    { primeira: '99700' },
+    { primeira: '60000' },
+    { primeira: '' }, // linha deixada em branco: ignorada
+  ]
+  for (const [i, c] of contratosDoTeste.entries()) {
+    await adicionar.click()
+    const bloco = dialogo(bia.page).locator(`[data-contrato="${i + 1}"]`)
+    assert.equal(await bloco.getByLabel('Meses').inputValue(), '3', 'contrato começa com 3 meses')
+    if (c.cliente) await bloco.getByLabel(/cliente/).fill(c.cliente)
+    if (c.primeira) await bloco.getByLabel('1ª parcela').fill(c.primeira)
+    if (c.mensal) await bloco.getByLabel('Demais parcelas').fill(c.mensal)
+  }
+  assert.match(await dialogo(bia.page).locator('[data-contrato="1"]').innerText(), /Total do contrato: R\$\s*6\.141[\s\S]*3\.847[\s\S]*2 ×[\s\S]*1\.147/)
+  assert.match(await dialogo(bia.page).locator('[data-contratos-resumo]').innerText(), /3 contratos · 1º mês R\$\s*5\.444 · total R\$\s*10\.932/)
+  // Remover tira só o contrato escolhido.
+  await dialogo(bia.page).getByRole('button', { name: 'Remover contrato 4' }).click()
+  assert.equal(await dialogo(bia.page).locator('[data-contrato]').count(), 3)
+  if (shots) await dialogo(bia.page).screenshot({ path: `${shots}/15-contratos-dialogo.png` })
+
+  contratosAusentes = true
+  await dialogo(bia.page).getByRole('button', { name: 'Lançar', exact: true }).click()
+  await dialogo(bia.page).getByText(/20261109_funil_lancamentos_contratos/).waitFor()
+  contratosAusentes = false
+  await dialogo(bia.page).getByRole('button', { name: 'Lançar', exact: true }).click()
+  await fechou(bia.page)
+  await bia.page.waitForLoadState('networkidle')
+  const comContratos = tables.funil_lancamentos.find((l) => l.funil_id === fontesFunil.id && l.data === '2026-12-02')
+  assert.deepEqual(comContratos.contratos, [
+    { cliente: 'Loja Centro', primeira: 3847, mensal: 1147, meses: 3 },
+    { primeira: 997, mensal: 997, meses: 3 },
+    { primeira: 600, mensal: 600, meses: 3 },
+  ])
+  assert.equal(Number(comContratos.faturamento), 5444)
+  await bia.page.locator(`[data-etapa="${topoNome}"]`, { hasText: '5' }).waitFor()
+  await bia.page.locator('[data-lancamento="2026-12-02"]').waitFor()
+  t = await texto(bia.page)
+  assert.match(t, /Entrada no 1º mês\s+R\$\s*5\.444/)
+  assert.match(t, /Recorrência mensal\s+R\$\s*2\.744/)
+  assert.match(t, /Total contratado\s+R\$\s*10\.932/)
+  assert.match(t, /Ticket médio do contrato\s+R\$\s*3\.644/)
+  assert.match(t, /Retorno do total contratado\s+113x/)
+  assert.match(t, /56x o investido/)
+  assert.match(await bia.page.locator('[data-lancamento="2026-12-02"]').innerText(), /3 contratos: R\$\s*10\.932/)
+  ok('contratos: 1ª parcela diferente, demais parcelas e meses; 1º mês, recorrência, total e retorno')
+
+  // Editar mantém a lista e permite mudar a duração.
+  await bia.page.getByRole('button', { name: 'Editar lançamento de 02 dez 2026' }).click()
+  assert.equal(await dialogo(bia.page).locator('[data-contrato]').count(), 3)
+  assert.equal(await dialogo(bia.page).locator('[data-contrato="1"]').getByLabel(/cliente/).inputValue(), 'Loja Centro')
+  await dialogo(bia.page).locator('[data-contrato="3"]').getByLabel('Meses').fill('6')
+  await dialogo(bia.page).getByRole('button', { name: 'Salvar', exact: true }).click()
+  await fechou(bia.page)
+  await bia.page.getByText(/Total contratado\s*R\$\s*12\.732/).waitFor()
+  assert.equal(tables.funil_lancamentos.find((l) => l.id === comContratos.id).contratos[2].meses, 6)
+  ok('editar lançamento mantém os contratos e recalcula o total')
+
+  await conferirLarguras(bia.page, `${COMERCIAL}?${DEZ}&funil=${fontesFunil.id}`, 'contratos')
+  for (const largura of [390, 320]) {
+    await bia.page.setViewportSize({ width: largura, height: 800 })
+    await bia.page.getByRole('button', { name: 'Editar lançamento de 02 dez 2026' }).click()
+    const caixa = await dialogo(bia.page).locator('[data-contrato="1"]').boundingBox()
+    assert.ok(caixa.x >= 0 && caixa.x + caixa.width <= largura, `contrato fora da tela em ${largura}px`)
+    const estouroDialogo = await dialogo(bia.page).evaluate((el) => el.scrollWidth - el.clientWidth)
+    assert.ok(estouroDialogo <= 0, `diálogo com estouro horizontal em ${largura}px`)
+    if (shots && largura === 390) await bia.page.screenshot({ path: `${shots}/16-contratos-celular.png` })
+    await bia.page.keyboard.press('Escape'); await fechou(bia.page)
+  }
+  await bia.page.setViewportSize({ width: 1440, height: 1000 })
+  ok('contratos cabem no celular e os cartões de resultado não se sobrepõem')
 
   // Importação: relatório de campanhas com dia, duas campanhas e linha de resumo.
   const CSV_META = '\uFEFF' + [
@@ -995,6 +1089,9 @@ try {
   await dialogo(ana.page).getByRole('button', { name: 'Salvar', exact: true }).click()
   await fechou(ana.page)
   await ana.page.locator('[data-etapa="Topo Caio"]', { hasText: '80' }).waitFor()
+  const caioEditado = tables.funil_lancamentos.find((l) => l.id === LANC_CAIO)
+  assert.deepEqual(caioEditado.contratos, [{ primeira: 900, mensal: 0, meses: 1 }], 'faturamento antigo vira contrato de 1 mês')
+  assert.equal(Number(caioEditado.faturamento), 900)
   ok('admin edita lançamento de outra pessoa')
 
   await ir(ana.page, `${COMERCIAL}/historico?mes=Novembro&ano=2026`)

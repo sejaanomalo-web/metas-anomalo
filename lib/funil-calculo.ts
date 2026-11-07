@@ -1,5 +1,10 @@
 import {
+  contratosDoLancamento,
   fonteDoLancamento,
+  MAX_CONTRATOS,
+  MAX_MESES_CONTRATO,
+  MAX_NOME_CLIENTE,
+  type ContratoFechado,
   type EtapaFunil,
   type FonteFunil,
   type LancamentoFunil,
@@ -197,14 +202,25 @@ export interface GargaloFunil {
 export interface ResumoFunil {
   etapas: EtapaResumo[]
   investimento: number
+  /** Entrada no 1º mês: soma das 1ªs parcelas. */
   faturamento: number
+  /** Soma das parcelas que se repetem depois do 1º mês (contratos de 2+ meses). */
+  recorrencia: number
+  /** Valor de todos os contratos até o fim: 1ª parcela + demais parcelas. */
+  totalContratado: number
+  /** Quantos contratos têm valor informado. */
+  contratos: number
+  /** totalContratado / contratos. null sem contratos. */
+  ticketMedio: number | null
   perdidos: number
   /** Valor da última etapa do funil. */
   fechados: number
   /** fechados / (fechados + perdidos). null sem nenhum dos dois. */
   taxaFechamento: number | null
-  /** faturamento / investimento. null sem investimento. */
+  /** totalContratado / investimento. null sem investimento. */
   retorno: number | null
+  /** faturamento (só o 1º mês) / investimento. null sem investimento. */
+  retornoPrimeiroMes: number | null
   gargalo: GargaloFunil | null
   registros: number
 }
@@ -228,12 +244,23 @@ export function resumirFunil(
 ): ResumoFunil {
   let investimento = 0
   let faturamento = 0
+  let recorrencia = 0
+  let totalContratado = 0
+  let contratos = 0
   let perdidos = 0
   const somas = new Map<string, number>(etapas.map((e) => [e.id, 0]))
 
   for (const l of lancamentos) {
     investimento += numeroSeguro(l.investimento)
-    faturamento += numeroSeguro(l.faturamento)
+    for (const c of contratosDoLancamento(l)) {
+      const primeira = numeroSeguro(c.primeira)
+      const mensal = numeroSeguro(c.mensal)
+      const meses = Math.max(1, Math.floor(numeroSeguro(c.meses)))
+      faturamento += primeira
+      if (meses > 1) recorrencia += mensal
+      totalContratado += primeira + mensal * (meses - 1)
+      contratos++
+    }
     perdidos += numeroSeguro(l.perdidos)
     for (const e of etapas) {
       somas.set(e.id, (somas.get(e.id) ?? 0) + numeroSeguro(l.valores?.[e.id]))
@@ -271,11 +298,16 @@ export function resumirFunil(
     etapas: resumo,
     investimento,
     faturamento,
+    recorrencia,
+    totalContratado,
+    contratos,
+    ticketMedio: contratos > 0 ? totalContratado / contratos : null,
     perdidos,
     fechados,
     taxaFechamento:
       fechados + perdidos > 0 ? fechados / (fechados + perdidos) : null,
-    retorno: investimento > 0 ? faturamento / investimento : null,
+    retorno: investimento > 0 ? totalContratado / investimento : null,
+    retornoPrimeiroMes: investimento > 0 ? faturamento / investimento : null,
     gargalo,
     registros: lancamentos.length,
   }
@@ -323,4 +355,62 @@ export function formatarPct(taxa: number | null): string {
   return `${new Intl.NumberFormat("pt-BR", {
     maximumFractionDigits: 1,
   }).format(taxa * 100)}%`
+}
+
+const MAX_VALOR_PARCELA = 1e10
+
+/**
+ * Valida a lista de contratos que vem do formulário (JSON). Parcela das demais
+ * em branco vale o mesmo que a 1ª. Linha sem nenhum valor é ignorada.
+ */
+export function normalizarContratos(
+  bruto: unknown
+): { contratos: ContratoFechado[] } | { erro: string } {
+  if (bruto === null || bruto === undefined || bruto === "") return { contratos: [] }
+  let lista: unknown = bruto
+  if (typeof bruto === "string") {
+    try {
+      lista = JSON.parse(bruto)
+    } catch {
+      return { erro: "Lista de contratos inválida." }
+    }
+  }
+  if (!Array.isArray(lista)) return { erro: "Lista de contratos inválida." }
+  if (lista.length > MAX_CONTRATOS) {
+    return { erro: `Limite de ${MAX_CONTRATOS} contratos por lançamento.` }
+  }
+
+  const valor = (v: unknown): number | null => {
+    if (v === null || v === undefined || v === "") return null
+    const n = typeof v === "number" ? v : Number(v)
+    return Number.isFinite(n) && n >= 0 && n < MAX_VALOR_PARCELA
+      ? Math.round(n * 100) / 100
+      : NaN
+  }
+
+  const contratos: ContratoFechado[] = []
+  for (let i = 0; i < lista.length; i++) {
+    const item = lista[i] as Record<string, unknown> | null
+    if (!item || typeof item !== "object") return { erro: "Lista de contratos inválida." }
+    const n = i + 1
+    const primeira = valor(item.primeira)
+    const mensalBruta = valor(item.mensal)
+    if (Number.isNaN(primeira) || Number.isNaN(mensalBruta)) {
+      return { erro: `Valor inválido no contrato ${n}.` }
+    }
+    if (primeira === null && mensalBruta === null) continue
+    const meses = Number(item.meses)
+    if (!Number.isInteger(meses) || meses < 1 || meses > MAX_MESES_CONTRATO) {
+      return { erro: `No contrato ${n}, informe de 1 a ${MAX_MESES_CONTRATO} meses.` }
+    }
+    const p = primeira ?? 0
+    const mensal = meses === 1 ? 0 : mensalBruta ?? p
+    if (p === 0 && mensal === 0) continue
+    const cliente =
+      typeof item.cliente === "string"
+        ? item.cliente.trim().slice(0, MAX_NOME_CLIENTE)
+        : ""
+    contratos.push({ ...(cliente ? { cliente } : {}), primeira: p, mensal, meses })
+  }
+  return { contratos }
 }

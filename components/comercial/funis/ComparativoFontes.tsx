@@ -56,8 +56,8 @@ export default function ComparativoFontes({
                 <dd>{custoFundo(resumo)}</dd>
               </div>
               <div>
-                <dt>Faturamento</dt>
-                <dd>{dinheiro(resumo, resumo.faturamento)}</dd>
+                <dt>Contratado</dt>
+                <dd>{dinheiro(resumo, resumo.totalContratado)}</dd>
               </div>
             </dl>
           </li>
@@ -74,7 +74,7 @@ export default function ComparativoFontes({
               <th scope="col">{nomeFundo}</th>
               <th scope="col">Conversão</th>
               <th scope="col">Custo por {nomeFundo}</th>
-              <th scope="col">Faturamento</th>
+              <th scope="col">Contratado</th>
             </tr>
           </thead>
           <tbody>
@@ -94,7 +94,7 @@ export default function ComparativoFontes({
                 <td>{formatNumero(resumo.fechados)}</td>
                 <td>{conversao(resumo)}</td>
                 <td>{custoFundo(resumo)}</td>
-                <td>{dinheiro(resumo, resumo.faturamento)}</td>
+                <td>{dinheiro(resumo, resumo.totalContratado)}</td>
               </tr>
             ))}
           </tbody>

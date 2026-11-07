@@ -3,7 +3,7 @@
 import { randomUUID } from "crypto"
 import { revalidatePath } from "next/cache"
 import { getUsuarioAtual, temPermissao, type UsuarioSessao } from "./auth"
-import { dataValida } from "./funil-calculo"
+import { dataValida, normalizarContratos } from "./funil-calculo"
 import { parseNumeroForm } from "./parse-numero"
 import { getSupabaseAdmin } from "./supabase"
 import { erroDeTabelaAusente } from "./funis-comerciais"
@@ -41,6 +41,8 @@ const MIGRATION_IMPORTACAO_PENDENTE =
   "O banco ainda não está pronto para importar. Aplique a migration 20261107_funil_lancamentos_importacao."
 const MIGRATION_FONTES_PENDENTE =
   "O banco ainda não tem as fontes de demanda. Aplique a migration 20261108_funis_fontes_demanda."
+const MIGRATION_CONTRATOS_PENDENTE =
+  "O banco ainda não tem a lista de contratos. Aplique a migration 20261109_funil_lancamentos_contratos."
 
 /** Mensagem de migration pendente, ou null se o erro é de outra natureza. */
 function migrationPendente(
@@ -51,9 +53,9 @@ function migrationPendente(
     erro?.code === "PGRST204" || // coluna fora do cache do PostgREST
     erro?.code === "42P10" // ON CONFLICT sem índice único correspondente
   if (!faltaAlgo) return null
-  return /fonte/i.test(erro?.message ?? "")
-    ? MIGRATION_FONTES_PENDENTE
-    : MIGRATION_IMPORTACAO_PENDENTE
+  const msg = erro?.message ?? ""
+  if (/contratos/i.test(msg)) return MIGRATION_CONTRATOS_PENDENTE
+  return /fonte/i.test(msg) ? MIGRATION_FONTES_PENDENTE : MIGRATION_IMPORTACAO_PENDENTE
 }
 
 async function usuarioDoComercial(): Promise<UsuarioSessao | null> {
@@ -361,8 +363,12 @@ export async function salvarLancamentoAction(
 
   const investimento = moedaDoForm(formData.get("investimento"), "Investimento")
   if ("erro" in investimento) return { ok: false, erro: investimento.erro }
-  const faturamento = moedaDoForm(formData.get("faturamento"), "Faturamento")
-  if ("erro" in faturamento) return { ok: false, erro: faturamento.erro }
+  const lista = normalizarContratos(formData.get("contratos"))
+  if ("erro" in lista) return { ok: false, erro: lista.erro }
+  const contratos = lista.contratos
+  // O faturamento gravado é o que entra no 1º mês: as outras telas somam ele.
+  const faturamento =
+    Math.round(contratos.reduce((s, c) => s + c.primeira, 0) * 100) / 100
 
   const perdidos = inteiroDoForm(formData.get("perdidos"))
   if (perdidos === null) return { ok: false, erro: "Perdidos inválido." }
@@ -380,7 +386,7 @@ export async function salvarLancamentoAction(
   if (
     Object.keys(valores).length === 0 &&
     investimento.valor === 0 &&
-    faturamento.valor === 0 &&
+    contratos.length === 0 &&
     perdidos === 0
   ) {
     return { ok: false, erro: "Preencha pelo menos um número." }
@@ -390,7 +396,8 @@ export async function salvarLancamentoAction(
     data,
     fonte,
     investimento: investimento.valor,
-    faturamento: faturamento.valor,
+    faturamento,
+    contratos,
     perdidos,
     valores,
     observacoes:
