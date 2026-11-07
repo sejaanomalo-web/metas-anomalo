@@ -204,6 +204,14 @@ try {
     const r = await page.goto(base + url, { waitUntil: 'networkidle', timeout: 90000 })
     assert.ok(r.status() < 400, `${url}: HTTP ${r.status()}`)
     assert.equal(await page.getByRole('heading', { name: /Não foi possível carregar esta página|Algo quebrou aqui/ }).count(), 0, `Boundary de erro em ${url}`)
+    await abrirSecoes(page)
+  }
+  /** Evolução e Lançamentos começam recolhidas: abre as que estiverem fechadas. */
+  async function abrirSecoes(page) {
+    const fechadas = page.locator('main button[aria-expanded="false"]')
+    for (let i = await fechadas.count(); i > 0; i--) {
+      await fechadas.first().click()
+    }
   }
   const texto = (page) => page.locator('main').innerText()
   const valorEtapa = (page, nome) => page.locator(`[data-etapa="${nome}"]`).innerText()
@@ -223,6 +231,7 @@ try {
     await dialogo(page).getByRole('button', { name: 'Lançar', exact: true }).click()
     await fechou(page)
     await page.waitForLoadState('networkidle')
+    await abrirSecoes(page)
   }
   const funisDe = (id) => tables.funis_comerciais.filter((f) => f.usuario_id === id)
 
@@ -368,6 +377,40 @@ try {
   assert.ok(await largura('Leads gerados') > await largura('Responderam'))
   assert.ok(await largura('Responderam') > await largura('Contratos fechados'))
   ok('camadas afunilam e mostram %, gargalo, custos, retorno e taxa de fechamento corretos')
+
+  // Evolução e Lançamentos: recolhidas por padrão, com resumo, e a escolha fica salva.
+  await bia.page.evaluate(() => localStorage.clear())
+  await bia.page.goto(base + `${COMERCIAL}?${NOV}`, { waitUntil: 'networkidle' })
+  const botaoEvolucao = bia.page.getByRole('button', { name: /Evolução no período/ })
+  const botaoLancamentos = bia.page.getByRole('button', { name: /Lançamentos/ })
+  assert.equal(await botaoEvolucao.getAttribute('aria-expanded'), 'false')
+  assert.equal(await botaoLancamentos.getAttribute('aria-expanded'), 'false')
+  assert.match(await botaoEvolucao.innerText(), /6 semanas · 1 com lançamentos/)
+  assert.match(await botaoLancamentos.innerText(), /1 lançamento · R\$\s*1\.000 investidos/)
+  assert.equal(await bia.page.locator('[data-evolucao]').count(), 0)
+  assert.equal(await bia.page.locator('[data-lancamento]').count(), 0)
+  if (shots) await bia.page.screenshot({ path: `${shots}/15-recolhidas-desktop.png`, fullPage: true })
+  await botaoEvolucao.click()
+  await bia.page.locator('[data-evolucao]').waitFor()
+  assert.equal(await botaoEvolucao.getAttribute('aria-expanded'), 'true')
+  assert.match(await botaoEvolucao.innerText(), /Compare dia a dia/)
+  await bia.page.reload({ waitUntil: 'networkidle' })
+  await bia.page.locator('[data-evolucao]').waitFor()
+  assert.equal(await botaoLancamentos.getAttribute('aria-expanded'), 'false')
+  await botaoEvolucao.click()
+  assert.equal(await bia.page.locator('[data-evolucao]').count(), 0)
+  await botaoLancamentos.focus()
+  await bia.page.keyboard.press('Enter')
+  await bia.page.locator('[data-lancamento]').first().waitFor()
+  await bia.page.keyboard.press('Space')
+  assert.equal(await bia.page.locator('[data-lancamento]').count(), 0)
+  if (shots) {
+    await bia.page.setViewportSize({ width: 390, height: 844 })
+    await bia.page.reload({ waitUntil: 'networkidle' })
+    await bia.page.screenshot({ path: `${shots}/16-recolhidas-celular.png`, fullPage: true })
+    await bia.page.setViewportSize({ width: 1440, height: 1000 })
+  }
+  ok('Evolução e Lançamentos recolhidas com resumo; abrem pela setinha ou teclado e lembram a escolha')
   if (shots) await bia.page.screenshot({ path: `${shots}/1-funil-desktop.png`, fullPage: true })
 
   // Filtros de data.
@@ -944,6 +987,7 @@ try {
   await ir(ana.page, `${COMERCIAL}/time?${NOV}`)
   await ana.page.getByRole('link', { name: 'Funil secreto do Caio' }).click()
   await ana.page.locator('[data-etapa="Topo Caio"]', { hasText: '70' }).waitFor()
+  await abrirSecoes(ana.page)
   ok('Time mostra todos com acesso, totais corretos e abre o funil da pessoa')
 
   await ana.page.getByRole('button', { name: 'Editar lançamento de 04 nov 2026' }).click()

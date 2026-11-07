@@ -25,6 +25,7 @@ import ComparativoFontes from "./ComparativoFontes"
 import EvolucaoFunil from "./EvolucaoFunil"
 import FunilCamadas from "./FunilCamadas"
 import ListaLancamentos from "./ListaLancamentos"
+import SecaoRecolhivel from "./SecaoRecolhivel"
 import estilos from "./funis.module.css"
 
 /**
@@ -86,6 +87,19 @@ export default function PainelFunil({
   const primeira = resumo.etapas[0]
   const ultima = resumo.etapas[resumo.etapas.length - 1]
   const nomeTopo = funil.etapas[0]?.nome ?? "Topo"
+
+  // Uma linha que diga o essencial com a seção fechada.
+  const fatiasComDados = evolucao.filter((e) => e.resumo.registros > 0).length
+  const nomeFatia = { dia: ["dia", "dias"], semana: ["semana", "semanas"], mes: ["mês", "meses"] }[agrupamento]
+  const resumoEvolucao = `${evolucao.length} ${nomeFatia[evolucao.length === 1 ? 0 : 1]} · ${fatiasComDados} com lançamentos`
+  const resumoLancamentos =
+    visiveis.length === 0
+      ? fonte
+        ? `Nenhum lançamento de ${fonte.nome} neste período`
+        : "Nenhum lançamento neste período"
+      : `${visiveis.length} ${visiveis.length === 1 ? "lançamento" : "lançamentos"}${
+          resumo.investimento > 0 ? ` · ${formatBRL(resumo.investimento)} investidos` : ""
+        }`
 
   return (
     <>
@@ -230,25 +244,27 @@ export default function PainelFunil({
       )}
 
       {!semDados && (
-        <section>
-          <SectionHeader
-            titulo="Evolução no período"
-            descricao="Compare dia a dia, semana a semana ou mês a mês"
-          />
+        <SecaoRecolhivel
+          chave="evolucao"
+          titulo="Evolução no período"
+          descricao="Compare dia a dia, semana a semana ou mês a mês"
+          resumo={resumoEvolucao}
+        >
           <EvolucaoFunil
             linhas={evolucao}
             agrupamento={agrupamento}
             disponiveis={agrupamentosDisponiveis({ de, ate })}
             aoEscolher={(a: AgrupamentoFunil) => trocarParam("agrupar", a)}
           />
-        </section>
+        </SecaoRecolhivel>
       )}
 
-      <section>
-        <SectionHeader
-          titulo="Lançamentos"
-          descricao="O que foi registrado no período, por data"
-        />
+      <SecaoRecolhivel
+        chave="lancamentos"
+        titulo="Lançamentos"
+        descricao="O que foi registrado no período, por data"
+        resumo={resumoLancamentos}
+      >
         <ListaLancamentos
           funil={funil}
           lancamentos={visiveis}
@@ -262,7 +278,7 @@ export default function PainelFunil({
               : "Nenhum lançamento neste período."
           }
         />
-      </section>
+      </SecaoRecolhivel>
     </>
   )
 }
