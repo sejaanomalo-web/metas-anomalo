@@ -384,7 +384,7 @@ try {
   assert.match(t, /Custo por Leads gerados\s+R\$\s*10/)
   assert.match(t, /Custo por Contratos fechados\s+R\$\s*500/)
   assert.match(t, /5x/)
-  assert.match(t, /Taxa de fechamento\s+40%/)
+  assert.doesNotMatch(t, /Taxa de fechamento|Contratos perdidos/)
   assert.match(await valorEtapa(bia.page, 'Contratos fechados'), /2% do topo/)
   const largura = (nome) => bia.page.locator(`[data-etapa="${nome}"]`).evaluate((el) => el.getBoundingClientRect().width)
   assert.ok(await largura('Leads gerados') > await largura('Responderam'))
@@ -791,7 +791,15 @@ try {
     await bia.page.keyboard.press('Escape'); await fechou(bia.page)
   }
   await bia.page.setViewportSize({ width: 1440, height: 1000 })
-  ok('contratos cabem no celular e os cartões de resultado não se sobrepõem')
+  // Os 4 cartões de resultado: uma linha no desktop, 2 + 2 no celular.
+  for (const [largura, colunas] of [[1440, 4], [1100, 4], [820, 4], [390, 2], [320, 2]]) {
+    await bia.page.setViewportSize({ width: largura, height: 900 })
+    const tops = await bia.page.locator('[data-resultados] > *').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)))
+    assert.equal(tops.length, 4)
+    assert.equal(new Set(tops).size, 4 / colunas, `${largura}px: esperava ${colunas} por linha, linhas em ${tops}`)
+  }
+  await bia.page.setViewportSize({ width: 1440, height: 1000 })
+  ok('contratos cabem no celular; resultados em 4 colunas no desktop e 2 + 2 no celular')
 
   // Importação: relatório de campanhas com dia, duas campanhas e linha de resumo.
   const CSV_META = '\uFEFF' + [
