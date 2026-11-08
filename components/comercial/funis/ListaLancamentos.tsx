@@ -9,8 +9,10 @@ import {
 } from "@/lib/funis-comerciais-actions"
 import { formatarDataCurta } from "@/lib/funil-calculo"
 import {
+  contratosDoLancamento,
   fonteDoLancamento,
   fontesDoFunil,
+  totalDoContrato,
   type FunilComercial,
   type LancamentoFunil,
 } from "@/lib/funil-tipos"
@@ -123,8 +125,12 @@ export default function ListaLancamentos({
             .filter((e) => (l.valores?.[e.id] ?? 0) > 0)
             .map((e) => `${e.nome}: ${formatNumero(l.valores[e.id])}`)
           if (l.perdidos > 0) partes.push(`Perdidos: ${formatNumero(l.perdidos)}`)
-          if (Number(l.faturamento) > 0) {
-            partes.push(`Faturamento: ${formatBRL(Number(l.faturamento))}`)
+          const contratos = contratosDoLancamento(l)
+          if (contratos.length > 0) {
+            const total = contratos.reduce((s, c) => s + totalDoContrato(c), 0)
+            partes.push(
+              `${contratos.length} ${contratos.length === 1 ? "contrato" : "contratos"}: ${formatBRL(total)}`
+            )
           }
           return (
             <li

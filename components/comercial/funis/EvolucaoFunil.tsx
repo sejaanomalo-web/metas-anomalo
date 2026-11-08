@@ -113,10 +113,10 @@ export default function EvolucaoFunil({
                     <dd>{formatNumero(resumo.perdidos)}</dd>
                   </div>
                 )}
-                {resumo.faturamento > 0 && (
+                {resumo.totalContratado > 0 && (
                   <div>
-                    <dt>Faturamento</dt>
-                    <dd>{formatBRL(resumo.faturamento)}</dd>
+                    <dt>Contratado</dt>
+                    <dd>{formatBRL(resumo.totalContratado)}</dd>
                   </div>
                 )}
               </dl>
@@ -144,7 +144,7 @@ export default function EvolucaoFunil({
                 Perdidos
               </th>
               <th scope="col" style={titulo}>
-                Faturamento
+                Contratado
               </th>
             </tr>
           </thead>
@@ -191,7 +191,7 @@ export default function EvolucaoFunil({
                     {vazia ? "—" : formatNumero(resumo.perdidos)}
                   </td>
                   <td style={{ ...celula, color: apagado }}>
-                    {vazia ? "—" : formatBRL(resumo.faturamento)}
+                    {vazia ? "—" : formatBRL(resumo.totalContratado)}
                   </td>
                 </tr>
               )

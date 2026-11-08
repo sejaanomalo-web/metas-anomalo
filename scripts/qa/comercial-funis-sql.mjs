@@ -21,6 +21,9 @@ await db.exec(sql2)
 const sql3 = await readFile('supabase/migrations/20261108_funis_fontes_demanda.sql', 'utf8')
 await db.exec(sql3)
 await db.exec(sql3)
+const sql4 = await readFile('supabase/migrations/20261109_funil_lancamentos_contratos.sql', 'utf8')
+await db.exec(sql4)
+await db.exec(sql4)
 console.log('ok  migrations aplicam e são idempotentes')
 
 const { rows: [a] } = await db.query(`insert into usuarios (nome) values ('A') returning id`)
@@ -53,6 +56,22 @@ const lancar = (campos) => {
 await recusa('investimento negativo', '23514', () => lancar({ investimento: -1 }))
 await recusa('perdidos negativo', '23514', () => lancar({ perdidos: -1 }))
 await recusa('faturamento negativo', '23514', () => lancar({ faturamento: -1 }))
+{
+  const { rows: [sem] } = await lancar({})
+  const { rows: [r] } = await db.query(`select contratos from funil_lancamentos where id = $1`, [sem.id])
+  assert.deepEqual(r.contratos, [])
+  await db.query(`delete from funil_lancamentos where id = $1`, [sem.id])
+  console.log('ok  lançamento sem contratos fica com lista vazia')
+  const umContrato = { primeira: 3847, mensal: 1147, meses: 3 }
+  const lancarContratos = (json) => db.query(
+    `insert into funil_lancamentos (funil_id, data, contratos, criado_por) values ($1, '2026-11-06', $2::jsonb, $3) returning id`,
+    [f.id, json, b.id])
+  const { rows: [com] } = await lancarContratos(JSON.stringify([umContrato]))
+  await db.query(`delete from funil_lancamentos where id = $1`, [com.id])
+  console.log('ok  aceita lista de contratos')
+  await recusa('contratos fora de array', '23514', () => lancarContratos('{}'))
+  await recusa('mais de 50 contratos', '23514', () => lancarContratos(JSON.stringify(Array(51).fill(umContrato))))
+}
 await recusa('valores fora de objeto', '23514', () => lancar({ valores: '[]' }))
 await recusa('data que não existe', '22008', () => lancar({ data: '2026-02-31' }))
 

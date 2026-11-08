@@ -28,6 +28,10 @@ import ListaLancamentos from "./ListaLancamentos"
 import SecaoRecolhivel from "./SecaoRecolhivel"
 import estilos from "./funis.module.css"
 
+function vezes(n: number): string {
+  return `${n.toLocaleString("pt-BR", { maximumFractionDigits: n >= 10 ? 0 : 2 })}x`
+}
+
 /**
  * Tudo que muda com a fonte de demanda. O servidor já entrega os lançamentos do
  * período inteiro, então trocar de fonte só refaz a conta aqui: é instantâneo e
@@ -148,13 +152,8 @@ export default function PainelFunil({
             valor: ultima?.custo != null ? formatBRL(ultima.custo) : "—",
           },
           {
-            rotulo: "Retorno sobre o investido",
-            valor:
-              resumo.retorno !== null
-                ? `${resumo.retorno.toLocaleString("pt-BR", {
-                    maximumFractionDigits: 2,
-                  })}x`
-                : "—",
+            rotulo: "Retorno do total contratado",
+            valor: resumo.retorno !== null ? vezes(resumo.retorno) : "—",
           },
         ].map((k) => (
           <div key={k.rotulo} className={`glass ${estilos.kpi}`}>
@@ -205,7 +204,34 @@ export default function PainelFunil({
                 valor: formatarPct(resumo.taxaFechamento),
                 nota: "fechados ÷ (fechados + perdidos)",
               },
-              { rotulo: "Faturamento gerado", valor: formatBRL(resumo.faturamento) },
+              {
+                rotulo: "Ticket médio do contrato",
+                valor: resumo.ticketMedio !== null ? formatBRL(resumo.ticketMedio) : "—",
+                nota:
+                  resumo.contratos > 0
+                    ? `${formatNumero(resumo.contratos)} ${
+                        resumo.contratos === 1 ? "contrato" : "contratos"
+                      } com valor`
+                    : undefined,
+              },
+              {
+                rotulo: "Entrada no 1º mês",
+                valor: formatBRL(resumo.faturamento),
+                nota:
+                  resumo.retornoPrimeiroMes !== null && resumo.faturamento > 0
+                    ? `${vezes(resumo.retornoPrimeiroMes)} o investido`
+                    : "soma das 1ªs parcelas",
+              },
+              {
+                rotulo: "Recorrência mensal",
+                valor: formatBRL(resumo.recorrencia),
+                nota: "por mês, a partir do 2º mês",
+              },
+              {
+                rotulo: "Total contratado",
+                valor: formatBRL(resumo.totalContratado),
+                nota: "todas as parcelas até o fim",
+              },
             ].map((c) => (
               <div key={c.rotulo} className="glass" style={{ padding: "14px 16px" }}>
                 <p style={{ fontSize: 12, color: "var(--text-2)" }}>{c.rotulo}</p>
@@ -219,11 +245,7 @@ export default function PainelFunil({
                 >
                   {c.valor}
                 </p>
-                {c.nota && (
-                  <p style={{ marginTop: 2, fontSize: 11, color: "var(--text-3)" }}>
-                    {c.nota}
-                  </p>
-                )}
+                {c.nota && <p className={estilos.resultadoNota}>{c.nota}</p>}
               </div>
             ))}
           </div>
