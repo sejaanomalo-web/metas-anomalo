@@ -196,24 +196,8 @@ export default function PainelFunil({
         <FunilCamadas resumo={resumo} />
 
         {!semDados && (
-          <div className={estilos.resultados}>
+          <div className={estilos.resultados} data-resultados>
             {[
-              { rotulo: "Contratos perdidos", valor: formatNumero(resumo.perdidos) },
-              {
-                rotulo: "Taxa de fechamento",
-                valor: formatarPct(resumo.taxaFechamento),
-                nota: "fechados ÷ (fechados + perdidos)",
-              },
-              {
-                rotulo: "Ticket médio do contrato",
-                valor: resumo.ticketMedio !== null ? formatBRL(resumo.ticketMedio) : "—",
-                nota:
-                  resumo.contratos > 0
-                    ? `${formatNumero(resumo.contratos)} ${
-                        resumo.contratos === 1 ? "contrato" : "contratos"
-                      } com valor`
-                    : undefined,
-              },
               {
                 rotulo: "Entrada no 1º mês",
                 valor: formatBRL(resumo.faturamento),
@@ -231,6 +215,16 @@ export default function PainelFunil({
                 rotulo: "Total contratado",
                 valor: formatBRL(resumo.totalContratado),
                 nota: "todas as parcelas até o fim",
+              },
+              {
+                rotulo: "Ticket médio do contrato",
+                valor: resumo.ticketMedio !== null ? formatBRL(resumo.ticketMedio) : "—",
+                nota:
+                  resumo.contratos > 0
+                    ? `${formatNumero(resumo.contratos)} ${
+                        resumo.contratos === 1 ? "contrato" : "contratos"
+                      } com valor`
+                    : undefined,
               },
             ].map((c) => (
               <div key={c.rotulo} className="glass" style={{ padding: "14px 16px" }}>
