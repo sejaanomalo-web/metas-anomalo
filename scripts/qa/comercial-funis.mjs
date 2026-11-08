@@ -398,6 +398,10 @@ try {
   const botaoLancamentos = bia.page.getByRole('button', { name: /Lançamentos/ })
   assert.equal(await botaoEvolucao.getAttribute('aria-expanded'), 'false')
   assert.equal(await botaoLancamentos.getAttribute('aria-expanded'), 'false')
+  const botaoComparativo = bia.page.getByRole('button', { name: /Comparação entre fontes/ })
+  assert.equal(await botaoComparativo.getAttribute('aria-expanded'), 'false')
+  assert.match(await botaoComparativo.innerText(), /1 de 3 fontes com números · mais contratado: Tráfego \(R\$\s*5\.000\)/)
+  assert.equal(await bia.page.locator('main table', { hasText: 'Fonte' }).count(), 0)
   assert.match(await botaoEvolucao.innerText(), /6 semanas · 1 com lançamentos/)
   assert.match(await botaoLancamentos.innerText(), /1 lançamento · R\$\s*1\.000 investidos/)
   assert.equal(await bia.page.locator('[data-evolucao]').count(), 0)
@@ -423,7 +427,7 @@ try {
     await bia.page.screenshot({ path: `${shots}/16-recolhidas-celular.png`, fullPage: true })
     await bia.page.setViewportSize({ width: 1440, height: 1000 })
   }
-  ok('Evolução e Lançamentos recolhidas com resumo; abrem pela setinha ou teclado e lembram a escolha')
+  ok('Comparação, Evolução e Lançamentos recolhidas com resumo; abrem pela setinha ou teclado e lembram a escolha')
   if (shots) await bia.page.screenshot({ path: `${shots}/1-funil-desktop.png`, fullPage: true })
 
   // Filtros de data.

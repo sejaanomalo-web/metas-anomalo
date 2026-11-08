@@ -96,6 +96,19 @@ export default function PainelFunil({
   const fatiasComDados = evolucao.filter((e) => e.resumo.registros > 0).length
   const nomeFatia = { dia: ["dia", "dias"], semana: ["semana", "semanas"], mes: ["mês", "meses"] }[agrupamento]
   const resumoEvolucao = `${evolucao.length} ${nomeFatia[evolucao.length === 1 ? 0 : 1]} · ${fatiasComDados} com lançamentos`
+  const comDados = porFonte.filter((p) => p.resumo.registros > 0)
+  const destaque = [...comDados].sort(
+    (a, b) =>
+      b.resumo.totalContratado - a.resumo.totalContratado ||
+      (b.resumo.etapas[0]?.valor ?? 0) - (a.resumo.etapas[0]?.valor ?? 0)
+  )[0]
+  const resumoComparativo = !destaque
+    ? `${porFonte.length} fontes`
+    : `${comDados.length} de ${porFonte.length} fontes com números · ${
+        destaque.resumo.totalContratado > 0
+          ? `mais contratado: ${destaque.fonte.nome} (${formatBRL(destaque.resumo.totalContratado)})`
+          : `mais ${nomeTopo}: ${destaque.fonte.nome} (${formatNumero(destaque.resumo.etapas[0]?.valor ?? 0)})`
+      }`
   const resumoLancamentos =
     visiveis.length === 0
       ? fonte
@@ -247,16 +260,17 @@ export default function PainelFunil({
       </section>
 
       {!fonte && !semDados && (
-        <section>
-          <SectionHeader
-            titulo="Comparação entre fontes"
-            descricao="O mesmo funil, por fonte. Toque no nome para abrir só ela."
-          />
+        <SecaoRecolhivel
+          chave="comparativo"
+          titulo="Comparação entre fontes"
+          descricao="O mesmo funil, por fonte. Toque no nome para abrir só ela."
+          resumo={resumoComparativo}
+        >
           <ComparativoFontes
             linhas={porFonte}
             aoEscolher={(id) => trocarParam("fonte", id)}
           />
-        </section>
+        </SecaoRecolhivel>
       )}
 
       {!semDados && (
