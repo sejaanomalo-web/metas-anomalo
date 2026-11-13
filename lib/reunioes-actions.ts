@@ -35,6 +35,10 @@ import {
   calListarWebhooks,
   calMe,
   calSalvarFeedIcs,
+  CONTA_PRINCIPAL,
+  nomeEnvApiKey,
+  nomeEnvWebhookSecret,
+  segredoWebhookDe,
   type CalEventType,
 } from "./calcom"
 import {
@@ -50,7 +54,18 @@ import {
   validarPeriodos,
   type BloqueioDisp,
 } from "./reunioes-nucleo"
-import { lerIntegracao, logSync, reconciliar, repararEncerramentosPendentes, reprocessarPendentes, type Integracao } from "./reunioes-sync"
+import {
+  chaveContaValida,
+  lerIntegracao,
+  lerIntegracaoPorId,
+  lerIntegracoes,
+  logSync,
+  reconciliar,
+  repararEncerramentosPendentes,
+  reprocessarPendentes,
+  rotuloConta,
+  type Integracao,
+} from "./reunioes-sync"
 import { hojeISO } from "./workspace-datas"
 import { ehAdminNoModulo } from "./acesso-admin"
 import { cancelarReuniaoPeloWorkspace, podeCancelarReuniao } from "./reunioes-cancelar"
@@ -120,10 +135,22 @@ async function db() {
   return d
 }
 
-async function integracaoOuErro(): Promise<Integracao> {
-  const i = await lerIntegracao(await db())
-  if (!i) throw new Error("Integração não encontrada — a migration 20261021_reunioes_calcom.sql foi aplicada?")
+async function integracaoOuErro(conta: string): Promise<Integracao> {
+  const i = await lerIntegracao(await db(), chaveContaValida(conta))
+  if (!i) {
+    throw new Error(
+      conta === CONTA_PRINCIPAL
+        ? "Integração não encontrada — a migration 20261021_reunioes_calcom.sql foi aplicada?"
+        : `Conta "${conta}" não encontrada — a migration 20261113_reunioes_calcom_multi_contas.sql foi aplicada?`
+    )
+  }
   return i
+}
+
+/** Endereço do webhook/feed de cada conta: a principal mantém a URL de
+ *  sempre (o webhook já registrado continua válido); as outras levam ?conta=. */
+function comConta(url: string, conta: string): string {
+  return conta === CONTA_PRINCIPAL ? url : `${url}?conta=${encodeURIComponent(conta)}`
 }
 
 // ============================================================
@@ -131,28 +158,37 @@ async function integracaoOuErro(): Promise<Integracao> {
 // ============================================================
 
 /** Verificação REAL: chama a API com a chave configurada e lista o que dá. */
-export async function testarConexaoAction(): Promise<ResultadoReunioes> {
+export async function testarConexaoAction(contaBruta: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
-  if (!calcomConfigurado()) return { ok: false, erro: "CALCOM_API_KEY não está configurada no servidor." }
+  const conta = chaveContaValida(contaBruta)
+  if (!calcomConfigurado(conta)) return { ok: false, erro: `${nomeEnvApiKey(conta)} não está configurada no servidor.` }
 
   const d = await db()
-  const integ = await integracaoOuErro()
+  const integ = await integracaoOuErro(conta)
   const itens: NonNullable<ResultadoReunioes["itens"]> = []
   let me: Awaited<ReturnType<typeof calMe>> | null = null
 
   try {
-    me = await calMe()
+    me = await calMe(conta)
     itens.push({ rotulo: "API key válida (GET /v2/me)", ok: true, detalhe: `Conta: ${me.username}` })
+    // A mesma API key colada nas duas variáveis faria as duas "contas" serem
+    // uma só — e cada reserva chegaria duas vezes.
+    const outra = (await lerIntegracoes(d)).find((i) => i.id !== integ.id && i.conta_id !== null && i.conta_id === me!.id)
+    itens.push({
+      rotulo: "Conta diferente das outras conectadas",
+      ok: !outra,
+      detalhe: outra ? `É a mesma conta de "${rotuloConta(outra)}" (@${me.username}). Confira ${nomeEnvApiKey(conta)}.` : "OK",
+    })
   } catch (e) {
     itens.push({ rotulo: "API key válida (GET /v2/me)", ok: false, detalhe: msg(e) })
   }
   if (me) {
     for (const [rotulo, fn] of [
-      ["Ler tipos de evento (GET /v2/event-types)", () => calListarEventTypes(me!.username).then((x) => `${x.length} encontrados`)],
-      ["Ler disponibilidades (GET /v2/schedules)", () => calListarSchedules().then((x) => `${x.length} encontradas`)],
-      ["Ler webhooks (GET /v2/webhooks)", () => calListarWebhooks().then((x) => `${x.length} registrados`)],
-      ["Apps de videochamada (GET /v2/conferencing)", () => calListarConferencias().then((x) => x.map((c) => c.appSlug ?? c.type).filter(Boolean).join(", ") || "nenhum app listado (Cal Video é nativo)")],
+      ["Ler tipos de evento (GET /v2/event-types)", () => calListarEventTypes(conta, me!.username).then((x) => `${x.length} encontrados`)],
+      ["Ler disponibilidades (GET /v2/schedules)", () => calListarSchedules(conta).then((x) => `${x.length} encontradas`)],
+      ["Ler webhooks (GET /v2/webhooks)", () => calListarWebhooks(conta).then((x) => `${x.length} registrados`)],
+      ["Apps de videochamada (GET /v2/conferencing)", () => calListarConferencias(conta).then((x) => x.map((c) => c.appSlug ?? c.type).filter(Boolean).join(", ") || "nenhum app listado (Cal Video é nativo)")],
     ] as const) {
       try {
         itens.push({ rotulo, ok: true, detalhe: await fn() })
@@ -161,10 +197,13 @@ export async function testarConexaoAction(): Promise<ResultadoReunioes> {
       }
     }
   }
+  const proprio = Boolean(process.env[nomeEnvWebhookSecret(conta)])
   itens.push({
-    rotulo: "Segredo do webhook (CALCOM_WEBHOOK_SECRET)",
-    ok: Boolean(process.env.CALCOM_WEBHOOK_SECRET),
-    detalhe: process.env.CALCOM_WEBHOOK_SECRET ? "configurado" : "ausente — webhooks seriam recusados",
+    rotulo: `Segredo do webhook (${nomeEnvWebhookSecret(conta)}${conta === CONTA_PRINCIPAL ? "" : " ou CALCOM_WEBHOOK_SECRET"})`,
+    ok: Boolean(segredoWebhookDe(conta)),
+    detalhe: segredoWebhookDe(conta)
+      ? proprio || conta === CONTA_PRINCIPAL ? "configurado" : "usando o segredo comum (CALCOM_WEBHOOK_SECRET)"
+      : "ausente — webhooks seriam recusados",
   })
 
   const ok = itens.every((i) => i.ok)
@@ -176,7 +215,7 @@ export async function testarConexaoAction(): Promise<ResultadoReunioes> {
     ...(!ok && integ.status === "conectado" ? { status: "erro" } : {}),
     ...(ok && integ.status === "erro" ? { status: "conectado", ultimo_erro: null } : {}),
   }).eq("id", integ.id)
-  await logSync(d, ok ? "info" : "aviso", "testar_conexao", ok ? "Teste de conexão OK." : "Teste de conexão com falhas.", { atorId: usuario.id })
+  await logSync(d, ok ? "info" : "aviso", "testar_conexao", `${rotuloConta(integ)}: ${ok ? "teste de conexão OK." : "teste de conexão com falhas."}`, { atorId: usuario.id })
   revalidatePath(ROTA)
   return { ok, itens, erro: ok ? undefined : "Alguma verificação falhou — veja os itens." }
 }
@@ -186,28 +225,33 @@ export async function testarConexaoAction(): Promise<ResultadoReunioes> {
  * POST /v2/webhooks, com o segredo de CALCOM_WEBHOOK_SECRET. Idempotente:
  * se já existe webhook pra esta URL, só atualiza.
  */
-export async function conectarAction(): Promise<ResultadoReunioes> {
+export async function conectarAction(contaBruta: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
-  if (!calcomConfigurado()) return { ok: false, erro: "Configure CALCOM_API_KEY no servidor antes de conectar." }
-  const segredo = process.env.CALCOM_WEBHOOK_SECRET
-  if (!segredo) return { ok: false, erro: "Configure CALCOM_WEBHOOK_SECRET no servidor antes de conectar." }
+  const conta = chaveContaValida(contaBruta)
+  if (!calcomConfigurado(conta)) return { ok: false, erro: `Configure ${nomeEnvApiKey(conta)} no servidor antes de conectar.` }
+  const segredo = segredoWebhookDe(conta)
+  if (!segredo) return { ok: false, erro: `Configure ${nomeEnvWebhookSecret(conta)} (ou CALCOM_WEBHOOK_SECRET) no servidor antes de conectar.` }
   const base = urlBaseApp()
   if (!base) return { ok: false, erro: "Não consegui descobrir a URL pública do app. Defina APP_PUBLIC_URL." }
-  const url = `${base}/api/reunioes/calcom/webhook`
+  const url = comConta(`${base}/api/reunioes/calcom/webhook`, conta)
   if (!urlPublicaAlcancavel(url)) {
     return { ok: false, erro: `O Cal.com não alcança ${url}. Conecte a partir do app publicado (https) ou defina APP_PUBLIC_URL.` }
   }
 
   const d = await db()
-  const integ = await integracaoOuErro()
+  const integ = await integracaoOuErro(conta)
   try {
-    const me = await calMe()
-    const existentes = await calListarWebhooks()
+    const me = await calMe(conta)
+    const outra = (await lerIntegracoes(d)).find((i) => i.id !== integ.id && i.conta_id !== null && i.conta_id === me.id)
+    if (outra) {
+      return { ok: false, erro: `Esta API key é da mesma conta de "${rotuloConta(outra)}" (@${me.username}). Gere a chave dentro da conta ${rotuloConta(integ)} e coloque em ${nomeEnvApiKey(conta)}.` }
+    }
+    const existentes = await calListarWebhooks(conta)
     const meu = existentes.find((w) => w.subscriberUrl === url)
     const wh = meu
-      ? await calAtualizarWebhook(String(meu.id), { active: true, triggers: GATILHOS, secret: segredo })
-      : await calCriarWebhook({ subscriberUrl: url, triggers: GATILHOS, secret: segredo, active: true })
+      ? await calAtualizarWebhook(conta, String(meu.id), { active: true, triggers: GATILHOS, secret: segredo })
+      : await calCriarWebhook(conta, { subscriberUrl: url, triggers: GATILHOS, secret: segredo, active: true })
     await d.from("reunioes_integracoes").update({
       status: "conectado",
       sincronizacao_ativa: true,
@@ -221,7 +265,7 @@ export async function conectarAction(): Promise<ResultadoReunioes> {
       ultimo_erro: null,
       desconectado_em: null,
     }).eq("id", integ.id)
-    await logSync(d, "info", "conectar", `Webhook ${meu ? "reativado" : "registrado"} em ${url} (conta ${me.username}).`, { atorId: usuario.id })
+    await logSync(d, "info", "conectar", `${rotuloConta(integ)}: webhook ${meu ? "reativado" : "registrado"} em ${url} (conta ${me.username}).`, { atorId: usuario.id })
     revalidatePath(ROTA)
     return { ok: true, mensagem: `Conectado à conta ${me.username}. Webhook ${meu ? "reativado" : "registrado"}.` }
   } catch (e) {
@@ -232,10 +276,11 @@ export async function conectarAction(): Promise<ResultadoReunioes> {
   }
 }
 
-export async function sincronizarAgoraAction(): Promise<ResultadoReunioes> {
+/** Sem conta = todas (o cron faz o mesmo). */
+export async function sincronizarAgoraAction(contaBruta?: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
-  const r = await reconciliar(await db())
+  const r = await reconciliar(await db(), contaBruta ? chaveContaValida(contaBruta) : undefined)
   revalidatePath(ROTA)
   revalidatePath("/dashboard/workspace")
   return { ok: r.erros === 0, mensagem: r.mensagem, erro: r.erros > 0 ? r.mensagem : undefined }
@@ -270,21 +315,22 @@ export async function reprocessarAction(): Promise<ResultadoReunioes> {
 }
 
 /** Pausar/retomar: para de importar SEM apagar nada (histórico intacto). */
-export async function alternarSincronizacaoAction(ativa: boolean): Promise<ResultadoReunioes> {
+export async function alternarSincronizacaoAction(contaBruta: string, ativa: boolean): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
+  const conta = chaveContaValida(contaBruta)
   const d = await db()
-  const integ = await integracaoOuErro()
+  const integ = await integracaoOuErro(conta)
   let aviso = ""
-  if (integ.webhook_id && calcomConfigurado()) {
+  if (integ.webhook_id && calcomConfigurado(conta)) {
     try {
-      await calAtualizarWebhook(integ.webhook_id, { active: ativa })
+      await calAtualizarWebhook(conta, integ.webhook_id, { active: ativa })
     } catch (e) {
       aviso = ` (o webhook no Cal.com não foi ${ativa ? "reativado" : "pausado"}: ${msg(e)}; eventos recebidos serão ignorados mesmo assim)`
     }
   }
   await d.from("reunioes_integracoes").update({ sincronizacao_ativa: ativa }).eq("id", integ.id)
-  await logSync(d, "info", "sincronizacao", `Sincronização ${ativa ? "retomada" : "pausada"}.${aviso}`, { atorId: usuario.id })
+  await logSync(d, "info", "sincronizacao", `${rotuloConta(integ)}: sincronização ${ativa ? "retomada" : "pausada"}.${aviso}`, { atorId: usuario.id })
   revalidatePath(ROTA)
   return { ok: true, mensagem: `Sincronização ${ativa ? "retomada" : "pausada"}.${aviso}` }
 }
@@ -294,16 +340,17 @@ export async function alternarSincronizacaoAction(ativa: boolean): Promise<Resul
  * marca desconectado. NÃO cancela reservas, NÃO apaga tarefas nem histórico.
  * A API key em si vive na env — removê-la/revogá-la é passo manual (doc).
  */
-export async function desconectarAction(confirmacao: string): Promise<ResultadoReunioes> {
+export async function desconectarAction(contaBruta: string, confirmacao: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   if (confirmacao !== "DESCONECTAR") return { ok: false, erro: "Digite DESCONECTAR para confirmar." }
+  const conta = chaveContaValida(contaBruta)
   const d = await db()
-  const integ = await integracaoOuErro()
+  const integ = await integracaoOuErro(conta)
   const avisos: string[] = []
-  if (integ.webhook_id && calcomConfigurado()) {
+  if (integ.webhook_id && calcomConfigurado(conta)) {
     try {
-      await calApagarWebhook(integ.webhook_id)
+      await calApagarWebhook(conta, integ.webhook_id)
     } catch (e) {
       avisos.push(`Webhook não removido no Cal.com (${msg(e)}) — remova em Settings → Developer → Webhooks.`)
     }
@@ -314,36 +361,61 @@ export async function desconectarAction(confirmacao: string): Promise<ResultadoR
     webhook_id: null,
     desconectado_em: new Date().toISOString(),
   }).eq("id", integ.id)
-  await logSync(d, avisos.length ? "aviso" : "info", "desconectar", `Integração desconectada. ${avisos.join(" ")}`.trim(), { atorId: usuario.id })
+  await logSync(d, avisos.length ? "aviso" : "info", "desconectar", `${rotuloConta(integ)}: integração desconectada. ${avisos.join(" ")}`.trim(), { atorId: usuario.id })
   revalidatePath(ROTA)
   return {
     ok: true,
-    mensagem: "Desconectado. Reuniões e tarefas existentes foram preservadas; novas reservas não serão importadas. Para encerrar de vez, revogue a API key no Cal.com e remova CALCOM_API_KEY do servidor.",
+    mensagem: `Desconectado. Reuniões e tarefas existentes foram preservadas; novas reservas desta conta não serão importadas. Para encerrar de vez, revogue a API key no Cal.com e remova ${nomeEnvApiKey(conta)} do servidor.`,
     erro: avisos.length ? avisos.join(" ") : undefined,
   }
 }
 
 /** Cadastra no Cal.com o feed ICS de bloqueios do Workspace. */
-export async function conectarFeedIcsAction(): Promise<ResultadoReunioes> {
+export async function conectarFeedIcsAction(contaBruta: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
+  const conta = chaveContaValida(contaBruta)
   const token = process.env.REUNIOES_ICS_TOKEN ?? ""
   if (token.length < 24) return { ok: false, erro: "Configure REUNIOES_ICS_TOKEN (mín. 24 caracteres aleatórios) no servidor." }
-  if (!calcomConfigurado()) return { ok: false, erro: "Configure CALCOM_API_KEY antes." }
+  if (!calcomConfigurado(conta)) return { ok: false, erro: `Configure ${nomeEnvApiKey(conta)} antes.` }
   const base = urlBaseApp()
-  const url = base ? `${base}/api/reunioes/agenda-bloqueios/${token}.ics` : null
+  const url = base ? comConta(`${base}/api/reunioes/agenda-bloqueios/${token}.ics`, conta) : null
   if (!url || !urlPublicaAlcancavel(url)) return { ok: false, erro: "O feed precisa de uma URL https pública. Faça isso pelo app publicado ou defina APP_PUBLIC_URL." }
   const d = await db()
-  const integ = await integracaoOuErro()
+  const integ = await integracaoOuErro(conta)
   try {
-    const r = await calSalvarFeedIcs(url)
+    const r = await calSalvarFeedIcs(conta, url)
     await d.from("reunioes_integracoes").update({ ics_credencial_id: r.id }).eq("id", integ.id)
-    await logSync(d, "info", "feed_ics", "Feed ICS de bloqueios cadastrado no Cal.com.", { atorId: usuario.id })
+    await logSync(d, "info", "feed_ics", `${rotuloConta(integ)}: feed ICS de bloqueios cadastrado no Cal.com.`, { atorId: usuario.id })
     revalidatePath(ROTA)
-    return { ok: true, mensagem: "Feed cadastrado. Confira em app.cal.com → Settings → Calendars se ele aparece marcado para checar conflitos." }
+    return { ok: true, mensagem: "Feed cadastrado. Confira em app.cal.com → Settings → Calendars (logado nesta conta) se ele aparece marcado para checar conflitos." }
   } catch (e) {
-    await logSync(d, "erro", "feed_ics", msg(e), { atorId: usuario.id })
+    await logSync(d, "erro", "feed_ics", `${rotuloConta(integ)}: ${msg(e)}`, { atorId: usuario.id })
     return { ok: false, erro: msg(e) }
+  }
+}
+
+/**
+ * Liga/desliga o bloqueio cruzado: o feed desta conta passa (ou deixa) de
+ * marcar como ocupado o horário das reuniões das outras contas. Sem efeito
+ * enquanto o feed não estiver cadastrado nesta conta.
+ */
+export async function alternarBloqueioOutrasContasAction(contaBruta: string, ativo: boolean): Promise<ResultadoReunioes> {
+  const { usuario, erro } = await exigirAdmin()
+  if (!usuario) return { ok: false, erro }
+  const conta = chaveContaValida(contaBruta)
+  const d = await db()
+  const integ = await integracaoOuErro(conta)
+  if (!integ.multi) return { ok: false, erro: "Aplique a migration 20261113_reunioes_calcom_multi_contas.sql antes." }
+  const { error } = await d.from("reunioes_integracoes").update({ bloquear_outras_contas: ativo }).eq("id", integ.id)
+  if (error) return { ok: false, erro: "Não foi possível salvar." }
+  await logSync(d, "info", "feed_ics", `${rotuloConta(integ)}: reuniões das outras contas ${ativo ? "passam a bloquear" : "deixam de bloquear"} esta agenda.`, { atorId: usuario.id })
+  revalidatePath(ROTA)
+  return {
+    ok: true,
+    mensagem: ativo
+      ? "Ligado. Quando o Cal.com reler o feed, os horários das reuniões das outras contas aparecem ocupados aqui."
+      : "Desligado. Esta conta volta a ignorar as reuniões das outras.",
   }
 }
 
@@ -353,6 +425,8 @@ export async function conectarFeedIcsAction(): Promise<ResultadoReunioes> {
 
 interface TipoRow {
   id: string
+  /** undefined = migration de várias contas não aplicada (conta principal). */
+  integracao_id?: string | null
   nome: string
   descricao: string | null
   duracao_min: number
@@ -371,6 +445,11 @@ function linkDe(et: CalEventType, username: string | null): string | null {
   return urlSegura(et.bookingUrl) ?? (username ? `https://cal.com/${username}/${et.slug}` : null)
 }
 
+/** Conta do Cal.com do tipo (sem coluna/valor = principal). */
+async function contaDoTipo(tipo: Pick<TipoRow, "integracao_id">): Promise<Integracao | null> {
+  return lerIntegracaoPorId(await db(), tipo.integracao_id ?? null)
+}
+
 /** Empurra as regras do tipo para o event type vinculado (PATCH). */
 async function publicarTipo(tipoId: string): Promise<{ ok: boolean; erro?: string }> {
   const d = await db()
@@ -378,22 +457,32 @@ async function publicarTipo(tipoId: string): Promise<{ ok: boolean; erro?: strin
   const tipo = t as TipoRow | null
   if (!tipo) return { ok: false, erro: "Tipo não encontrado." }
   if (!tipo.calcom_event_type_id) return { ok: false, erro: "Tipo sem evento do Cal.com associado." }
-  if (!calcomConfigurado()) return { ok: false, erro: "Cal.com não configurado." }
+  const integ = await contaDoTipo(tipo)
+  if (!integ) return { ok: false, erro: "Conta do Cal.com do tipo não encontrada." }
+  const conta = integ.chave
+  if (!calcomConfigurado(conta)) return { ok: false, erro: `Cal.com não configurado (${nomeEnvApiKey(conta)}).` }
 
+  // O schedule é de UM usuário do Cal.com: só vale se a disponibilidade for
+  // da mesma conta do evento. De outra conta, o Cal.com recusaria.
   let scheduleId: number | null = null
   if (tipo.disponibilidade_id) {
-    const { data: disp } = await d.from("reunioes_disponibilidades").select("calcom_schedule_id").eq("id", tipo.disponibilidade_id).maybeSingle()
+    const { data: disp } = await d.from("reunioes_disponibilidades").select("*").eq("id", tipo.disponibilidade_id).maybeSingle()
+    const dispConta = (disp as { integracao_id?: string | null } | null)?.integracao_id
+    if (disp && integ.multi && dispConta && dispConta !== integ.id) {
+      const erro = "A disponibilidade escolhida é de outra conta do Cal.com. Escolha uma disponibilidade da mesma conta do evento."
+      await d.from("reunioes_tipos").update({ ultimo_erro: erro }).eq("id", tipoId)
+      return { ok: false, erro }
+    }
     scheduleId = (disp?.calcom_schedule_id as number | null) ?? null
   }
-  const integ = await lerIntegracao(d)
   try {
-    const et = await calAtualizarEventType(tipo.calcom_event_type_id, {
+    const et = await calAtualizarEventType(conta, tipo.calcom_event_type_id, {
       ...montarCorpoEventType({ ...tipo, scheduleId }),
       hidden: !tipo.ativo,
     })
     await d.from("reunioes_tipos").update({
       calcom_slug: et.slug,
-      link_publico: linkDe(et, integ?.conta_username ?? null),
+      link_publico: linkDe(et, integ.conta_username ?? null),
       ultima_sincronizacao_em: new Date().toISOString(),
       ultimo_erro: null,
     }).eq("id", tipoId)
@@ -434,7 +523,29 @@ export async function salvarTipoAction(fd: FormData): Promise<ResultadoReunioes>
     return ehUuid(v) ? v : null
   }
 
+  // Trocar a conta do tipo desfaz a associação com o evento: o event type
+  // antigo é da outra conta. O link público some até associar o novo.
+  const { data: antes } = await d.from("reunioes_tipos").select("*").eq("id", id).maybeSingle()
+  if (!antes) return { ok: false, erro: "Tipo não encontrado." }
+  const contas = await lerIntegracoes(d)
+  const multi = contas.some((c) => c.multi)
+  const contaNova = uuidOuNull("integracao_id")
+  if (multi && contaNova && !contas.some((c) => c.id === contaNova)) return { ok: false, erro: "Conta do Cal.com inválida." }
+  const contaAntes = (antes as TipoRow).integracao_id ?? null
+  const trocouConta = multi && contaNova !== null && contaNova !== contaAntes
+  const dispId = uuidOuNull("disponibilidade_id")
+  if (multi && dispId) {
+    const { data: dsp } = await d.from("reunioes_disponibilidades").select("integracao_id").eq("id", dispId).maybeSingle()
+    const contaFinal = contaNova ?? contaAntes
+    if (dsp && dsp.integracao_id && contaFinal && dsp.integracao_id !== contaFinal) {
+      return { ok: false, erro: "A disponibilidade escolhida é de outra conta do Cal.com. Escolha uma da mesma conta do tipo." }
+    }
+  }
+
   const { error } = await d.from("reunioes_tipos").update({
+    ...(trocouConta
+      ? { integracao_id: contaNova, calcom_event_type_id: null, calcom_slug: null, link_publico: null, ultimo_erro: null }
+      : {}),
     nome,
     descricao: limparTexto(fd.get("descricao"), 1000),
     campanha_rotulo: limparTexto(fd.get("campanha_rotulo"), 120),
@@ -445,15 +556,18 @@ export async function salvarTipoAction(fd: FormData): Promise<ResultadoReunioes>
     limite_diario: limite,
     local,
     responsavel_id: uuidOuNull("responsavel_id"),
-    disponibilidade_id: uuidOuNull("disponibilidade_id"),
+    disponibilidade_id: dispId,
     contexto_id: uuidOuNull("contexto_id"),
     ativo: fd.get("ativo") === "1",
   }).eq("id", id)
   if (error) return { ok: false, erro: "Não foi possível salvar o tipo." }
 
-  const { data: t } = await d.from("reunioes_tipos").select("calcom_event_type_id").eq("id", id).maybeSingle()
+  const { data: t } = await d.from("reunioes_tipos").select("*").eq("id", id).maybeSingle()
+  const contaDoSalvo = t ? await contaDoTipo(t as TipoRow) : null
   let mensagem = "Salvo no Workspace."
-  if (t?.calcom_event_type_id && calcomConfigurado()) {
+  if (trocouConta) {
+    mensagem = "Conta trocada. Associe (ou crie) o evento desta conta no Cal.com para o link público voltar."
+  } else if (t?.calcom_event_type_id && contaDoSalvo && calcomConfigurado(contaDoSalvo.chave)) {
     const p = await publicarTipo(id)
     if (!p.ok) {
       revalidatePath(ROTA)
@@ -476,8 +590,16 @@ export async function criarTipoAction(fd: FormData): Promise<ResultadoReunioes> 
   if (!nome) return { ok: false, erro: "Informe o nome." }
   const origem = slugDe(String(fd.get("origem_comercial") ?? nome)).replace(/-/g, "_").slice(0, 60)
   if (!/^[a-z0-9_]{2,60}$/.test(origem)) return { ok: false, erro: "Origem comercial inválida (use letras, números e _)." }
-  const { data: disp } = await d.from("reunioes_disponibilidades").select("id").order("created_at").limit(1).maybeSingle()
+  // Conta escolhida no formulário; a disponibilidade padrão é a 1ª dela.
+  const contas = await lerIntegracoes(d)
+  const multi = contas.some((c) => c.multi)
+  const contaId = String(fd.get("integracao_id") ?? "")
+  const conta = multi ? contas.find((c) => c.id === contaId) ?? contas.find((c) => c.chave === CONTA_PRINCIPAL) ?? null : null
+  let qDisp = d.from("reunioes_disponibilidades").select("id").order("created_at").limit(1)
+  if (conta) qDisp = qDisp.eq("integracao_id", conta.id)
+  const { data: disp } = await qDisp.maybeSingle()
   const { error } = await d.from("reunioes_tipos").insert({
+    ...(conta ? { integracao_id: conta.id } : {}),
     nome,
     origem_comercial: origem,
     duracao_min: inteiroEntre(fd, "duracao_min", 5, 480) ?? 30,
@@ -506,15 +628,18 @@ export async function vincularEventTypeAction(tipoId: string, eventTypeId: numbe
   if (!Number.isInteger(eventTypeId) || eventTypeId <= 0) return { ok: false, erro: "Evento inválido." }
 
   try {
-    const integ = await lerIntegracao(d)
-    const ets = await calListarEventTypes(integ?.conta_username ?? undefined)
+    const { data: tRow } = await d.from("reunioes_tipos").select("*").eq("id", tipoId).maybeSingle()
+    if (!tRow) return { ok: false, erro: "Tipo não encontrado." }
+    const integ = await contaDoTipo(tRow as TipoRow)
+    if (!integ) return { ok: false, erro: "Conta do Cal.com do tipo não encontrada." }
+    const ets = await calListarEventTypes(integ.chave, integ.conta_username ?? undefined)
     const et = ets.find((e) => e.id === eventTypeId)
-    // Só aceita evento que a API realmente devolve pra esta conta.
-    if (!et) return { ok: false, erro: "Esse evento não pertence à conta conectada." }
+    // Só aceita evento que a API realmente devolve pra conta DO TIPO.
+    if (!et) return { ok: false, erro: `Esse evento não pertence à conta ${rotuloConta(integ)}.` }
     const { error } = await d.from("reunioes_tipos").update({
       calcom_event_type_id: et.id,
       calcom_slug: et.slug,
-      link_publico: linkDe(et, integ?.conta_username ?? null),
+      link_publico: linkDe(et, integ.conta_username ?? null),
       ultimo_erro: null,
     }).eq("id", tipoId)
     if (error) {
@@ -534,24 +659,24 @@ export async function criarEventTypeNoCalcomAction(tipoId: string): Promise<Resu
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   if (!ehUuid(tipoId)) return { ok: false, erro: "Tipo inválido." }
-  if (!calcomConfigurado()) return { ok: false, erro: "Cal.com não configurado." }
   const d = await db()
   const { data: t } = await d.from("reunioes_tipos").select("*").eq("id", tipoId).maybeSingle()
   const tipo = t as TipoRow | null
   if (!tipo) return { ok: false, erro: "Tipo não encontrado." }
   if (tipo.calcom_event_type_id) return { ok: false, erro: "Este tipo já tem evento no Cal.com." }
+  const integ = await contaDoTipo(tipo)
+  if (!integ || !calcomConfigurado(integ.chave)) return { ok: false, erro: `Cal.com não configurado${integ ? ` (${nomeEnvApiKey(integ.chave)})` : ""}.` }
 
   try {
-    const integ = await lerIntegracao(d)
     const corpo = montarCorpoEventType({ ...tipo, scheduleId: null })
-    const et = await calCriarEventType({ ...corpo, slug: slugDe(tipo.nome) })
+    const et = await calCriarEventType(integ.chave, { ...corpo, slug: slugDe(tipo.nome) })
     await d.from("reunioes_tipos").update({
       calcom_event_type_id: et.id,
       calcom_slug: et.slug,
-      link_publico: linkDe(et, integ?.conta_username ?? null),
+      link_publico: linkDe(et, integ.conta_username ?? null),
     }).eq("id", tipoId)
     const p = await publicarTipo(tipoId)
-    await logSync(d, "info", "tipo", `Evento "${et.title}" criado no Cal.com (${et.id}).`, { atorId: usuario.id })
+    await logSync(d, "info", "tipo", `Evento "${et.title}" criado no Cal.com, conta ${rotuloConta(integ)} (${et.id}).`, { atorId: usuario.id })
     revalidatePath(ROTA)
     return p.ok ? { ok: true, mensagem: "Evento criado no Cal.com." } : { ok: false, erro: `Criado, mas a publicação das regras falhou: ${p.erro}` }
   } catch (e) {
@@ -613,8 +738,11 @@ export async function salvarDisponibilidadeAction(fd: FormData): Promise<Resulta
   const bl = validarBloqueios(bruto.bloqueios ?? [])
   if (!bl.ok) return { ok: false, erro: bl.erro }
 
-  const { data: atualRow } = await d.from("reunioes_disponibilidades").select("calcom_schedule_id, bloqueios").eq("id", id).maybeSingle()
+  const { data: atualRow } = await d.from("reunioes_disponibilidades").select("*").eq("id", id).maybeSingle()
   if (!atualRow) return { ok: false, erro: "Disponibilidade não encontrada." }
+  // Schedule e Out of Office são da conta DONA desta disponibilidade.
+  const integ = await lerIntegracaoPorId(d, (atualRow as { integracao_id?: string | null }).integracao_id ?? null)
+  const conta = integ?.chave ?? CONTA_PRINCIPAL
   const responsavelBruto = String(fd.get("responsavel_id") ?? "")
 
   const salvar = async (extra: Record<string, unknown>) =>
@@ -628,10 +756,10 @@ export async function salvarDisponibilidadeAction(fd: FormData): Promise<Resulta
       ...extra,
     }).eq("id", id)
 
-  if (!calcomConfigurado()) {
-    await salvar({ bloqueios: bl.bloqueios, publicacao_erro: "Cal.com não configurado — salvo só no Workspace, NÃO publicado." })
+  if (!calcomConfigurado(conta)) {
+    await salvar({ bloqueios: bl.bloqueios, publicacao_erro: `Cal.com não configurado (${nomeEnvApiKey(conta)}) — salvo só no Workspace, NÃO publicado.` })
     revalidatePath(ROTA)
-    return { ok: false, erro: "Salvo no Workspace, mas NÃO publicado: o Cal.com não está configurado." }
+    return { ok: false, erro: `Salvo no Workspace, mas NÃO publicado: ${nomeEnvApiKey(conta)} não está configurada.` }
   }
 
   // ---------- publicar ----------
@@ -640,9 +768,9 @@ export async function salvarDisponibilidadeAction(fd: FormData): Promise<Resulta
   let scheduleId = (atualRow.calcom_schedule_id as number | null) ?? null
   try {
     if (scheduleId) {
-      await calAtualizarSchedule(scheduleId, corpo)
+      await calAtualizarSchedule(conta, scheduleId, corpo)
     } else {
-      const s = await calCriarSchedule({ ...corpo, isDefault: false })
+      const s = await calCriarSchedule(conta, { ...corpo, isDefault: false })
       scheduleId = s.id
     }
   } catch (e) {
@@ -660,7 +788,7 @@ export async function salvarDisponibilidadeAction(fd: FormData): Promise<Resulta
       continue
     }
     try {
-      const ooo = await calCriarOoo({
+      const ooo = await calCriarOoo(conta, {
         start: brParaUtcIso(b.de, "00:00"),
         end: new Date(Date.parse(brParaUtcIso(b.ate, "23:59")) + 59_999).toISOString(),
         notes: b.motivo ?? "Bloqueio pelo Workspace",
@@ -676,7 +804,7 @@ export async function salvarDisponibilidadeAction(fd: FormData): Promise<Resulta
     const mantido = novos.some((n) => n.calcom_ooo_id && n.calcom_ooo_id === a.calcom_ooo_id)
     if (a.calcom_ooo_id && !mantido) {
       try {
-        await calApagarOoo(a.calcom_ooo_id)
+        await calApagarOoo(conta, a.calcom_ooo_id)
       } catch (e) {
         erros.push(`Remover bloqueio ${a.de}–${a.ate}: ${msg(e)}`)
       }
@@ -735,7 +863,7 @@ export async function cancelarReuniaoAction(fd: FormData): Promise<ResultadoReun
 
   const { data: ag, error } = await db
     .from("reunioes_agendamentos")
-    .select("id, booking_uid, status, responsavel_id, provedor")
+    .select("*")
     .eq("id", id)
     .maybeSingle()
   if (error) return { ok: false, erro: "Não foi possível ler a reunião. Tente de novo." }
@@ -746,17 +874,23 @@ export async function cancelarReuniaoAction(fd: FormData): Promise<ResultadoReun
   if (ag.status !== "solicitada" && ag.status !== "confirmada") {
     return { ok: true, mensagem: "Esta reunião já não está ativa — nada a cancelar." }
   }
-  if (!calcomConfigurado()) return { ok: false, erro: "O Cal.com não está configurado no servidor. Nada foi cancelado." }
-  const integ = await lerIntegracao(db)
-  if (!integ || integ.status === "desconectado") {
-    return { ok: false, erro: "A integração com o Cal.com está desconectada. Nada foi cancelado." }
+  // A reserva é cancelada com a API key da conta onde ela foi feita.
+  const integ = await lerIntegracaoPorId(db, (ag as { integracao_id?: string | null }).integracao_id ?? null)
+  if (!integ) return { ok: false, erro: "Conta do Cal.com desta reunião não encontrada. Nada foi cancelado." }
+  const conta = integ.chave
+  if (!calcomConfigurado(conta)) return { ok: false, erro: `O Cal.com da conta ${rotuloConta(integ)} não está configurado no servidor (${nomeEnvApiKey(conta)}). Nada foi cancelado.` }
+  if (integ.status === "desconectado") {
+    return { ok: false, erro: `A conta ${rotuloConta(integ)} do Cal.com está desconectada. Nada foi cancelado.` }
   }
 
   const motivo = limparTexto(fd.get("motivo"), 300) ?? MOTIVO_PADRAO
   const r = await cancelarReuniaoPeloWorkspace(
     {
-      repo: repoSupabase(db),
-      cal: { cancelar: calCancelarBooking, buscar: calBuscarBooking },
+      repo: repoSupabase(db, integ.multi ? integ.id : null),
+      cal: {
+        cancelar: (uid, motivo) => calCancelarBooking(conta, uid, motivo),
+        buscar: (uid) => calBuscarBooking(conta, uid),
+      },
       log: (nivel, mensagem, detalhes) => logSync(db, nivel, "cancelamento", mensagem, { detalhes, atorId: usuario.id }),
     },
     ag.booking_uid as string,

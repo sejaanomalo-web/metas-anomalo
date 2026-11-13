@@ -34,6 +34,16 @@ export const COR_CONEXAO: Record<EstadoConexao, string> = {
 }
 
 export interface IntegracaoTela {
+  /** id da linha em reunioes_integracoes ("" quando não existe). */
+  id: string
+  /** 'principal' | 'ativo' | … — é o que as actions recebem. */
+  chave: string
+  /** Nome curto da conta ("Anômalo Hub", "Ativo"). */
+  rotulo: string
+  /** Migration de várias contas aplicada. */
+  multi: boolean
+  /** Feed desta conta marca as reuniões das outras como ocupadas. */
+  bloquearOutrasContas: boolean
   estado: EstadoConexao
   sincronizacaoAtiva: boolean
   contaUsername: string | null
@@ -47,10 +57,14 @@ export interface IntegracaoTela {
   ultimoErro: string | null
   /** Quais variáveis de ambiente existem (nunca o valor). */
   env: { apiKey: boolean; webhookSecret: boolean; icsToken: boolean }
+  /** Nomes das variáveis desta conta, pra tela dizer exatamente o que falta. */
+  envNomes: { apiKey: string; webhookSecret: string }
 }
 
 export interface TipoTela {
   id: string
+  /** Conta do Cal.com dona do evento (null = principal / sem migration). */
+  integracao_id: string | null
   nome: string
   descricao: string | null
   duracao_min: number
@@ -74,6 +88,8 @@ export interface TipoTela {
 
 export interface DisponibilidadeTela {
   id: string
+  /** Conta do Cal.com dona do schedule (null = principal / sem migration). */
+  integracao_id: string | null
   nome: string
   fuso: string
   responsavel_id: string | null
@@ -97,6 +113,8 @@ export interface AgendamentoTela {
   participante_email: string | null
   participante_telefone: string | null
   tipo_nome: string | null
+  /** Conta do Cal.com onde a reserva foi feita (só quando há mais de uma). */
+  conta_rotulo: string | null
   origem_comercial: string | null
   responsavel_id: string | null
   responsavel_nome: string | null
@@ -136,7 +154,10 @@ export interface EventTypeExterno {
 export interface PainelReunioes {
   /** false = a migration 20261021_reunioes_calcom.sql ainda não foi aplicada. */
   migracaoAplicada: boolean
+  /** Resumo pra lista e cabeçalho: a "melhor" situação entre as contas. */
   integracao: IntegracaoTela
+  /** Uma por conta do Cal.com, na ordem da tela. */
+  integracoes: IntegracaoTela[]
   tipos: TipoTela[]
   disponibilidades: DisponibilidadeTela[]
   proximas: AgendamentoTela[]
@@ -147,7 +168,8 @@ export interface PainelReunioes {
   log: LogTela[]
   usuarios: { id: string; nome: string }[]
   contextos: { id: string; nome: string }[]
-  /** Event types da conta (só quando a API está configurada e respondeu). */
-  eventTypesExternos: EventTypeExterno[] | null
-  eventTypesErro: string | null
+  /** Event types de cada conta, por id da integração (só as que responderam). */
+  eventTypesExternos: Record<string, EventTypeExterno[]>
+  /** Erro ao listar, por id da integração. */
+  eventTypesErro: Record<string, string>
 }

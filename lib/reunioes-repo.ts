@@ -22,7 +22,12 @@ function ehUnico(err: { code?: string; message?: string } | null): boolean {
   return Boolean(err && (err.code === "23505" || /duplicate|unique/i.test(err.message ?? "")))
 }
 
-export function repoSupabase(db: SupabaseClient): RepoReunioes {
+/**
+ * `integracaoId` = conta do Cal.com de onde vem o que este repo grava (a
+ * reserva nova nasce com ela). null = modo de conta única (migration
+ * 20261113 não aplicada) ou uso que não cria reserva — a coluna não é tocada.
+ */
+export function repoSupabase(db: SupabaseClient, integracaoId: string | null): RepoReunioes {
   return {
     async buscarAgendamento(uid) {
       const { data, error } = await db
@@ -36,7 +41,9 @@ export function repoSupabase(db: SupabaseClient): RepoReunioes {
     },
 
     async inserirAgendamento(linha: LinhaAgendamento) {
-      const { error } = await db.from("reunioes_agendamentos").insert({ provedor: "calcom", ...linha })
+      const { error } = await db
+        .from("reunioes_agendamentos")
+        .insert({ provedor: "calcom", ...linha, ...(integracaoId ? { integracao_id: integracaoId } : {}) })
       if (ehUnico(error)) return "conflito"
       if (error) throw new Error(`inserirAgendamento: ${error.message}`)
       return "ok"

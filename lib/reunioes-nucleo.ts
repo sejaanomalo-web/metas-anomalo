@@ -882,7 +882,13 @@ export function brParaUtcIso(data: string, hora: string): string {
  * lido pelo Cal.com por uma URL com token, e não precisa (nem deve) carregar
  * título de tarefa, nome de cliente ou qualquer dado interno.
  */
-export function montarIcs(bloqueios: { id: string; data: string; hora: string; duracao_min: number }[], agora: Date = new Date()): string {
+/** Item do feed: tarefa que bloqueia (data/hora em Brasília + duração) ou
+ *  reunião de OUTRA conta do Cal.com (início/fim já em UTC). */
+export type ItemIcs =
+  | { id: string; data: string; hora: string; duracao_min: number }
+  | { id: string; inicioIso: string; fimIso: string; prefixoUid: string }
+
+export function montarIcs(bloqueios: ItemIcs[], agora: Date = new Date()): string {
   const carimbo = icsData(agora.toISOString())
   const linhas = [
     "BEGIN:VCALENDAR",
@@ -893,11 +899,21 @@ export function montarIcs(bloqueios: { id: string; data: string; hora: string; d
     "X-WR-CALNAME:ANÔMALO — bloqueios do Workspace",
   ]
   for (const b of bloqueios) {
-    const inicio = brParaUtcIso(b.data, b.hora)
-    const fim = new Date(Date.parse(inicio) + b.duracao_min * 60_000).toISOString()
+    let inicio: string, fim: string, uid: string
+    if ("inicioIso" in b) {
+      if (!Number.isFinite(Date.parse(b.inicioIso)) || !Number.isFinite(Date.parse(b.fimIso))) continue
+      // O banco devolve "+00:00"; o ICS quer o formato Z.
+      inicio = new Date(b.inicioIso).toISOString()
+      fim = new Date(b.fimIso).toISOString()
+      uid = `${b.prefixoUid}-${b.id}`
+    } else {
+      inicio = brParaUtcIso(b.data, b.hora)
+      fim = new Date(Date.parse(inicio) + b.duracao_min * 60_000).toISOString()
+      uid = `ws-${b.id}`
+    }
     linhas.push(
       "BEGIN:VEVENT",
-      `UID:ws-${b.id}@anomalo`,
+      `UID:${uid}@anomalo`,
       `DTSTAMP:${carimbo}`,
       `DTSTART:${icsData(inicio)}`,
       `DTEND:${icsData(fim)}`,

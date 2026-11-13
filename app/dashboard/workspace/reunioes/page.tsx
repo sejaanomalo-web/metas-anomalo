@@ -51,6 +51,12 @@ export default async function ReunioesPage({ searchParams }: { searchParams: SP 
   ])
   const integ = painel.integracao
   const aguardando = painel.pendencias.length + painel.eventosComErro
+  // Mais de uma conta do Cal.com (migration 20261113 aplicada): o cabeçalho
+  // mostra uma bolinha por conta e cada tipo/disponibilidade diz a sua.
+  const contasTela = painel.integracoes.length > 0 ? painel.integracoes : [integ]
+  const variasContas = contasTela.length > 1
+  const contas = contasTela.map((c) => ({ id: c.id, rotulo: c.rotulo, pronta: c.env.apiKey && c.estado !== "desconectado" }))
+  const contaPorId = new Map(contas.map((c) => [c.id, c]))
 
   return (
     <main className="ws-main">
@@ -60,17 +66,20 @@ export default async function ReunioesPage({ searchParams }: { searchParams: SP 
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>Reuniões</h2>
-          <span
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600,
-              padding: "3px 9px", borderRadius: 999, border: `1px solid ${COR_CONEXAO[integ.estado]}55`,
-              color: COR_CONEXAO[integ.estado],
-            }}
-          >
-            <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 999, background: COR_CONEXAO[integ.estado] }} />
-            Cal.com: {ROTULO_CONEXAO[integ.estado]}
-            {integ.estado === "conectado" && !integ.sincronizacaoAtiva && " · pausada"}
-          </span>
+          {contasTela.map((c) => (
+            <span
+              key={c.id || c.chave}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600,
+                padding: "3px 9px", borderRadius: 999, border: `1px solid ${COR_CONEXAO[c.estado]}55`,
+                color: COR_CONEXAO[c.estado],
+              }}
+            >
+              <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 999, background: COR_CONEXAO[c.estado] }} />
+              {variasContas ? `Cal.com ${c.rotulo}` : "Cal.com"}: {ROTULO_CONEXAO[c.estado]}
+              {c.estado === "conectado" && !c.sincronizacaoAtiva && " · pausada"}
+            </span>
+          ))}
           {aguardando > 0 && (
             <Link href="?secao=historico" style={{ fontSize: 11, fontWeight: 600, color: "#e24b4a", textDecoration: "none" }}>
               {aguardando} {aguardando === 1 ? "item aguardando" : "itens aguardando"} sincronização
@@ -123,12 +132,12 @@ export default async function ReunioesPage({ searchParams }: { searchParams: SP 
         ) : secao === "tipos" ? (
           <TiposReuniao
             tipos={painel.tipos}
-            disponibilidades={painel.disponibilidades.map((d) => ({ id: d.id, nome: d.nome }))}
+            disponibilidades={painel.disponibilidades.map((d) => ({ id: d.id, nome: d.nome, integracao_id: d.integracao_id }))}
             usuarios={painel.usuarios}
             contextos={painel.contextos}
+            contas={contas}
             eventTypes={painel.eventTypesExternos}
             eventTypesErro={painel.eventTypesErro}
-            calcomPronto={integ.env.apiKey && integ.estado !== "desconectado"}
             souAdmin={souAdmin}
           />
         ) : secao === "disponibilidade" ? (
@@ -139,13 +148,14 @@ export default async function ReunioesPage({ searchParams }: { searchParams: SP 
                 disp={d}
                 usuarios={painel.usuarios}
                 tiposQueUsam={painel.tipos.filter((t) => t.disponibilidade_id === d.id).map((t) => t.nome)}
-                calcomPronto={integ.env.apiKey && integ.estado !== "desconectado"}
+                contaRotulo={variasContas ? contaPorId.get(d.integracao_id ?? "")?.rotulo ?? null : null}
+                calcomPronto={contaPorId.get(d.integracao_id ?? "")?.pronta ?? (integ.env.apiKey && integ.estado !== "desconectado")}
                 souAdmin={souAdmin}
               />
             ))}
           </div>
         ) : secao === "integracoes" ? (
-          <IntegracoesReunioes integ={integ} souAdmin={souAdmin} />
+          <IntegracoesReunioes integracoes={contasTela} souAdmin={souAdmin} />
         ) : (
           <HistoricoReunioes
             pendencias={painel.pendencias}

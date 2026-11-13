@@ -77,6 +77,7 @@ function CartaoReuniao({ a, apagado, podeCancelar = false }: { a: AgendamentoTel
           {a.participante_nome ?? "Participante"}
         </div>
         <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+          {a.conta_rotulo ? `${a.conta_rotulo} · ` : ""}
           {a.tipo_nome ?? "Tipo não associado"}
           {" · "}
           {a.responsavel_nome ?? "sem responsável"}

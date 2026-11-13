@@ -3,8 +3,8 @@
 // =============================================================================
 
 import { getSupabaseAdmin } from "./supabase"
-import { calcomConfigurado, calListarEventTypes, webhookSecretConfigurado } from "./calcom"
-import { lerIntegracao, type Integracao } from "./reunioes-sync"
+import { calcomConfigurado, calListarEventTypes, CONTA_PRINCIPAL, nomeEnvApiKey, nomeEnvWebhookSecret, webhookSecretConfigurado } from "./calcom"
+import { lerIntegracoes, rotuloConta, type Integracao } from "./reunioes-sync"
 import type {
   AgendamentoTela,
   DisponibilidadeTela,
@@ -19,17 +19,12 @@ import type {
 
 export * from "./reunioes-tipos"
 
-const COLUNAS_TIPO =
-  "id, nome, descricao, duracao_min, origem_comercial, campanha_rotulo, responsavel_id, disponibilidade_id, " +
-  "contexto_id, calcom_event_type_id, calcom_slug, link_publico, local, antecedencia_min_horas, intervalo_min, " +
-  "limite_diario, horizonte_dias, ativo, ultima_sincronizacao_em, ultimo_erro"
-
 const COLUNAS_AGEND =
   "id, booking_uid, status, inicio, fim, participante_nome, participante_email, participante_telefone, " +
   "origem_comercial, link_reuniao, local_rotulo, tarefa_id, sync_status, sync_erro, tipo_id, responsavel_id"
 
-function estadoDe(i: Integracao | null): EstadoConexao {
-  if (!calcomConfigurado()) return "nao_configurado"
+function estadoDe(i: Integracao | null, chave: string): EstadoConexao {
+  if (!calcomConfigurado(chave)) return "nao_configurado"
   if (!i) return "pendente"
   if (i.status === "desconectado") return "desconectado"
   if (i.status === "conectado" && !i.webhook_id) return "pendente"
@@ -37,8 +32,14 @@ function estadoDe(i: Integracao | null): EstadoConexao {
 }
 
 export function integracaoParaTela(i: Integracao | null): IntegracaoTela {
+  const chave = i?.chave ?? CONTA_PRINCIPAL
   return {
-    estado: estadoDe(i),
+    id: i?.id ?? "",
+    chave,
+    rotulo: i ? rotuloConta(i) : "Anômalo Hub",
+    multi: i?.multi ?? false,
+    bloquearOutrasContas: i?.bloquear_outras_contas ?? true,
+    estado: estadoDe(i, chave),
     sincronizacaoAtiva: i?.sincronizacao_ativa ?? false,
     contaUsername: i?.conta_username ?? null,
     contaNome: i?.conta_nome ?? null,
@@ -50,16 +51,28 @@ export function integracaoParaTela(i: Integracao | null): IntegracaoTela {
     ultimaSincronizacaoEm: i?.ultima_sincronizacao_em ?? null,
     ultimoErro: i?.ultimo_erro ?? null,
     env: {
-      apiKey: calcomConfigurado(),
-      webhookSecret: webhookSecretConfigurado(),
+      apiKey: calcomConfigurado(chave),
+      webhookSecret: webhookSecretConfigurado(chave),
       icsToken: (process.env.REUNIOES_ICS_TOKEN ?? "").length >= 24,
     },
+    envNomes: { apiKey: nomeEnvApiKey(chave), webhookSecret: nomeEnvWebhookSecret(chave) },
   }
+}
+
+/** Ordem de "quão bem" está uma conta — o resumo mostra a melhor. */
+const PESO: Record<EstadoConexao, number> = {
+  conectado: 5, sincronizando: 4, erro: 3, pendente: 2, desconectado: 1, nao_configurado: 0,
+}
+
+export function resumoIntegracoes(lista: IntegracaoTela[]): IntegracaoTela {
+  if (lista.length === 0) return integracaoParaTela(null)
+  return [...lista].sort((a, b) => PESO[b.estado] - PESO[a.estado])[0]
 }
 
 const VAZIO: PainelReunioes = {
   migracaoAplicada: false,
   integracao: integracaoParaTela(null),
+  integracoes: [],
   tipos: [],
   disponibilidades: [],
   proximas: [],
@@ -70,8 +83,8 @@ const VAZIO: PainelReunioes = {
   log: [],
   usuarios: [],
   contextos: [],
-  eventTypesExternos: null,
-  eventTypesErro: null,
+  eventTypesExternos: {},
+  eventTypesErro: {},
 }
 
 /**
@@ -95,17 +108,22 @@ export async function carregarPainelReunioes(opts: {
   const desde = new Date(agora.getTime() - 2 * 3_600_000).toISOString()
   const trintaDias = new Date(agora.getTime() - 30 * 86_400_000).toISOString()
 
-  const [integ, tipos, disps, proximas, encerradas, pendencias, eventosErro, eventos, log, usuarios, contextos] =
+  // Contas primeiro: dizem se a migration de várias contas existe (e, com
+  // ela, a coluna integracao_id nas reuniões).
+  const contas = await lerIntegracoes(db)
+  const multi = contas.some((c) => c.multi)
+  const colAgend = multi ? `${COLUNAS_AGEND}, integracao_id` : COLUNAS_AGEND
+
+  const [tipos, disps, proximas, encerradas, pendencias, eventosErro, eventos, log, usuarios, contextos] =
     await Promise.all([
-      lerIntegracao(db),
-      db.from("reunioes_tipos").select(COLUNAS_TIPO).order("ordem").order("nome"),
+      db.from("reunioes_tipos").select("*").order("ordem").order("nome"),
       db.from("reunioes_disponibilidades").select("*").order("created_at"),
-      db.from("reunioes_agendamentos").select(COLUNAS_AGEND)
+      db.from("reunioes_agendamentos").select(colAgend)
         .in("status", ["solicitada", "confirmada"]).gte("inicio", desde).order("inicio").limit(60),
-      db.from("reunioes_agendamentos").select(COLUNAS_AGEND)
+      db.from("reunioes_agendamentos").select(colAgend)
         .in("status", ["cancelada", "rejeitada", "realizada"]).gte("updated_at", trintaDias)
         .order("inicio", { ascending: false }).limit(30),
-      db.from("reunioes_agendamentos").select(COLUNAS_AGEND)
+      db.from("reunioes_agendamentos").select(colAgend)
         .neq("sync_status", "ok").order("updated_at", { ascending: false }).limit(30),
       db.from("reunioes_webhook_eventos").select("id", { count: "exact", head: true }).eq("status", "erro"),
       opts.verDetalhesTecnicos
@@ -121,41 +139,59 @@ export async function carregarPainelReunioes(opts: {
       db.from("ws_contextos").select("id, nome, tipo").is("arquivado_em", null).order("nome"),
     ])
 
-  const listaTipos = (tipos.data ?? []) as unknown as TipoTela[]
+  const principal = contas.find((c) => c.chave === CONTA_PRINCIPAL) ?? null
+  // Sem migration (ou registro antigo) não há integracao_id: é da principal.
+  const contaDe = (id: string | null | undefined) => (id ?? principal?.id ?? null)
+  const rotuloPorId = new Map(contas.map((c) => [c.id, rotuloConta(c)]))
+
+  const listaTipos = ((tipos.data ?? []) as unknown as (TipoTela & { integracao_id?: string | null })[])
+    .map((t) => ({ ...t, integracao_id: contaDe(t.integracao_id) }))
   const nomeTipo = new Map(listaTipos.map((t) => [t.id, t.nome]))
   const listaUsuarios = (usuarios.data ?? []) as { id: string; nome: string }[]
   const nomeUsuario = new Map(listaUsuarios.map((u) => [u.id, u.nome]))
 
   const paraTela = (rows: unknown): AgendamentoTela[] =>
-    ((rows ?? []) as (AgendamentoTela & { tipo_id: string | null; responsavel_id: string | null })[]).map((a) => ({
+    ((rows ?? []) as (AgendamentoTela & { tipo_id: string | null; responsavel_id: string | null; integracao_id?: string | null })[]).map(({ integracao_id, ...a }) => ({
       ...a,
+      conta_rotulo: multi && contas.length > 1 ? rotuloPorId.get(contaDe(integracao_id) ?? "") ?? null : null,
       tipo_nome: a.tipo_id ? nomeTipo.get(a.tipo_id) ?? null : null,
       responsavel_nome: a.responsavel_id ? nomeUsuario.get(a.responsavel_id) ?? null : null,
       sync_erro: opts.verDetalhesTecnicos ? a.sync_erro : a.sync_erro ? "Pendente de configuração." : null,
     }))
 
-  let eventTypesExternos: EventTypeExterno[] | null = null
-  let eventTypesErro: string | null = null
-  if (opts.comEventTypes && calcomConfigurado() && integ?.status !== "desconectado") {
-    try {
-      const ets = await calListarEventTypes(integ?.conta_username ?? undefined)
-      eventTypesExternos = ets.map((e) => ({
-        id: e.id,
-        title: e.title,
-        slug: e.slug,
-        lengthInMinutes: e.lengthInMinutes,
-        bookingUrl: e.bookingUrl ?? null,
-      }))
-    } catch (e) {
-      eventTypesErro = e instanceof Error ? e.message : String(e)
-    }
+  // Event types de CADA conta, em paralelo (uma conta fora do ar não
+  // atrasa nem esconde a outra).
+  const eventTypesExternos: Record<string, EventTypeExterno[]> = {}
+  const eventTypesErro: Record<string, string> = {}
+  if (opts.comEventTypes) {
+    await Promise.all(
+      contas
+        .filter((c) => calcomConfigurado(c.chave) && c.status !== "desconectado")
+        .map(async (c) => {
+          try {
+            const ets = await calListarEventTypes(c.chave, c.conta_username ?? undefined)
+            eventTypesExternos[c.id] = ets.map((e) => ({
+              id: e.id,
+              title: e.title,
+              slug: e.slug,
+              lengthInMinutes: e.lengthInMinutes,
+              bookingUrl: e.bookingUrl ?? null,
+            }))
+          } catch (e) {
+            eventTypesErro[c.id] = e instanceof Error ? e.message : String(e)
+          }
+        })
+    )
   }
 
+  const integracoes = contas.map(integracaoParaTela)
   return {
     migracaoAplicada: true,
-    integracao: integracaoParaTela(integ),
+    integracao: resumoIntegracoes(integracoes),
+    integracoes,
     tipos: listaTipos,
-    disponibilidades: (disps.data ?? []) as DisponibilidadeTela[],
+    disponibilidades: ((disps.data ?? []) as (DisponibilidadeTela & { integracao_id?: string | null })[])
+      .map((d) => ({ ...d, integracao_id: contaDe(d.integracao_id) })),
     proximas: paraTela(proximas.data),
     encerradas: paraTela(encerradas.data),
     pendencias: paraTela(pendencias.data),
