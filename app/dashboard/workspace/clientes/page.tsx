@@ -19,6 +19,11 @@ function chaveEmpresa(nome: string): string {
   return nome.trim().toLowerCase()
 }
 
+/** Grupo de clientes desativados — visível só pra admin do sistema. */
+function ehGrupoDesativados(nome: string): boolean {
+  return /^desativad[oa]s?$/.test(chaveEmpresa(nome))
+}
+
 /**
  * Aba Clientes — lista vertical reordenável, agrupada por ÂNCORA (contexto
  * tipo 'empresa'), não por texto.
@@ -42,8 +47,11 @@ export default async function ClientesPage() {
     getPreferencia(usuario.id),
   ])
 
+  const ehAdmin = usuario.papel === "admin"
+
   const ancoras = contextos
     .filter((c) => c.tipo === "empresa")
+    .filter((c) => ehAdmin || !ehGrupoDesativados(c.empresa_nome ?? c.nome))
     .sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"))
 
   const ancoraPorId = new Map(ancoras.map((a) => [a.id, a]))
@@ -65,6 +73,16 @@ export default async function ClientesPage() {
   const contextoPorClienteTrafego = new Map<string, string>()
   for (const c of contextosCliente) {
     if (c.cliente_id) contextoPorClienteTrafego.set(c.cliente_id, c.id)
+    // Cliente que está no grupo Desativados (escondido pra não-admin) não
+    // pode vazar pra "sem empresa".
+    if (
+      !ehAdmin &&
+      ((c.grupo_id && !ancoraPorId.has(c.grupo_id) &&
+        contextos.some((a) => a.id === c.grupo_id && ehGrupoDesativados(a.empresa_nome ?? a.nome))) ||
+        (!c.grupo_id && c.empresa_nome && ehGrupoDesativados(c.empresa_nome)))
+    ) {
+      continue
+    }
     const contagem = contagens.get(c.id)
     // grupo_id é a fonte; o nome só entra como resgate pra linha que ainda
     // não passou pela migração da fase 4.
@@ -86,6 +104,7 @@ export default async function ClientesPage() {
   // 2) Clientes do cadastro de tráfego que ainda não têm pasta. Vão pro fim
   //    do grupo (ordem alta) porque ainda não têm posição escolhida.
   for (const [empresa, clientes] of Object.entries(porEmpresa)) {
+    if (!ehAdmin && ehGrupoDesativados(empresa)) continue
     const ancora = ancoraPorNome.get(chaveEmpresa(empresa))
     for (const cliente of clientes) {
       if (contextoPorClienteTrafego.has(cliente.id)) continue
