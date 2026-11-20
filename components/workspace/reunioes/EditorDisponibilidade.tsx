@@ -43,12 +43,15 @@ export default function EditorDisponibilidade({
   disp,
   usuarios,
   tiposQueUsam,
+  contaRotulo = null,
   calcomPronto,
   souAdmin,
 }: {
   disp: DisponibilidadeTela
   usuarios: { id: string; nome: string }[]
   tiposQueUsam: string[]
+  /** Conta do Cal.com onde esta agenda é publicada (só com várias contas). */
+  contaRotulo?: string | null
   calcomPronto: boolean
   souAdmin: boolean
 }) {
@@ -87,7 +90,7 @@ export default function EditorDisponibilidade({
 
   return (
     <Cartao
-      titulo={disp.nome}
+      titulo={contaRotulo ? `${disp.nome} · Cal.com ${contaRotulo}` : disp.nome}
       subtitulo={<span style={{ color: status.cor }}>{status.texto}</span>}
       acoes={
         souAdmin ? (

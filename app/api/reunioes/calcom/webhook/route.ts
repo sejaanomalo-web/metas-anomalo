@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase"
-import { receberWebhook } from "@/lib/reunioes-sync"
+import { chaveContaValida, receberWebhook } from "@/lib/reunioes-sync"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -9,11 +9,16 @@ export const maxDuration = 60
 /**
  * Webhook do Cal.com → tarefa no Workspace.
  *
- * Registrado automaticamente pelo botão "Conectar" da aba Reuniões
- * (POST /v2/webhooks), ou à mão em app.cal.com → Settings → Developer →
- * Webhooks, com:
- *   Subscriber URL: <URL do app>/api/reunioes/calcom/webhook
- *   Secret:         o mesmo valor de CALCOM_WEBHOOK_SECRET
+ * Registrado automaticamente pelo botão "Conectar" de cada conta na aba
+ * Reuniões (POST /v2/webhooks), ou à mão em app.cal.com → Settings →
+ * Developer → Webhooks, com:
+ *   Subscriber URL: <URL do app>/api/reunioes/calcom/webhook            (conta principal)
+ *                   <URL do app>/api/reunioes/calcom/webhook?conta=ativo (conta Ativo)
+ *   Secret:         CALCOM_WEBHOOK_SECRET_<CONTA>, ou o CALCOM_WEBHOOK_SECRET comum
+ *
+ * `?conta=` diz qual conta mandou: é com o segredo DELA que a assinatura é
+ * conferida, e é a ela que a reserva fica ligada (cancelar/conferir usam a
+ * API key dessa conta).
  *
  * O Cal.com assina o CORPO com o secret e manda em `x-cal-signature-256`. Por
  * isso o corpo é lido como TEXTO CRU — reserializar o JSON quebraria o HMAC.
@@ -37,7 +42,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, erro: "service_role_ausente" }, { status: 500 })
   }
 
-  const r = await receberWebhook(db, corpoCru, req.headers.get("x-cal-signature-256"))
+  const conta = chaveContaValida(new URL(req.url).searchParams.get("conta"))
+  const r = await receberWebhook(db, corpoCru, req.headers.get("x-cal-signature-256"), conta)
   // A resposta nunca ecoa o payload — tem dado pessoal.
   return NextResponse.json(r.corpo, { status: r.http })
 }

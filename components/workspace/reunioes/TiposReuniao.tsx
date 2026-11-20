@@ -13,6 +13,10 @@ import { urlSegura } from "@/lib/reunioes-nucleo"
 import { BotaoCopiar, Cartao, estiloBotao, estiloCampo, Mensagem, Rotulo, useAcao } from "./ui"
 
 type Opcao = { id: string; nome: string }
+/** Disponibilidade com a conta dona do schedule. */
+type OpcaoDisp = Opcao & { integracao_id: string | null }
+/** Conta do Cal.com como os tipos precisam. `pronta` = chave configurada e não desconectada. */
+export type ContaOpcao = { id: string; rotulo: string; pronta: boolean }
 
 const ROTULO_LOCAL: Record<TipoTela["local"], string> = {
   cal_video: "Cal Video",
@@ -22,15 +26,17 @@ const ROTULO_LOCAL: Record<TipoTela["local"], string> = {
 
 export default function TiposReuniao(props: {
   tipos: TipoTela[]
-  disponibilidades: Opcao[]
+  disponibilidades: OpcaoDisp[]
   usuarios: Opcao[]
   contextos: Opcao[]
-  eventTypes: EventTypeExterno[] | null
-  eventTypesErro: string | null
-  calcomPronto: boolean
+  /** Contas do Cal.com. Mais de uma = cada tipo escolhe a sua. */
+  contas: ContaOpcao[]
+  /** Eventos de cada conta, por id da conta. */
+  eventTypes: Record<string, EventTypeExterno[]>
+  eventTypesErro: Record<string, string>
   souAdmin: boolean
 }) {
-  const { tipos, souAdmin } = props
+  const { tipos, souAdmin, contas } = props
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {!souAdmin && (
@@ -38,17 +44,18 @@ export default function TiposReuniao(props: {
           Só administradores alteram tipos de reunião. Você pode copiar os links.
         </p>
       )}
-      {souAdmin && props.eventTypesErro && (
-        <p style={{ fontSize: 11, color: "#e24b4a", margin: 0 }}>
-          Não consegui listar os eventos do Cal.com: {props.eventTypesErro}
-        </p>
-      )}
+      {souAdmin &&
+        Object.entries(props.eventTypesErro).map(([contaId, erro]) => (
+          <p key={contaId} style={{ fontSize: 11, color: "#e24b4a", margin: 0 }}>
+            Não consegui listar os eventos do Cal.com ({contas.find((c) => c.id === contaId)?.rotulo ?? "conta"}): {erro}
+          </p>
+        ))}
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))" }}>
         {tipos.map((t) => (
           <CartaoTipo key={t.id} tipo={t} {...props} />
         ))}
       </div>
-      {souAdmin && <NovoTipo />}
+      {souAdmin && <NovoTipo contas={contas} />}
     </div>
   )
 }
@@ -58,18 +65,23 @@ function CartaoTipo({
   disponibilidades,
   usuarios,
   contextos,
-  eventTypes,
-  calcomPronto,
+  contas,
+  eventTypes: eventTypesPorConta,
   souAdmin,
 }: {
   tipo: TipoTela
-  disponibilidades: Opcao[]
+  disponibilidades: OpcaoDisp[]
   usuarios: Opcao[]
   contextos: Opcao[]
-  eventTypes: EventTypeExterno[] | null
-  calcomPronto: boolean
+  contas: ContaOpcao[]
+  eventTypes: Record<string, EventTypeExterno[]>
   souAdmin: boolean
 }) {
+  // Tudo do Cal.com aqui é da conta DO TIPO: eventos listados, criar, publicar.
+  const conta = contas.find((c) => c.id === tipo.integracao_id) ?? null
+  const variasContas = contas.length > 1
+  const calcomPronto = conta?.pronta ?? false
+  const eventTypes = conta ? eventTypesPorConta[conta.id] ?? null : null
   const [editando, setEditando] = useState(false)
   const [eventoEscolhido, setEventoEscolhido] = useState<string>(tipo.calcom_event_type_id ? String(tipo.calcom_event_type_id) : "")
   const { pendente, resultado, rodar } = useAcao()
@@ -82,7 +94,7 @@ function CartaoTipo({
   return (
     <Cartao
       titulo={tipo.nome}
-      subtitulo={`${tipo.duracao_min} min · ${tipo.campanha_rotulo ?? tipo.origem_comercial} · ${tipo.ativo ? "ativo" : "inativo"}`}
+      subtitulo={`${variasContas && conta ? `${conta.rotulo} · ` : ""}${tipo.duracao_min} min · ${tipo.campanha_rotulo ?? tipo.origem_comercial} · ${tipo.ativo ? "ativo" : "inativo"}`}
       acoes={
         souAdmin ? (
           <button type="button" className="no-ds" style={estiloBotao("neutro")} onClick={() => setEditando((v) => !v)}>
@@ -94,6 +106,12 @@ function CartaoTipo({
       {tipo.descricao && <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0 }}>{tipo.descricao}</p>}
 
       <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px", fontSize: 12, margin: 0 }}>
+        {variasContas && (
+          <>
+            <dt style={{ color: "var(--text-4)" }}>Conta Cal.com</dt>
+            <dd style={{ margin: 0, color: conta ? "var(--text-1)" : "#C9953A" }}>{conta?.rotulo ?? "Não definida (configure)"}</dd>
+          </>
+        )}
         <dt style={{ color: "var(--text-4)" }}>Responsável</dt>
         <dd style={{ margin: 0, color: resp ? "var(--text-1)" : "#C9953A" }}>{resp?.nome ?? "Não definido (configure)"}</dd>
         <dt style={{ color: "var(--text-4)" }}>Disponibilidade</dt>
@@ -133,7 +151,7 @@ function CartaoTipo({
         <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}>
           {!calcomPronto ? (
             <span style={{ fontSize: 11, color: "var(--text-4)" }}>
-              Conecte o Cal.com (aba Integrações) para associar ou criar o evento.
+              Conecte a conta {conta?.rotulo ?? "do Cal.com"} (aba Integrações) para associar ou criar o evento.
             </span>
           ) : (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -146,7 +164,7 @@ function CartaoTipo({
                   aria-label="Evento do Cal.com"
                   disabled={pendente}
                 >
-                  <option value="" style={{ color: "#111" }}>— evento do Cal.com —</option>
+                  <option value="" style={{ color: "#111" }}>— evento do Cal.com{variasContas && conta ? ` (${conta.rotulo})` : ""} —</option>
                   {eventTypes.map((e) => (
                     <option key={e.id} value={e.id} style={{ color: "#111" }}>
                       {e.title} ({e.lengthInMinutes} min) · /{e.slug}
@@ -187,14 +205,32 @@ function CartaoTipo({
       )}
 
       {souAdmin && editando && (
-        <FormTipo tipo={tipo} disponibilidades={disponibilidades} usuarios={usuarios} contextos={contextos} />
+        <FormTipo tipo={tipo} disponibilidades={disponibilidades} usuarios={usuarios} contextos={contextos} contas={contas} />
       )}
     </Cartao>
   )
 }
 
-function FormTipo({ tipo, disponibilidades, usuarios, contextos }: { tipo: TipoTela; disponibilidades: Opcao[]; usuarios: Opcao[]; contextos: Opcao[] }) {
+function FormTipo({
+  tipo,
+  disponibilidades,
+  usuarios,
+  contextos,
+  contas,
+}: {
+  tipo: TipoTela
+  disponibilidades: OpcaoDisp[]
+  usuarios: Opcao[]
+  contextos: Opcao[]
+  contas: ContaOpcao[]
+}) {
   const { pendente, resultado, rodar } = useAcao()
+  const [contaId, setContaId] = useState(tipo.integracao_id ?? "")
+  const [dispId, setDispId] = useState(tipo.disponibilidade_id ?? "")
+  // Schedule é de um usuário do Cal.com: só aparecem as disponibilidades da
+  // conta escolhida (as sem conta são da principal, sem migration).
+  const dispsDaConta = contas.length > 1 ? disponibilidades.filter((d) => d.integracao_id === contaId) : disponibilidades
+  const trocandoConta = contas.length > 1 && contaId !== (tipo.integracao_id ?? "")
   return (
     <form
       onSubmit={(e) => {
@@ -205,6 +241,35 @@ function FormTipo({ tipo, disponibilidades, usuarios, contextos }: { tipo: TipoT
       }}
       style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}
     >
+      {contas.length > 1 && (
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Rotulo
+            texto="Conta do Cal.com"
+            dica={
+              trocandoConta
+                ? "Ao salvar, o evento atual é desassociado (ele é da outra conta). Depois associe ou crie o evento nesta conta."
+                : "Conta onde fica o evento e a página pública deste tipo."
+            }
+          >
+            <select
+              name="integracao_id"
+              value={contaId}
+              onChange={(e) => {
+                const nova = e.target.value
+                setContaId(nova)
+                // A disponibilidade de outra conta não serve: volta pra 1ª da nova.
+                if (!disponibilidades.some((d) => d.id === dispId && d.integracao_id === nova)) {
+                  setDispId(disponibilidades.find((d) => d.integracao_id === nova)?.id ?? "")
+                }
+              }}
+              className="glass-input"
+              style={estiloCampo}
+            >
+              {contas.map((c) => <option key={c.id} value={c.id} style={{ color: "#111" }}>{c.rotulo}</option>)}
+            </select>
+          </Rotulo>
+        </div>
+      )}
       <Rotulo texto="Nome *">
         <input name="nome" required maxLength={120} defaultValue={tipo.nome} className="glass-input" style={estiloCampo} />
       </Rotulo>
@@ -245,9 +310,9 @@ function FormTipo({ tipo, disponibilidades, usuarios, contextos }: { tipo: TipoT
         </select>
       </Rotulo>
       <Rotulo texto="Disponibilidade">
-        <select name="disponibilidade_id" defaultValue={tipo.disponibilidade_id ?? ""} className="glass-input" style={estiloCampo}>
+        <select name="disponibilidade_id" value={dispId} onChange={(e) => setDispId(e.target.value)} className="glass-input" style={estiloCampo}>
           <option value="" style={{ color: "#111" }}>Padrão da conta</option>
-          {disponibilidades.map((d) => <option key={d.id} value={d.id} style={{ color: "#111" }}>{d.nome}</option>)}
+          {dispsDaConta.map((d) => <option key={d.id} value={d.id} style={{ color: "#111" }}>{d.nome}</option>)}
         </select>
       </Rotulo>
       <Rotulo texto="Projeto da tarefa" dica="Onde a tarefa da reunião entra (opcional).">
@@ -269,7 +334,7 @@ function FormTipo({ tipo, disponibilidades, usuarios, contextos }: { tipo: TipoT
   )
 }
 
-function NovoTipo() {
+function NovoTipo({ contas }: { contas: ContaOpcao[] }) {
   const [aberto, setAberto] = useState(false)
   const { pendente, resultado, rodar } = useAcao()
   if (!aberto) {
@@ -300,6 +365,13 @@ function NovoTipo() {
         <Rotulo texto="Duração (min)">
           <input name="duracao_min" type="number" min={5} max={480} defaultValue={30} className="glass-input" style={estiloCampo} />
         </Rotulo>
+        {contas.length > 1 && (
+          <Rotulo texto="Conta do Cal.com">
+            <select name="integracao_id" defaultValue={contas[0]?.id} className="glass-input" style={estiloCampo}>
+              {contas.map((c) => <option key={c.id} value={c.id} style={{ color: "#111" }}>{c.rotulo}</option>)}
+            </select>
+          </Rotulo>
+        )}
         <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <button type="submit" className="no-ds" disabled={pendente} style={estiloBotao("principal", pendente)}>Criar</button>
           <button type="button" className="no-ds" style={estiloBotao("neutro")} onClick={() => setAberto(false)}>Cancelar</button>

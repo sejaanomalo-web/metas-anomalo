@@ -1,6 +1,7 @@
 # Cal.com → Workspace (aba Reuniões)
 
 > Implementado em 2026-10-21, branch `feat/calcom-workspace-reunioes`.
+> **Várias contas** (Anômalo Hub + Ativo): 2026-11-13, branch `feat/calcom-multi-contas`. Ver §18.
 > Referência oficial consultada: API v2 do Cal.com (https://cal.com/docs/api-reference/v2) e o guia de webhooks.
 
 ## 1. Arquitetura
@@ -165,7 +166,7 @@ O status "Publicado" só aparece quando a API confirma. Se algo falhar, a tela m
 
 ## 10. Conflitos de agenda e bloqueios manuais (sem Google Calendar)
 
-- **Marketing × Sistema:** os dois event types pertencem à **mesma conta/usuário** do Cal.com. O Cal.com considera todas as reservas desse usuário ao calcular horários livres, então uma reserva das 10:00 ocupa as 10:00 nos dois links. Requisito: os dois eventos precisam ser do mesmo usuário, e não de um time round-robin com outras pessoas.
+- **Marketing × Sistema:** desde 2026-11-13 ficam em **contas diferentes** (Anômalo Hub e Ativo). Uma conta não enxerga a agenda da outra. O conflito entre elas passa pelo feed ICS (§18).
 - **Tarefas manuais:** no detalhe da tarefa, marque **"Bloqueia agenda de reuniões"** e escolha a duração. Só tarefas com **data e horário** entram no feed. Tarefas comuns (editar vídeo, roteiro etc.) **não** bloqueiam.
 - **Feed ICS:** o botão **Cadastrar feed no Cal.com** chama `POST /v2/calendars/ics-feed/save` com a URL secreta do feed. O Cal.com passa a ler o feed como calendário e trata cada evento dele como horário ocupado. Detalhes:
   - o feed mostra só "Ocupado", sem título nem cliente;
@@ -247,3 +248,48 @@ Confira com **Testar conexão**: cada item mostra OK ou o erro exato da API (403
 - Schedules, event types, Out of Office e feed ICS: endpoints de usuário. A disponibilidade no plano gratuito ainda precisa ser confirmada no teste real.
 - Limite global de reservas por usuário: só organizações (não usado).
 - `confirmationPolicy` (exigir confirmação): configure direto no evento do Cal.com, se quiser. A integração já trata solicitações pendentes.
+
+## 18. Várias contas do Cal.com (Anômalo Hub + Ativo)
+
+O sistema ganhou marca e conta próprias no Cal.com (**Ativo**). As duas contas usam o mesmo fluxo: a reserva vira tarefa no Calendário, o cancelamento funciona nos dois sentidos, e reconciliação, reagendamento e feed de bloqueios valem para as duas.
+
+### Como funciona
+
+| Item | Por conta |
+|---|---|
+| Linha em `reunioes_integracoes` | `chave` = `principal` (Anômalo Hub) ou `ativo` |
+| API key | `CALCOM_API_KEY` (principal) · `CALCOM_API_KEY_ATIVO` |
+| Segredo do webhook | `CALCOM_WEBHOOK_SECRET_ATIVO`, ou o `CALCOM_WEBHOOK_SECRET` comum |
+| Webhook | `/api/reunioes/calcom/webhook` (principal, URL de sempre) · `…/webhook?conta=ativo` |
+| Feed ICS | `/api/reunioes/agenda-bloqueios/<token>.ics` · `…ics?conta=ativo` |
+| Tipo de reunião, disponibilidade, reserva | coluna `integracao_id` |
+
+- Uma reserva é **cancelada, conferida e reagendada com a API key da conta onde foi feita**, que vem de `reunioes_agendamentos.integracao_id`.
+- Um tipo de reunião pertence a uma conta. Só aparecem os eventos daquela conta, e só disponibilidades da mesma conta (schedule é por usuário do Cal.com).
+- Trocar a conta de um tipo desassocia o evento antigo. O link público fica vazio até você associar ou criar o evento na conta nova.
+- **Conflito entre contas:** com "Reuniões das outras contas bloqueiam esta agenda" ligado (padrão), o feed de cada conta inclui as reuniões ativas das outras como "Ocupado". As reuniões da própria conta nunca entram, para não criar loop. Atenção: o Cal.com relê o feed periodicamente, então duas reservas no mesmo horário, em contas diferentes, ainda podem entrar nesse intervalo.
+- **Proteção:** "Testar conexão" e "Conectar" recusam uma API key que seja da mesma conta já conectada em outra linha. Sem isso, cada reserva chegaria duas vezes.
+- Uma terceira conta não exige código novo: basta inserir a linha (`chave` = `xyz`) e configurar `CALCOM_API_KEY_XYZ`.
+
+### Passo a passo (uma vez)
+
+1. Faça o **deploy** do código. Ele funciona sem a migration, no modo de conta única.
+2. Rode `supabase/migrations/20261113_reunioes_calcom_multi_contas.sql` no SQL Editor. Ela cria a conta `ativo` e a "Agenda Ativo", e liga tudo o que já existia à conta principal. **Não rode antes do deploy:** o código antigo não funciona com duas contas.
+3. Em app.cal.com, **logado na conta Ativo**:
+   - Settings → General → fuso `America/Sao_Paulo`;
+   - Settings → Developer → API Keys → gere a chave.
+4. Na Vercel, crie `CALCOM_API_KEY_ATIVO` com essa chave. Opcional: `CALCOM_WEBHOOK_SECRET_ATIVO`. Sem ela, vale o segredo comum. Depois faça o redeploy.
+5. Workspace → Reuniões → Integrações, no cartão **Cal.com · Ativo**:
+   - **Testar conexão**;
+   - **Conectar**;
+   - **Cadastrar feed no Cal.com**.
+6. No cartão **Anômalo Hub**, clique em **Cadastrar de novo** no feed. Isso não é obrigatório para o bloqueio funcionar, porque o feed antigo (sem `?conta`) já é o da principal. Faça só se o feed não estiver cadastrado.
+7. Em Disponibilidade, ajuste a **Agenda Ativo** e clique em **Salvar e publicar**. Isso cria o schedule na conta Ativo.
+8. Em Tipos, no tipo do Sistema:
+   - **Configurar**;
+   - Conta do Cal.com = **Ativo**, Disponibilidade = **Agenda Ativo**;
+   - **Salvar**;
+   - associe o evento da conta Ativo (ou **Criar evento no Cal.com**).
+   O link público novo aparece no cartão. **Atualize o link nas campanhas do Meta Ads.**
+9. Reuniões do Sistema já marcadas na conta antiga continuam ligadas a ela, e cancelar funciona normalmente. Só reservas novas usam a conta Ativo.
+
