@@ -158,7 +158,7 @@ function comConta(url: string, conta: string): string {
 // ============================================================
 
 /** Verificação REAL: chama a API com a chave configurada e lista o que dá. */
-export async function testarConexaoAction(contaBruta: string): Promise<ResultadoReunioes> {
+async function testarConexaoActionImpl(contaBruta: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const conta = chaveContaValida(contaBruta)
@@ -225,7 +225,7 @@ export async function testarConexaoAction(contaBruta: string): Promise<Resultado
  * POST /v2/webhooks, com o segredo de CALCOM_WEBHOOK_SECRET. Idempotente:
  * se já existe webhook pra esta URL, só atualiza.
  */
-export async function conectarAction(contaBruta: string): Promise<ResultadoReunioes> {
+async function conectarActionImpl(contaBruta: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const conta = chaveContaValida(contaBruta)
@@ -277,7 +277,7 @@ export async function conectarAction(contaBruta: string): Promise<ResultadoReuni
 }
 
 /** Sem conta = todas (o cron faz o mesmo). */
-export async function sincronizarAgoraAction(contaBruta?: string): Promise<ResultadoReunioes> {
+async function sincronizarAgoraActionImpl(contaBruta?: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const r = await reconciliar(await db(), contaBruta ? chaveContaValida(contaBruta) : undefined)
@@ -286,7 +286,7 @@ export async function sincronizarAgoraAction(contaBruta?: string): Promise<Resul
   return { ok: r.erros === 0, mensagem: r.mensagem, erro: r.erros > 0 ? r.mensagem : undefined }
 }
 
-export async function reprocessarAction(): Promise<ResultadoReunioes> {
+async function reprocessarActionImpl(): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const d = await db()
@@ -315,7 +315,7 @@ export async function reprocessarAction(): Promise<ResultadoReunioes> {
 }
 
 /** Pausar/retomar: para de importar SEM apagar nada (histórico intacto). */
-export async function alternarSincronizacaoAction(contaBruta: string, ativa: boolean): Promise<ResultadoReunioes> {
+async function alternarSincronizacaoActionImpl(contaBruta: string, ativa: boolean): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const conta = chaveContaValida(contaBruta)
@@ -340,7 +340,7 @@ export async function alternarSincronizacaoAction(contaBruta: string, ativa: boo
  * marca desconectado. NÃO cancela reservas, NÃO apaga tarefas nem histórico.
  * A API key em si vive na env — removê-la/revogá-la é passo manual (doc).
  */
-export async function desconectarAction(contaBruta: string, confirmacao: string): Promise<ResultadoReunioes> {
+async function desconectarActionImpl(contaBruta: string, confirmacao: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   if (confirmacao !== "DESCONECTAR") return { ok: false, erro: "Digite DESCONECTAR para confirmar." }
@@ -371,7 +371,7 @@ export async function desconectarAction(contaBruta: string, confirmacao: string)
 }
 
 /** Cadastra no Cal.com o feed ICS de bloqueios do Workspace. */
-export async function conectarFeedIcsAction(contaBruta: string): Promise<ResultadoReunioes> {
+async function conectarFeedIcsActionImpl(contaBruta: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const conta = chaveContaValida(contaBruta)
@@ -400,7 +400,7 @@ export async function conectarFeedIcsAction(contaBruta: string): Promise<Resulta
  * marcar como ocupado o horário das reuniões das outras contas. Sem efeito
  * enquanto o feed não estiver cadastrado nesta conta.
  */
-export async function alternarBloqueioOutrasContasAction(contaBruta: string, ativo: boolean): Promise<ResultadoReunioes> {
+async function alternarBloqueioOutrasContasActionImpl(contaBruta: string, ativo: boolean): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const conta = chaveContaValida(contaBruta)
@@ -498,7 +498,7 @@ function inteiroEntre(fd: FormData, campo: string, min: number, max: number): nu
   return Number.isInteger(v) && v >= min && v <= max ? v : null
 }
 
-export async function salvarTipoAction(fd: FormData): Promise<ResultadoReunioes> {
+async function salvarTipoActionImpl(fd: FormData): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const d = await db()
@@ -582,7 +582,7 @@ export async function salvarTipoAction(fd: FormData): Promise<ResultadoReunioes>
   return { ok: true, mensagem }
 }
 
-export async function criarTipoAction(fd: FormData): Promise<ResultadoReunioes> {
+async function criarTipoActionImpl(fd: FormData): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const d = await db()
@@ -613,7 +613,7 @@ export async function criarTipoAction(fd: FormData): Promise<ResultadoReunioes> 
 }
 
 /** Associa um tipo interno a um event type JÁ existente na conta. */
-export async function vincularEventTypeAction(tipoId: string, eventTypeId: number | null): Promise<ResultadoReunioes> {
+async function vincularEventTypeActionImpl(tipoId: string, eventTypeId: number | null): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   if (!ehUuid(tipoId)) return { ok: false, erro: "Tipo inválido." }
@@ -655,7 +655,7 @@ export async function vincularEventTypeAction(tipoId: string, eventTypeId: numbe
 }
 
 /** Cria o event type no Cal.com a partir do tipo interno (POST /v2/event-types). */
-export async function criarEventTypeNoCalcomAction(tipoId: string): Promise<ResultadoReunioes> {
+async function criarEventTypeNoCalcomActionImpl(tipoId: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   if (!ehUuid(tipoId)) return { ok: false, erro: "Tipo inválido." }
@@ -685,7 +685,7 @@ export async function criarEventTypeNoCalcomAction(tipoId: string): Promise<Resu
   }
 }
 
-export async function publicarTipoAction(tipoId: string): Promise<ResultadoReunioes> {
+async function publicarTipoActionImpl(tipoId: string): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   if (!ehUuid(tipoId)) return { ok: false, erro: "Tipo inválido." }
@@ -707,7 +707,7 @@ export async function publicarTipoAction(tipoId: string): Promise<ResultadoReuni
  * Se o Cal.com recusar, o que foi salvo continua salvo e a tela mostra
  * "não publicado" com o motivo — nunca finge que publicou.
  */
-export async function salvarDisponibilidadeAction(fd: FormData): Promise<ResultadoReunioes> {
+async function salvarDisponibilidadeActionImpl(fd: FormData): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirAdmin()
   if (!usuario) return { ok: false, erro }
   const d = await db()
@@ -852,7 +852,7 @@ const MOTIVO_PADRAO = "Reunião cancelada pela equipe ANÔMALO."
  * Workspace (lib/acesso-admin.ts). O resto do fluxo, com confirmação real no
  * Cal.com e tratamento de falha parcial, está em lib/reunioes-cancelar.ts.
  */
-export async function cancelarReuniaoAction(fd: FormData): Promise<ResultadoReunioes> {
+async function cancelarReuniaoActionImpl(fd: FormData): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirWorkspace()
   if (!usuario) return { ok: false, erro }
   const db = getSupabaseAdmin()
@@ -906,7 +906,7 @@ export async function cancelarReuniaoAction(fd: FormData): Promise<ResultadoReun
 // Tarefa que bloqueia a agenda pública
 // ============================================================
 
-export async function definirBloqueioTarefaAction(fd: FormData): Promise<ResultadoReunioes> {
+async function definirBloqueioTarefaActionImpl(fd: FormData): Promise<ResultadoReunioes> {
   const { usuario, erro } = await exigirWorkspace()
   if (!usuario) return { ok: false, erro }
   const d = await db()
@@ -944,4 +944,88 @@ export async function definirBloqueioTarefaAction(fd: FormData): Promise<Resulta
         : "Marcado — mas só bloqueia quando a tarefa tiver data E horário."
       : "Não bloqueia mais a agenda pública.",
   }
+}
+
+// ============================================================
+// Exportações protegidas
+// ============================================================
+// Em produção o Next esconde a mensagem de qualquer erro LANÇADO por uma
+// Server Action (o browser só recebe um digest) e a tela mostrava "Falha
+// inesperada". Cada action pública passa por aqui: erro vira resultado com o
+// motivo real, e o stack completo continua no log do servidor.
+async function protegido<A extends unknown[]>(
+  nome: string,
+  fn: (...a: A) => Promise<ResultadoReunioes>,
+  a: A
+): Promise<ResultadoReunioes> {
+  try {
+    return await fn(...a)
+  } catch (e) {
+    console.error(`[reunioes] ${nome}`, e)
+    return { ok: false, erro: msg(e) }
+  }
+}
+
+export async function testarConexaoAction(...a: Parameters<typeof testarConexaoActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("testarConexaoAction", testarConexaoActionImpl, a)
+}
+
+export async function conectarAction(...a: Parameters<typeof conectarActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("conectarAction", conectarActionImpl, a)
+}
+
+export async function sincronizarAgoraAction(...a: Parameters<typeof sincronizarAgoraActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("sincronizarAgoraAction", sincronizarAgoraActionImpl, a)
+}
+
+export async function reprocessarAction(...a: Parameters<typeof reprocessarActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("reprocessarAction", reprocessarActionImpl, a)
+}
+
+export async function alternarSincronizacaoAction(...a: Parameters<typeof alternarSincronizacaoActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("alternarSincronizacaoAction", alternarSincronizacaoActionImpl, a)
+}
+
+export async function desconectarAction(...a: Parameters<typeof desconectarActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("desconectarAction", desconectarActionImpl, a)
+}
+
+export async function conectarFeedIcsAction(...a: Parameters<typeof conectarFeedIcsActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("conectarFeedIcsAction", conectarFeedIcsActionImpl, a)
+}
+
+export async function alternarBloqueioOutrasContasAction(...a: Parameters<typeof alternarBloqueioOutrasContasActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("alternarBloqueioOutrasContasAction", alternarBloqueioOutrasContasActionImpl, a)
+}
+
+export async function salvarTipoAction(...a: Parameters<typeof salvarTipoActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("salvarTipoAction", salvarTipoActionImpl, a)
+}
+
+export async function criarTipoAction(...a: Parameters<typeof criarTipoActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("criarTipoAction", criarTipoActionImpl, a)
+}
+
+export async function vincularEventTypeAction(...a: Parameters<typeof vincularEventTypeActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("vincularEventTypeAction", vincularEventTypeActionImpl, a)
+}
+
+export async function criarEventTypeNoCalcomAction(...a: Parameters<typeof criarEventTypeNoCalcomActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("criarEventTypeNoCalcomAction", criarEventTypeNoCalcomActionImpl, a)
+}
+
+export async function publicarTipoAction(...a: Parameters<typeof publicarTipoActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("publicarTipoAction", publicarTipoActionImpl, a)
+}
+
+export async function salvarDisponibilidadeAction(...a: Parameters<typeof salvarDisponibilidadeActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("salvarDisponibilidadeAction", salvarDisponibilidadeActionImpl, a)
+}
+
+export async function cancelarReuniaoAction(...a: Parameters<typeof cancelarReuniaoActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("cancelarReuniaoAction", cancelarReuniaoActionImpl, a)
+}
+
+export async function definirBloqueioTarefaAction(...a: Parameters<typeof definirBloqueioTarefaActionImpl>): Promise<ResultadoReunioes> {
+  return protegido("definirBloqueioTarefaAction", definirBloqueioTarefaActionImpl, a)
 }

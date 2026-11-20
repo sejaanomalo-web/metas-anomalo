@@ -71,6 +71,12 @@ export default function IntegracoesReunioes({ integracoes, souAdmin }: { integra
   )
 }
 
+/** Pra que serve cada conta — evita conectar a API key na conta errada. */
+const USO_CONTA: Record<string, string> = {
+  principal: "Marketing — reuniões das campanhas da Anômalo",
+  ativo: "Sistema — reuniões do Ativo (sistema imobiliário)",
+}
+
 function CartaoConta({ integ, souAdmin, variasContas }: { integ: IntegracaoTela; souAdmin: boolean; variasContas: boolean }) {
   const { pendente, resultado, rodar } = useAcao()
   const [confirmando, setConfirmando] = useState(false)
@@ -92,7 +98,7 @@ function CartaoConta({ integ, souAdmin, variasContas }: { integ: IntegracaoTela;
           <span style={{ fontSize: 11, fontWeight: 600, color: COR_CONEXAO[integ.estado] }}>● {ROTULO_CONEXAO[integ.estado]}</span>
         </span>
       }
-      subtitulo="Página pública de agendamento. Cada reserva vira tarefa no Calendário do Workspace."
+      subtitulo={`${USO_CONTA[conta] ? `${USO_CONTA[conta]}. ` : ""}Página pública de agendamento. Cada reserva vira tarefa no Calendário do Workspace.`}
     >
       <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px", fontSize: 12, margin: 0 }}>
         <dt style={{ color: "var(--text-4)" }}>Conta</dt>
