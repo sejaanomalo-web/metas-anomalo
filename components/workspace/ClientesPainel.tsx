@@ -36,6 +36,7 @@ export interface ItemCliente {
   fotoUrl: string | null
   pendentes: number
   atrasadas: number
+  desativado?: boolean
 }
 
 export interface GrupoEmpresa {
@@ -43,6 +44,7 @@ export interface GrupoEmpresa {
   ancoraId: string
   empresa: string
   itens: ItemCliente[]
+  apenasAdmin?: boolean
 }
 
 const PREFIXO_GRUPO = "grupo:"
@@ -62,11 +64,14 @@ const PREFIXO_GRUPO = "grupo:"
 export default function ClientesPainel({
   grupos,
   soltos,
+  desativadosSemGrupo,
   empresas,
 }: {
   grupos: GrupoEmpresa[]
   /** Clientes sem empresa — listados no fim, fora do arrasto de grupos. */
   soltos: ItemCliente[]
+  /** Desativados sem âncora, visíveis somente no payload do admin. */
+  desativadosSemGrupo: ItemCliente[]
   empresas: string[]
 }) {
   const router = useRouter()
@@ -225,7 +230,7 @@ export default function ClientesPainel({
       )}
       {criandoEmpresa && <NovaEmpresa aoFechar={() => setCriandoEmpresa(false)} />}
 
-      {ordemGrupos.length === 0 && soltos.length === 0 && (
+      {ordemGrupos.length === 0 && soltos.length === 0 && desativadosSemGrupo.length === 0 && (
         <div
           className="glass"
           style={{ padding: "28px 16px", borderRadius: 12, textAlign: "center", fontSize: 12, color: "var(--text-4)" }}
@@ -251,6 +256,7 @@ export default function ClientesPainel({
                 ancoraId={ancoraId}
                 empresa={estadoServidor.nomes[ancoraId] ?? ""}
                 itens={itensPorGrupo[ancoraId] ?? []}
+                apenasAdmin={grupos.find((g) => g.ancoraId === ancoraId)?.apenasAdmin}
               />
             ))}
           </div>
@@ -272,6 +278,18 @@ export default function ClientesPainel({
           </div>
         </section>
       )}
+      {desativadosSemGrupo.length > 0 && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-3)", margin: 0 }}>
+            Desativados <TagApenasAdmin />
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {desativadosSemGrupo.map((item) => (
+              <LinhaSemGrupo key={item.clienteId ?? item.nome} item={item} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -282,6 +300,14 @@ function MaisIcone() {
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
+  )
+}
+
+function TagApenasAdmin() {
+  return (
+    <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", background: "var(--surface-3)", borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap" }}>
+      Visto apenas por admins
+    </span>
   )
 }
 
@@ -312,10 +338,12 @@ function Grupo({
   ancoraId,
   empresa,
   itens,
+  apenasAdmin,
 }: {
   ancoraId: string
   empresa: string
   itens: ItemCliente[]
+  apenasAdmin?: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -409,6 +437,7 @@ function Grupo({
             {empresa}
           </h2>
         )}
+        {apenasAdmin && <TagApenasAdmin />}
         <button
           type="button"
           onClick={() => {
@@ -542,6 +571,7 @@ function ConteudoLinha({ item }: { item: ItemCliente }) {
       >
         {item.nome}
       </span>
+      {item.desativado && <span style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>Desativado · visto apenas por admins</span>}
       {item.atrasadas > 0 && (
         <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 999, background: "rgba(226,75,74,0.16)", color: "#e24b4a", flexShrink: 0 }}>
           {item.atrasadas} atrasada{item.atrasadas === 1 ? "" : "s"}
