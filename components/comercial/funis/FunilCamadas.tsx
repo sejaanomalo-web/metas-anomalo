@@ -39,13 +39,11 @@ export default function FunilCamadas({ resumo }: { resumo: ResumoFunil }) {
   return (
     <div
       style={{
-        maxWidth: 760,
-        marginInline: "auto",
         width: "100%",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 6,
+        gap: 10,
       }}
     >
       {resumo.etapas.map((etapa, i) => {
@@ -69,14 +67,20 @@ export default function FunilCamadas({ resumo }: { resumo: ResumoFunil }) {
               <div
                 data-passo={etapa.nome}
                 style={{
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
                   gap: 8,
-                  minHeight: 24,
-                  fontSize: 13,
+                  minHeight: 28,
+                  padding: "3px 12px",
+                  borderRadius: 999,
+                  fontSize: 12,
                   fontWeight: 600,
                   fontVariantNumeric: "tabular-nums",
                   color: ehGargalo ? "#fca5a5" : "var(--text-2)",
+                  background: ehGargalo ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.03)",
+                  border: ehGargalo
+                    ? "1px solid rgba(239,68,68,0.40)"
+                    : "1px solid var(--card-border)",
                 }}
               >
                 <span aria-hidden>↓</span>
@@ -108,9 +112,9 @@ export default function FunilCamadas({ resumo }: { resumo: ResumoFunil }) {
               style={{
                 width: `${largura}%`,
                 minWidth: "min(240px, 100%)",
-                minHeight: 60,
-                padding: "11px 18px",
-                borderRadius: 12,
+                minHeight: 64,
+                padding: "12px 20px",
+                borderRadius: 14,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -125,7 +129,7 @@ export default function FunilCamadas({ resumo }: { resumo: ResumoFunil }) {
               <div style={{ minWidth: 0 }}>
                 <p
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: 600,
                     color: semDados ? "var(--text-2)" : "#fff",
                   }}
@@ -135,8 +139,8 @@ export default function FunilCamadas({ resumo }: { resumo: ResumoFunil }) {
                 {detalhes.length > 0 && (
                   <p
                     style={{
-                      marginTop: 2,
-                      fontSize: 11,
+                      marginTop: 3,
+                      fontSize: 12,
                       color: "rgba(255,255,255,0.88)",
                     }}
                   >
@@ -146,7 +150,7 @@ export default function FunilCamadas({ resumo }: { resumo: ResumoFunil }) {
               </div>
               <p
                 style={{
-                  fontSize: 22,
+                  fontSize: 26,
                   fontWeight: 700,
                   fontVariantNumeric: "tabular-nums",
                   color: semDados ? "var(--text-3)" : "#fff",

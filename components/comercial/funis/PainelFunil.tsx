@@ -2,7 +2,6 @@
 
 import { useMemo } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
-import SectionHeader from "@/components/ui/SectionHeader"
 import { formatBRL, formatNumero } from "@/lib/data"
 import {
   agrupamentosDisponiveis,
@@ -21,11 +20,12 @@ import {
   type FunilComercial,
   type LancamentoFunil,
 } from "@/lib/funil-tipos"
+import { lerVista } from "./AbasVista"
+import Bloco from "./Bloco"
 import ComparativoFontes from "./ComparativoFontes"
 import EvolucaoFunil from "./EvolucaoFunil"
 import FunilCamadas from "./FunilCamadas"
 import ListaLancamentos from "./ListaLancamentos"
-import SecaoRecolhivel from "./SecaoRecolhivel"
 import estilos from "./funis.module.css"
 
 function vezes(n: number): string {
@@ -57,6 +57,7 @@ export default function PainelFunil({
   const fontes = fontesDoFunil(funil)
   const fonteUrl = searchParams.get("fonte")
   const fonte = fontes.find((f) => f.id === fonteUrl) ?? null
+  const vista = lerVista(searchParams.get("vista"))
   const agrupamento = resolverAgrupamento(searchParams.get("agrupar"), { de, ate })
 
   function trocarParam(chave: string, valor: string | null) {
@@ -118,197 +119,228 @@ export default function PainelFunil({
           resumo.investimento > 0 ? ` · ${formatBRL(resumo.investimento)} investidos` : ""
         }`
 
-  return (
-    <>
-      <section aria-label="Fonte da demanda">
-        <div role="group" aria-label="Filtrar por fonte" className={estilos.fontes}>
+  const filtroFontes = (
+    <div role="group" aria-label="Filtrar por fonte" className={estilos.fontes}>
+      <button
+        type="button"
+        className={estilos.fonte}
+        aria-pressed={fonte === null}
+        onClick={() => trocarParam("fonte", null)}
+      >
+        <span>Todas as fontes</span>
+        <strong>{formatNumero(totalTopo)}</strong>
+        <i className={estilos.fonteBarra} aria-hidden>
+          <b style={{ width: totalTopo > 0 ? "100%" : "0%" }} />
+        </i>
+      </button>
+      {porFonte.map(({ fonte: f, resumo: r }) => {
+        const n = r.etapas[0]?.valor ?? 0
+        const parte = totalTopo > 0 ? n / totalTopo : 0
+        return (
           <button
+            key={f.id}
             type="button"
             className={estilos.fonte}
-            aria-pressed={fonte === null}
-            onClick={() => trocarParam("fonte", null)}
+            aria-pressed={fonte?.id === f.id}
+            onClick={() => trocarParam("fonte", f.id)}
           >
-            <span>Todas as fontes</span>
-            <strong>{formatNumero(totalTopo)}</strong>
+            <span>{f.nome}</span>
+            <strong>
+              {formatNumero(n)}
+              {totalTopo > 0 && <small>{formatarPct(parte)}</small>}
+            </strong>
+            <i className={estilos.fonteBarra} aria-hidden>
+              <b style={{ width: `${Math.round(parte * 100)}%` }} />
+            </i>
           </button>
-          {porFonte.map(({ fonte: f, resumo: r }) => (
-            <button
-              key={f.id}
-              type="button"
-              className={estilos.fonte}
-              aria-pressed={fonte?.id === f.id}
-              onClick={() => trocarParam("fonte", f.id)}
-            >
-              <span>{f.nome}</span>
-              <strong>{formatNumero(r.etapas[0]?.valor ?? 0)}</strong>
-            </button>
-          ))}
-        </div>
-        <p style={{ marginTop: 6, fontSize: 12, color: "var(--text-3)" }}>
-          O número é {nomeTopo} no período.
-        </p>
-      </section>
+        )
+      })}
+    </div>
+  )
 
-      <section aria-label="Indicadores do período" className={estilos.kpis}>
-        {[
-          {
-            rotulo:
-              fonte?.id === FONTE_TRAFEGO ? "Investido no tráfego" : "Investido",
-            valor: semDados ? "—" : formatBRL(resumo.investimento),
-          },
-          {
-            rotulo: `Custo por ${primeira?.nome ?? "etapa"}`,
-            valor: primeira?.custo != null ? formatBRL(primeira.custo) : "—",
-          },
-          {
-            rotulo: `Custo por ${ultima?.nome ?? "etapa"}`,
-            valor: ultima?.custo != null ? formatBRL(ultima.custo) : "—",
-          },
-          {
-            rotulo: "Retorno do total contratado",
-            valor: resumo.retorno !== null ? vezes(resumo.retorno) : "—",
-          },
-        ].map((k) => (
-          <div key={k.rotulo} className={`glass ${estilos.kpi}`}>
-            <p>{k.rotulo}</p>
-            <p>{k.valor}</p>
-          </div>
-        ))}
-      </section>
+  const kpis = [
+    {
+      rotulo: fonte?.id === FONTE_TRAFEGO ? "Investido no tráfego" : "Investido",
+      valor: semDados ? "—" : formatBRL(resumo.investimento),
+    },
+    {
+      rotulo: `Custo por ${primeira?.nome ?? "etapa"}`,
+      valor: primeira?.custo != null ? formatBRL(primeira.custo) : "—",
+    },
+    {
+      rotulo: `Custo por ${ultima?.nome ?? "etapa"}`,
+      valor: ultima?.custo != null ? formatBRL(ultima.custo) : "—",
+    },
+    {
+      rotulo: "Retorno do total contratado",
+      valor: resumo.retorno !== null ? vezes(resumo.retorno) : "—",
+      destaque: resumo.retorno !== null,
+    },
+  ]
 
-      <section>
-        <SectionHeader
-          titulo={fonte ? `Funil · ${fonte.nome}` : "Funil do período"}
-          descricao={
-            semDados
-              ? fonte
-                ? `Sem números de ${fonte.nome} neste período.`
-                : "Ainda sem números neste período. Lance à mão ou importe do Meta."
-              : "Porcentagem entre as etapas, somando os lançamentos do período"
-          }
-        />
-        {resumo.gargalo && (
-          <p
-            role="status"
-            style={{
-              maxWidth: 760,
-              margin: "0 auto 14px",
-              padding: "10px 14px",
-              borderRadius: 10,
-              fontSize: 13,
-              color: "#fecaca",
-              background: "rgba(239,68,68,0.10)",
-              border: "1px solid rgba(239,68,68,0.35)",
-            }}
+  const resultados = [
+    {
+      rotulo: "Entrada no 1º mês",
+      valor: formatBRL(resumo.faturamento),
+      nota:
+        resumo.retornoPrimeiroMes !== null && resumo.faturamento > 0
+          ? `${vezes(resumo.retornoPrimeiroMes)} o investido`
+          : "soma das 1ªs parcelas",
+    },
+    {
+      rotulo: "Recorrência mensal",
+      valor: formatBRL(resumo.recorrencia),
+      nota: "por mês, a partir do 2º mês",
+    },
+    {
+      rotulo: "Total contratado",
+      valor: formatBRL(resumo.totalContratado),
+      nota: "todas as parcelas até o fim",
+      principal: true,
+    },
+    {
+      rotulo: "Ticket médio do contrato",
+      valor: resumo.ticketMedio !== null ? formatBRL(resumo.ticketMedio) : "—",
+      nota:
+        resumo.contratos > 0
+          ? `${formatNumero(resumo.contratos)} ${
+              resumo.contratos === 1 ? "contrato" : "contratos"
+            } com valor`
+          : undefined,
+    },
+  ]
+
+  const lista = (
+    <ListaLancamentos
+      funil={funil}
+      lancamentos={visiveis}
+      dataPadrao={dataPadrao}
+      de={de}
+      ate={ate}
+      fontePadrao={fonte?.id ?? null}
+      mensagemVazia={
+        fonte
+          ? `Nenhum lançamento de ${fonte.nome} neste período.`
+          : "Nenhum lançamento neste período."
+      }
+    />
+  )
+
+  if (vista === "analise") {
+    return (
+      <div className={estilos.vista}>
+        <Bloco
+          titulo="Fonte em análise"
+          descricao={`Escolha uma fonte para ver só ela na evolução e nos lançamentos. ${resumoComparativo}.`}
+        >
+          {filtroFontes}
+        </Bloco>
+
+        {!fonte && !semDados && (
+          <Bloco
+            titulo="Comparação entre fontes"
+            descricao="O mesmo funil, fonte por fonte. Toque no nome para abrir só ela."
           >
-            Maior gargalo: de <strong>{resumo.gargalo.de}</strong> para{" "}
-            <strong>{resumo.gargalo.para}</strong>, só{" "}
-            {formatarPct(resumo.gargalo.taxa)} avançaram.
-          </p>
+            <ComparativoFontes
+              linhas={porFonte}
+              aoEscolher={(id) => trocarParam("fonte", id)}
+            />
+          </Bloco>
         )}
-        <FunilCamadas resumo={resumo} />
 
         {!semDados && (
-          <div className={estilos.resultados} data-resultados>
-            {[
-              {
-                rotulo: "Entrada no 1º mês",
-                valor: formatBRL(resumo.faturamento),
-                nota:
-                  resumo.retornoPrimeiroMes !== null && resumo.faturamento > 0
-                    ? `${vezes(resumo.retornoPrimeiroMes)} o investido`
-                    : "soma das 1ªs parcelas",
-              },
-              {
-                rotulo: "Recorrência mensal",
-                valor: formatBRL(resumo.recorrencia),
-                nota: "por mês, a partir do 2º mês",
-              },
-              {
-                rotulo: "Total contratado",
-                valor: formatBRL(resumo.totalContratado),
-                nota: "todas as parcelas até o fim",
-              },
-              {
-                rotulo: "Ticket médio do contrato",
-                valor: resumo.ticketMedio !== null ? formatBRL(resumo.ticketMedio) : "—",
-                nota:
-                  resumo.contratos > 0
-                    ? `${formatNumero(resumo.contratos)} ${
-                        resumo.contratos === 1 ? "contrato" : "contratos"
-                      } com valor`
-                    : undefined,
-              },
-            ].map((c) => (
-              <div key={c.rotulo} className="glass" style={{ padding: "14px 16px" }}>
-                <p style={{ fontSize: 12, color: "var(--text-2)" }}>{c.rotulo}</p>
-                <p
-                  style={{
-                    marginTop: 4,
-                    fontSize: 20,
-                    fontWeight: 700,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {c.valor}
-                </p>
-                {c.nota && <p className={estilos.resultadoNota}>{c.nota}</p>}
-              </div>
-            ))}
-          </div>
+          <Bloco
+            titulo="Evolução no período"
+            descricao={`Compare dia a dia, semana a semana ou mês a mês · ${resumoEvolucao}`}
+          >
+            <EvolucaoFunil
+              linhas={evolucao}
+              agrupamento={agrupamento}
+              disponiveis={agrupamentosDisponiveis({ de, ate })}
+              aoEscolher={(a: AgrupamentoFunil) => trocarParam("agrupar", a)}
+            />
+          </Bloco>
         )}
-      </section>
 
-      {!fonte && !semDados && (
-        <SecaoRecolhivel
-          chave="comparativo"
-          titulo="Comparação entre fontes"
-          descricao="O mesmo funil, por fonte. Toque no nome para abrir só ela."
-          resumo={resumoComparativo}
-        >
-          <ComparativoFontes
-            linhas={porFonte}
-            aoEscolher={(id) => trocarParam("fonte", id)}
-          />
-        </SecaoRecolhivel>
-      )}
+        <Bloco titulo="Lançamentos" descricao={`O que foi registrado, por data · ${resumoLancamentos}`}>
+          {lista}
+        </Bloco>
+      </div>
+    )
+  }
 
-      {!semDados && (
-        <SecaoRecolhivel
-          chave="evolucao"
-          titulo="Evolução no período"
-          descricao="Compare dia a dia, semana a semana ou mês a mês"
-          resumo={resumoEvolucao}
-        >
-          <EvolucaoFunil
-            linhas={evolucao}
-            agrupamento={agrupamento}
-            disponiveis={agrupamentosDisponiveis({ de, ate })}
-            aoEscolher={(a: AgrupamentoFunil) => trocarParam("agrupar", a)}
-          />
-        </SecaoRecolhivel>
-      )}
-
-      <SecaoRecolhivel
-        chave="lancamentos"
-        titulo="Lançamentos"
-        descricao="O que foi registrado no período, por data"
-        resumo={resumoLancamentos}
+  return (
+    <div className={estilos.vista}>
+      <Bloco
+        titulo="De onde vem a demanda"
+        descricao={`Quantos ${nomeTopo.toLowerCase()} cada fonte trouxe. Toque para filtrar a tela.`}
       >
-        <ListaLancamentos
-          funil={funil}
-          lancamentos={visiveis}
-          dataPadrao={dataPadrao}
-          de={de}
-          ate={ate}
-          fontePadrao={fonte?.id ?? null}
-          mensagemVazia={
-            fonte
-              ? `Nenhum lançamento de ${fonte.nome} neste período.`
-              : "Nenhum lançamento neste período."
-          }
-        />
-      </SecaoRecolhivel>
-    </>
+        {filtroFontes}
+      </Bloco>
+
+      <Bloco titulo="Investimento e custo" descricao="Quanto custou cada etapa e quanto voltou">
+        <div className={estilos.kpis}>
+          {kpis.map((k) => (
+            <div
+              key={k.rotulo}
+              className={`glass ${estilos.kpi}`}
+              data-destaque={k.destaque || undefined}
+            >
+              <p>{k.rotulo}</p>
+              <p>{k.valor}</p>
+            </div>
+          ))}
+        </div>
+      </Bloco>
+
+      <Bloco
+        titulo={fonte ? `Funil · ${fonte.nome}` : "Funil do período"}
+        descricao={
+          semDados
+            ? fonte
+              ? `Sem números de ${fonte.nome} neste período.`
+              : "Ainda sem números neste período. Use “+ Lançar números” para começar."
+            : "Quantos passaram de uma etapa para a outra, somando os lançamentos do período"
+        }
+        extra={
+          resumo.gargalo ? (
+            <p role="status" className={estilos.gargalo}>
+              <span aria-hidden>●</span> Maior gargalo:{" "}
+              <strong>{resumo.gargalo.de}</strong> → <strong>{resumo.gargalo.para}</strong> ·{" "}
+              {formatarPct(resumo.gargalo.taxa)} avançaram
+            </p>
+          ) : undefined
+        }
+      >
+        <div className={estilos.funilGrade} data-sem-dados={semDados || undefined}>
+          <div className={`glass ${estilos.funilCartao}`}>
+            <FunilCamadas resumo={resumo} />
+          </div>
+
+          {!semDados && (
+            <aside aria-label="Resultado do funil" className={estilos.resultados} data-resultados>
+              <p className={estilos.resultadosTitulo}>Resultado</p>
+              {resultados.map((c) => (
+                <div
+                  key={c.rotulo}
+                  className={`glass ${estilos.resultado}`}
+                  data-principal={c.principal || undefined}
+                >
+                  <p className={estilos.resultadoRotulo}>{c.rotulo}</p>
+                  <p className={estilos.resultadoValor}>{c.valor}</p>
+                  {c.nota && <p className={estilos.resultadoNota}>{c.nota}</p>}
+                </div>
+              ))}
+            </aside>
+          )}
+        </div>
+      </Bloco>
+
+      {semDados && (
+        <Bloco titulo="Lançamentos" descricao={resumoLancamentos}>
+          {lista}
+        </Bloco>
+      )}
+    </div>
   )
 }

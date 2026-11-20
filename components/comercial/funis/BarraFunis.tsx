@@ -1,10 +1,10 @@
 "use client"
 
-import dynamic from "next/dynamic"
 import { useState, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { excluirFunilAction } from "@/lib/funis-comerciais-actions"
 import { fontesDoFunil, type FunilComercial } from "@/lib/funil-tipos"
+import AbasVista from "./AbasVista"
 import FormularioFunil from "./FormularioFunil"
 import FormularioLancamento from "./FormularioLancamento"
 import ModalComercial, {
@@ -14,12 +14,11 @@ import ModalComercial, {
 } from "./ModalComercial"
 import estilos from "./funis.module.css"
 
-// Só baixa o leitor de arquivos quando alguém abre a importação.
-const ImportarMeta = dynamic(() => import("./ImportarMeta"), { ssr: false })
-
 /**
- * Faixa de controle do funil: troca de funil, criar, editar, excluir e o botão
- * de lançar números. O funil selecionado fica na URL (?funil=).
+ * Faixa de controle do funil: troca de funil, criar, editar, excluir, o botão
+ * de lançar números e a troca entre Visão geral e Análise. O funil selecionado
+ * fica na URL (?funil=). Os números entram só à mão: a importação do Meta saiu
+ * para o funil refletir o que o comercial de fato registrou.
  */
 export default function BarraFunis({
   funis,
@@ -39,7 +38,7 @@ export default function BarraFunis({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [modal, setModal] = useState<
-    "novo" | "editar" | "excluir" | "lancar" | "importar" | null
+    "novo" | "editar" | "excluir" | "lancar" | null
   >(null)
   const [navegando, startNav] = useTransition()
 
@@ -110,15 +109,6 @@ export default function BarraFunis({
             </button>
             <button
               type="button"
-              className={estilos.botaoSecundario}
-              onClick={() => setModal("importar")}
-            >
-              Importar do Meta
-            </button>
-          </div>
-          <div className={estilos.painelGerir}>
-            <button
-              type="button"
               className={estilos.botaoLeve}
               onClick={() => setModal("editar")}
             >
@@ -129,8 +119,11 @@ export default function BarraFunis({
               className={estilos.botaoLeve}
               onClick={() => setModal("excluir")}
             >
-              Excluir funil
+              Excluir
             </button>
+          </div>
+          <div className={estilos.painelVista}>
+            <AbasVista />
           </div>
         </div>
       )}
@@ -161,29 +154,6 @@ export default function BarraFunis({
           aoSalvar={() => {
             setModal(null)
             router.refresh()
-          }}
-        />
-      )}
-      {modal === "importar" && selecionado && (
-        <ImportarMeta
-          funil={selecionado}
-          fechar={() => setModal(null)}
-          aoImportar={(de, ate) => {
-            setModal(null)
-            // Mostra o período importado, mesmo que seja outro mês.
-            const params = new URLSearchParams(searchParams.toString())
-            params.set("funil", selecionado.id)
-            params.set("modo", "intervalo")
-            params.set("de", de)
-            params.set("ate", ate)
-            params.delete("mes")
-            params.delete("ano")
-            params.delete("agrupar")
-            params.delete("fonte") // para o que entrou aparecer, em qualquer filtro
-            startNav(() => {
-              router.push(`${pathname}?${params.toString()}`, { scroll: false })
-              router.refresh()
-            })
           }}
         />
       )}
