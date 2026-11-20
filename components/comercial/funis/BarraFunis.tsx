@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { excluirFunilAction } from "@/lib/funis-comerciais-actions"
 import { fontesDoFunil, type FunilComercial } from "@/lib/funil-tipos"
 import AbasVista from "./AbasVista"
+import MenuFunil from "./MenuFunil"
 import FormularioFunil from "./FormularioFunil"
 import FormularioLancamento from "./FormularioLancamento"
 import ModalComercial, {
@@ -15,8 +16,8 @@ import ModalComercial, {
 import estilos from "./funis.module.css"
 
 /**
- * Faixa de controle do funil: troca de funil, criar, editar, excluir, o botão
- * de lançar números e a troca entre Visão geral e Análise. O funil selecionado
+ * Cartão do funil: nome, o "⋯" (lançar, editar, excluir, trocar e criar funil)
+ * e as abas da tela. O funil selecionado
  * fica na URL (?funil=). Os números entram só à mão: a importação do Meta saiu
  * para o funil refletir o que o comercial de fato registrou.
  */
@@ -71,61 +72,35 @@ export default function BarraFunis({
         transition: "opacity 0.15s ease",
       }}
     >
-      <div role="group" aria-label="Funis" className={estilos.chips}>
-        {funis.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            className={estilos.chip}
-            title={f.nome}
-            aria-pressed={f.id === selecionado?.id}
-            onClick={() => irParaFunil(f.id)}
-          >
-            {f.nome}
-          </button>
-        ))}
-        <button
-          type="button"
-          className={estilos.chipNovo}
-          onClick={() => setModal("novo")}
-        >
-          + Novo funil
-        </button>
-      </div>
-
-      {selecionado && (
+      {selecionado ? (
         <div className={`glass ${estilos.painel}`}>
           <div className={estilos.painelInfo}>
             <h2>{selecionado.nome}</h2>
             {selecionado.descricao && <p>{selecionado.descricao}</p>}
           </div>
           <div className={estilos.painelAcoes}>
-            <button
-              type="button"
-              className={estilos.botaoPrimario}
-              onClick={() => setModal("lancar")}
-            >
-              + Lançar números
-            </button>
-            <button
-              type="button"
-              className={estilos.botaoLeve}
-              onClick={() => setModal("editar")}
-            >
-              Editar funil
-            </button>
-            <button
-              type="button"
-              className={estilos.botaoLeve}
-              onClick={() => setModal("excluir")}
-            >
-              Excluir
-            </button>
+            <MenuFunil
+              funis={funis}
+              selecionado={selecionado}
+              aoLancar={() => setModal("lancar")}
+              aoEditar={() => setModal("editar")}
+              aoExcluir={() => setModal("excluir")}
+              aoNovo={() => setModal("novo")}
+              aoTrocar={irParaFunil}
+            />
           </div>
           <div className={estilos.painelVista}>
             <AbasVista />
           </div>
         </div>
+      ) : (
+        <button
+          type="button"
+          className={estilos.botaoPrimario}
+          onClick={() => setModal("novo")}
+        >
+          + Novo funil
+        </button>
       )}
 
       {modal === "novo" && (

@@ -226,20 +226,63 @@ export default function PainelFunil({
     />
   )
 
-  if (vista === "analise") {
+  // Filtro de fonte ativo: aparece em todas as abas, com um toque para limpar.
+  const seloFonte = fonte ? (
+    <button
+      type="button"
+      className={estilos.seloFonte}
+      onClick={() => trocarParam("fonte", null)}
+      aria-label={`Filtrando por ${fonte.nome}. Remover filtro`}
+    >
+      Fonte: <strong>{fonte.nome}</strong> <span aria-hidden>×</span>
+    </button>
+  ) : undefined
+
+  if (vista === "demanda") {
     return (
       <div className={estilos.vista}>
         <Bloco
-          titulo="Fonte em análise"
-          descricao={`Escolha uma fonte para ver só ela na evolução e nos lançamentos. ${resumoComparativo}.`}
+          titulo="De onde vem a demanda"
+          descricao={`Quantos ${nomeTopo.toLowerCase()} cada fonte trouxe. Toque numa fonte para filtrar todas as abas.`}
         >
           {filtroFontes}
         </Bloco>
+      </div>
+    )
+  }
 
+  if (vista === "investimento") {
+    return (
+      <div className={estilos.vista}>
+        <Bloco
+          titulo="Investimento e custo"
+          descricao="Quanto foi investido, quanto custou cada etapa e quanto voltou"
+          extra={seloFonte}
+        >
+          <div className={estilos.kpis}>
+            {kpis.map((k) => (
+              <div
+                key={k.rotulo}
+                className={`glass ${estilos.kpi}`}
+                data-destaque={k.destaque || undefined}
+              >
+                <p>{k.rotulo}</p>
+                <p>{k.valor}</p>
+              </div>
+            ))}
+          </div>
+        </Bloco>
+      </div>
+    )
+  }
+
+  if (vista === "analise") {
+    return (
+      <div className={estilos.vista}>
         {!fonte && !semDados && (
           <Bloco
             titulo="Comparação entre fontes"
-            descricao="O mesmo funil, fonte por fonte. Toque no nome para abrir só ela."
+            descricao={`O mesmo funil, fonte por fonte. Toque no nome para abrir só ela · ${resumoComparativo}`}
           >
             <ComparativoFontes
               linhas={porFonte}
@@ -252,6 +295,7 @@ export default function PainelFunil({
           <Bloco
             titulo="Evolução no período"
             descricao={`Compare dia a dia, semana a semana ou mês a mês · ${resumoEvolucao}`}
+            extra={seloFonte}
           >
             <EvolucaoFunil
               linhas={evolucao}
@@ -262,7 +306,11 @@ export default function PainelFunil({
           </Bloco>
         )}
 
-        <Bloco titulo="Lançamentos" descricao={`O que foi registrado, por data · ${resumoLancamentos}`}>
+        <Bloco
+          titulo="Lançamentos"
+          descricao={`O que foi registrado, por data · ${resumoLancamentos}`}
+          extra={semDados ? seloFonte : undefined}
+        >
           {lista}
         </Bloco>
       </div>
@@ -272,43 +320,26 @@ export default function PainelFunil({
   return (
     <div className={estilos.vista}>
       <Bloco
-        titulo="De onde vem a demanda"
-        descricao={`Quantos ${nomeTopo.toLowerCase()} cada fonte trouxe. Toque para filtrar a tela.`}
-      >
-        {filtroFontes}
-      </Bloco>
-
-      <Bloco titulo="Investimento e custo" descricao="Quanto custou cada etapa e quanto voltou">
-        <div className={estilos.kpis}>
-          {kpis.map((k) => (
-            <div
-              key={k.rotulo}
-              className={`glass ${estilos.kpi}`}
-              data-destaque={k.destaque || undefined}
-            >
-              <p>{k.rotulo}</p>
-              <p>{k.valor}</p>
-            </div>
-          ))}
-        </div>
-      </Bloco>
-
-      <Bloco
         titulo={fonte ? `Funil · ${fonte.nome}` : "Funil do período"}
         descricao={
           semDados
             ? fonte
               ? `Sem números de ${fonte.nome} neste período.`
-              : "Ainda sem números neste período. Use “+ Lançar números” para começar."
+              : "Ainda sem números neste período. Use o ⋯ e “Lançar números” para começar."
             : "Quantos passaram de uma etapa para a outra, somando os lançamentos do período"
         }
         extra={
-          resumo.gargalo ? (
-            <p role="status" className={estilos.gargalo}>
-              <span aria-hidden>●</span> Maior gargalo:{" "}
-              <strong>{resumo.gargalo.de}</strong> → <strong>{resumo.gargalo.para}</strong> ·{" "}
-              {formatarPct(resumo.gargalo.taxa)} avançaram
-            </p>
+          seloFonte || resumo.gargalo ? (
+            <div className={estilos.blocoExtras}>
+              {seloFonte}
+              {resumo.gargalo && (
+                <p role="status" className={estilos.gargalo}>
+                  <span aria-hidden>●</span> Maior gargalo:{" "}
+                  <strong>{resumo.gargalo.de}</strong> → <strong>{resumo.gargalo.para}</strong> ·{" "}
+                  {formatarPct(resumo.gargalo.taxa)} avançaram
+                </p>
+              )}
+            </div>
           ) : undefined
         }
       >
