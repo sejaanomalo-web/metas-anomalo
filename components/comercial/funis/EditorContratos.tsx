@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import CampoInteiro from "@/components/inputs/CampoInteiro"
 import CampoMoeda from "@/components/inputs/CampoMoeda"
 import { formatBRL } from "@/lib/data"
@@ -23,6 +23,10 @@ interface Linha {
   meses: string
 }
 
+function vazia(l: Linha): boolean {
+  return l.primeira === "" && l.mensal === "" && l.cliente.trim() === ""
+}
+
 function numero(v: string): number {
   const n = Number(v)
   return Number.isFinite(n) && n > 0 ? n : 0
@@ -40,11 +44,20 @@ function contaDaLinha(l: Linha) {
  * Lista dos contratos fechados no lançamento. Cada um tem a 1ª parcela, as
  * demais parcelas e a duração, porque a 1ª costuma ser diferente (outro produto
  * vendido junto). Vai ao servidor como JSON em um campo oculto "contratos".
+ *
+ * Fica em sincronia com a etapa "Contratos fechados": digitar 3 ali abre 3
+ * blocos de contrato aqui, e adicionar/remover um contrato aqui ajusta a etapa.
+ * Ao diminuir, só somem blocos vazios do fim: nada preenchido é apagado.
  */
 export default function EditorContratos({
   iniciais,
+  quantidade,
+  aoMudarQuantidade,
 }: {
   iniciais: ContratoFechado[]
+  /** Valor da última etapa (contratos fechados). */
+  quantidade: number
+  aoMudarQuantidade: (n: number) => void
 }) {
   const proxima = useRef(0)
   const nova = (c?: ContratoFechado): Linha => ({
@@ -55,6 +68,32 @@ export default function EditorContratos({
     meses: String(c?.meses ?? MESES_CONTRATO_PADRAO),
   })
   const [linhas, setLinhas] = useState<Linha[]>(() => iniciais.map((c) => nova(c)))
+
+  useEffect(() => {
+    setLinhas((ls) => {
+      const alvo = Math.min(Math.max(quantidade, 0), MAX_CONTRATOS)
+      if (ls.length < alvo) {
+        return [...ls, ...Array.from({ length: alvo - ls.length }, () => nova())]
+      }
+      let fim = ls.length
+      while (fim > alvo && vazia(ls[fim - 1])) fim--
+      return fim === ls.length ? ls : ls.slice(0, fim)
+    })
+    // `nova` só usa a ref do contador; a lista reage apenas à quantidade.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quantidade])
+
+  function adicionar() {
+    const n = linhas.length + 1
+    setLinhas((ls) => [...ls, nova()])
+    if (n > quantidade) aoMudarQuantidade(n)
+  }
+
+  function remover(chave: number) {
+    const n = linhas.length - 1
+    setLinhas((ls) => ls.filter((x) => x.chave !== chave))
+    if (quantidade > n) aoMudarQuantidade(n)
+  }
 
   function mudar(chave: number, campo: keyof Omit<Linha, "chave">, valor: string) {
     setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, [campo]: valor } : l)))
@@ -79,7 +118,8 @@ export default function EditorContratos({
       <input type="hidden" name="contratos" value={json} />
       {linhas.length === 0 && (
         <p style={{ fontSize: 13, color: "var(--text-3)" }}>
-          Nenhum contrato fechado neste lançamento.
+          Informe quantos contratos foram fechados na etapa acima: um bloco para
+          cada um aparece aqui.
         </p>
       )}
       {linhas.map((l, i) => {
@@ -103,14 +143,14 @@ export default function EditorContratos({
                 type="button"
                 className={estilos.contratoRemover}
                 aria-label={`Remover contrato ${i + 1}`}
-                onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))}
+                onClick={() => remover(l.chave)}
               >
                 Remover
               </button>
             </div>
             <div className={estilos.contratoGrade}>
               <label style={estiloRotulo}>
-                1ª parcela
+                1ª parcela (1º mês)
                 <CampoMoeda
                   name={`contrato_${i}_primeira`}
                   value={l.primeira}
@@ -120,7 +160,7 @@ export default function EditorContratos({
                 />
               </label>
               <label style={{ ...estiloRotulo, opacity: umMes ? 0.5 : 1 }}>
-                Demais parcelas
+                Outros meses (cada)
                 <CampoMoeda
                   name={`contrato_${i}_mensal`}
                   value={umMes ? "" : l.mensal}
@@ -131,7 +171,7 @@ export default function EditorContratos({
                 />
               </label>
               <label style={estiloRotulo}>
-                Meses
+                Meses de contrato
                 <CampoInteiro
                   name={`contrato_${i}_meses`}
                   value={l.meses}
@@ -164,7 +204,7 @@ export default function EditorContratos({
           <button
             type="button"
             className="btn-gold-outline"
-            onClick={() => setLinhas((ls) => [...ls, nova()])}
+            onClick={adicionar}
           >
             + Adicionar contrato
           </button>

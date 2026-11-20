@@ -44,7 +44,66 @@
   font-size: 20px;
   overflow-wrap: anywhere;
 }
-.painelInfo p {
+.seletorRaiz {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.seletorTitulo {
+  margin: 0;
+  font-size: inherit;
+}
+.seletorBotao {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  min-height: 44px;
+  margin-left: -6px;
+  padding: 4px 10px 4px 6px;
+  color: var(--text-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.seletorBotao:hover,
+.seletorBotao[aria-expanded="true"] {
+  border-color: rgba(201, 149, 58, 0.45);
+  background: rgba(201, 149, 58, 0.06);
+}
+.seletorBotao:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.seletorSeta {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  border: 1px solid rgba(201, 149, 58, 0.45);
+  border-radius: 8px;
+  transition: transform 0.2s ease;
+}
+.seletorBotao[aria-expanded="true"] .seletorSeta {
+  transform: rotate(180deg);
+}
+.seletorNome {
+  min-width: 0;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.menuEsquerda {
+  left: 0;
+  right: auto;
+}
+.painelInfo > p {
   margin-top: 4px;
   font-size: 14px;
   line-height: 1.45;
@@ -584,7 +643,7 @@
 
 .contratoGrade {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 84px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px;
   gap: 10px;
 }
 

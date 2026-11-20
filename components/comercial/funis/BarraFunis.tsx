@@ -6,6 +6,7 @@ import { excluirFunilAction } from "@/lib/funis-comerciais-actions"
 import { fontesDoFunil, type FunilComercial } from "@/lib/funil-tipos"
 import AbasVista from "./AbasVista"
 import MenuFunil from "./MenuFunil"
+import SeletorFunil from "./SeletorFunil"
 import FormularioFunil from "./FormularioFunil"
 import FormularioLancamento from "./FormularioLancamento"
 import ModalComercial, {
@@ -75,7 +76,11 @@ export default function BarraFunis({
       {selecionado ? (
         <div className={`glass ${estilos.painel}`}>
           <div className={estilos.painelInfo}>
-            <h2>{selecionado.nome}</h2>
+            <SeletorFunil
+              funis={funis}
+              selecionado={selecionado}
+              aoTrocar={irParaFunil}
+            />
             {selecionado.descricao && <p>{selecionado.descricao}</p>}
           </div>
           <div className={estilos.painelAcoes}>

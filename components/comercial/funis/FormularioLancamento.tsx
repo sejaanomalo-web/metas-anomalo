@@ -48,6 +48,12 @@ export default function FormularioLancamento({
   const [fonte, setFonte] = useState(
     lancamento ? fonteDoLancamento(lancamento) : fontePadrao ?? FONTE_TRAFEGO
   )
+  // A última etapa é o fechamento: o número dela abre os blocos de contrato.
+  const etapaFechamento = funil.etapas[funil.etapas.length - 1]?.id ?? null
+  const [fechados, setFechados] = useState(() => {
+    const v = etapaFechamento ? lancamento?.valores?.[etapaFechamento] : undefined
+    return v ? String(v) : ""
+  })
   const [erro, setErro] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -136,13 +142,24 @@ export default function FormularioLancamento({
           {funil.etapas.map((etapa) => (
             <label key={etapa.id} style={estiloRotulo}>
               {etapa.nome}
-              <CampoInteiro
-                name={`etapa_${etapa.id}`}
-                className="glass-input"
-                style={estiloCampo}
-                placeholder="0"
-                defaultValue={lancamento?.valores?.[etapa.id] || undefined}
-              />
+              {etapa.id === etapaFechamento ? (
+                <CampoInteiro
+                  name={`etapa_${etapa.id}`}
+                  className="glass-input"
+                  style={estiloCampo}
+                  placeholder="0"
+                  value={fechados}
+                  onValorChange={setFechados}
+                />
+              ) : (
+                <CampoInteiro
+                  name={`etapa_${etapa.id}`}
+                  className="glass-input"
+                  style={estiloCampo}
+                  placeholder="0"
+                  defaultValue={lancamento?.valores?.[etapa.id] || undefined}
+                />
+              )}
             </label>
           ))}
         </div>
@@ -151,12 +168,14 @@ export default function FormularioLancamento({
           Contratos fechados
         </h3>
         <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-3)" }}>
-          Valor de cada contrato. Se a 1ª parcela for diferente das outras, informe
-          as duas.
+          Para cada contrato: valor da 1ª parcela (1º mês), valor dos outros meses
+          e quantos meses dura. Em branco nos outros meses = igual à 1ª.
         </p>
         <div style={{ marginTop: 10 }}>
           <EditorContratos
             iniciais={lancamento ? contratosDoLancamento(lancamento) : []}
+            quantidade={Number(fechados) || 0}
+            aoMudarQuantidade={(n) => setFechados(n > 0 ? String(n) : "")}
           />
         </div>
 

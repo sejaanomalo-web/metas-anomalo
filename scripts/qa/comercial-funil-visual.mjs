@@ -47,7 +47,9 @@ const tables = {
   funis_comerciais: [{ id: FUNIL_CAIO, usuario_id: CAIO, nome: 'Campanha Marketing', descricao: 'Processo comercial para fechamento de planos de Marketing',
     etapas: [{ id: 'e1', nome: 'Leads gerados' }, { id: 'e2', nome: 'Responderam' }, { id: 'e3', nome: 'Reuniões agendadas' }, { id: 'e4', nome: 'Reuniões realizadas' }, { id: 'e5', nome: 'Propostas enviadas' }, { id: 'e6', nome: 'Contratos fechados' }],
     fontes: [{ id: 'trafego', nome: 'Tráfego' }, { id: 'indicacao', nome: 'Indicação' }, { id: 'prospeccao', nome: 'Prospecção fria' }],
-    created_at: agora, updated_at: agora }],
+    created_at: agora, updated_at: agora },
+    { id: '00000000-0000-4000-8000-0000000000c9', usuario_id: CAIO, nome: 'Campanha Sistema', descricao: 'Sistema antes de lançar a ativo, teste.',
+    etapas: [{ id: 's1', nome: 'Leads gerados' }, { id: 's2', nome: 'Contratos fechados' }], created_at: agora, updated_at: agora }],
   funil_lancamentos: [
     { id: LANC_CAIO, funil_id: FUNIL_CAIO, data: '2026-11-04', fonte: 'indicacao', investimento: 40, valores: { e1: 3, e2: 2, e3: 2, e4: 2, e5: 2, e6: 2 }, perdidos: 0, faturamento: 0, contratos: [{ primeira: 1500, mensal: 800, meses: 3 }, { primeira: 1100, mensal: 0, meses: 1 }], observacoes: null, criado_por: CAIO, created_at: agora, updated_at: agora },
     { id: randomUUID(), funil_id: FUNIL_CAIO, data: '2026-11-11', fonte: 'prospeccao', investimento: 57, valores: { e1: 2, e2: 2, e3: 1, e4: 1, e5: 1, e6: 1 }, perdidos: 0, faturamento: 0, contratos: [{ primeira: 2844, mensal: 1147, meses: 5 }], observacoes: null, criado_por: CAIO, created_at: agora, updated_at: agora },
@@ -251,8 +253,49 @@ try {
     await page.getByRole('menuitem', { name: 'Lançar números' }).click()
     await page.getByRole('dialog').waitFor()
     ok(`${nome}: Lançar números pelo ⋯ abre o formulário`)
-    await page.keyboard.press('Escape')
-    await page.getByRole('dialog').waitFor({ state: 'detached' }).catch(async () => { await page.getByRole('button', { name: /Cancelar|Fechar/ }).first().click() })
+    const dlg = page.getByRole('dialog')
+    const blocos = dlg.locator('[data-contrato]')
+    const campoFechados = dlg.getByLabel('Contratos fechados', { exact: true })
+    assert.equal(await blocos.count(), 0)
+    await campoFechados.fill('3')
+    assert.equal(await blocos.count(), 3, 'digitar 3 abre 3 blocos de contrato')
+    await blocos.nth(0).getByLabel('1ª parcela (1º mês)').fill('300000')
+    await campoFechados.fill('1')
+    assert.equal(await blocos.count(), 1, 'diminuir remove só os blocos vazios do fim')
+    await dlg.getByRole('button', { name: '+ Adicionar contrato' }).click()
+    assert.equal(await campoFechados.inputValue(), '2', 'adicionar contrato sobe a etapa')
+    await blocos.nth(1).getByLabel('1ª parcela (1º mês)').fill('100000')
+    await blocos.nth(1).getByLabel('Outros meses (cada)').fill('50000')
+    await blocos.nth(1).getByLabel('Meses de contrato').fill('3')
+    assert.match(await dlg.innerText(), /Total do contrato: R\$\s?2\.000/)
+    if (shotsDir && nome === 'desktop') await dlg.screenshot({ path: `${shotsDir}/${nome}-contratos.png` })
+    ok(`${nome}: "Contratos fechados" abre um bloco por contrato com 1ª parcela, outros meses e meses`)
+    await dlg.getByLabel('Leads gerados', { exact: true }).fill('4')
+    await dlg.getByRole('button', { name: 'Lançar', exact: true }).click()
+    await dlg.waitFor({ state: 'detached' })
+    await page.waitForLoadState('networkidle')
+    const esperado = nome === 'desktop' ? '22.632' : '33.632' // cada rodada soma 3 × 3.000 (meses padrão, outros meses = 1ª) + 2.000
+    let achou = false
+    for (let i = 0; i < 30 && !achou; i++) {
+      achou = (await main()).replace(/\u00a0/g, ' ').includes(`R$ ${esperado}`)
+      if (!achou) await page.waitForTimeout(500)
+    }
+    assert.ok(achou, `total contratado deveria ser R$ ${esperado}. Tela:\n${(await main()).slice(0, 1500)}`)
+    ok(`${nome}: lançamento salvo e total contratado atualizado`)
+
+    // Setinha ao lado do nome troca de funil
+    await page.getByRole('button', { name: /Trocar de funil/ }).click()
+    await page.getByRole('menu', { name: 'Trocar de funil' }).waitFor()
+    if (shotsDir) await page.screenshot({ path: `${shotsDir}/${nome}-seletor.png` })
+    await page.getByRole('menuitemradio', { name: 'Campanha Sistema' }).click()
+    await page.waitForURL(/funil=00000000-0000-4000-8000-0000000000c9/)
+    await page.getByRole('button', { name: /Funil: Campanha Sistema/ }).waitFor()
+    ok(`${nome}: setinha ao lado do nome troca para Campanha Sistema`)
+    await page.getByRole('button', { name: 'Ações e funis' }).click()
+    await page.getByRole('menuitemradio', { name: 'Campanha Marketing' }).click()
+    await page.getByRole('button', { name: /Funil: Campanha Marketing/ }).waitFor()
+    await page.waitForLoadState('networkidle')
+    ok(`${nome}: o ⋯ também troca de funil`)
 
     // Demanda
     await aba(page, 'Demanda').click()

@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useId, useRef, useState } from "react"
+import { useId } from "react"
 import type { FunilComercial } from "@/lib/funil-tipos"
+import { useMenuSuspenso } from "./useMenuSuspenso"
 import estilos from "./funis.module.css"
 
 /**
  * O "⋯" do cartão do funil: concentra as ações (lançar, editar, excluir) e a
  * troca de funil, para o topo da tela ficar só com o nome e as abas.
- * Fecha com Esc, com clique fora e ao escolher um item; setas navegam.
  */
 export default function MenuFunil({
   funis,
@@ -26,44 +26,8 @@ export default function MenuFunil({
   aoNovo: () => void
   aoTrocar: (id: string) => void
 }) {
-  const [aberto, setAberto] = useState(false)
-  const raiz = useRef<HTMLDivElement>(null)
-  const botao = useRef<HTMLButtonElement>(null)
+  const { aberto, setAberto, raiz, botao, escolher } = useMenuSuspenso()
   const idMenu = useId()
-
-  useEffect(() => {
-    if (!aberto) return
-    const itens = () =>
-      Array.from(raiz.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? [])
-    itens()[0]?.focus()
-    function fora(ev: PointerEvent) {
-      if (!raiz.current?.contains(ev.target as Node)) setAberto(false)
-    }
-    function tecla(ev: KeyboardEvent) {
-      if (ev.key === "Escape") {
-        setAberto(false)
-        botao.current?.focus()
-        return
-      }
-      if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return
-      ev.preventDefault()
-      const lista = itens()
-      const atual = lista.indexOf(document.activeElement as HTMLButtonElement)
-      const passo = ev.key === "ArrowDown" ? 1 : -1
-      lista[(atual + passo + lista.length) % lista.length]?.focus()
-    }
-    document.addEventListener("pointerdown", fora)
-    document.addEventListener("keydown", tecla)
-    return () => {
-      document.removeEventListener("pointerdown", fora)
-      document.removeEventListener("keydown", tecla)
-    }
-  }, [aberto])
-
-  function escolher(fn: () => void) {
-    setAberto(false)
-    fn()
-  }
 
   return (
     <div ref={raiz} className={estilos.menuRaiz}>
