@@ -22,6 +22,7 @@ import {
 } from "@/lib/funil-tipos"
 import { lerVista } from "./AbasVista"
 import Bloco from "./Bloco"
+import BlocoRecolhivel from "./BlocoRecolhivel"
 import ComparativoFontes from "./ComparativoFontes"
 import EvolucaoFunil from "./EvolucaoFunil"
 import FunilCamadas from "./FunilCamadas"
@@ -278,9 +279,10 @@ export default function PainelFunil({
 
   if (vista === "analise") {
     return (
-      <div className={estilos.vista}>
+      <div className={estilos.vista} data-vista="analise">
         {!fonte && !semDados && (
-          <Bloco
+          <BlocoRecolhivel
+            chave="comparativo"
             titulo="Comparação entre fontes"
             descricao={`O mesmo funil, fonte por fonte. Toque no nome para abrir só ela · ${resumoComparativo}`}
           >
@@ -288,11 +290,12 @@ export default function PainelFunil({
               linhas={porFonte}
               aoEscolher={(id) => trocarParam("fonte", id)}
             />
-          </Bloco>
+          </BlocoRecolhivel>
         )}
 
         {!semDados && (
-          <Bloco
+          <BlocoRecolhivel
+            chave="evolucao"
             titulo="Evolução no período"
             descricao={`Compare dia a dia, semana a semana ou mês a mês · ${resumoEvolucao}`}
             extra={seloFonte}
@@ -303,16 +306,17 @@ export default function PainelFunil({
               disponiveis={agrupamentosDisponiveis({ de, ate })}
               aoEscolher={(a: AgrupamentoFunil) => trocarParam("agrupar", a)}
             />
-          </Bloco>
+          </BlocoRecolhivel>
         )}
 
-        <Bloco
+        <BlocoRecolhivel
+          chave="lancamentos"
           titulo="Lançamentos"
           descricao={`O que foi registrado, por data · ${resumoLancamentos}`}
           extra={semDados ? seloFonte : undefined}
         >
           {lista}
-        </Bloco>
+        </BlocoRecolhivel>
       </div>
     )
   }
