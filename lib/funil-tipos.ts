@@ -6,7 +6,7 @@ export interface EtapaFunil {
   nome: string
 }
 
-/** De onde a demanda vem: tráfego, indicação, prospecção fria... */
+/** De onde a demanda vem: tráfego, indicação, prospecção fria, upsell... */
 export type FonteFunil = EtapaFunil
 
 export interface FunilComercial {
@@ -98,10 +98,15 @@ export const ETAPAS_PADRAO: readonly string[] = [
 /** Id fixo: é onde entra a importação do Meta, então não pode ser removida. */
 export const FONTE_TRAFEGO = "trafego"
 
+/** Venda para quem já é cliente (ex.: um sistema para um cliente de assessoria). */
+export const FONTE_UPSELL = "upsell"
+
 export const FONTES_PADRAO: readonly FonteFunil[] = [
   { id: FONTE_TRAFEGO, nome: "Tráfego" },
   { id: "indicacao", nome: "Indicação" },
   { id: "prospeccao", nome: "Prospecção fria" },
+  /** Venda nova para quem já é cliente. */
+  { id: FONTE_UPSELL, nome: "Upsell" },
 ]
 
 export function fontesDoFunil(funil: { fontes?: FonteFunil[] | null }): FonteFunil[] {
