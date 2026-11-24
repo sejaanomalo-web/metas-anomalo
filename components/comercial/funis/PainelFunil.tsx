@@ -84,15 +84,18 @@ export default function PainelFunil({
     () => evolucaoDoFunil(funil.etapas, visiveis, gerarBaldes(de, ate, agrupamento)),
     [funil.etapas, visiveis, de, ate, agrupamento]
   )
-  const totalTopo = useMemo(
-    () => resumirFunil(funil.etapas, lancamentos).etapas[0]?.valor ?? 0,
+  const resumoGeral = useMemo(
+    () => resumirFunil(funil.etapas, lancamentos),
     [funil.etapas, lancamentos]
   )
+  const totalTopo = resumoGeral.etapas[0]?.valor ?? 0
+  const totalFechamentos = resumoGeral.etapas[resumoGeral.etapas.length - 1]?.valor ?? 0
 
   const semDados = resumo.registros === 0
   const primeira = resumo.etapas[0]
   const ultima = resumo.etapas[resumo.etapas.length - 1]
   const nomeTopo = funil.etapas[0]?.nome ?? "Topo"
+  const nomeFim = funil.etapas[funil.etapas.length - 1]?.nome ?? "Fechamentos"
 
   // Uma linha que diga o essencial com a seção fechada.
   const fatiasComDados = evolucao.filter((e) => e.resumo.registros > 0).length
@@ -120,44 +123,60 @@ export default function PainelFunil({
           resumo.investimento > 0 ? ` · ${formatBRL(resumo.investimento)} investidos` : ""
         }`
 
-  const filtroFontes = (
-    <div role="group" aria-label="Filtrar por fonte" className={estilos.fontes}>
-      <button
-        type="button"
-        className={estilos.fonte}
-        aria-pressed={fonte === null}
-        onClick={() => trocarParam("fonte", null)}
-      >
-        <span>Todas as fontes</span>
-        <strong>{formatNumero(totalTopo)}</strong>
-        <i className={estilos.fonteBarra} aria-hidden>
-          <b style={{ width: totalTopo > 0 ? "100%" : "0%" }} />
-        </i>
-      </button>
-      {porFonte.map(({ fonte: f, resumo: r }) => {
-        const n = r.etapas[0]?.valor ?? 0
-        const parte = totalTopo > 0 ? n / totalTopo : 0
-        return (
-          <button
-            key={f.id}
-            type="button"
-            className={estilos.fonte}
-            aria-pressed={fonte?.id === f.id}
-            onClick={() => trocarParam("fonte", f.id)}
-          >
-            <span>{f.nome}</span>
-            <strong>
-              {formatNumero(n)}
-              {totalTopo > 0 && <small>{formatarPct(parte)}</small>}
-            </strong>
-            <i className={estilos.fonteBarra} aria-hidden>
-              <b style={{ width: `${Math.round(parte * 100)}%` }} />
-            </i>
-          </button>
-        )
-      })}
-    </div>
-  )
+  /**
+   * Cartões de fonte com uma métrica qualquer do funil. Servem tanto para
+   * "de onde vem a demanda" (1ª etapa) quanto para "de onde vêm os fechamentos"
+   * (última etapa); tocar num cartão filtra todas as abas pela fonte.
+   */
+  function cartoesFontes(
+    rotulo: string,
+    total: number,
+    valorDe: (r: (typeof porFonte)[number]["resumo"]) => number,
+    notaDe?: (r: (typeof porFonte)[number]["resumo"]) => string | null
+  ) {
+    const notaTodas = notaDe?.(resumoGeral) ?? null
+    return (
+      <div role="group" aria-label={rotulo} className={estilos.fontes}>
+        <button
+          type="button"
+          className={estilos.fonte}
+          aria-pressed={fonte === null}
+          onClick={() => trocarParam("fonte", null)}
+        >
+          <span>Todas as fontes</span>
+          <strong>{formatNumero(total)}</strong>
+          {notaTodas && <em className={estilos.fonteNota}>{notaTodas}</em>}
+          <i className={estilos.fonteBarra} aria-hidden>
+            <b style={{ width: total > 0 ? "100%" : "0%" }} />
+          </i>
+        </button>
+        {porFonte.map(({ fonte: f, resumo: r }) => {
+          const n = valorDe(r)
+          const parte = total > 0 ? n / total : 0
+          const nota = notaDe?.(r) ?? null
+          return (
+            <button
+              key={f.id}
+              type="button"
+              className={estilos.fonte}
+              aria-pressed={fonte?.id === f.id}
+              onClick={() => trocarParam("fonte", f.id)}
+            >
+              <span>{f.nome}</span>
+              <strong>
+                {formatNumero(n)}
+                {total > 0 && <small>{formatarPct(parte)}</small>}
+              </strong>
+              {nota && <em className={estilos.fonteNota}>{nota}</em>}
+              <i className={estilos.fonteBarra} aria-hidden>
+                <b style={{ width: `${Math.round(parte * 100)}%` }} />
+              </i>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
 
   const kpis = [
     {
@@ -246,8 +265,21 @@ export default function PainelFunil({
           titulo="De onde vem a demanda"
           descricao={`Quantos ${nomeTopo.toLowerCase()} cada fonte trouxe. Toque numa fonte para filtrar todas as abas.`}
         >
-          {filtroFontes}
+          {cartoesFontes("Filtrar por fonte", totalTopo, (r) => r.etapas[0]?.valor ?? 0)}
         </Bloco>
+        {funil.etapas.length > 1 && (
+          <Bloco
+            titulo="De onde vêm os fechamentos"
+            descricao={`Quantos ${nomeFim.toLowerCase()} cada fonte gerou e quanto isso rendeu em contratos.`}
+          >
+            {cartoesFontes(
+              `${nomeFim} por fonte`,
+              totalFechamentos,
+              (r) => r.etapas[r.etapas.length - 1]?.valor ?? 0,
+              (r) => (r.totalContratado > 0 ? `${formatBRL(r.totalContratado)} contratados` : null)
+            )}
+          </Bloco>
+        )}
       </div>
     )
   }

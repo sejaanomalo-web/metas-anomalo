@@ -466,6 +466,16 @@
   font-weight: 600;
   color: var(--text-3);
 }
+.fonteNota {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
 .fonteBarra {
   display: block;
   margin-top: 10px;
