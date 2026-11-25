@@ -1,10 +1,35 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { slotsDoDia, sobrepoe, validarNome, validarWhatsapp, validarAtribuicao, segredoValido, lerJsonNativo } from "./reunioes-nativas"
+import { slotsDoDia, sobrepoe, validarNome, validarWhatsapp, validarAtribuicao, segredoValido, lerJsonNativo, idempotencyKeyValida, reservarNativo } from "./reunioes-nativas"
 import { brParaUtcIso, dataBR, horaBR } from "./reunioes-nucleo"
 
 const seg = "2026-11-30"
 const agora = new Date("2026-11-25T10:00:00Z")
+
+test("UUID do contrato é aceito com os cinco grupos", () => {
+  assert.equal(idempotencyKeyValida("b993e704-151a-4496-b2ee-0b00bc13acb4"), true)
+  assert.equal(idempotencyKeyValida("B993E704-151A-4496-B2EE-0B00BC13ACB4"), true)
+  for (const value of ["b993e704-151a-4496-0b00bc13acb4", "b993e704151a4496b2ee0b00bc13acb4", "g993e704-151a-4496-b2ee-0b00bc13acb4", " b993e704-151a-4496-b2ee-0b00bc13acb4", "", null, 123]) {
+    assert.equal(idempotencyKeyValida(value), false)
+  }
+})
+
+test("reserva recusa UUID inválido antes de consultar configuração ou banco", async () => {
+  const result = await reservarNativo({ name: "João", whatsapp: "+5545999999999", start: "2026-11-30T12:00:00.000Z", idempotencyKey: "b993e704-151a-4496-0b00bc13acb4", attribution: {} })
+  assert.deepEqual(result, { code: "INVALID_INPUT" })
+})
+
+test("reserva aceita a chave do contrato e segue para a verificação de configuração", async () => {
+  const flag = process.env.ATIVO_NATIVE_BOOKING_ENABLED
+  try {
+    process.env.ATIVO_NATIVE_BOOKING_ENABLED = "false"
+    const result = await reservarNativo({ name: "João", whatsapp: "+5545999999999", start: "2026-11-30T12:00:00.000Z", idempotencyKey: "b993e704-151a-4496-b2ee-0b00bc13acb4", attribution: {} })
+    assert.deepEqual(result, { code: "CONFIG_UNAVAILABLE" })
+  } finally {
+    if (flag === undefined) delete process.env.ATIVO_NATIVE_BOOKING_ENABLED
+    else process.env.ATIVO_NATIVE_BOOKING_ENABLED = flag
+  }
+})
 const config = (): Parameters<typeof slotsDoDia>[0] => ({
   tipo: { id: "tipo", duracao_min: 60, antecedencia_min_horas: 12, intervalo_min: 15, limite_diario: 3, horizonte_dias: 14, responsavel_id: "resp", ativo: true },
   disp: { id: "disp", fuso: "America/Sao_Paulo", modo_nativo: true, calcom_schedule_id: null, responsavel_id: "resp",

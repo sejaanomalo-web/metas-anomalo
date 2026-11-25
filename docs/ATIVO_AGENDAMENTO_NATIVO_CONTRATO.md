@@ -122,9 +122,9 @@ O evento de intenção `ScheduleClick` da LP permanece. O **backend da LP** ser�
 
 ## Testes e estado da implantação
 
-A integração foi concluída sobre o `main` com duas contas. Uma leitura do Supabase confirmou as duas conexões e o tipo ATIVO com 60 minutos, antecedência de 12 horas, buffer de 15 minutos, limite diário de 3 e horizonte de 14 dias. O canal nativo ainda não tem configuração ativa. A RPC `reunioes_nativas_versao` ainda não está instalada no Supabase consultado, confirmando que a migration complementar está pendente. Esses valores são lidos do banco, nunca fixados no motor.
+A integração foi concluída sobre o `main` com duas contas. Uma leitura do Supabase confirmou as duas conexões e o tipo ATIVO com 60 minutos, antecedência de 12 horas, buffer de 15 minutos, limite diário de 3 e horizonte de 14 dias. Na conferência posterior, o canal nativo está ativo e associado a agenda nativa e responsável. A RPC `reunioes_nativas_versao` retornou `PGRST202` na API consultada; conferir a aplicação da migration complementar no projeto do deployment e o reload do schema cache antes da validação com a LP. Esses valores são lidos do banco, nunca fixados no motor.
 
-Verificações finais: `npm run typecheck` e `npm run build` passaram; 176 testes unitários e 12 testes transacionais passaram. Os testes transacionais locais usam PostgreSQL 17 real com conexões independentes e aplicam as migrations reais de Workspace, multi responsáveis e Reuniões. Cobrem corrida, idempotência, reserva/tarefa/vínculos/notificação/realtime, conflito Cal.com, janelas especiais, limites, reagendamento, cancelamento, rollback, fila de notificação e restrição das RPCs. Não criam dados em produção.
+Verificações finais: `npm run typecheck` e `npm run build` passaram; 179 testes unitários e 12 testes transacionais passaram. Os testes transacionais locais usam PostgreSQL 17 real com conexões independentes e aplicam as migrations reais de Workspace, multi responsáveis e Reuniões. Cobrem corrida, idempotência, reserva/tarefa/vínculos/notificação/realtime, conflito Cal.com, janelas especiais, limites, reagendamento, cancelamento, rollback, fila de notificação e restrição das RPCs. Não criam dados em produção.
 
 Para repetir em PostgreSQL local descartável:
 
@@ -137,3 +137,5 @@ O script cria e remove seu próprio banco `nativo_qa_*`; exige socket Unix local
 A entrega permanece **aguardando aplicação da migration complementar, configuração da agenda/segredos e integração da LP**. A flag está desligada por padrão; não foi feito deploy de produção nem alteradas conexões Cal.com.
 
 As notificações usam uma fila durável lateral com entrega atômica e lock `SKIP LOCKED`. O sino e o push continuam usando `notificacoes`/`notificacoes_usuario`. Falha ao entregar não desfaz a reserva. A entrega é tentada na criação e no cron existente `/api/reunioes/reconciliar`; não gera outra reserva ou tarefa.
+
+A validação de UUID aceita o formato de cinco grupos (`8-4-4-4-12`). A chave de exemplo `b993e704-151a-4496-b2ee-0b00bc13acb4` tem regressão tanto no validador usado pelo backend quanto na reserva PostgreSQL concorrente e idempotente.

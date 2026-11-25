@@ -51,7 +51,7 @@ test('duas conexões concorrentes recebem uma reserva e um conflito',async()=>{
  assert.equal(await run('select count(*) from public.ws_tarefas'),'1')
 })
 test('mesma chave concorrente retorna uma única reserva; payload diferente é recusado',async()=>{
- const key=randomUUID();const [a,b]=await Promise.all([reserve(key),reserve(key)]);assert.equal(a.bookingId,b.bookingId)
+ const key='b993e704-151a-4496-b2ee-0b00bc13acb4';const [a,b]=await Promise.all([reserve(key),reserve(key)]);assert.equal(a.bookingId,b.bookingId)
  assert.equal((await reserve(key,'09:00','b'.repeat(64))).code,'IDEMPOTENCY_MISMATCH')
  assert.equal(await run('select count(*) from public.ws_tarefas'),'1')
 })

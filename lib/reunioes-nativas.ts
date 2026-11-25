@@ -4,7 +4,11 @@ import { brParaUtcIso, dataBR, horaBR, type Janela, type PeriodoDisp, type Excec
 
 export const FUSO_NATIVO = "America/Sao_Paulo"
 const DIA_MS = 86_400_000
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function idempotencyKeyValida(value: unknown): value is string {
+  return typeof value === "string" && UUID.test(value)
+}
 
 type Config = {
   tipo: { id: string; duracao_min: number; antecedencia_min_horas: number; intervalo_min: number; limite_diario: number | null; horizonte_dias: number; responsavel_id: string | null; ativo: boolean }
@@ -158,9 +162,10 @@ export async function limitar(chave: string, limite = 30): Promise<boolean | nul
 }
 
 export async function reservarNativo(input: { name: string; whatsapp: string; start: string; idempotencyKey: string; attribution: Record<string, string> }) {
+  if (!idempotencyKeyValida(input.idempotencyKey)) return { code: "INVALID_INPUT" }
   const c = await configurarNativo()
   if (!c) return { code: "CONFIG_UNAVAILABLE" }
-  if (!UUID.test(input.idempotencyKey) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(input.start) || !Number.isFinite(Date.parse(input.start))) return { code: "INVALID_INPUT" }
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(input.start) || !Number.isFinite(Date.parse(input.start))) return { code: "INVALID_INPUT" }
   const start = new Date(input.start).toISOString()
   const payload = JSON.stringify([input.name, input.whatsapp, start, input.attribution])
   const hash = createHash("sha256").update(payload).digest("hex")
