@@ -9,7 +9,7 @@ const agora = new Date("2026-11-25T10:00:00Z")
 test("UUID do contrato é aceito com os cinco grupos", () => {
   assert.equal(idempotencyKeyValida("b993e704-151a-4496-b2ee-0b00bc13acb4"), true)
   assert.equal(idempotencyKeyValida("B993E704-151A-4496-B2EE-0B00BC13ACB4"), true)
-  for (const value of ["b993e704-151a-4496-0b00bc13acb4", "b993e704151a4496b2ee0b00bc13acb4", "g993e704-151a-4496-b2ee-0b00bc13acb4", " b993e704-151a-4496-b2ee-0b00bc13acb4", "", null, 123]) {
+  for (const value of ["b993e704-151a-4496-0b00bc13acb4", "b993e704151a4496b2ee0b00bc13acb4", "g993e704-151a-4496-b2ee-0b00bc13acb4", " b993e704-151a-4496-b2ee-0b00bc13acb4", "b993e704-151a-4496-b2ee-0b00bc13acb4\n", "b993e704-151a-4496-b2ee-0b00bc13acb4 ", "", null, 123]) {
     assert.equal(idempotencyKeyValida(value), false)
   }
 })
