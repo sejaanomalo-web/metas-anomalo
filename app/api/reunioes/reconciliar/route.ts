@@ -25,6 +25,9 @@ async function executar() {
   const db = getSupabaseAdmin()
   if (!db) return NextResponse.json({ erro: "service_role_ausente" }, { status: 500 })
 
+  // Fila nativa durável: tentativas de notificação não repetem reservas/tarefas.
+  const notificacoesNativas = await db.rpc("reunioes_nativas_entregar_notificacoes", { p_limite: 100 })
+  if (notificacoesNativas.error) console.error("[reunioes] fila nativa indisponível")
   const r = await reconciliar(db)
 
   if (r.erros > 0) {

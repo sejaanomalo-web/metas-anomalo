@@ -105,6 +105,16 @@ export async function GET(req: Request, { params }: { params: { token: string } 
       }
     }
   }
+  // Defesa adicional quando o feed estiver cadastrado no Cal.com. A releitura
+  // de ICS é periódica: a exclusividade das janelas continua obrigatória.
+  const { data: nativas, error: erroNativas } = await db.from("reunioes_agendamentos")
+    .select("id,inicio,fim").eq("provedor", "nativo").in("status", ["solicitada", "confirmada"])
+    .gte("inicio", `${desde}T00:00:00Z`).limit(1000)
+  if (erroNativas || (nativas?.length ?? 0) >= 1000) return new NextResponse("erro", { status: 500 })
+  for (const n of nativas ?? []) {
+    if (!n.inicio || !n.fim) continue
+    bloqueios.push({ id: n.id, inicioIso: n.inicio, fimIso: n.fim, prefixoUid: "nativo" })
+  }
 
   return new NextResponse(montarIcs(bloqueios), {
     status: 200,

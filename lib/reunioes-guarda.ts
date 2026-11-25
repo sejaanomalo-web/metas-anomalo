@@ -1,5 +1,5 @@
 // =============================================================================
-// Guarda: arquivar/excluir tarefa que É uma reunião ativa do Cal.com.
+// Guarda: arquivar/excluir tarefa que É uma reunião ativa (Cal.com ou nativa).
 // =============================================================================
 //
 // Por que existe (2026-10-21): uma reunião foi mandada pra lixeira do
@@ -14,8 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export const AVISO_TAREFA_REUNIAO =
-  "Esta tarefa está vinculada a uma reunião ativa do Cal.com. Excluir ou arquivar só aqui deixaria a reserva " +
-  "ativa no Cal.com. Use “Cancelar reunião” no detalhe da tarefa para cancelar nos dois sistemas."
+  "Esta tarefa está vinculada a uma reunião ativa. Use “Cancelar reunião” no detalhe da tarefa para liberar o horário corretamente."
 
 /** true = a tarefa é a reunião ATIVA (solicitada/confirmada) de um booking. */
 export async function tarefaEhReuniaoAtiva(db: SupabaseClient, tarefaId: string): Promise<boolean> {

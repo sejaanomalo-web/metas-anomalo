@@ -83,33 +83,34 @@ export default function EditorDisponibilidade({
   }
 
   const status = disp.publicacao_erro
-    ? { cor: "#e24b4a", texto: `Não publicado: ${disp.publicacao_erro}` }
-    : disp.publicado_em
+    ? disp.modo_nativo ? { cor: "#e24b4a", texto: `Erro: ${disp.publicacao_erro}` } : { cor: "#e24b4a", texto: `Não publicado: ${disp.publicacao_erro}` }
+    : disp.modo_nativo ? { cor: "#5da283", texto: "Agenda nativa do Workspace" } : disp.publicado_em
       ? { cor: "#5da283", texto: `Publicado no Cal.com em ${new Date(disp.publicado_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}` }
       : { cor: "#C9953A", texto: "Ainda não publicado no Cal.com" }
 
   return (
     <Cartao
-      titulo={contaRotulo ? `${disp.nome} · Cal.com ${contaRotulo}` : disp.nome}
+      titulo={!disp.modo_nativo && contaRotulo ? `${disp.nome} · Cal.com ${contaRotulo}` : disp.nome}
       subtitulo={<span style={{ color: status.cor }}>{status.texto}</span>}
       acoes={
         souAdmin ? (
           <button type="button" className="no-ds" disabled={pendente} onClick={salvar} style={estiloBotao("principal", pendente)}>
-            {pendente ? "Publicando…" : calcomPronto ? "Salvar e publicar" : "Salvar (sem publicar)"}
+            {pendente ? "Salvando…" : disp.modo_nativo ? "Salvar agenda nativa" : calcomPronto ? "Salvar e publicar" : "Salvar (sem publicar)"}
           </button>
         ) : undefined
       }
     >
       <Mensagem r={resultado} />
-      {!calcomPronto && souAdmin && (
+      {!disp.modo_nativo && !calcomPronto && souAdmin && (
         <p style={{ fontSize: 11, color: "#C9953A", margin: 0 }}>
           O Cal.com não está conectado: o que você salvar fica só no Workspace e NÃO muda a agenda pública.
         </p>
       )}
       {somenteLeitura && <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>Só administradores alteram a disponibilidade.</p>}
       <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>
-        Usada por: {tiposQueUsam.length ? tiposQueUsam.join(", ") : "nenhum tipo"}. Todos os tipos do mesmo
-        responsável dividem a mesma agenda no Cal.com — uma reserva ocupa o horário para todos os links.
+        Usada por: {tiposQueUsam.length ? tiposQueUsam.join(", ") : "nenhum tipo"}. {disp.modo_nativo
+          ? "Esta agenda não é publicada no Cal.com. Alterar as janelas desativa o canal até nova validação da exclusividade."
+          : "Todos os tipos do mesmo responsável dividem a mesma agenda no Cal.com — uma reserva ocupa o horário para todos os links."}
       </p>
 
       <fieldset disabled={somenteLeitura || pendente} style={{ border: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
@@ -195,14 +196,14 @@ export default function EditorDisponibilidade({
           </div>
         </Bloco>
 
-        <Bloco titulo="Bloqueios temporários" dica="Dias inteiros fora (viagem, férias). Vira 'Out of Office' no Cal.com — vale para todos os tipos do responsável.">
+        <Bloco titulo="Bloqueios temporários" dica={disp.modo_nativo ? "Dias inteiros fora (viagem, férias) na agenda nativa." : "Dias inteiros fora (viagem, férias). Vira 'Out of Office' no Cal.com — vale para todos os tipos do responsável."}>
           {bloqueios.map((b, i) => (
             <div key={b.id} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <input type="date" value={b.de} onChange={(e) => setBloqueios(bloqueios.map((x, j) => (j === i ? { ...x, de: e.target.value } : x)))} className="glass-input" style={estiloCampo} aria-label="De" />
               <span style={{ fontSize: 12, color: "var(--text-3)" }}>até</span>
               <input type="date" value={b.ate} onChange={(e) => setBloqueios(bloqueios.map((x, j) => (j === i ? { ...x, ate: e.target.value } : x)))} className="glass-input" style={estiloCampo} aria-label="Até" />
               <input value={b.motivo ?? ""} placeholder="Motivo (opcional)" maxLength={120} onChange={(e) => setBloqueios(bloqueios.map((x, j) => (j === i ? { ...x, motivo: e.target.value } : x)))} className="glass-input" style={{ ...estiloCampo, flex: "1 1 160px" }} />
-              <span style={{ fontSize: 11, color: b.calcom_ooo_id ? "#5da283" : "var(--text-4)" }}>{b.calcom_ooo_id ? "no Cal.com" : "não publicado"}</span>
+              <span style={{ fontSize: 11, color: b.calcom_ooo_id ? "#5da283" : "var(--text-4)" }}>{disp.modo_nativo ? "no Workspace" : b.calcom_ooo_id ? "no Cal.com" : "não publicado"}</span>
               <button type="button" className="no-ds" style={estiloBotao("perigo")} onClick={() => setBloqueios(bloqueios.filter((_, j) => j !== i))}>Remover</button>
             </div>
           ))}

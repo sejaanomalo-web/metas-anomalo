@@ -2,6 +2,7 @@ import Link from "next/link"
 import { formatarDataHora, ROTULO_STATUS, urlSegura } from "@/lib/reunioes-nucleo"
 import type { AgendamentoTela, EstadoConexao } from "@/lib/reunioes-tipos"
 import CancelarReuniao from "./CancelarReuniao"
+import GerirReuniaoNativa from "./GerirReuniaoNativa"
 
 const COR_STATUS: Record<AgendamentoTela["status"], string> = {
   solicitada: "#C9953A",
@@ -70,7 +71,8 @@ function CartaoReuniao({ a, apagado, podeCancelar = false }: { a: AgendamentoTel
     >
       <div style={{ flex: "0 0 auto", minWidth: 120 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>{formatarDataHora(a.inicio)}</div>
-        <div style={{ fontSize: 11, color: COR_STATUS[a.status], fontWeight: 600 }}>{ROTULO_STATUS[a.status]}</div>
+        <div style={{ fontSize: 11, color: COR_STATUS[a.status], fontWeight: 600 }}>{a.provedor === "nativo" && a.status === "solicitada" ? "Aguardando contato pelo WhatsApp" : ROTULO_STATUS[a.status]}</div>
+        <div style={{ fontSize: 10, color: "var(--text-4)" }}>{a.provedor === "nativo" ? "Agendamento nativo do Workspace" : "Agendamento via Cal.com"}</div>
       </div>
       <div style={{ flex: "1 1 200px", minWidth: 0 }}>
         <div style={{ fontSize: 13, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -108,9 +110,10 @@ function CartaoReuniao({ a, apagado, podeCancelar = false }: { a: AgendamentoTel
           </Link>
         )}
         {/* Só decide se o botão aparece; a action confere de novo. */}
-        {!apagado && podeCancelar && (a.status === "confirmada" || a.status === "solicitada") && (
+        {!apagado && podeCancelar && a.provedor === "calcom" && (a.status === "confirmada" || a.status === "solicitada") && (
           <CancelarReuniao agendamentoId={a.id} participante={a.participante_nome} tipo={a.tipo_nome} inicio={a.inicio} />
         )}
+        {!apagado && podeCancelar && a.provedor === "nativo" && <GerirReuniaoNativa id={a.id} telefone={a.participante_telefone} ativa={a.status === "confirmada" || a.status === "solicitada"} />}
       </div>
     </article>
   )

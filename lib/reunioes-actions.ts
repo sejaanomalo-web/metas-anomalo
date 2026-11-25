@@ -541,6 +541,12 @@ async function salvarTipoActionImpl(fd: FormData): Promise<ResultadoReunioes> {
       return { ok: false, erro: "A disponibilidade escolhida é de outra conta do Cal.com. Escolha uma da mesma conta do tipo." }
     }
   }
+  const dispTipoId = dispId
+  if (dispTipoId) {
+    const { data: dispTipo } = await d.from("reunioes_disponibilidades").select("modo_nativo").eq("id", dispTipoId).maybeSingle()
+    if (dispTipo?.modo_nativo) return { ok: false, erro: "Agenda nativa exclusiva não pode ser publicada no Cal.com." }
+
+  }
 
   const { error } = await d.from("reunioes_tipos").update({
     ...(trocouConta
@@ -739,6 +745,7 @@ async function salvarDisponibilidadeActionImpl(fd: FormData): Promise<ResultadoR
   if (!bl.ok) return { ok: false, erro: bl.erro }
 
   const { data: atualRow } = await d.from("reunioes_disponibilidades").select("*").eq("id", id).maybeSingle()
+
   if (!atualRow) return { ok: false, erro: "Disponibilidade não encontrada." }
   // Schedule e Out of Office são da conta DONA desta disponibilidade.
   const integ = await lerIntegracaoPorId(d, (atualRow as { integracao_id?: string | null }).integracao_id ?? null)
@@ -756,8 +763,19 @@ async function salvarDisponibilidadeActionImpl(fd: FormData): Promise<ResultadoR
       ...extra,
     }).eq("id", id)
 
+  // A agenda nativa usa o mesmo editor, mas nunca é publicada no Cal.com.
+  if (atualRow.modo_nativo) {
+    if (fuso !== "America/Sao_Paulo") return { ok: false, erro: "A agenda nativa da ATIVO usa America/Sao_Paulo." }
+    const { error } = await salvar({ bloqueios: bl.bloqueios, publicacao_erro: null, publicado_em: null })
+    if (error) return { ok: false, erro: "Não foi possível salvar a agenda nativa." }
+    // O trigger do banco desativa o canal quando as regras mudam.
+    revalidatePath(ROTA)
+    return { ok: true, mensagem: "Agenda nativa salva. Se os horários mudaram, valide novamente a separação no Cal.com antes de ativar." }
+  }
+
   if (!calcomConfigurado(conta)) {
     await salvar({ bloqueios: bl.bloqueios, publicacao_erro: `Cal.com não configurado (${nomeEnvApiKey(conta)}) — salvo só no Workspace, NÃO publicado.` })
+
     revalidatePath(ROTA)
     return { ok: false, erro: `Salvo no Workspace, mas NÃO publicado: ${nomeEnvApiKey(conta)} não está configurada.` }
   }
@@ -844,6 +862,77 @@ async function salvarDisponibilidadeActionImpl(fd: FormData): Promise<ResultadoR
  *  anfitrião). */
 const MOTIVO_PADRAO = "Reunião cancelada pela equipe ANÔMALO."
 
+/** Configuração do canal ATIVO; não altera a associação Cal.com do tipo. */
+export async function salvarCanalNativoAction(fd: FormData): Promise<ResultadoReunioes> {
+  const { usuario, erro } = await exigirAdmin()
+  if (!usuario) return { ok: false, erro }
+  const d = await db()
+  const tipoId = String(fd.get("tipo_id") ?? "")
+  const dispId = String(fd.get("disponibilidade_id") ?? "")
+  if (!ehUuid(tipoId) || !ehUuid(dispId)) return { ok: false, erro: "Selecione tipo e agenda." }
+  const [t, a] = await Promise.all([
+    d.from("reunioes_tipos").select("id, origem_comercial, responsavel_id, ativo").eq("id", tipoId).maybeSingle(),
+    d.from("reunioes_disponibilidades").select("id, responsavel_id, fuso, calcom_schedule_id, modo_nativo").eq("id", dispId).maybeSingle(),
+  ])
+  if (t.error || a.error || t.data?.origem_comercial !== "sistema_imobiliario" || !t.data.ativo ||
+      !a.data || !a.data.modo_nativo || a.data.fuso !== "America/Sao_Paulo" || a.data.calcom_schedule_id !== null ||
+      !a.data.responsavel_id || !t.data.responsavel_id || a.data.responsavel_id !== t.data.responsavel_id) {
+    return { ok: false, erro: "Tipo ATIVO e agenda nativa exclusiva precisam ter o mesmo responsável ativo." }
+  }
+  const ativar = fd.get("ativo") === "1"
+  const verificada = fd.get("exclusividade_verificada") === "1"
+  if (ativar && !verificada) return { ok: false, erro: "Confirme a separação real dos horários nas duas contas Cal.com antes de ativar." }
+  const { error } = await d.from("reunioes_canais_nativos").upsert({
+    chave: "ativo", tipo_id: tipoId, disponibilidade_id: dispId, ativo: ativar,
+    exclusividade_verificada_em: ativar ? new Date().toISOString() : null,
+    exclusividade_verificada_por: ativar ? usuario.id : null,
+  }, { onConflict: "chave" })
+  if (error) return { ok: false, erro: "Não foi possível salvar o canal. Verifique se a agenda é exclusiva do modo nativo." }
+  revalidatePath(ROTA)
+  return { ok: true, mensagem: ativar ? "Canal habilitado no banco. A API ainda exige a feature flag do servidor." : "Canal nativo desativado." }
+}
+
+export async function criarAgendaNativaAction(): Promise<ResultadoReunioes> {
+  const { usuario, erro } = await exigirAdmin()
+  if (!usuario) return { ok: false, erro }
+  const d = await db()
+  const { data: existente } = await d.from("reunioes_disponibilidades")
+    .select("id").eq("nome", "Agenda ATIVO nativa").eq("modo_nativo", true).maybeSingle()
+  if (existente) return { ok: true, mensagem: "A Agenda ATIVO nativa já existe. Configure as janelas em Disponibilidade." }
+  const { error } = await d.from("reunioes_disponibilidades").insert({
+    nome: "Agenda ATIVO nativa", fuso: "America/Sao_Paulo", responsavel_id: null,
+    janelas: [], periodos: [], excecoes: [], bloqueios: [], modo_nativo: true,
+  })
+  if (error) return { ok: false, erro: "Não foi possível criar a agenda." }
+  revalidatePath(ROTA)
+  return { ok: true, mensagem: "Agenda criada. Defina responsável e horários em Disponibilidade." }
+}
+
+export async function gerirReuniaoNativaAction(fd: FormData): Promise<ResultadoReunioes> {
+  const { usuario, erro } = await exigirWorkspace()
+  if (!usuario) return { ok: false, erro }
+  const d = getSupabaseAdmin()
+  if (!d) return { ok: false, erro: "Banco indisponível." }
+  const id = String(fd.get("agendamento_id") ?? "")
+  const acao = String(fd.get("acao") ?? "")
+  if (!ehUuid(id) || !["confirmar", "cancelar", "realizar", "reagendar"].includes(acao)) return { ok: false, erro: "Ação inválida." }
+  const { data: ag, error } = await d.from("reunioes_agendamentos")
+    .select("responsavel_id, provedor").eq("id", id).maybeSingle()
+  if (error || ag?.provedor !== "nativo") return { ok: false, erro: "Reunião nativa não encontrada." }
+  if (!podeCancelarReuniao(usuario, ag.responsavel_id)) return { ok: false, erro: "Só o responsável ou um administrador pode alterar a reunião." }
+  const inicio = String(fd.get("novo_inicio") ?? "")
+  if (acao === "reagendar" && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(inicio) || !Number.isFinite(Date.parse(inicio)))) {
+    return { ok: false, erro: "Escolha um horário UTC válido." }
+  }
+  const { data, error: err } = await d.rpc("reunioes_nativas_gerir", {
+    p_id: id, p_acao: acao, p_ator: usuario.id, p_novo_inicio: acao === "reagendar" ? inicio : null,
+  })
+  if (err) return { ok: false, erro: "Falha ao atualizar a reunião." }
+  if (data !== "OK") return { ok: false, erro: data === "SLOT_UNAVAILABLE" ? "Esse horário não está mais disponível." : "Não foi possível alterar esta reunião." }
+  revalidatePath("/dashboard/workspace", "layout")
+  return { ok: true, mensagem: "Reunião atualizada." }
+}
+
 /**
  * "Cancelar reunião" (detalhe da tarefa e Próximas reuniões).
  *
@@ -867,13 +956,22 @@ async function cancelarReuniaoActionImpl(fd: FormData): Promise<ResultadoReunioe
     .eq("id", id)
     .maybeSingle()
   if (error) return { ok: false, erro: "Não foi possível ler a reunião. Tente de novo." }
-  if (!ag || ag.provedor !== "calcom") return { ok: false, erro: "Reunião não encontrada." }
+  if (!ag) return { ok: false, erro: "Reunião não encontrada." }
 
   if (!podeCancelarReuniao(usuario, (ag.responsavel_id as string | null) ?? null)) return { ok: false, erro: "Só o responsável pela reunião ou um administrador pode cancelá-la." }
 
   if (ag.status !== "solicitada" && ag.status !== "confirmada") {
     return { ok: true, mensagem: "Esta reunião já não está ativa — nada a cancelar." }
   }
+  if (ag.provedor === "nativo") {
+    const { data, error: err } = await db.rpc("reunioes_nativas_gerir", {
+      p_id: id, p_acao: "cancelar", p_ator: usuario.id, p_novo_inicio: null,
+    })
+    if (err || data !== "OK") return { ok: false, erro: "Não foi possível cancelar a reserva nativa." }
+    revalidatePath("/dashboard/workspace", "layout")
+    return { ok: true, mensagem: "Reserva nativa cancelada; horário liberado." }
+  }
+  if (ag.provedor !== "calcom") return { ok: false, erro: "Origem de reunião desconhecida." }
   // A reserva é cancelada com a API key da conta onde ela foi feita.
   const integ = await lerIntegracaoPorId(db, (ag as { integracao_id?: string | null }).integracao_id ?? null)
   if (!integ) return { ok: false, erro: "Conta do Cal.com desta reunião não encontrada. Nada foi cancelado." }
@@ -881,6 +979,7 @@ async function cancelarReuniaoActionImpl(fd: FormData): Promise<ResultadoReunioe
   if (!calcomConfigurado(conta)) return { ok: false, erro: `O Cal.com da conta ${rotuloConta(integ)} não está configurado no servidor (${nomeEnvApiKey(conta)}). Nada foi cancelado.` }
   if (integ.status === "desconectado") {
     return { ok: false, erro: `A conta ${rotuloConta(integ)} do Cal.com está desconectada. Nada foi cancelado.` }
+
   }
 
   const motivo = limparTexto(fd.get("motivo"), 300) ?? MOTIVO_PADRAO
@@ -916,8 +1015,8 @@ async function definirBloqueioTarefaActionImpl(fd: FormData): Promise<ResultadoR
 
   const { data: t } = await d.from("ws_tarefas").select("id, source_gid, prazo_hora").eq("id", tarefaId).maybeSingle()
   if (!t) return { ok: false, erro: "Tarefa não encontrada." }
-  if (String(t.source_gid ?? "").startsWith("calcom:")) {
-    return { ok: false, erro: "Reuniões do Cal.com já ocupam o horário lá — não precisam de bloqueio." }
+  if (/^(calcom|nativo):/.test(String(t.source_gid ?? ""))) {
+    return { ok: false, erro: "Reuniões já ocupam o horário — não precisam de bloqueio manual." }
   }
 
   if (!bloqueia) {

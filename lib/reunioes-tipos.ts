@@ -92,6 +92,7 @@ export interface DisponibilidadeTela {
   integracao_id: string | null
   nome: string
   fuso: string
+  modo_nativo?: boolean
   responsavel_id: string | null
   janelas: Janela[]
   periodos: PeriodoDisp[]
@@ -105,6 +106,7 @@ export interface DisponibilidadeTela {
 
 export interface AgendamentoTela {
   id: string
+  provedor: "calcom" | "nativo"
   booking_uid: string
   status: StatusReuniao
   inicio: string | null
@@ -158,6 +160,8 @@ export interface PainelReunioes {
   integracao: IntegracaoTela
   /** Uma por conta do Cal.com, na ordem da tela. */
   integracoes: IntegracaoTela[]
+  canalNativo: { tipo_id: string; disponibilidade_id: string; ativo: boolean; exclusividade_verificada_em: string | null } | null
+
   tipos: TipoTela[]
   disponibilidades: DisponibilidadeTela[]
   proximas: AgendamentoTela[]
