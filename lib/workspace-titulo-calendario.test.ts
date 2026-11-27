@@ -31,6 +31,11 @@ test("reunião Cal.com às 09:00: horário uma vez só", () => {
   assert.equal(textoDoCartao(t), "09:00 - Reunião com Participante Teste")
 })
 
+test("reunião nativa às 09:00: horário uma vez só", () => {
+  const t = { ...reuniao("2026-10-29T12:00:00.000Z", "Participante Teste", "solicitada"), source_gid: "nativo:bkg_teste_ficticio" }
+  assert.equal(textoDoCartao(t), "09:00 - Reunião com Participante Teste (a confirmar)")
+})
+
 test("reunião Cal.com às 14:30: horário uma vez só", () => {
   const t = reuniao("2026-10-29T17:30:00.000Z", "Participante Teste")
   assert.equal(textoDoCartao(t), "14:30 - Reunião com Participante Teste")

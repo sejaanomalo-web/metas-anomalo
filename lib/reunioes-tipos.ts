@@ -64,7 +64,10 @@ export interface TipoTela {
   link_publico: string | null
   local: "cal_video" | "google_meet" | "definido_no_calcom"
   antecedencia_min_horas: number
+  /** Buffer após cada reunião. */
   intervalo_min: number
+  /** Passo entre os inícios oferecidos pela agenda nativa (5–480). */
+  intervalo_minutos: number
   limite_diario: number | null
   horizonte_dias: number
   ativo: boolean
@@ -76,6 +79,7 @@ export interface DisponibilidadeTela {
   id: string
   nome: string
   fuso: string
+  modo_nativo?: boolean
   responsavel_id: string | null
   janelas: Janela[]
   periodos: PeriodoDisp[]
@@ -89,6 +93,7 @@ export interface DisponibilidadeTela {
 
 export interface AgendamentoTela {
   id: string
+  provedor: "calcom" | "nativo"
   booking_uid: string
   status: StatusReuniao
   inicio: string | null
@@ -137,6 +142,7 @@ export interface PainelReunioes {
   /** false = a migration 20261021_reunioes_calcom.sql ainda não foi aplicada. */
   migracaoAplicada: boolean
   integracao: IntegracaoTela
+  canalNativo: { tipo_id: string; disponibilidade_id: string; ativo: boolean; exclusividade_verificada_em: string | null } | null
   tipos: TipoTela[]
   disponibilidades: DisponibilidadeTela[]
   proximas: AgendamentoTela[]

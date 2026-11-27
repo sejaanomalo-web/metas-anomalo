@@ -5,6 +5,7 @@ import { definirBloqueioTarefaAction } from "@/lib/reunioes-actions"
 import { ROTULO_STATUS, urlSegura, type StatusReuniao } from "@/lib/reunioes-nucleo"
 import type { ReuniaoDaTarefa } from "@/lib/reunioes"
 import CancelarReuniao from "./CancelarReuniao"
+import GerirReuniaoNativa from "./GerirReuniaoNativa"
 import { Mensagem, useAcao } from "./ui"
 
 const DURACOES = [15, 30, 45, 60, 90, 120, 180, 240]
@@ -39,7 +40,7 @@ export default function BlocoReuniaoTarefa({
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <span style={{ flex: "0 0 110px", fontSize: 12, color: "var(--text-3)" }}>Reunião</span>
         <span style={{ fontSize: 12, color: "var(--text-1)" }}>
-          {ROTULO_STATUS[reuniao.status]} · {reuniao.local ?? "Cal.com"}
+          {reuniao.provedor === "nativo" ? `Agendamento nativo do Workspace — ${reuniao.status === "solicitada" ? "aguardando WhatsApp" : ROTULO_STATUS[reuniao.status]}` : ROTULO_STATUS[reuniao.status]} · {reuniao.local ?? "Cal.com"}
         </span>
         {link && ativa ? (
           <a
@@ -50,10 +51,10 @@ export default function BlocoReuniaoTarefa({
           >
             Entrar na reunião
           </a>
-        ) : ativa ? (
+        ) : ativa && reuniao.provedor !== "nativo" ? (
           <span style={{ fontSize: 11, color: "var(--text-4)" }}>link ainda não disponível</span>
         ) : null}
-        {ativa && podeCancelar && reuniao.id && (
+        {ativa && podeCancelar && reuniao.id && reuniao.provedor === "calcom" && (
           <CancelarReuniao
             agendamentoId={reuniao.id}
             participante={reuniao.participante ?? null}
@@ -61,6 +62,7 @@ export default function BlocoReuniaoTarefa({
             inicio={reuniao.inicio ?? null}
           />
         )}
+        {ativa && podeCancelar && reuniao.id && reuniao.provedor === "nativo" && <GerirReuniaoNativa id={reuniao.id} telefone={reuniao.telefone ?? null} ativa />}
       </div>
     )
   }

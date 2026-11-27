@@ -81,7 +81,7 @@ export default function HistoricoReunioes({
               </div>
             ))}
           </Cartao>
-          <Cartao titulo="Log de sincronização" subtitulo="Ações, publicações e falhas.">
+          <Cartao titulo="Histórico de reuniões" subtitulo="Ações nativas, sincronizações Cal.com, publicações e falhas.">
             {log.length === 0 && <p style={{ fontSize: 12, color: "var(--text-4)", margin: 0 }}>Sem registros.</p>}
             {log.map((l) => (
               <div key={l.id} style={{ fontSize: 11, display: "flex", flexDirection: "column", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: 4 }}>

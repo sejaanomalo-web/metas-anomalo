@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { timingSafeEqual } from "crypto"
 import { getSupabaseAdmin } from "@/lib/supabase"
-import { montarIcs } from "@/lib/reunioes-nucleo"
+import { montarIcs, dataBR, horaBR } from "@/lib/reunioes-nucleo"
 import { hojeISO, somarDiasISO } from "@/lib/workspace-datas"
 
 export const runtime = "nodejs"
@@ -72,6 +72,18 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       !(t.source_gid ?? "").startsWith("calcom:")
     )
     .map(({ l, t }) => ({ id: t!.id, data: t!.prazo_em!, hora: t!.prazo_hora!.slice(0, 5), duracao_min: l.duracao_min }))
+
+  // Defesa adicional quando o feed estiver cadastrado no Cal.com. A releitura
+  // de ICS é periódica: a exclusividade das janelas continua obrigatória.
+  const { data: nativas, error: erroNativas } = await db.from("reunioes_agendamentos")
+    .select("id,inicio,fim").eq("provedor", "nativo").in("status", ["solicitada", "confirmada"])
+    .gte("inicio", `${desde}T00:00:00Z`).limit(1000)
+  if (erroNativas || (nativas?.length ?? 0) >= 1000) return new NextResponse("erro", { status: 500 })
+  for (const n of nativas ?? []) {
+    if (!n.inicio || !n.fim) continue
+    bloqueios.push({ id: n.id, data: dataBR(n.inicio), hora: horaBR(n.inicio),
+      duracao_min: Math.round((Date.parse(n.fim) - Date.parse(n.inicio)) / 60_000) })
+  }
 
   return new NextResponse(montarIcs(bloqueios), {
     status: 200,

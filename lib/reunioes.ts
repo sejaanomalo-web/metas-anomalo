@@ -21,11 +21,11 @@ export * from "./reunioes-tipos"
 
 const COLUNAS_TIPO =
   "id, nome, descricao, duracao_min, origem_comercial, campanha_rotulo, responsavel_id, disponibilidade_id, " +
-  "contexto_id, calcom_event_type_id, calcom_slug, link_publico, local, antecedencia_min_horas, intervalo_min, " +
+  "contexto_id, calcom_event_type_id, calcom_slug, link_publico, local, antecedencia_min_horas, intervalo_min, intervalo_minutos, " +
   "limite_diario, horizonte_dias, ativo, ultima_sincronizacao_em, ultimo_erro"
 
 const COLUNAS_AGEND =
-  "id, booking_uid, status, inicio, fim, participante_nome, participante_email, participante_telefone, " +
+  "id, provedor, booking_uid, status, inicio, fim, participante_nome, participante_email, participante_telefone, " +
   "origem_comercial, link_reuniao, local_rotulo, tarefa_id, sync_status, sync_erro, tipo_id, responsavel_id"
 
 function estadoDe(i: Integracao | null): EstadoConexao {
@@ -60,6 +60,7 @@ export function integracaoParaTela(i: Integracao | null): IntegracaoTela {
 const VAZIO: PainelReunioes = {
   migracaoAplicada: false,
   integracao: integracaoParaTela(null),
+  canalNativo: null,
   tipos: [],
   disponibilidades: [],
   proximas: [],
@@ -95,7 +96,7 @@ export async function carregarPainelReunioes(opts: {
   const desde = new Date(agora.getTime() - 2 * 3_600_000).toISOString()
   const trintaDias = new Date(agora.getTime() - 30 * 86_400_000).toISOString()
 
-  const [integ, tipos, disps, proximas, encerradas, pendencias, eventosErro, eventos, log, usuarios, contextos] =
+  const [integ, tipos, disps, proximas, encerradas, pendencias, eventosErro, eventos, log, usuarios, contextos, canalNativo] =
     await Promise.all([
       lerIntegracao(db),
       db.from("reunioes_tipos").select(COLUNAS_TIPO).order("ordem").order("nome"),
@@ -119,6 +120,7 @@ export async function carregarPainelReunioes(opts: {
         : Promise.resolve({ data: [] }),
       db.from("usuarios").select("id, nome").eq("ativo", true).order("nome"),
       db.from("ws_contextos").select("id, nome, tipo").is("arquivado_em", null).order("nome"),
+      db.from("reunioes_canais_nativos").select("tipo_id, disponibilidade_id, ativo, exclusividade_verificada_em").eq("chave", "ativo").maybeSingle(),
     ])
 
   const listaTipos = (tipos.data ?? []) as unknown as TipoTela[]
@@ -154,6 +156,7 @@ export async function carregarPainelReunioes(opts: {
   return {
     migracaoAplicada: true,
     integracao: integracaoParaTela(integ),
+    canalNativo: canalNativo.data as PainelReunioes["canalNativo"],
     tipos: listaTipos,
     disponibilidades: (disps.data ?? []) as DisponibilidadeTela[],
     proximas: paraTela(proximas.data),
@@ -175,11 +178,13 @@ export async function carregarPainelReunioes(opts: {
 export interface ReuniaoDaTarefa {
   /** id INTERNO do agendamento — é o que o botão "Cancelar reunião" envia. */
   id: string
+  provedor: "calcom" | "nativo"
   status: AgendamentoTela["status"]
   link: string | null
   local: string | null
   inicio: string | null
   participante: string | null
+  telefone: string | null
   tipo: string | null
   responsavelId: string | null
 }
@@ -199,7 +204,7 @@ export async function reuniaoDaTarefa(tarefaId: string): Promise<{
   if (!db) return { reuniao: null, bloqueio: null, disponivel: false }
   const [r, b] = await Promise.all([
     db.from("reunioes_agendamentos")
-      .select("id, status, link_reuniao, local_rotulo, inicio, participante_nome, tipo_id, responsavel_id, updated_at")
+      .select("id, provedor, status, link_reuniao, local_rotulo, inicio, participante_nome, participante_telefone, tipo_id, responsavel_id, updated_at")
       .eq("tarefa_id", tarefaId)
       .order("updated_at", { ascending: false })
       .limit(5),
@@ -208,8 +213,8 @@ export async function reuniaoDaTarefa(tarefaId: string): Promise<{
   // Tabelas ausentes (migration não aplicada) → o bloco simplesmente não aparece.
   if (r.error || b.error) return { reuniao: null, bloqueio: null, disponivel: false }
   type Linha = {
-    id: string; status: AgendamentoTela["status"]; link_reuniao: string | null; local_rotulo: string | null
-    inicio: string | null; participante_nome: string | null; tipo_id: string | null; responsavel_id: string | null
+    id: string; provedor: "calcom" | "nativo"; status: AgendamentoTela["status"]; link_reuniao: string | null; local_rotulo: string | null
+    inicio: string | null; participante_nome: string | null; participante_telefone: string | null; tipo_id: string | null; responsavel_id: string | null
   }
   const linhas = (r.data ?? []) as Linha[]
   const linha = linhas.find((l) => l.status === "confirmada" || l.status === "solicitada") ?? linhas[0]
@@ -221,8 +226,8 @@ export async function reuniaoDaTarefa(tarefaId: string): Promise<{
   return {
     reuniao: linha
       ? {
-          id: linha.id, status: linha.status, link: linha.link_reuniao, local: linha.local_rotulo, inicio: linha.inicio,
-          participante: linha.participante_nome, tipo, responsavelId: linha.responsavel_id,
+          id: linha.id, provedor: linha.provedor, status: linha.status, link: linha.link_reuniao, local: linha.local_rotulo, inicio: linha.inicio,
+          participante: linha.participante_nome, telefone: linha.participante_telefone, tipo, responsavelId: linha.responsavel_id,
         }
       : null,
     bloqueio: (b.data as { duracao_min: number } | null) ?? null,

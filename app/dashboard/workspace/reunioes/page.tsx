@@ -123,7 +123,8 @@ export default async function ReunioesPage({ searchParams }: { searchParams: SP 
         ) : secao === "tipos" ? (
           <TiposReuniao
             tipos={painel.tipos}
-            disponibilidades={painel.disponibilidades.map((d) => ({ id: d.id, nome: d.nome }))}
+            disponibilidades={painel.disponibilidades.map((d) => ({ id: d.id, nome: d.nome, modo_nativo: d.modo_nativo }))}
+            canalNativo={painel.canalNativo}
             usuarios={painel.usuarios}
             contextos={painel.contextos}
             eventTypes={painel.eventTypesExternos}
@@ -138,14 +139,19 @@ export default async function ReunioesPage({ searchParams }: { searchParams: SP 
                 key={`${d.id}-${d.updated_at}`}
                 disp={d}
                 usuarios={painel.usuarios}
-                tiposQueUsam={painel.tipos.filter((t) => t.disponibilidade_id === d.id).map((t) => t.nome)}
+                tiposQueUsam={painel.tipos.filter((t) => t.disponibilidade_id === d.id || (painel.canalNativo?.disponibilidade_id === d.id && painel.canalNativo.tipo_id === t.id)).map((t) => t.nome)}
                 calcomPronto={integ.env.apiKey && integ.estado !== "desconectado"}
                 souAdmin={souAdmin}
               />
             ))}
           </div>
         ) : secao === "integracoes" ? (
-          <IntegracoesReunioes integ={integ} souAdmin={souAdmin} />
+          <div style={{ display: "grid", gap: 14 }}>
+            <IntegracoesReunioes integ={integ} souAdmin={souAdmin} />
+            <section className="glass" style={{ padding: 14, borderRadius: 10, fontSize: 12, color: "var(--text-2)" }}>
+              <strong>Agendamento nativo do Workspace</strong> · {painel.canalNativo?.ativo ? "ativo no banco" : "inativo"}. Configure em Tipos de reunião; a API pública também exige a feature flag do servidor.
+            </section>
+          </div>
         ) : (
           <HistoricoReunioes
             pendencias={painel.pendencias}
