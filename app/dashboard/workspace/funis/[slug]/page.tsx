@@ -51,8 +51,10 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
   if ("erro" in p) {
     return (
       <main className="ws-main"><div className="ws-topo">{nav}</div><div className="ws-conteudo">
-        <Cartao titulo={p.erro === "migracao" ? "Falta aplicar a migration do banco" : "Funil não encontrado"}
-          subtitulo={p.erro === "migracao" ? "Rode supabase/migrations/20261127_funil_estaticos_meta.sql no SQL Editor (depois das migrations 20261125 e 20261126). Passo a passo em docs/FUNIL_ESTATICOS_META.md." : "Confira o endereço."} />
+        <Cartao titulo={p.erro === "nao_encontrado" ? "Funil não encontrado" : "Falta aplicar migration do banco"}
+          subtitulo={p.erro === "migracao" ? "Rode no SQL Editor, nesta ordem: 20261125, 20261126, 20261127 e 20261128. Passo a passo em docs/FUNIL_ESTATICOS_META.md."
+            : p.erro === "migracao_fase2" ? "A 20261127 está aplicada, mas falta a 20261128_funil_apresentacao_teste.sql (tela inicial, modo de teste e criativos). Passo a passo em docs/FUNIL_ESTATICOS_META.md."
+            : p.erro === "nao_encontrado" ? "Confira o endereço." : "Banco indisponível."} />
       </div></main>
     )
   }
@@ -73,7 +75,8 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
   if (!f.pixel_id) pendencias.push("Conjunto de dados (Pixel) da ANÔMALO não configurado.")
   if (f.capi_ativo && !p.env.capiToken) pendencias.push("CAPI ligada, mas falta FUNIL_ESTATICOS_META_CAPI_TOKEN no servidor.")
   if (p.conversoesPendentes) pendencias.push(`${p.conversoesPendentes} conversões aguardando envio/reenvio.`)
-  if (!p.criativos.length) pendencias.push("Nenhum criativo cadastrado (E01–E06).")
+  if (!p.criativos.length) pendencias.push("Nenhum criativo cadastrado (E01–E12).")
+  else if (p.criativos.some(c => c.status === "ativo" && !c.meta_ad_id)) pendencias.push(`${p.criativos.filter(c => c.status === "ativo" && !c.meta_ad_id).length} criativo(s) ativo(s) sem ID do anúncio — a atribuição dependerá do creative_id na URL.`)
 
   return (
     <main className="ws-main">
@@ -91,7 +94,7 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
             {Object.keys(PERIODOS).map(k => (
               <Link key={k} href={qs({ periodo: k })} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, textDecoration: "none", color: k === periodo ? "#1e1f21" : "var(--text-2)", background: k === periodo ? "var(--accent)" : "var(--surface-3)" }}>{k}d</Link>
             ))}
-            <Link href={qs({ teste: teste ? "0" : "1" })} style={{ fontSize: 11, padding: "3px 8px", color: "var(--text-3)" }}>{teste ? "Ocultar testes" : "Incluir testes"}</Link>
+            <Link href={qs({ teste: teste ? "0" : "1" })} title="Por padrão os relatórios mostram só produção" style={{ fontSize: 11, padding: "3px 8px", color: teste ? "#C9953A" : "var(--text-3)" }}>{teste ? "Mostrando testes — ocultar" : "Incluir testes"}</Link>
           </nav>
         </div>
         <nav aria-label="Seções do funil" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -105,7 +108,7 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
       <div className="ws-conteudo" style={{ display: "grid", gap: 14 }}>
         {aba === "visao" && (
           <>
-            <Cartao titulo="URL pública" subtitulo="Use como destino dos 6 anúncios (todos com a mesma URL)."
+            <Cartao titulo="URL pública" subtitulo={`Destino de todos os anúncios (${p.criativos.length || 12} criativos, mesma URL). “Versão de teste” não reserva horário real, não cria tarefa e não envia nada à Meta.`}
               acoes={<><BotaoCopiar texto={urlPublica} /><a className="no-ds" href={urlPublica} target="_blank" rel="noopener" style={{ fontSize: 12, color: "var(--text-1)" }}>Abrir ↗</a>
                 {p.versaoPublicada && <BotaoPrevia funilId={f.id} versaoId={p.versaoPublicada.id} base={urlPublica} rotulo="Versão de teste" />}</>}>
               <code style={{ fontSize: 12, wordBreak: "break-all", color: "var(--text-1)" }}>{urlPublica}</code>
@@ -132,9 +135,25 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
               ))}
             </div>
             <Funil etapas={m.etapas} abandono={m.abandonoPorEtapa} />
+            <Cartao titulo="Tela inicial (Etapa 00)" subtitulo="Só sessões que realmente viram a apresentação entram nestes denominadores. Ver a apresentação ou clicar no botão não é lead.">
+              {m.apresentacao.vistas === 0 ? <p style={{ fontSize: 12, color: "var(--text-4)", margin: 0 }}>Sem dados — nenhuma sessão abriu com a apresentação no período.</p> : (
+                <Tabela cab={["Indicador", "Valor", "Cálculo"]} linhas={[
+                  ["Visualizaram a apresentação", String(m.apresentacao.vistas), "sessões com welcome_viewed"],
+                  ["Clique no botão inicial", pct(m.taxas.cliqueInicial), `${m.taxas.cliqueInicial.num} clicaram / ${m.taxas.cliqueInicial.den} viram`],
+                  ["Taxa de início", pct(m.taxas.inicioAposApresentacao), `${m.taxas.inicioAposApresentacao.num} iniciaram as perguntas / ${m.taxas.inicioAposApresentacao.den} viram a apresentação`],
+                  ["Abandono inicial", pct(m.taxas.abandonoInicial), `${m.taxas.abandonoInicial.num} abandonaram sem iniciar / ${m.taxas.abandonoInicial.den} elegíveis (iniciaram ou já foram marcadas como abandonadas)`],
+                ]} />
+              )}
+              {p.porVariante.length > 0 && (
+                <Tabela cab={["Entrada", "Sessões", "Início", "Leads", "Captura", "Agendadas"]} linhas={p.porVariante.map(v => [
+                  v.variante === "apresentacao" ? "Com apresentação" : "Direto na 1ª pergunta", String(v.metricas.contagens.sessoes),
+                  `${v.metricas.contagens.iniciadas} (${pct(v.metricas.taxas.inicio)})`, String(v.metricas.contagens.comContato), pct(v.metricas.taxas.captura), String(v.metricas.contagens.agendadas)])} />
+              )}
+              <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>As duas entradas não rodam ao mesmo tempo (não há sorteio A/B): a comparação é entre períodos/versões e pode ter outras diferenças além da tela inicial.</p>
+            </Cartao>
             <Cartao titulo="Taxas de conversão" subtitulo="Denominadores explícitos. Coorte = sessões abertas no período.">
               <Tabela cab={["Taxa", "Valor", "Cálculo"]} linhas={[
-                ["Início", pct(m.taxas.inicio), `${m.taxas.inicio.num} iniciaram / ${m.taxas.inicio.den} sessões`],
+                ["Início", pct(m.taxas.inicio), `${m.taxas.inicio.num} responderam a 1ª pergunta / ${m.taxas.inicio.den} sessões`],
                 ["Conclusão das perguntas", pct(m.taxas.conclusaoPerguntas), `${m.taxas.conclusaoPerguntas.num} concluíram / ${m.taxas.conclusaoPerguntas.den} iniciaram`],
                 ["Captura", pct(m.taxas.captura), `${m.taxas.captura.num} com contato / ${m.taxas.captura.den} sessões`],
                 ["Agendamento", pct(m.taxas.agendamento), `${m.taxas.agendamento.num} leads que agendaram / ${m.taxas.agendamento.den} leads da coorte`],
@@ -179,6 +198,8 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
             <Cartao titulo="Diagnóstico de tracking" acoes={<BotaoReprocessar funilId={f.id} />}>
               <Tabela cab={["Item", "Status"]} linhas={[
                 ["Ambiente atual", p.env.ambiente === "production" ? "Produção (eventos reais)" : `${p.env.ambiente} — CAPI só envia com código de teste`],
+                ["Versão de teste (funcional)", "Nunca envia à Meta: sem Pixel, sem CAPI; reserva simulada"],
+                ["Diagnóstico da CAPI", "Link próprio (abaixo): Lead/Schedule só com o código de teste, visíveis em Eventos de teste"],
                 ["Pixel ID", f.pixel_id ? String(f.pixel_id) : "Não configurado"],
                 ["CAPI", f.capi_ativo ? "Ligada" : "Desligada"],
                 ["Token CAPI no servidor", p.env.capiToken ? "Presente (oculto)" : "Ausente — FUNIL_ESTATICOS_META_CAPI_TOKEN"],
@@ -191,6 +212,10 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
                 ["Deduplicação", "Pixel e CAPI usam o mesmo event_id (lead.<id> / schedule.<id>); a fila tem event_id único"],
               ]} />
             </Cartao>
+            <Cartao titulo="Diagnóstico da Conversions API" subtitulo="Gera um link de teste que envia Lead e Schedule à Meta APENAS com o código de teste (aba “Eventos de teste” do Gerenciador). Não conta como conversão real, não reserva horário e não entra nos relatórios de produção. O Pixel do navegador continua desligado nesse link.">
+              {p.versaoPublicada ? <div><BotaoPrevia funilId={f.id} versaoId={p.versaoPublicada.id} base={urlPublica} rotulo="Abrir link de diagnóstico da CAPI" modo="diagnostico_capi" /></div>
+                : <p style={{ fontSize: 12, color: "var(--text-4)", margin: 0 }}>Sem versão publicada.</p>}
+            </Cartao>
             <GeradorUrl base={urlPublica} parametros={PARAMETROS_META_ADS} criativos={p.criativos.map(c => ({ codigo: c.codigo, nome: c.nome }))} />
             <GerirCriativos funilId={f.id} criativos={p.criativos} />
             <Cartao titulo="Conversões recentes" subtitulo="Fila durável da Conversions API (sem dados pessoais nesta tela).">
@@ -198,8 +223,8 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
                 linhas={p.conversoes.map(c => [c.evento + (c.ambiente === "teste" ? " (teste)" : ""), c.event_id.slice(0, 18) + "…", c.status, String(c.tentativas), formatarDataHora(c.criado_em), c.ultimo_erro ?? c.motivo ?? ""])} />
             </Cartao>
             <Cartao titulo="Sessões recentes">
-              <Tabela cab={["Aberta em", "Origem", "Criativo", "Situação"]} vazio="Sem sessões."
-                linhas={p.sessoesRecentes.map(s => [formatarDataHora(s.aberta_em), ORIGEM[s.origem] ?? s.origem, nomeCriativo(s.criativo_id), s.etapa])} />
+              <Tabela cab={["Aberta em", "Entrada", "Origem", "Criativo", "Situação"]} vazio="Sem sessões."
+                linhas={p.sessoesRecentes.map(s => [formatarDataHora(s.aberta_em) + (s.ambiente === "teste" ? " (teste)" : ""), s.entrada === "apresentacao" ? "Apresentação" : "Direto", ORIGEM[s.origem] ?? s.origem, nomeCriativo(s.criativo_id), s.etapa])} />
             </Cartao>
           </>
         )}

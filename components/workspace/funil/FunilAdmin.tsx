@@ -1,13 +1,15 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   atualizarLeadFunilAction, descartarRascunhoAction, excluirCriativoAction, gerarLinkPreviaAction, publicarRascunhoAction,
   reprocessarConversoesAction, salvarCanalFunilAction, salvarConfigFunilAction, salvarCriativoAction, salvarInvestimentoAction, salvarRascunhoAction,
 } from "@/lib/funil-estaticos-actions"
 import {
-  PARAMS_ATRIBUICAO, ROTULO_QUALIFICACAO, ROTULO_STATUS_COMERCIAL, validarDefinicao, type DefinicaoFunil, type Pergunta,
+  APRESENTACAO_PADRAO, IDENTIDADES_VISUAIS, PARAMS_ATRIBUICAO, ROTULO_QUALIFICACAO, ROTULO_STATUS_COMERCIAL, validarDefinicao,
+  type DefinicaoFunil, type Pergunta,
 } from "@/lib/funil-estaticos-nucleo"
+import { paginaFunil } from "@/lib/funil-estaticos-pagina"
 import { BotaoCopiar, Cartao, estiloBotao, estiloCampo, Mensagem, Rotulo, useAcao } from "@/components/workspace/reunioes/ui"
 
 const grade: React.CSSProperties = { display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))" }
@@ -168,8 +170,12 @@ export function EditorFormularioFunil({ funilId, urlPublica, publicada, rascunho
   const fd = () => { const x = new FormData(); x.set("funil_id", funilId); x.set("definicao", JSON.stringify(def)); return x }
   const slugId = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 30) || "item"
   const mover = (i: number, d: number) => set(c => { const j = i + d; if (j < 0 || j >= c.perguntas.length) return; [c.perguntas[i], c.perguntas[j]] = [c.perguntas[j], c.perguntas[i]] })
-  const textos: [keyof DefinicaoFunil["textos"], string][] = [["titulo", "Título de abertura"], ["subtitulo", "Texto complementar"], ["contato_titulo", "Título do contato"], ["contato_cta", "Botão do contato"],
-    ["agenda_titulo", "Título da agenda"], ["agenda_subtitulo", "Texto da agenda"], ["sem_horarios", "Sem horários"], ["confirmacao_titulo", "Título da confirmação"], ["confirmacao_texto", "Texto da confirmação"], ["inativo", "Mensagem com funil inativo"]]
+  const textos: [keyof DefinicaoFunil["textos"], string][] = [["titulo", "Título de abertura (só no início direto, sem apresentação)"], ["subtitulo", "Texto de abertura (só no início direto)"],
+    ["contato_titulo", "Título da identificação"], ["contato_subtitulo", "Texto da identificação"], ["contato_cta", "Botão da identificação"],
+    ["agenda_titulo", "Título da agenda"], ["agenda_subtitulo", "Texto da agenda"], ["agenda_cta", "Botão de confirmar horário"], ["sem_horarios", "Sem horários"],
+    ["confirmacao_titulo", "Título da confirmação"], ["confirmacao_texto", "Texto da confirmação"], ["inativo", "Mensagem com funil inativo"]]
+  const ap = def.apresentacao
+  const moverBeneficio = (i: number, d: number) => set(c => { const b = c.apresentacao!.beneficios; const j = i + d; if (j < 0 || j >= b.length) return; [b[i], b[j]] = [b[j], b[i]] })
   return (
     <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", alignItems: "start" }}>
       <div style={{ display: "grid", gap: 14 }}>
@@ -186,10 +192,51 @@ export function EditorFormularioFunil({ funilId, urlPublica, publicada, rascunho
           <label style={{ fontSize: 12, color: "var(--text-2)", display: "flex", gap: 6 }}>
             <input type="checkbox" checked={def.avanco_automatico} onChange={e => set(c => { c.avanco_automatico = e.target.checked })} /> Avançar automaticamente ao escolher
           </label>
+          <Rotulo texto="Identidade visual da página">
+            <select value={def.visual ?? "escuro"} onChange={e => set(c => { c.visual = e.target.value as never })} style={estiloCampo}>
+              {IDENTIDADES_VISUAIS.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+            </select>
+          </Rotulo>
           <div style={grade}>
             <Rotulo texto="Campo e-mail"><select value={def.contato.email} onChange={e => set(c => { c.contato.email = e.target.value as never })} style={estiloCampo}><option value="oculto">Oculto</option><option value="opcional">Opcional</option><option value="obrigatorio">Obrigatório</option></select></Rotulo>
             <Rotulo texto="Campo Instagram"><select value={def.contato.instagram} onChange={e => set(c => { c.contato.instagram = e.target.value as never })} style={estiloCampo}><option value="oculto">Oculto</option><option value="opcional">Opcional</option></select></Rotulo>
           </div>
+        </Cartao>
+        <Cartao titulo="Tela inicial de apresentação" subtitulo="Etapa 00: apresentação comercial antes da 1ª pergunta. Desligada, o formulário abre direto na 1ª pergunta (versão anterior). Faz parte da versão: salve e publique como as perguntas.">
+          <label style={{ fontSize: 12, color: "var(--text-1)", display: "flex", gap: 6, fontWeight: 600 }}>
+            <input type="checkbox" checked={ap?.ativo === true} onChange={e => set(c => {
+              if (!c.apresentacao) c.apresentacao = JSON.parse(JSON.stringify(APRESENTACAO_PADRAO))
+              c.apresentacao!.ativo = e.target.checked
+            })} /> Mostrar a tela inicial de apresentação
+          </label>
+          {ap && (
+            <div style={{ display: "grid", gap: 10, opacity: ap.ativo ? 1 : 0.6 }}>
+              <Rotulo texto="Texto de identificação (acima da headline)"><input value={ap.identificacao} maxLength={80} onChange={e => set(c => { c.apresentacao!.identificacao = e.target.value })} style={estiloCampo} /></Rotulo>
+              <Rotulo texto="Headline"><textarea value={ap.headline} maxLength={160} rows={2} onChange={e => set(c => { c.apresentacao!.headline = e.target.value })} style={{ ...estiloCampo, resize: "vertical" }} /></Rotulo>
+              <div style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--text-2)" }}>Benefícios (até 6; o destaque aparece em negrito)</span>
+                {ap.beneficios.map((b, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "56px minmax(0,1fr) minmax(0,1.3fr) auto", gap: 6, alignItems: "end" }}>
+                    <Rotulo texto="Emoji"><input value={b.emoji} maxLength={8} aria-label={`Emoji do benefício ${i + 1}`} onChange={e => set(c => { c.apresentacao!.beneficios[i].emoji = e.target.value })} style={{ ...estiloCampo, textAlign: "center" }} /></Rotulo>
+                    <Rotulo texto="Destaque"><input value={b.destaque} maxLength={60} onChange={e => set(c => { c.apresentacao!.beneficios[i].destaque = e.target.value })} style={estiloCampo} /></Rotulo>
+                    <Rotulo texto="Complemento"><input value={b.texto} maxLength={120} onChange={e => set(c => { c.apresentacao!.beneficios[i].texto = e.target.value })} style={estiloCampo} /></Rotulo>
+                    <span style={{ display: "flex", gap: 4 }}>
+                      <button type="button" className="no-ds" style={estiloBotao()} onClick={() => moverBeneficio(i, -1)} aria-label="Mover benefício para cima">↑</button>
+                      <button type="button" className="no-ds" style={estiloBotao()} onClick={() => moverBeneficio(i, 1)} aria-label="Mover benefício para baixo">↓</button>
+                      <button type="button" className="no-ds" style={estiloBotao("perigo")} onClick={() => set(c => { c.apresentacao!.beneficios.splice(i, 1) })} aria-label="Remover benefício">✕</button>
+                    </span>
+                  </div>
+                ))}
+                {ap.beneficios.length < 6 && <div><button type="button" className="no-ds" style={estiloBotao()} onClick={() => set(c => { c.apresentacao!.beneficios.push({ emoji: "✅", destaque: "Novo benefício", texto: "" }) })}>+ Benefício</button></div>}
+              </div>
+              <Rotulo texto="Texto complementar"><textarea value={ap.complemento} maxLength={300} rows={2} onChange={e => set(c => { c.apresentacao!.complemento = e.target.value })} style={{ ...estiloCampo, resize: "vertical" }} /></Rotulo>
+              <div style={grade}>
+                <Rotulo texto="Botão (CTA)" dica="Aparece em maiúsculas, com →."><input value={ap.cta} maxLength={60} onChange={e => set(c => { c.apresentacao!.cta = e.target.value })} style={estiloCampo} /></Rotulo>
+                <Rotulo texto="Rodapé" dica="O link da política vem de Configurações."><input value={ap.rodape} maxLength={160} onChange={e => set(c => { c.apresentacao!.rodape = e.target.value })} style={estiloCampo} /></Rotulo>
+              </div>
+              <div><button type="button" className="no-ds" style={estiloBotao()} onClick={() => set(c => { c.apresentacao = { ...JSON.parse(JSON.stringify(APRESENTACAO_PADRAO)), ativo: c.apresentacao?.ativo ?? true } })}>Restaurar textos padrão</button></div>
+            </div>
+          )}
         </Cartao>
         {def.perguntas.map((p, i) => (
           <Cartao key={i} titulo={`Pergunta ${String(i + 1).padStart(2, "0")}`} subtitulo={`id: ${p.id}`}
@@ -214,7 +261,7 @@ export function EditorFormularioFunil({ funilId, urlPublica, publicada, rascunho
         <button type="button" className="no-ds" style={estiloBotao()} onClick={() => set(c => { let k = c.perguntas.length + 1; while (c.perguntas.some(p => p.id === `pergunta_${k}`)) k++; c.perguntas.push({ id: `pergunta_${k}`, texto: "Nova pergunta", opcoes: [{ id: "a", texto: "Alternativa A", pontos: 0 }, { id: "b", texto: "Alternativa B", pontos: 0 }] } as Pergunta) })}>+ Pergunta</button>
         <Cartao titulo="Textos públicos">
           {textos.map(([k, r]) => (
-            <Rotulo key={k} texto={r}><textarea value={def.textos[k]} maxLength={400} rows={k.length > 12 ? 3 : 2} onChange={e => set(c => { c.textos[k] = e.target.value })} style={{ ...estiloCampo, resize: "vertical" }} /></Rotulo>
+            <Rotulo key={k} texto={r}><textarea value={def.textos[k] ?? ""} maxLength={k === "agenda_cta" ? 60 : 400} rows={k.length > 12 ? 3 : 2} onChange={e => set(c => { c.textos[k] = e.target.value })} style={{ ...estiloCampo, resize: "vertical" }} /></Rotulo>
           ))}
         </Cartao>
         <Cartao titulo="Histórico de versões">
@@ -223,51 +270,47 @@ export function EditorFormularioFunil({ funilId, urlPublica, publicada, rascunho
           </ul>
         </Cartao>
       </div>
-      <Cartao titulo="Pré-visualização" subtitulo="Aproximação visual. Para o fluxo real (com agenda), use a versão de teste."
+      <Cartao titulo="Pré-visualização" subtitulo="É a página real (mesmo HTML e script) rodando sem rede: nada é enviado nem salvo e a agenda mostra horários de exemplo. Para testar com a agenda de verdade, use a versão de teste."
         acoes={<>
           <button type="button" className="no-ds" style={estiloBotao(largura === "mobile" ? "principal" : "neutro")} onClick={() => setLargura("mobile")}>Mobile</button>
           <button type="button" className="no-ds" style={estiloBotao(largura === "desktop" ? "principal" : "neutro")} onClick={() => setLargura("desktop")}>Desktop</button>
         </>}>
-        <Previa def={def} largura={largura === "mobile" ? 375 : 760} />
+        <Previa def={def} largura={largura} erros={erros.length} />
       </Cartao>
     </div>
   )
 }
 
-function Previa({ def, largura }: { def: DefinicaoFunil; largura: number }) {
-  const [i, setI] = useState(0)
-  const p = def.perguntas[Math.min(i, def.perguntas.length - 1)]
-  const total = def.perguntas.length + 2
+function Previa({ def, largura, erros }: { def: DefinicaoFunil; largura: "mobile" | "desktop"; erros: number }) {
+  // Atualiza 400 ms depois da última edição (evita recarregar o iframe a cada tecla).
+  const [html, setHtml] = useState("")
+  useEffect(() => {
+    if (erros) return
+    const t = setTimeout(() => setHtml(paginaFunil({
+      slug: "previa", nome: "Pré-visualização", versaoId: "previa", def, api: "", privacidadeUrl: "https://example.com/privacidade",
+      consentimentoModo: "opt_in", pixelId: null, eventosMeta: {}, previa: null, demo: true,
+    })), 400)
+    return () => clearTimeout(t)
+  }, [def, erros])
+  const w = largura === "mobile" ? 390 : 1100
+  const h = largura === "mobile" ? 780 : 720
   return (
-    <div style={{ width: "100%", maxWidth: largura, margin: "0 auto", background: "#000", border: "1px solid #2a2a31", borderRadius: 14, padding: 16, color: "#fff", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" }}>
-      <div style={{ maxWidth: 528, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <img src="/funil/logo-anomalo-96.png" width={28} height={28} alt="" />
-          <strong style={{ letterSpacing: ".18em", fontSize: 12 }}>ANÔMALO</strong>
-          {i > 0 && <button type="button" className="no-ds" onClick={() => setI(i - 1)} style={{ marginLeft: "auto", background: "none", border: 0, color: "#c9c9d1", cursor: "pointer" }}>← Voltar</button>}
-        </div>
-        <div style={{ height: 4, background: "#17171c", borderRadius: 4, margin: "12px 0 4px" }}><div style={{ height: 4, width: `${(i / total) * 100}%`, background: "#C9953A", borderRadius: 4 }} /></div>
-        <p style={{ fontSize: 12, color: "#8d8d97", margin: "0 0 16px" }}>Etapa {i + 1} de {total}</p>
-        {i === 0 && <><h1 style={{ fontSize: 20, margin: "0 0 6px" }}>{def.textos.titulo}</h1><p style={{ color: "#c9c9d1", margin: "0 0 20px", fontSize: 15 }}>{def.textos.subtitulo}</p></>}
-        {p && <>
-          <h2 style={{ fontSize: 19, margin: "0 0 14px" }}>{p.texto}</h2>
-          <div style={{ display: "grid", gap: 10 }}>
-            {p.opcoes.map(o => <button type="button" key={o.id} className="no-ds" onClick={() => setI(Math.min(i + 1, def.perguntas.length - 1))}
-              style={{ textAlign: "left", padding: 15, borderRadius: 12, border: "1px solid #2a2a31", background: "#0f0f12", color: "#fff", fontSize: 15, cursor: "pointer" }}>{o.texto}</button>)}
-          </div>
-        </>}
-      </div>
+    <div style={{ overflowX: "auto" }}>
+      {erros > 0 && <p style={{ fontSize: 11, color: "#e24b4a", margin: "0 0 6px" }}>Corrija os erros acima para atualizar a pré-visualização.</p>}
+      <iframe title="Pré-visualização do funil" srcDoc={html} sandbox="allow-scripts allow-forms" width={w} height={h}
+        style={{ display: "block", margin: "0 auto", border: "1px solid var(--surface-3)", borderRadius: largura === "mobile" ? 24 : 10, background: "#fff", maxWidth: largura === "mobile" ? "100%" : "none" }} />
+      <p style={{ fontSize: 11, color: "var(--text-4)", margin: "6px 0 0", textAlign: "center" }}>{largura === "mobile" ? "390 × 780 (iPhone 13/14)" : "1100 × 720"} · o link da política na prévia é ilustrativo</p>
     </div>
   )
 }
 
-export function BotaoPrevia({ funilId, versaoId, base, rotulo }: { funilId: string; versaoId: string; base: string; rotulo: string }) {
+export function BotaoPrevia({ funilId, versaoId, base, rotulo, modo = "funcional" }: { funilId: string; versaoId: string; base: string; rotulo: string; modo?: "funcional" | "diagnostico_capi" }) {
   const [carregando, setCarregando] = useState(false)
   return (
     <button type="button" className="no-ds" disabled={carregando} style={estiloBotao("neutro", carregando)} onClick={async () => {
       setCarregando(true)
       const janela = window.open("about:blank", "_blank")
-      const r = await gerarLinkPreviaAction(funilId, versaoId)
+      const r = await gerarLinkPreviaAction(funilId, versaoId, modo)
       setCarregando(false)
       if (r.ok && r.token && janela) janela.location.href = `${base}?previa=${encodeURIComponent(r.token)}`
       else { janela?.close(); window.alert(r.erro ?? "Não foi possível gerar o link de teste.") }
@@ -297,10 +340,10 @@ export function GeradorUrl({ base, parametros, criativos }: { base: string; para
     return s ? `${base}?${s}` : base
   }, [base, codigo, extra])
   return (
-    <Cartao titulo="Gerador de URL e parâmetros do anúncio" subtitulo="Os 6 anúncios usam a MESMA URL de destino. Cole os parâmetros abaixo no campo “Parâmetros de URL” de cada anúncio.">
+    <Cartao titulo="Gerador de URL e parâmetros do anúncio" subtitulo="Todos os anúncios (hoje 12 criativos estáticos) usam a MESMA URL de destino. Cole os parâmetros abaixo no campo “Parâmetros de URL” de cada anúncio.">
       <Rotulo texto="Parâmetros de URL (Meta Ads)"><code style={{ fontSize: 11, wordBreak: "break-all", color: "var(--text-1)" }}>{parametros}</code></Rotulo>
       <div><BotaoCopiar texto={parametros} rotulo="Copiar parâmetros" /></div>
-      <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>Para identificação manual do conceito, acrescente <code>&creative_id=E01</code> (E02…E06) nos parâmetros de cada anúncio. A atribuição usa primeiro o ad_id cadastrado e depois o código.</p>
+      <p style={{ fontSize: 11, color: "var(--text-4)", margin: 0 }}>Para identificação manual do conceito, acrescente <code>&creative_id=E01</code> (E02…E12) nos parâmetros de cada anúncio. A atribuição usa primeiro o ad_id cadastrado e depois o código.</p>
       <div style={grade}>
         <Rotulo texto="Criativo (creative_id)">
           <select value={codigo} onChange={e => setCodigo(e.target.value)} style={estiloCampo}>
@@ -326,7 +369,7 @@ export function GerirCriativos({ funilId, criativos }: { funilId: string; criati
   const vazio: Criativo = { id: "", codigo: proximo, nome: "", hipotese: null, miniatura_url: null, meta_ad_id: null, status: "ativo", inicio_em: null }
   const c = editando ?? vazio
   return (
-    <Cartao titulo="Criativos" subtitulo="Associe cada código (E01–E06…) ao ID real do anúncio — não dependa do nome, que pode mudar.">
+    <Cartao titulo="Criativos" subtitulo="Associe cada código (E01–E12; pode cadastrar mais) ao ID real do anúncio — não dependa do nome, que pode mudar.">
       <div style={{ display: "grid", gap: 6 }}>
         {criativos.map(x => (
           <div key={x.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>

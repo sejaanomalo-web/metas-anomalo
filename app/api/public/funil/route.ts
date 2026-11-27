@@ -38,13 +38,20 @@ export async function POST(req: Request) {
   let funil: FunilPublico | null = await carregarFunil(slug)
   if (!funil || funil.slug !== slug) return erro(404, "NOT_FOUND", "Formulário não encontrado.")
   let ambiente: "producao" | "teste" = "producao"
+  let diagnosticoCapi = false
   if (typeof body.previa === "string") {
-    const versaoId = lerTokenPrevia(funil.id, body.previa)
-    if (!versaoId) return erro(403, "PREVIEW_INVALID", "Link de teste expirado.")
-    funil = await carregarFunil(slug, { versaoId })
+    const previa = lerTokenPrevia(funil.id, body.previa)
+    if (!previa) return erro(403, "PREVIEW_INVALID", "Link de teste expirado.")
+    funil = await carregarFunil(slug, { versaoId: previa.versaoId })
     if (!funil) return erro(404, "NOT_FOUND", "Versão não encontrada.")
     ambiente = "teste"
+    diagnosticoCapi = previa.modo === "diagnostico_capi"
   } else if (!funil.ativo) return erro(503, "FUNNEL_INACTIVE", funil.definicao.textos.inativo)
+  else if (acao === "sessao" && typeof body.versaoId === "string" && body.versaoId !== funil.versaoId && /^[0-9a-f-]{36}$/i.test(body.versaoId)) {
+    // Página aberta antes de uma nova publicação: a sessão nasce na versão que
+    // o visitante está vendo (só versões já publicadas; nunca rascunho).
+    funil = (await carregarFunil(slug, { versaoId: body.versaoId, apenasPublicadas: true })) ?? funil
+  }
 
   const ip = ipDaRequisicao(req)
   try {
@@ -52,13 +59,19 @@ export async function POST(req: Request) {
       const rate = await limitarFunil(`sessao:${ip}`, 40)
       if (rate === null) return erro(503, "TEMPORARY_FAILURE", "Tente novamente.")
       if (!rate) return erro(429, "RATE_LIMITED", "Tente novamente mais tarde.")
-      const r = await abrirSessao(funil, req, body, ambiente)
+      const r = await abrirSessao(funil, req, body, ambiente, diagnosticoCapi)
       return r ? json({ ok: true, ...r }) : erro(503, "TEMPORARY_FAILURE", "Tente novamente.")
     }
 
     const s = await lerSessao(funil, body.sessaoId, body.segredo)
     if (!s) return erro(401, "SESSION_INVALID", "Sessão expirada. Recarregue a página.")
     if (s.ambiente !== ambiente) return erro(401, "SESSION_INVALID", "Sessão expirada. Recarregue a página.")
+    // Cada sessão é interpretada pela versão em que começou (publicar não a quebra).
+    if (s.versao_id !== funil.versaoId) {
+      const daSessao = await carregarFunil(slug, { versaoId: s.versao_id })
+      if (!daSessao) return erro(401, "SESSION_INVALID", "Sessão expirada. Recarregue a página.")
+      funil = daSessao
+    }
 
     if (acao === "eventos") {
       if (!Array.isArray(body.eventos)) return erro(400, "INVALID_INPUT", "Dados inválidos.")
@@ -122,7 +135,7 @@ export async function POST(req: Request) {
       const rate = await limitarFunil(`reservar:${ip}`, 15)
       if (rate === null) return erro(503, "TEMPORARY_FAILURE", "Tente novamente.")
       if (!rate) return erro(429, "RATE_LIMITED", "Tente novamente mais tarde.")
-      const r = await reservarNoFunil(s, body.start, body.idempotencyKey, contextoCapi(req, s, urlFonte(body.url, req, funil.slug)))
+      const r = await reservarNoFunil(s, body.start, body.idempotencyKey, contextoCapi(req, s, urlFonte(body.url, req, funil.slug)), funil)
       if (r.code === "SLOT_UNAVAILABLE") return erro(409, "SLOT_UNAVAILABLE", "Esse horário não está mais disponível.")
       if (r.code === "IDEMPOTENCY_MISMATCH") return erro(409, "IDEMPOTENCY_MISMATCH", "Escolha o horário novamente.")
       if (r.code === "LEAD_REQUIRED") return erro(409, "LEAD_REQUIRED", "Informe seus dados antes.")
@@ -130,6 +143,7 @@ export async function POST(req: Request) {
       if (r.code === "INVALID_INPUT") return erro(400, "INVALID_INPUT", "Horário inválido.")
       if (r.code || !r.bookingId) return erro(503, "TEMPORARY_FAILURE", "Tente novamente.")
       // Sucesso só depois que reserva + tarefa foram gravadas (mesma transação).
+      // Teste: status "simulated" (nenhuma reunião real foi criada).
       return json({ ok: true, status: r.status, bookingId: r.bookingId, startsAt: r.startsAt, endsAt: r.endsAt,
         eventId: r.eventId, enviarPixel: r.enviarPixel === true && r.status === "reserved" }, 201)
     }

@@ -3,15 +3,25 @@
 // memória. Serve para testar a experiência (mobile, teclado, erros, 409,
 // recarregar) e medir performance sem tocar no Supabase.
 //   npx tsx scripts/qa/funil-estaticos-harness.ts   → http://localhost:4321/funil/estaticos-meta
+// Variáveis: VARIANTE=direto (v1, abre na 1ª pergunta, identidade escura);
+// padrão = v2 da 20261128 (apresentação + identidade branca). PIXEL=<id> liga
+// o aviso de cookies (o Pixel real NÃO carrega: connect.facebook.net fica
+// bloqueado no navegador de teste). PREVIA=1 simula o link de teste.
 import { createServer } from "node:http"
 import { readFileSync } from "node:fs"
 import { randomUUID } from "node:crypto"
-import { cabecalhosSeguranca, paginaFunil } from "../../lib/funil-estaticos-pagina"
+import { paginaFunil } from "../../lib/funil-estaticos-pagina"
+import { cabecalhosSeguranca } from "../../lib/funil-estaticos-seguranca"
 import type { DefinicaoFunil } from "../../lib/funil-estaticos-nucleo"
 
 const raiz = new URL("../../", import.meta.url)
 const sql = readFileSync(new URL("supabase/migrations/20261127_funil_estaticos_meta.sql", raiz), "utf8")
-const def = JSON.parse(sql.split("$json$")[1]) as DefinicaoFunil
+const v1 = JSON.parse(sql.split("$json$")[1]) as DefinicaoFunil
+const sql2 = readFileSync(new URL("supabase/migrations/20261128_funil_apresentacao_teste.sql", raiz), "utf8")
+const def: DefinicaoFunil = process.env.VARIANTE === "direto" ? v1 : {
+  ...v1, visual: "claro", apresentacao: JSON.parse(sql2.split("$json$")[1]),
+  textos: { ...v1.textos, contato_subtitulo: "Informe seus dados para visualizar os horários disponíveis.", agenda_cta: "Confirmar agendamento" },
+}
 const PORTA = Number(process.env.PORTA ?? 4321)
 const log: Record<string, unknown>[] = []
 const sessoes = new Map<string, { lead: boolean; reserva: { inicio: string; fim: string } | null }>()
@@ -34,11 +44,11 @@ createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`)
   if (req.method === "GET" && url.pathname === "/funil/estaticos-meta") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8", ...cabecalhosSeguranca() })
-    return res.end(paginaFunil({ slug: "estaticos-meta", nome: "Funil Estáticos Meta", versaoId: "v1", def, api: "/api/public/funil",
+    return res.end(paginaFunil({ slug: "estaticos-meta", nome: "Funil Estáticos Meta", versaoId: "v2", def, api: "/api/public/funil",
       privacidadeUrl: "https://example.com/privacidade", consentimentoModo: "opt_in", pixelId: process.env.PIXEL ?? null,
-      eventosMeta: { PageView: true, Lead: true, Schedule: true }, previa: null }))
+      eventosMeta: { PageView: true, Lead: true, Schedule: true }, previa: process.env.PREVIA ? "token-de-teste" : null }))
   }
-  if (req.method === "GET" && (url.pathname === "/funil/logo-anomalo-96.png" || url.pathname === "/favicon-32.png")) {
+  if (req.method === "GET" && (/^\/funil\/[a-z0-9-]+\.png$/.test(url.pathname) || url.pathname === "/favicon-32.png")) {
     res.writeHead(200, { "content-type": "image/png", "cache-control": "public, max-age=31536000, immutable" })
     return res.end(readFileSync(new URL(`public${url.pathname}`, raiz)))
   }
@@ -46,16 +56,17 @@ createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === "/api/public/funil") {
     let raw = ""; for await (const c of req) raw += c
     const b = JSON.parse(raw)
-    log.push({ acao: b.acao, ...(b.acao === "eventos" ? { eventos: b.eventos.map((e: { evento: string; etapa?: string }) => `${e.evento}:${e.etapa ?? ""}`) } : {}), ...(b.acao === "contato" ? { respostas: b.respostas } : {}) })
+    log.push({ acao: b.acao, ...(b.acao === "eventos" ? { eventos: b.eventos.map((e: { evento: string; etapa?: string }) => `${e.evento}:${e.etapa ?? ""}`) } : {}),
+      ...(b.acao === "contato" ? { respostas: b.respostas, consentimento: b.consentimento } : {}), ...(b.acao === "sessao" ? { versaoId: b.versaoId, atribuicao: b.atribuicao } : {}) })
     await new Promise(r => setTimeout(r, atraso))
     const json = (s: number, o: unknown) => { res.writeHead(s, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(o)) }
     if (b.acao === "sessao") {
       if (b.sessaoId && sessoes.has(b.sessaoId)) {
         const s = sessoes.get(b.sessaoId)!
-        return json(200, { ok: true, sessaoId: b.sessaoId, versaoId: "v1", etapa: "p1", respostas: {}, lead: s.lead ? { primeiroNome: "João" } : null, reuniao: s.reserva, ambiente: "producao" })
+        return json(200, { ok: true, sessaoId: b.sessaoId, versaoId: "v2", etapa: "p1", respostas: {}, lead: s.lead ? { primeiroNome: "João" } : null, reuniao: s.reserva, ambiente: "producao" })
       }
       const id = randomUUID(); sessoes.set(id, { lead: false, reserva: null })
-      return json(200, { ok: true, sessaoId: id, segredo: "s".repeat(43), versaoId: "v1", etapa: "perfil", respostas: {}, lead: null, reuniao: null, ambiente: "producao" })
+      return json(200, { ok: true, sessaoId: id, segredo: "s".repeat(43), versaoId: "v2", etapa: "apresentacao", respostas: {}, lead: null, reuniao: null, ambiente: "producao" })
     }
     const s = sessoes.get(b.sessaoId)
     if (!s) return json(401, { ok: false, code: "SESSION_INVALID" })

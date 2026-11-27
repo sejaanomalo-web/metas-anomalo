@@ -13,15 +13,60 @@ export interface Opcao { id: string; texto: string; pontos?: number; interesse?:
 export interface Pergunta { id: string; texto: string; objetivo?: string; opcoes: Opcao[] }
 export interface Textos {
   titulo: string; subtitulo: string; contato_titulo: string; contato_cta: string
+  /** Texto complementar da etapa de identificação (opcional nas versões antigas). */
+  contato_subtitulo?: string
   agenda_titulo: string; agenda_subtitulo: string; sem_horarios: string
+  /** Botão de confirmação da agenda (opcional; padrão "Confirmar agendamento"). */
+  agenda_cta?: string
   confirmacao_titulo: string; confirmacao_texto: string; inativo: string
 }
+export interface Beneficio { emoji: string; destaque: string; texto: string }
+/** Etapa 00 — apresentação comercial antes da 1ª pergunta. */
+export interface Apresentacao {
+  ativo: boolean
+  identificacao: string
+  headline: string
+  beneficios: Beneficio[]
+  complemento: string
+  cta: string
+  rodape: string
+}
+export type IdentidadeVisual = "claro" | "escuro"
+export const IDENTIDADES_VISUAIS: { id: IdentidadeVisual; nome: string }[] = [
+  { id: "claro", nome: "Branca (padrão) — fundo branco, botão amarelo ANÔMALO" },
+  { id: "escuro", nome: "Escura (versão anterior)" },
+]
 export interface DefinicaoFunil {
   avanco_automatico: boolean
   textos: Textos
   contato: { email: ModoCampo; instagram: Exclude<ModoCampo, "obrigatorio"> }
   perguntas: Pergunta[]
+  /** Ausente nas versões antigas = "escuro" (identidade da v1). */
+  visual?: IdentidadeVisual
+  /** Ausente ou ativo=false = abre direto na 1ª pergunta (comportamento da v1). */
+  apresentacao?: Apresentacao
 }
+
+/** Conteúdo padrão da tela inicial (usado ao ativar a apresentação no editor). */
+export const APRESENTACAO_PADRAO: Apresentacao = {
+  ativo: true,
+  identificacao: "Marketing & Tecnologia Imobiliária",
+  headline: "Mais oportunidades de venda para corretores de imóveis de Cascavel.",
+  beneficios: [
+    { emoji: "🎯", destaque: "Tráfego pago", texto: "para seus imóveis" },
+    { emoji: "🎬", destaque: "Gravação e edição", texto: "por nossa conta" },
+    { emoji: "📲", destaque: "Sistema imobiliário", texto: "personalizado" },
+    { emoji: "📈", destaque: "Marketing e gestão", texto: "comercial" },
+  ],
+  complemento: "Para corretores que desejam atrair novos compradores e profissionalizar sua operação imobiliária.",
+  cta: "Quero conhecer as soluções",
+  rodape: "Suas respostas serão enviadas à ANÔMALO.",
+}
+
+export const apresentacaoAtiva = (d: Pick<DefinicaoFunil, "apresentacao">) => d.apresentacao?.ativo === true
+export const identidadeVisual = (d: Pick<DefinicaoFunil, "visual">): IdentidadeVisual => d.visual === "claro" ? "claro" : "escuro"
+/** Etapa onde a sessão começa (para abandono por etapa). */
+export const etapaInicial = (d: DefinicaoFunil) => apresentacaoAtiva(d) ? "apresentacao" : (d.perguntas[0]?.id ?? "p1")
 
 export const QUALIFICACOES = ["nao_avaliado", "baixa", "media", "alta", "qualificado", "nao_qualificado"] as const
 export type Qualificacao = (typeof QUALIFICACOES)[number]
@@ -183,9 +228,40 @@ export function validarDefinicao(d: unknown): string[] {
   const t = def.textos as unknown as Record<string, unknown> | undefined
   const chaves: (keyof Textos)[] = ["titulo", "subtitulo", "contato_titulo", "contato_cta", "agenda_titulo", "agenda_subtitulo", "sem_horarios", "confirmacao_titulo", "confirmacao_texto", "inativo"]
   for (const k of chaves) if (!TEXTO_LIVRE(t?.[k], 400)) erros.push(`Texto "${k}" obrigatório (até 400 caracteres, sem < >).`)
+  if (t?.contato_subtitulo !== undefined && t.contato_subtitulo !== "" && !TEXTO_LIVRE(t.contato_subtitulo, 300)) erros.push("Texto da identificação: até 300 caracteres, sem < >.")
+  if (t?.agenda_cta !== undefined && !TEXTO_LIVRE(t.agenda_cta, 60)) erros.push("Botão da agenda: até 60 caracteres, sem < >.")
+  if (def.visual !== undefined && !["claro", "escuro"].includes(def.visual)) erros.push("Identidade visual inválida.")
+  if (def.apresentacao !== undefined) erros.push(...validarApresentacao(def.apresentacao))
   if (!["oculto", "opcional", "obrigatorio"].includes(def.contato?.email)) erros.push("Campo e-mail: modo inválido.")
   if (!["oculto", "opcional"].includes(def.contato?.instagram)) erros.push("Campo Instagram: modo inválido.")
   if (typeof def.avanco_automatico !== "boolean") erros.push("Avanço automático precisa ser sim/não.")
+  return erros
+}
+
+function validarApresentacao(a: unknown): string[] {
+  const erros: string[] = []
+  if (!a || typeof a !== "object") return ["Tela inicial: configuração inválida."]
+  const x = a as Apresentacao
+  if (typeof x.ativo !== "boolean") erros.push("Tela inicial: ativar precisa ser sim/não.")
+  // Desativada, os textos ficam guardados mas não precisam estar completos.
+  const exigir = x.ativo === true
+  const campo = (v: unknown, max: number, nome: string, obrigatorio: boolean) => {
+    if ((v === undefined || v === "") && !obrigatorio) return
+    if (!TEXTO_LIVRE(v, max)) erros.push(`Tela inicial: ${nome} ${obrigatorio ? "obrigatório " : ""}(até ${max} caracteres, sem < >).`)
+  }
+  campo(x.identificacao, 80, "texto de identificação", false)
+  campo(x.headline, 160, "headline", exigir)
+  campo(x.complemento, 300, "texto complementar", false)
+  campo(x.cta, 60, "texto do botão", exigir)
+  campo(x.rodape, 160, "rodapé", false)
+  if (!Array.isArray(x.beneficios) || x.beneficios.length > 6) erros.push("Tela inicial: use de 0 a 6 benefícios.")
+  else for (const [i, b] of x.beneficios.entries()) {
+    const n = `Tela inicial, benefício ${i + 1}`
+    if (!b || typeof b !== "object") { erros.push(`${n}: inválido.`); continue }
+    if (typeof b.emoji !== "string" || [...b.emoji].length > 4 || /[<>]/.test(b.emoji)) erros.push(`${n}: emoji com até 4 caracteres.`)
+    if (!TEXTO_LIVRE(b.destaque, 60)) erros.push(`${n}: destaque obrigatório (até 60).`)
+    if (b.texto !== "" && b.texto !== undefined && !TEXTO_LIVRE(b.texto, 120)) erros.push(`${n}: complemento até 120 caracteres.`)
+  }
   return erros
 }
 
@@ -226,7 +302,7 @@ export function filtrarRespostas(def: DefinicaoFunil, entrada: unknown): Record<
 /** Eventos que o NAVEGADOR pode registrar. Os de negócio (lead_created,
  *  booking_confirmed, meeting_*) só o servidor/banco grava. */
 export const EVENTOS_CLIENTE = [
-  "funnel_page_view", "funnel_started", "question_viewed", "question_answered", "question_completed",
+  "funnel_page_view", "welcome_viewed", "welcome_cta_clicked", "funnel_started", "question_viewed", "question_answered", "question_completed",
   "question_back", "contact_form_viewed", "contact_submitted", "booking_page_viewed", "booking_no_slots",
   "booking_slot_selected", "booking_failed", "client_error",
 ] as const
@@ -242,6 +318,8 @@ export interface SessaoMetrica {
   agenda_vista_em: string | null; horario_selecionado_em: string | null; agendada_em: string | null
   abandonada: boolean; etapa_abandono: string | null; lead_id: string | null; agendamento_id: string | null
   respostas_em?: Record<string, string> | null
+  /** Etapa 00 (só quando a sessão começou com a apresentação). */
+  apresentacao_vista_em?: string | null; cta_inicial_em?: string | null; variante_entrada?: string | null
 }
 export interface LeadMetrica { id: string; criativo_id: string | null; qualificacao: Qualificacao; status_comercial: StatusComercial; valor_venda: number | null }
 export interface ReuniaoMetrica { id: string; status: string; fim: string | null }
@@ -272,9 +350,22 @@ export function calcularFunil(sessoes: SessaoMetrica[], nPerguntas: number, lead
   const leadsAgendados = new Set(agendadas.map(x => x.lead_id).filter(Boolean)).size
   const qualificados = leadsCoorte.filter(l => l.qualificacao === "qualificado" || l.qualificacao === "alta").length
 
+  // Etapa 00: denominadores só com sessões que REALMENTE viram a apresentação.
+  const viuApresentacao = s.filter(x => x.apresentacao_vista_em)
+  const clicouCta = viuApresentacao.filter(x => x.cta_inicial_em).length
+  const iniciouAposApresentacao = viuApresentacao.filter(x => x.iniciada_em).length
+  // Abandono inicial: abandonou sem iniciar. Elegíveis = já resolvidas (iniciaram
+  // ou foram marcadas como abandonadas); sessões ainda ativas ficam de fora.
+  const abandonoInicial = viuApresentacao.filter(x => !x.iniciada_em && x.abandonada).length
+  const elegiveisAbandonoInicial = viuApresentacao.filter(x => x.iniciada_em || x.abandonada).length
+
   const etapas: Etapa[] = [
     { chave: "entrada", rotulo: "Entrada", qtd: s.length },
-    { chave: "inicio", rotulo: "Início", qtd: iniciadas },
+    ...(viuApresentacao.length ? [
+      { chave: "apresentacao", rotulo: "Apresentação vista", qtd: viuApresentacao.length },
+      { chave: "cta_inicial", rotulo: "Clique no botão inicial", qtd: clicouCta },
+    ] : []),
+    { chave: "inicio", rotulo: "Início das perguntas", qtd: iniciadas },
     ...porPergunta.map((q, i) => ({ chave: `p${i + 1}`, rotulo: `Pergunta ${String(i + 1).padStart(2, "0")}`, qtd: q })),
     { chave: "lead", rotulo: "Lead", qtd: comContato },
     { chave: "agenda", rotulo: "Agenda", qtd: agendaVista },
@@ -290,10 +381,17 @@ export function calcularFunil(sessoes: SessaoMetrica[], nPerguntas: number, lead
 
   return {
     etapas, abandonoPorEtapa,
+    apresentacao: {
+      vistas: viuApresentacao.length, cliques: clicouCta, iniciaram: iniciouAposApresentacao,
+      abandonoInicial, elegiveisAbandonoInicial,
+    },
     contagens: { sessoes: s.length, iniciadas, comContato, leadsUnicos: leadIds.size, agendaVista, selecionou,
       agendadas: agendadas.length, realizadas, naoCompareceu, propostas, vendas: vendas.length, receita, qualificados },
     taxas: {
       inicio: taxa(iniciadas, s.length),
+      cliqueInicial: taxa(clicouCta, viuApresentacao.length),
+      inicioAposApresentacao: taxa(iniciouAposApresentacao, viuApresentacao.length),
+      abandonoInicial: taxa(abandonoInicial, elegiveisAbandonoInicial),
       conclusaoPerguntas: taxa(porPergunta[nPerguntas - 1] ?? 0, iniciadas),
       captura: taxa(comContato, s.length),
       agendamento: taxa(leadsAgendados, leadIds.size),

@@ -1,5 +1,5 @@
 // Teste das RPCs do Funil Estáticos Meta em PostgreSQL embutido (PGlite), com
-// schema mínimo + migrations 20261125, 20261126 e 20261127. Não toca banco real.
+// schema mínimo + migrations 20261125, 20261126, 20261127 e 20261128. Não toca banco real.
 // Uso (PGlite não é dependência do projeto):
 //   npm i --no-save @electric-sql/pglite@0.2.17 && node scripts/qa/funil-estaticos-pglite.mjs
 import { PGlite } from "@electric-sql/pglite"
@@ -9,7 +9,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { join } from "node:path"
 
 const DIR = process.env.MIGRATIONS_DIR ?? new URL("../../supabase/migrations/", import.meta.url).pathname
-const [m1, m2, m3] = ["20261125_reunioes_nativas.sql", "20261126_reunioes_nativas_intervalo_slots.sql", "20261127_funil_estaticos_meta.sql"]
+const [m1, m2, m3, m4] = ["20261125_reunioes_nativas.sql", "20261126_reunioes_nativas_intervalo_slots.sql", "20261127_funil_estaticos_meta.sql", "20261128_funil_apresentacao_teste.sql"]
   .map(f => readFileSync(join(DIR, f), "utf8"))
 const db = new PGlite({ extensions: { btree_gist } })
 await db.exec(`
@@ -59,8 +59,20 @@ const ativarCanais = () => db.exec(`
   on conflict (chave) do update set ativo=true, exclusividade_verificada_em=now()`)
 await ativarCanais()
 
+const f0 = await q1(`select id, versao_publicada_id, ativo from funil_config where chave='estaticos_meta'`)
+ok(f0 && f0.versao_publicada_id && f0.ativo === false, "seed: funil criado inativo com versão 1 publicada")
+
+// 20261128 (fase 2): v2 com apresentação, criativos E01–E12, colunas novas.
+await db.exec(m4)
 const f = await q1(`select id, versao_publicada_id, ativo from funil_config where chave='estaticos_meta'`)
-ok(f && f.versao_publicada_id && f.ativo === false, "seed: funil criado inativo com versão 1 publicada")
+const vs = (await db.query(`select numero, status, definicao from funil_versoes where funil_id=$1 order by numero`, [f.id])).rows
+ok(vs.length === 2 && vs[0].status === "arquivada" && vs[1].status === "publicada" && f.ativo === false, "20261128: v2 publicada, v1 arquivada, funil continua inativo")
+ok(JSON.stringify(vs[1].definicao.perguntas) === JSON.stringify(vs[0].definicao.perguntas), "v2 mantém exatamente as perguntas da v1")
+ok(vs[1].definicao.apresentacao?.ativo === true && vs[1].definicao.visual === "claro" && vs[1].definicao.apresentacao.beneficios.length === 4, "v2 com apresentação ativa e identidade branca")
+const cr = (await db.query(`select codigo, meta_ad_id from funil_criativos where funil_id=$1 order by codigo`, [f.id])).rows
+ok(cr.length === 12 && cr[0].codigo === "E01" && cr[11].codigo === "E12" && cr.every(c => c.meta_ad_id === null), "12 criativos E01–E12, sem ID de anúncio inventado")
+await db.exec(m4)
+ok((await q1(`select count(*)::int n from funil_versoes where funil_id=$1`, [f.id])).n === 2 && (await q1(`select count(*)::int n from funil_criativos`)).n === 12, "20261128 reaplicada: idempotente (sem v3, sem criativo duplicado)")
 let erroAtivar = false
 try { await db.exec(`update funil_config set ativo = true`) } catch { erroAtivar = true }
 ok(erroAtivar, "CHECK: não publica sem política de privacidade")
@@ -161,6 +173,25 @@ const s6 = await novaSessao("producao", { consent: false })
 const l6 = await q1(`select public.funil_capturar_lead($1,$2,'Sem Consent','+5545999990006',null,null,null,0,null,'{"marketing":false}'::jsonb,'{"client_ip_address":"9.9.9.9"}'::jsonb) r`, [s6.id, s6.hash])
 const c6 = await q1(`select status, motivo, contexto from funil_conversoes where event_id=$1`, [l6.r.eventId])
 ok(c6.status === "ignorado" && Object.keys(c6.contexto).length === 0, "opt-in recusado: CAPI não envia e não guarda IP")
+
+// Fase 2: teste não notifica, não gera follow-up e só aceita colunas de teste em sessão de teste.
+await db.exec(`update funil_config set followup_ativo = true, followup_minutos = 10, notificar_novo_lead = true`)
+const nAntes = (await q1(`select count(*)::int n from notificacoes`)).n
+const s7 = await novaSessao("teste"); const l7 = await lead(s7, "Teste Sem Efeito", "+5545999990077")
+ok((await q1(`select count(*)::int n from notificacoes`)).n === nAntes, "lead de TESTE não gera notificação para a equipe")
+const s8 = await novaSessao(); await lead(s8, "Lead Real", "+5545999990088")
+ok((await q1(`select count(*)::int n from notificacoes where titulo like 'Novo lead%'`)).n >= 1 && (await q1(`select count(*)::int n from notificacoes`)).n === nAntes + 1, "lead de produção continua notificando")
+await db.query(`update funil_leads set criado_em = now() - interval '1 hour' where id=$1`, [l7.leadId])
+await q1(`select public.funil_processar_inatividade() r`)
+ok((await q1(`select followup_tarefa_id from funil_leads where id=$1`, [l7.leadId])).followup_tarefa_id === null, "lead de TESTE não gera tarefa de follow-up")
+ok((await q1(`select count(*)::int n from ws_tarefas where titulo like '[TESTE] Follow-up%'`)).n === 0, "nenhuma tarefa '[TESTE] Follow-up' criada")
+let ck1 = false, ck2 = false, ck3 = false
+try { await db.query(`update funil_sessoes set diagnostico_capi = true where id=$1`, [s8.id]) } catch { ck1 = true }
+try { await db.query(`update funil_sessoes set teste_reserva_inicio = now(), teste_reserva_fim = now() + interval '1 hour' where id=$1`, [s8.id]) } catch { ck2 = true }
+try { await db.query(`update funil_sessoes set variante_entrada = 'xyz' where id=$1`, [s8.id]) } catch { ck3 = true }
+ok(ck1 && ck2 && ck3, "CHECK: diagnóstico da CAPI e reserva simulada só em sessão de teste; variante válida")
+await db.query(`update funil_sessoes set diagnostico_capi = true, teste_reserva_inicio = now(), teste_reserva_fim = now() + interval '1 hour', variante_entrada = 'apresentacao', versao_visual = 'claro' where id=$1`, [s7.id])
+ok((await q1(`select count(*)::int n from reunioes_agendamentos where participante_telefone='+5545999990077'`)).n === 0, "reserva simulada de teste não cria reunião real")
 
 // Mudar a agenda desativa os DOIS canais (mesma proteção do ATIVO).
 await db.exec(`update reunioes_disponibilidades set janelas = '[]'`)

@@ -1,5 +1,7 @@
 import { carregarFunil, lerTokenPrevia } from "@/lib/funil-estaticos"
-import { cabecalhosSeguranca, paginaFunil, paginaIndisponivel } from "@/lib/funil-estaticos-pagina"
+import { paginaFunil, paginaIndisponivel } from "@/lib/funil-estaticos-pagina"
+import { cabecalhosSeguranca } from "@/lib/funil-estaticos-seguranca"
+import { identidadeVisual } from "@/lib/funil-estaticos-nucleo"
 
 // Página pública do funil. Route Handler (não página React) de propósito:
 // HTML mínimo, sem o layout/CSS global do Workspace — ver lib/funil-estaticos-cliente.ts.
@@ -29,19 +31,20 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
   }
   let previa: string | null = null
   if (previaBruta) {
-    const versaoId = lerTokenPrevia(funil.id, previaBruta)
-    if (!versaoId) return html(paginaIndisponivel("Link de teste inválido ou expirado."), 403, false)
-    const comVersao = await carregarFunil(params.slug, { versaoId })
+    const lida = lerTokenPrevia(funil.id, previaBruta)
+    if (!lida) return html(paginaIndisponivel("Link de teste inválido ou expirado."), 403, false)
+    const comVersao = await carregarFunil(params.slug, { versaoId: lida.versaoId })
     if (!comVersao) return html(paginaIndisponivel("Versão de teste inválida."), 404, false)
     funil = comVersao
     previa = previaBruta
   } else if (!funil.ativo) {
-    return html(paginaIndisponivel(funil.definicao.textos.inativo), 200, true)
+    return html(paginaIndisponivel(funil.definicao.textos.inativo, identidadeVisual(funil.definicao) === "escuro"), 200, true)
   }
   return html(paginaFunil({
     slug: funil.slug, nome: funil.nome, versaoId: funil.versaoId, def: funil.definicao, api: "/api/public/funil",
     privacidadeUrl: funil.privacidadeUrl, consentimentoModo: funil.consentimentoModo,
-    // Prévia não carrega o Pixel de produção (evita PageView/Lead de teste no conjunto de dados).
+    // Teste (funcional ou diagnóstico) nunca carrega o Pixel: o navegador não
+    // tem test_event_code, então qualquer evento dele contaria como real.
     pixelId: previa ? null : funil.pixelId, eventosMeta: funil.eventosMeta, previa,
   }), 200, !previa)
 }
