@@ -54,14 +54,22 @@ export function slotsDoDia(c: Config, data: string, ocupados: Ocupado[], agora =
   return out
 }
 
+export type ChaveCanalNativo = "ativo" | "estaticos_meta"
+
+/** Canal ATIVO: exige também a feature flag do servidor (comportamento original). */
 export async function configurarNativo(): Promise<Config | null> {
   if (process.env.ATIVO_NATIVE_BOOKING_ENABLED !== "true") return null
+  return configurarCanal("ativo")
+}
+
+/** Lê tipo + agenda de um canal nativo ativo e com exclusividade verificada. */
+export async function configurarCanal(chave: ChaveCanalNativo): Promise<Config | null> {
   const db = getSupabaseAdmin()
   if (!db) return null
   const versao = await db.rpc("reunioes_nativas_versao")
   if (versao.error || versao.data !== 2) return null
   const { data: canal, error } = await db.from("reunioes_canais_nativos")
-    .select("tipo_id, disponibilidade_id, ativo, exclusividade_verificada_em").eq("chave", "ativo").maybeSingle()
+    .select("tipo_id, disponibilidade_id, ativo, exclusividade_verificada_em").eq("chave", chave).maybeSingle()
   if (error || !canal?.ativo || !canal.exclusividade_verificada_em) return null
   const [t, d] = await Promise.all([
     db.from("reunioes_tipos").select("id, duracao_min, antecedencia_min_horas, intervalo_min, limite_diario, horizonte_dias, responsavel_id, ativo").eq("id", canal.tipo_id).maybeSingle(),
@@ -104,8 +112,8 @@ async function ocupacao(c: Config, from: string, to: string): Promise<Ocupado[] 
   return ocupados
 }
 
-export async function agendaNativa(from: string, days: number) {
-  const c = await configurarNativo()
+export async function agendaNativa(from: string, days: number, canal: ChaveCanalNativo = "ativo") {
+  const c = canal === "ativo" ? await configurarNativo() : await configurarCanal(canal)
   if (!c) return null
   const hoje = dataBR(new Date().toISOString())
   const inicio = from < hoje ? hoje : from
