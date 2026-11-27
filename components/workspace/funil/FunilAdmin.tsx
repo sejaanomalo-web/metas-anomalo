@@ -104,7 +104,7 @@ export function FormConfigFunil({ funil: f, usuarios, empresasCrm, urlBase }: { 
 // ---------------------------------------------------------------- agenda
 export function FormCanalFunil({ funilId, canal, tipos, disponibilidades, usuarios }: {
   funilId: string; canal: { tipo_id: string; disponibilidade_id: string; ativo: boolean; exclusividade_verificada_em: string | null } | null
-  tipos: { id: string; nome: string; duracao_min: number; intervalo_minutos: number; antecedencia_min_horas: number; horizonte_dias: number; responsavel_id: string | null; ativo: boolean; origem_comercial: string }[]
+  tipos: { id: string; nome: string; duracao_min: number; antecedencia_min_horas: number; horizonte_dias: number; responsavel_id: string | null; ativo: boolean; origem_comercial: string }[]
   disponibilidades: { id: string; nome: string; modo_nativo: boolean; responsavel_id: string | null; fuso: string }[]
   usuarios: { id: string; nome: string }[]
 }) {
@@ -137,7 +137,7 @@ export function FormCanalFunil({ funilId, canal, tipos, disponibilidades, usuari
           </Rotulo>
         </div>
         {tipo && <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>
-          Duração {tipo.duracao_min} min · horários a cada {tipo.intervalo_minutos} min · antecedência {tipo.antecedencia_min_horas} h · horizonte {tipo.horizonte_dias} dias · responsável {nome(tipo.responsavel_id)}. Atribuição: responsável único do tipo/agenda (regra atual do Workspace).
+          Duração {tipo.duracao_min} min · horários a cada 15 min · antecedência {tipo.antecedencia_min_horas} h · horizonte {tipo.horizonte_dias} dias · responsável {nome(tipo.responsavel_id)}. Atribuição: responsável único do tipo/agenda (regra atual do Workspace).
         </p>}
         <Check nome="exclusividade_verificada" padrao={false} texto="Confirmo que nenhuma das contas Cal.com oferece estas mesmas janelas para o mesmo responsável." />
         <Check nome="ativo" padrao={canal?.ativo ?? false} texto="Agenda do funil ativa" />

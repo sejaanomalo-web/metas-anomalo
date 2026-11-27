@@ -3,7 +3,9 @@
 // conexões simultâneas. Complementa o teste em PGlite (que usa uma conexão só).
 //
 // Nunca usa o Supabase: sobe um servidor local temporário em 127.0.0.1, aplica
-// schema mínimo + 20261125 → 20261126 → 20261127 → 20261128 e apaga tudo no fim.
+// schema mínimo + as migrations na ordem aplicada em produção (20261125 →
+// 20261126 integridade → 20261126 intervalo_slots → 20261127 → 20261128 → 20261129)
+// e apaga tudo no fim.
 // Não lê nenhuma variável de ambiente além de MIGRATIONS_DIR/PORTA.
 //
 // Uso (as dependências NÃO são do projeto; instale numa pasta descartável):
@@ -18,7 +20,7 @@ import { createHash, randomUUID } from "node:crypto"
 
 const DIR = process.env.MIGRATIONS_DIR ?? new URL("../../supabase/migrations/", import.meta.url).pathname
 const PORTA = Number(process.env.PORTA ?? 54329)
-const migs = ["20261125_reunioes_nativas.sql", "20261126_reunioes_nativas_intervalo_slots.sql", "20261127_funil_estaticos_meta.sql", "20261128_funil_apresentacao_teste.sql"]
+const migs = ["20261125_reunioes_nativas.sql", "20261126_reunioes_nativas_integridade.sql", "20261126_reunioes_nativas_intervalo_slots.sql", "20261127_funil_estaticos_meta.sql", "20261128_funil_apresentacao_teste.sql", "20261129_reunioes_nativas_reconciliacao.sql"]
   .map(f => readFileSync(join(DIR, f), "utf8"))
 
 const dados = mkdtempSync(join(tmpdir(), "funil-pg-"))
@@ -67,14 +69,15 @@ insert into reunioes_disponibilidades(id,nome,fuso,responsavel_id,modo_nativo,ja
  ('22222222-2222-4222-8222-222222222222','Agenda nativa','America/Sao_Paulo','${R}',true,
   (select jsonb_agg(jsonb_build_object('dia',d,'inicio','09:00','fim','12:00')) from generate_series(0,6) d));
 insert into reunioes_tipos(id,nome,duracao_min,responsavel_id,origem_comercial)
- values ('33333333-3333-4333-8333-333333333333','Diagnóstico',60,'${R}','marketing_corretores');`)
-  await q(migs[1]); await q(migs[2]); await q(migs[3])
+ values ('33333333-3333-4333-8333-333333333333','Diagnóstico',60,'${R}','marketing_corretores'),
+        ('44444444-4444-4444-8444-444444444444','Demonstração ATIVO',60,'${R}','sistema_imobiliario');`)
+  for (const m of migs.slice(1)) await q(m)
   await q(`insert into reunioes_canais_nativos(chave,tipo_id,disponibilidade_id,ativo,exclusividade_verificada_em) values
-   ('ativo','33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222',true,now()),
+   ('ativo','44444444-4444-4444-8444-444444444444','22222222-2222-4222-8222-222222222222',true,now()),
    ('estaticos_meta','33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222',true,now())`)
   await q(`update funil_config set ativo = true, privacidade_url = 'https://exemplo.com/privacidade', capi_ativo = true, pixel_id = '1234567890', consentimento_modo = 'informativo'`)
   const f = await q1(`select id, versao_publicada_id from funil_config where chave='estaticos_meta'`)
-  ok(Boolean(f?.versao_publicada_id), `PostgreSQL real ${(await q1("show server_version")).server_version}: migrations 20261125→20261128 aplicadas`)
+  ok(Boolean(f?.versao_publicada_id), `PostgreSQL real ${(await q1("show server_version")).server_version}: migrations 20261125→20261129 aplicadas`)
 
   let tel = 100
   const novaSessao = async () => {

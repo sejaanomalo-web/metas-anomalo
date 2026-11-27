@@ -176,12 +176,23 @@ A coorte é formada pelas sessões abertas no período. Cada taxa mostra o denom
 | `APP_PUBLIC_URL` | opcional | URL exibida no painel |
 | `ATIVO_NATIVE_BOOKING_ENABLED`, `ATIVO_WORKSPACE_API_SECRET` | só para o ATIVO | não afetam o funil |
 
-## Organização dos commits (locais, sem push)
-1. `a627ffb` **feat(ativo): consolida infraestrutura de agendamento nativo**: base do ATIVO (migrations 20261125/20261126, `lib/reunioes-nativas.ts` original, API `/api/public/ativo`, telas de Reuniões, testes).
-2. `091fe17` **feat(funil): implementa Funil Estáticos Meta integrado ao Workspace**: fase 1 exatamente como entregue antes desta fase (migration 20261127, página, API, painel, fila CAPI, cron).
-3. **feat(funil): aprimora experiência pública e validações**: esta fase (20261128, identidade branca, Etapa 00, editor, modo de teste, trava por lead, testes novos).
+## Organização dos commits e reconciliação com a main
+O ATIVO entrou na `main` por outro caminho (`c101190`, `9061883`, `604a82f`), com a migration `20261126_reunioes_nativas_integridade.sql`. O funil foi refeito sobre essa `main` (branch `feat/funil-estaticos-meta`):
+1. **feat(funil): implementa Funil Estáticos Meta integrado ao Workspace** (fase 1).
+2. **feat(funil): aprimora experiência pública e validações** (fase 2).
+3. **fix(reunioes): reconcilia funções nativas após as duas migrations 20261126** (`20261129`).
 
-Cada estado foi exportado do índice e validado sozinho: tsc + `npm test`, e PGlite onde se aplica. Outros trabalhos que estão no working tree (revisão de fluidez, remoção de migrations antigas do CRM) **não** entraram nesses commits.
+### Por que existe a 20261129
+A produção recebeu as duas 20261126, a `integridade` (main) e a `intervalo_slots` (versão paralela do ATIVO que estava fora da main), e a segunda rodou por último. Resultado em 27/11:
+- `reunioes_nativas_reservar` e `reunioes_nativas_gerir` ficaram **sem** as correções da main;
+- o gatilho `reunioes_nativas_guardar_tarefa` (da main) passou a barrar o reagendamento;
+- a grade de intervalo recusava horários que a tela oferece (15 em 15 min).
+
+Esse cenário foi reproduzido com o teste do próprio ATIVO (`scripts/qa/reunioes-nativas-postgres.test.mjs`): 4/12 falham sem a 20261129 e 12/12 passam com ela.
+
+A 20261129 devolve as funções da main, com um único ajuste no reagendamento (canal da própria reserva), e alinha `funil_reservar` às mesmas regras. O recurso "intervalo entre horários" fica fora até entrar no código e no banco juntos. A coluna `reunioes_tipos.intervalo_minutos` permanece, sem uso.
+
+**Ordem das migrations** (a mesma aplicada na produção): `20261125` → `20261126_reunioes_nativas_integridade` → `20261126_reunioes_nativas_intervalo_slots` → `20261127` → `20261128` → `20261129`.
 
 ## Plano seguro de publicação (só quando autorizado)
 1. **Conferir o estado real da produção** (somente leitura, no SQL Editor):
@@ -191,7 +202,7 @@ Cada estado foi exportado do índice e validado sozinho: tsc + `npm test`, e PGl
           to_regclass('public.funil_config') as m27,
           (select count(*) from information_schema.columns where table_name='funil_sessoes' and column_name='variante_entrada') as m28;
    ```
-2. Aplicar **na ordem**, só as que faltarem: `20261125` → `20261126` → `20261127` → `20261128`. Se houver staging, aplicar lá primeiro. Todas são aditivas, mas precisam estar no banco **antes** do deploy: o código novo lê as colunas novas, e em 20/11 a produção quebrou justamente por migration depois do deploy.
+2. Aplicar **na ordem**, só as que faltarem: `20261125` → `20261126_..._integridade` → `20261126_..._intervalo_slots` → `20261127` → `20261128` → `20261129`. Se houver staging, aplicar lá primeiro. Todas são aditivas, mas precisam estar no banco **antes** do deploy: o código novo lê as colunas novas, e em 20/11 a produção quebrou justamente por migration depois do deploy.
 3. Conferir: `select numero, status from funil_versoes order by numero;` (v2 publicada), `select count(*) from funil_criativos;` (12) e `select jobname from cron.job where jobname='funil_inatividade_10min';`.
 4. Vercel → Environment Variables (Production): `FUNIL_ESTATICOS_META_CAPI_TOKEN` (e, se quiser, `FUNIL_HASH_SECRET`).
 5. Push da branch e deploy, só com autorização.
@@ -214,9 +225,9 @@ Cada estado foi exportado do índice e validado sozinho: tsc + `npm test`, e PGl
 | Teste | Comando | Resultado nesta fase |
 |---|---|---|
 | Unitários | `npm test` (inclui `lib/funil-estaticos.test.ts`) | 215/215 |
-| Banco (PGlite, 1 conexão) | `node scripts/qa/funil-estaticos-pglite.mjs` (precisa de `@electric-sql/pglite`) | 54/54 |
+| Banco (PGlite, 1 conexão) | `node scripts/qa/funil-estaticos-pglite.mjs` (precisa de `@electric-sql/pglite`) | 60/60 (com a 20261129) |
 | Concorrência (PostgreSQL 17 real, várias conexões) | `scripts/qa/funil-estaticos-concorrencia-pg.mjs` (precisa de `embedded-postgres` e `pg` numa pasta descartável) | 17/17 |
-| Regressão ATIVO | `scripts/qa/reunioes-nativas-grade-pglite.mjs` | 15/15 |
+| Regressão ATIVO | `scripts/qa/reunioes-nativas-postgres.test.mjs` (da main) sobre a sequência da produção | 12/12 com a 20261129 (4/12 falham sem ela) |
 | Navegador — página | harness `scripts/qa/funil-estaticos-harness.ts` + `scripts/qa/funil-estaticos-e2e.mjs` | 56/56 |
 | Navegador — editor do painel | `scripts/qa/funil-estaticos-admin-harness.mjs` + `scripts/qa/funil-estaticos-admin-e2e.mjs` | 24/24 |
 | Performance (laboratório) | `scripts/qa/funil-estaticos-perf.mjs` + Lighthouse 12 | ver relatório da fase 2 |

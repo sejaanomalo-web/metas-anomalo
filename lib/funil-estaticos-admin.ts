@@ -37,7 +37,7 @@ export async function carregarPainelFunil(slug: string, periodo: Periodo, inclui
     db.from("funil_conversoes").select("id", { count: "exact", head: true }).eq("funil_id", f.id).in("status", ["pendente", "erro"]),
     db.from("funil_investimentos").select("id, criativo_id, data, investimento, impressoes, alcance, cliques_link, observacao").eq("funil_id", f.id).gte("data", desde.slice(0, 10)).order("data", { ascending: false }),
     db.from("reunioes_canais_nativos").select("tipo_id, disponibilidade_id, ativo, exclusividade_verificada_em").eq("chave", f.canal_chave).maybeSingle(),
-    db.from("reunioes_tipos").select("id, nome, duracao_min, intervalo_minutos, antecedencia_min_horas, horizonte_dias, responsavel_id, ativo, origem_comercial").order("nome"),
+    db.from("reunioes_tipos").select("id, nome, duracao_min, antecedencia_min_horas, horizonte_dias, responsavel_id, ativo, origem_comercial").order("nome"),
     db.from("reunioes_disponibilidades").select("id, nome, modo_nativo, responsavel_id, fuso").order("nome"),
     db.from("usuarios").select("id, nome, papel, ativo").eq("ativo", true).order("nome"),
     db.from("crm_instancias").select("usuario_id, empresa_slug").eq("ativo", true),

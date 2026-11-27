@@ -1,5 +1,7 @@
 // Teste das RPCs do Funil Estáticos Meta em PostgreSQL embutido (PGlite), com
-// schema mínimo + migrations 20261125, 20261126, 20261127 e 20261128. Não toca banco real.
+// schema mínimo + migrations na ordem aplicada em produção: 20261125, 20261126
+// (integridade, da main), 20261126 (intervalo_slots), 20261127, 20261128 e
+// 20261129 (reconciliação). Não toca banco real.
 // Uso (PGlite não é dependência do projeto):
 //   npm i --no-save @electric-sql/pglite@0.2.17 && node scripts/qa/funil-estaticos-pglite.mjs
 import { PGlite } from "@electric-sql/pglite"
@@ -9,7 +11,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { join } from "node:path"
 
 const DIR = process.env.MIGRATIONS_DIR ?? new URL("../../supabase/migrations/", import.meta.url).pathname
-const [m1, m2, m3, m4] = ["20261125_reunioes_nativas.sql", "20261126_reunioes_nativas_intervalo_slots.sql", "20261127_funil_estaticos_meta.sql", "20261128_funil_apresentacao_teste.sql"]
+const [m1, m2i, m2, m3, m4, m5] = ["20261125_reunioes_nativas.sql", "20261126_reunioes_nativas_integridade.sql", "20261126_reunioes_nativas_intervalo_slots.sql", "20261127_funil_estaticos_meta.sql", "20261128_funil_apresentacao_teste.sql", "20261129_reunioes_nativas_reconciliacao.sql"]
   .map(f => readFileSync(join(DIR, f), "utf8"))
 const db = new PGlite({ extensions: { btree_gist } })
 await db.exec(`
@@ -45,7 +47,9 @@ insert into reunioes_disponibilidades(id,nome,fuso,responsavel_id,modo_nativo,ja
  ('22222222-2222-4222-8222-222222222222','Agenda nativa','America/Sao_Paulo','${R}',true,
   (select jsonb_agg(jsonb_build_object('dia',d,'inicio','09:00','fim','12:00')) from generate_series(0,6) d));
 insert into reunioes_tipos(id,nome,duracao_min,responsavel_id,origem_comercial)
- values ('33333333-3333-4333-8333-333333333333','Diagnóstico',60,'${R}','marketing_corretores');`)
+ values ('33333333-3333-4333-8333-333333333333','Diagnóstico',60,'${R}','marketing_corretores'),
+        ('44444444-4444-4444-8444-444444444444','Demonstração ATIVO',60,'${R}','sistema_imobiliario');`)
+await db.exec(m2i)
 await db.exec(m2)
 await db.exec(m3)
 
@@ -54,7 +58,7 @@ const ok = (cond, msg) => { console.log(`${cond ? "PASS" : "FAIL"}: ${msg}`); if
 const q1 = async (sql, p = []) => (await db.query(sql, p)).rows[0]
 const ativarCanais = () => db.exec(`
   insert into reunioes_canais_nativos(chave,tipo_id,disponibilidade_id,ativo,exclusividade_verificada_em) values
-   ('ativo','33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222',true,now()),
+   ('ativo','44444444-4444-4444-8444-444444444444','22222222-2222-4222-8222-222222222222',true,now()),
    ('estaticos_meta','33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222',true,now())
   on conflict (chave) do update set ativo=true, exclusividade_verificada_em=now()`)
 await ativarCanais()
@@ -64,6 +68,7 @@ ok(f0 && f0.versao_publicada_id && f0.ativo === false, "seed: funil criado inati
 
 // 20261128 (fase 2): v2 com apresentação, criativos E01–E12, colunas novas.
 await db.exec(m4)
+await db.exec(m5)
 const f = await q1(`select id, versao_publicada_id, ativo from funil_config where chave='estaticos_meta'`)
 const vs = (await db.query(`select numero, status, definicao from funil_versoes where funil_id=$1 order by numero`, [f.id])).rows
 ok(vs.length === 2 && vs[0].status === "arquivada" && vs[1].status === "publicada" && f.ativo === false, "20261128: v2 publicada, v1 arquivada, funil continua inativo")
@@ -71,7 +76,7 @@ ok(JSON.stringify(vs[1].definicao.perguntas) === JSON.stringify(vs[0].definicao.
 ok(vs[1].definicao.apresentacao?.ativo === true && vs[1].definicao.visual === "claro" && vs[1].definicao.apresentacao.beneficios.length === 4, "v2 com apresentação ativa e identidade branca")
 const cr = (await db.query(`select codigo, meta_ad_id from funil_criativos where funil_id=$1 order by codigo`, [f.id])).rows
 ok(cr.length === 12 && cr[0].codigo === "E01" && cr[11].codigo === "E12" && cr.every(c => c.meta_ad_id === null), "12 criativos E01–E12, sem ID de anúncio inventado")
-await db.exec(m4)
+await db.exec(m4); await db.exec(m5)
 ok((await q1(`select count(*)::int n from funil_versoes where funil_id=$1`, [f.id])).n === 2 && (await q1(`select count(*)::int n from funil_criativos`)).n === 12, "20261128 reaplicada: idempotente (sem v3, sem criativo duplicado)")
 let erroAtivar = false
 try { await db.exec(`update funil_config set ativo = true`) } catch { erroAtivar = true }
@@ -103,7 +108,7 @@ ok((await q1(`select count(*)::int n from funil_eventos where evento='lead_creat
 const sess1 = await q1(`select estado, lead_id, contato_em from funil_sessoes where id=$1`, [s1.id])
 ok(sess1.estado === "lead" && sess1.lead_id === l1.leadId && sess1.contato_em, "sessão vinculada ao lead real")
 
-ok((await reservar(s1, dia(3), "09:30")).code === "SLOT_UNAVAILABLE", "início fora da grade (09:30, passo 60) → SLOT_UNAVAILABLE")
+ok((await reservar(s1, dia(3), "09:10")).code === "SLOT_UNAVAILABLE", "início fora da grade de 15 min (09:10) → SLOT_UNAVAILABLE")
 ok((await reservar(s1, dia(3), "07:00")).code === "SLOT_UNAVAILABLE", "fora da janela → SLOT_UNAVAILABLE")
 ok((await reservar(s1, dia(0), "09:00")).code === "SLOT_UNAVAILABLE", "antecedência mínima respeitada")
 const chave = randomUUID()
@@ -192,6 +197,20 @@ try { await db.query(`update funil_sessoes set variante_entrada = 'xyz' where id
 ok(ck1 && ck2 && ck3, "CHECK: diagnóstico da CAPI e reserva simulada só em sessão de teste; variante válida")
 await db.query(`update funil_sessoes set diagnostico_capi = true, teste_reserva_inicio = now(), teste_reserva_fim = now() + interval '1 hour', variante_entrada = 'apresentacao', versao_visual = 'claro' where id=$1`, [s7.id])
 ok((await q1(`select count(*)::int n from reunioes_agendamentos where participante_telefone='+5545999990077'`)).n === 0, "reserva simulada de teste não cria reunião real")
+
+// 20261129: funções finais = main + ajustes do funil; ATIVO na grade de 15 min e reagendando.
+const def = async f => (await q1(`select pg_get_functiondef('public.${f}'::regproc) d`)).d
+const dRes = await def("reunioes_nativas_reservar"), dGer = await def("reunioes_nativas_gerir"), dFun = await def("funil_reservar")
+ok(dRes.includes("for share") && dRes.includes("reunioes_nativas_notificacoes") && !dRes.includes("intervalo_minutos"), "reunioes_nativas_reservar = versão da main (for share, fila de notificações, sem grade de intervalo)")
+ok(dGer.includes("nativo_gerindo") && dGer.includes("coalesce(v_a.canal_nativo") && !dGer.includes("intervalo_minutos"), "reunioes_nativas_gerir = main + canal da própria reserva")
+ok(dFun.includes("for share") && dFun.includes("funil-lead:") && dFun.includes("% 15") && !dFun.includes("v_passo"), "funil_reservar com as regras da main + trava por lead")
+const a15 = await q1(`select public.reunioes_nativas_reservar('ATIVO 15','+5545999990015',($1::date + '09:15'::time) at time zone 'America/Sao_Paulo',$2::uuid,repeat('c',64),'{}'::jsonb) r`, [dia(10), randomUUID()])
+ok(a15.r.status === "reserved_pending_whatsapp", "ATIVO aceita 09:15 (grade de 15 min, igual ao que a tela oferece)")
+const gA = (await q1(`select public.reunioes_nativas_gerir($1,'reagendar','${R}',($2::date + '10:30'::time) at time zone 'America/Sao_Paulo') r`, [a15.r.bookingId, dia(10)])).r
+ok(gA === "OK", `ATIVO reagenda pelo Workspace com o gatilho de guarda da tarefa ativo (${gA})`)
+let guarda = false
+try { await db.query(`update ws_tarefas set prazo_hora = '11:00' where id = (select tarefa_id from reunioes_agendamentos where id=$1)`, [a15.r.bookingId]) } catch { guarda = true }
+ok(guarda, "gatilho da main continua barrando edição direta da tarefa de reunião nativa")
 
 // Mudar a agenda desativa os DOIS canais (mesma proteção do ATIVO).
 await db.exec(`update reunioes_disponibilidades set janelas = '[]'`)
