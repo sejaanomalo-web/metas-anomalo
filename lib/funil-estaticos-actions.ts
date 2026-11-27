@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 import { getUsuarioAtual } from "./auth"
 import { ehAdminNoModulo } from "./acesso-admin"
 import { getSupabaseAdmin } from "./supabase"
-import { despacharConversoes, limparCacheFunil, tokenPrevia } from "./funil-estaticos"
+import { capiConfigurada, despacharConversoes, limparCacheFunil, tokenPrevia, type ModoPrevia } from "./funil-estaticos"
 import { QUALIFICACOES, STATUS_COMERCIAL, validarDefinicao, type DefinicaoFunil } from "./funil-estaticos-nucleo"
 import type { ResultadoReunioes } from "./reunioes-actions"
 
@@ -101,7 +101,7 @@ export async function publicarRascunhoAction(fd: FormData): Promise<ResultadoReu
   if (error) return R(false, "Falha ao publicar.")
   await a.db.from("funil_config").update({ versao_publicada_id: rasc.id, updated_at: new Date().toISOString() }).eq("id", f.id)
   rev(f.slug)
-  return R(true, "Nova versão publicada. Visitantes que já estavam no meio do formulário começam de novo na versão nova.")
+  return R(true, "Nova versão publicada. Quem já estava no meio do formulário termina na versão em que começou; novos visitantes veem a nova.")
 }
 
 export async function descartarRascunhoAction(fd: FormData): Promise<ResultadoReunioes> {
@@ -117,12 +117,20 @@ export async function descartarRascunhoAction(fd: FormData): Promise<ResultadoRe
   return R(true, "Rascunho descartado.")
 }
 
-export async function gerarLinkPreviaAction(funilId: string, versaoId: string): Promise<{ ok: boolean; token?: string; erro?: string }> {
+export async function gerarLinkPreviaAction(funilId: string, versaoId: string, modo: ModoPrevia = "funcional"): Promise<{ ok: boolean; token?: string; erro?: string }> {
   const a = await admin(); if (!a) return { ok: false, erro: "Sem permissão." }
   if (!UUID.test(funilId) || !UUID.test(versaoId)) return { ok: false, erro: "Versão inválida." }
+  if (modo !== "funcional" && modo !== "diagnostico_capi") return { ok: false, erro: "Modo inválido." }
   const { data } = await a.db.from("funil_versoes").select("id").eq("id", versaoId).eq("funil_id", funilId).maybeSingle()
   if (!data) return { ok: false, erro: "Versão não encontrada." }
-  return { ok: true, token: tokenPrevia(funilId, versaoId) }
+  if (modo === "diagnostico_capi") {
+    // Diagnóstico só faz sentido (e só é seguro) com o código de teste da Meta.
+    const { data: f } = await a.db.from("funil_config").select("pixel_id, capi_ativo, meta_test_event_code").eq("id", funilId).maybeSingle()
+    if (!f?.pixel_id || !f.capi_ativo) return { ok: false, erro: "Configure o conjunto de dados e ative a CAPI antes do diagnóstico." }
+    if (!f.meta_test_event_code) return { ok: false, erro: "Informe o código de teste do Gerenciador de Eventos antes do diagnóstico." }
+    if (!capiConfigurada()) return { ok: false, erro: "O token da CAPI não está configurado no servidor (FUNIL_ESTATICOS_META_CAPI_TOKEN)." }
+  }
+  return { ok: true, token: tokenPrevia(funilId, versaoId, modo) }
 }
 
 export async function salvarCanalFunilAction(fd: FormData): Promise<ResultadoReunioes> {

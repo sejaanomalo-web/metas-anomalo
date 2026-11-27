@@ -29,7 +29,7 @@ export async function carregarPainelFunil(slug: string, periodo: Periodo, inclui
   const [versoes, criativos, sessoes, leads, conv, convPend, invManual, canal, tipos, disps, usuarios, instancias, hist] = await Promise.all([
     db.from("funil_versoes").select("id, numero, status, definicao, criado_em, publicada_em, criado_por").eq("funil_id", f.id).order("numero", { ascending: false }).limit(30),
     db.from("funil_criativos").select("id, codigo, nome, hipotese, miniatura_url, meta_ad_id, status, inicio_em").eq("funil_id", f.id).order("codigo"),
-    db.from("funil_sessoes").select("id, criativo_id, canal_origem, aberta_em, iniciada_em, perguntas_concluidas, contato_em, agenda_vista_em, horario_selecionado_em, agendada_em, abandonada, etapa_abandono, lead_id, agendamento_id, atribuicao, versao_id")
+    db.from("funil_sessoes").select("id, criativo_id, canal_origem, aberta_em, iniciada_em, perguntas_concluidas, contato_em, agenda_vista_em, horario_selecionado_em, agendada_em, abandonada, etapa_abandono, lead_id, agendamento_id, atribuicao, versao_id, ambiente, apresentacao_vista_em, cta_inicial_em, variante_entrada, versao_visual, teste_reserva_inicio")
       .eq("funil_id", f.id).in("ambiente", ambientes).gte("aberta_em", desde).order("aberta_em", { ascending: false }).limit(20000),
     db.from("funil_leads").select("id, nome, telefone_e164, email, instagram, criado_em, ultima_interacao_em, respostas, interesse, pontuacao, qualificacao, qualificacao_manual, status_comercial, valor_venda, responsavel_id, crm_lead_id, ambiente, first_touch, last_touch, sessoes, primeira_sessao_id")
       .eq("funil_id", f.id).in("ambiente", ambientes).gte("criado_em", desde).order("criado_em", { ascending: false }).limit(5000),
@@ -44,7 +44,9 @@ export async function carregarPainelFunil(slug: string, periodo: Periodo, inclui
     db.from("funil_leads_historico").select("lead_id, campo, de, para, ator_id, em").order("em", { ascending: false }).limit(300),
   ])
 
-  const sess = (sessoes.data ?? []) as (SessaoMetrica & { atribuicao: Record<string, string>; versao_id: string })[]
+  // Colunas da 20261128 ausentes = migration da fase 2 não aplicada.
+  if (sessoes.error?.code === "42703") return { erro: "migracao_fase2" as const }
+  const sess = (sessoes.data ?? []) as (SessaoMetrica & { atribuicao: Record<string, string>; versao_id: string; ambiente: string; versao_visual: string | null; teste_reserva_inicio: string | null })[]
   const leadRows = (leads.data ?? []) as (Omit<LeadAdmin, "criativo_id" | "reuniao"> & { primeira_sessao_id: string | null })[]
 
   // Reuniões das sessões e dos leads (estado da reunião vem do módulo de Reuniões).
@@ -110,6 +112,13 @@ export async function carregarPainelFunil(slug: string, periodo: Periodo, inclui
     return itens.length ? itens.reduce((a, x) => ({ investimento: a.investimento + x.investimento, impressoes: a.impressoes + x.impressoes, cliques: a.cliques + x.cliques }), { investimento: 0, impressoes: 0, cliques: 0 }) : null
   })()
 
+  // Apresentação x início direto (base para um futuro teste A/B; hoje só compara períodos/versões).
+  const porVariante = (["apresentacao", "direto"] as const).map(v => {
+    const ss = sess.filter(s => (s.variante_entrada ?? "direto") === v)
+    const ids = new Set(ss.map(s => s.lead_id).filter(Boolean))
+    return { variante: v, metricas: calcularFunil(ss, nPerguntas, leadsAdmin.filter(l => ids.has(l.id)) as unknown as LeadMetrica[], reunioes) }
+  }).filter(x => x.metricas.contagens.sessoes > 0)
+
   const origens: Record<string, number> = {}
   for (const s of sess) origens[s.canal_origem] = (origens[s.canal_origem] ?? 0) + 1
 
@@ -117,14 +126,16 @@ export async function carregarPainelFunil(slug: string, periodo: Periodo, inclui
     funil: f as Record<string, unknown> & { id: string; slug: string; nome: string; ativo: boolean; canal_chave: string; versao_publicada_id: string | null },
     versoes: versoes.data ?? [], versaoPublicada: versaoPub ?? null, def,
     criativos: (criativos.data ?? []) as CriativoAdmin[],
-    leads: leadsAdmin, metricas, linhasCriativo, totalInvest, origens,
+    leads: leadsAdmin, metricas, linhasCriativo, totalInvest, origens, porVariante,
     investimentosManuais: invManual.data ?? [],
     conversoes: conv.data ?? [], conversoesPendentes: convPend.count ?? 0,
     canal: canal.data, tipos: tipos.data ?? [], disponibilidades: disps.data ?? [], usuarios: usuarios.data ?? [],
     empresasCrm: Array.from(new Set((instancias.data ?? []).map(i => `${i.usuario_id}|${i.empresa_slug}`))),
     historico: hist.data ?? [],
     env: { capiToken: capiConfigurada(), cronSecret: Boolean(process.env.CRON_SECRET), ambiente: process.env.VERCEL_ENV ?? "development" },
-    sessoesRecentes: sess.slice(0, 40).map(s => ({ id: s.id, aberta_em: s.aberta_em, etapa: s.abandonada ? `abandonou em ${s.etapa_abandono}` : s.agendamento_id ? "agendou" : s.contato_em ? "lead" : `pergunta ${s.perguntas_concluidas}`, origem: s.canal_origem, criativo_id: s.criativo_id })),
+    sessoesRecentes: sess.slice(0, 40).map(s => ({ id: s.id, aberta_em: s.aberta_em, ambiente: s.ambiente, entrada: s.variante_entrada ?? "direto", criativo_id: s.criativo_id, origem: s.canal_origem,
+      etapa: s.abandonada ? `abandonou em ${s.etapa_abandono}` : s.agendamento_id ? "agendou" : s.teste_reserva_inicio ? "agendou (simulado, teste)" : s.contato_em ? "lead"
+        : s.iniciada_em ? `pergunta ${s.perguntas_concluidas}` : s.cta_inicial_em ? "clicou no botão inicial" : s.apresentacao_vista_em ? "viu a apresentação" : "abriu" })),
   }
 }
 export type PainelFunil = Exclude<Awaited<ReturnType<typeof carregarPainelFunil>>, { erro: string }>

@@ -5,14 +5,16 @@
 // Lead    → RPC funil_capturar_lead (lead + sessão + evento + fila CAPI, atômico)
 // Agenda  → lib/reunioes-nativas (mesma disponibilidade do Workspace)
 // Reserva → RPC funil_reservar (mesmo lock/EXCLUDE do canal ATIVO)
+//           Sessão de TESTE não chama a RPC: valida o horário e simula.
 // CAPI    → funil_conversoes (fila durável) + despacharConversoes()
 // =============================================================================
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto"
 import { getSupabaseAdmin } from "./supabase"
 import { agendaNativa, idempotencyKeyValida } from "./reunioes-nativas"
+import { dataBR } from "./reunioes-nucleo"
 import {
-  avaliarRespostas, classificarOrigem, EVENTOS_CLIENTE, fbcDeFbclid, filtrarRespostas, resolverCriativo,
-  sanitizarAtribuicao, validarDefinicao, type Atribuicao, type DefinicaoFunil,
+  apresentacaoAtiva, avaliarRespostas, classificarOrigem, etapaInicial, EVENTOS_CLIENTE, fbcDeFbclid, filtrarRespostas,
+  identidadeVisual, resolverCriativo, sanitizarAtribuicao, validarDefinicao, type Atribuicao, type DefinicaoFunil,
 } from "./funil-estaticos-nucleo"
 
 export const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v26.0"
@@ -52,9 +54,9 @@ function montar(f: Linha, v: Linha, criativos: Linha[]): FunilPublico {
 const COLS_FUNIL = "id, chave, nome, slug, slugs_anteriores, ativo, versao_publicada_id, privacidade_url, consentimento_modo, pixel_id, capi_ativo, meta_test_event_code, eventos_meta, qualificacao, crm_usuario_id, crm_empresa_slug"
 
 /** Funil pelo slug (atual ou antigo). `versaoId` força outra versão (prévia admin). */
-export async function carregarFunil(slug: string, opts: { versaoId?: string; semCache?: boolean } = {}): Promise<FunilPublico | null> {
+export async function carregarFunil(slug: string, opts: { versaoId?: string; semCache?: boolean; apenasPublicadas?: boolean } = {}): Promise<FunilPublico | null> {
   if (!/^[a-z0-9-]{1,60}$/.test(slug)) return null
-  const chaveCache = `${slug}|${opts.versaoId ?? ""}`
+  const chaveCache = `${slug}|${opts.versaoId ?? ""}|${opts.apenasPublicadas ? "p" : ""}`
   if (!opts.semCache && Date.now() - cache.em < 30_000 && cache.porSlug.has(chaveCache)) return cache.porSlug.get(chaveCache)!
   if (Date.now() - cache.em >= 30_000) cache = { em: Date.now(), porSlug: new Map() }
   const db = getSupabaseAdmin()
@@ -65,10 +67,12 @@ export async function carregarFunil(slug: string, opts: { versaoId?: string; sem
   const versaoId = opts.versaoId ?? (f.versao_publicada_id as string | null)
   if (!versaoId) return null
   const [{ data: v }, { data: cr }] = await Promise.all([
-    db.from("funil_versoes").select("id, numero, definicao, funil_id").eq("id", versaoId).eq("funil_id", f.id).maybeSingle(),
+    db.from("funil_versoes").select("id, numero, definicao, funil_id, status").eq("id", versaoId).eq("funil_id", f.id).maybeSingle(),
     db.from("funil_criativos").select("id, codigo, meta_ad_id").eq("funil_id", f.id),
   ])
   if (!v || validarDefinicao(v.definicao).length) return null
+  // Visitante comum só fixa versões que já foram publicadas (nunca um rascunho).
+  if (opts.apenasPublicadas && v.status === "rascunho") return null
   const out = montar(f, v, cr ?? [])
   cache.porSlug.set(chaveCache, out)
   return out
@@ -88,18 +92,28 @@ export function novoSegredo(): string { return randomBytes(32).toString("base64u
 export const hashSegredo = (s: string) => sha256(`funil-sessao:${s}`)
 export const hashIp = (ip: string) => hmac("funil-ip", ip)
 
-/** Link de prévia (versão de teste/rascunho) válido por 7 dias, assinado. */
-export function tokenPrevia(funilId: string, versaoId: string, agora = Date.now()): string {
+/**
+ * Link de teste assinado (7 dias). Dois modos, separados de propósito:
+ *  - "f" teste funcional: tudo marcado como TESTE, reserva SIMULADA, sem Pixel
+ *    e sem nenhum envio à Meta;
+ *  - "d" diagnóstico da CAPI: igual ao funcional, mas Lead/Schedule vão à Meta
+ *    SOMENTE com o test_event_code (aba "Eventos de teste"). Gerado à parte.
+ */
+export type ModoPrevia = "funcional" | "diagnostico_capi"
+export interface Previa { versaoId: string; modo: ModoPrevia }
+export function tokenPrevia(funilId: string, versaoId: string, modo: ModoPrevia = "funcional", agora = Date.now()): string {
   const exp = Math.floor(agora / 1000) + 7 * 86400
-  return `${versaoId}.${exp}.${hmac("funil-previa", `${funilId}|${versaoId}|${exp}`).slice(0, 32)}`
+  const m = modo === "diagnostico_capi" ? "d" : "f"
+  return `${versaoId}.${exp}.${m}.${hmac("funil-previa", `${funilId}|${versaoId}|${exp}|${m}`).slice(0, 32)}`
 }
-export function lerTokenPrevia(funilId: string, token: string | null): string | null {
-  if (!token) return null
-  const [versaoId, exp, sig] = token.split(".")
-  if (!UUID.test(versaoId ?? "") || !/^\d{10}$/.test(exp ?? "") || !/^[a-f0-9]{32}$/.test(sig ?? "")) return null
+export function lerTokenPrevia(funilId: string, token: string | null): Previa | null {
+  if (!token || token.length > 120) return null
+  const [versaoId, exp, m, sig] = token.split(".")
+  if (!UUID.test(versaoId ?? "") || !/^\d{10}$/.test(exp ?? "") || (m !== "f" && m !== "d") || !/^[a-f0-9]{32}$/.test(sig ?? "")) return null
   if (Number(exp) * 1000 < Date.now()) return null
-  const esperado = hmac("funil-previa", `${funilId}|${versaoId}|${exp}`).slice(0, 32)
-  return timingSafeEqual(Buffer.from(sig), Buffer.from(esperado)) ? versaoId : null
+  const esperado = hmac("funil-previa", `${funilId}|${versaoId}|${exp}|${m}`).slice(0, 32)
+  if (!timingSafeEqual(Buffer.from(sig), Buffer.from(esperado))) return null
+  return { versaoId, modo: m === "d" ? "diagnostico_capi" : "funcional" }
 }
 
 export function ipDaRequisicao(req: Request): string {
@@ -125,8 +139,10 @@ type SessaoDb = {
   respostas: Record<string, string>; respostas_em: Record<string, string>; atribuicao: Atribuicao; consentimento_marketing: boolean | null
   fbp: string | null; fbc: string | null; iniciada_em: string | null; contato_visto_em: string | null; agenda_vista_em: string | null
   horario_selecionado_em: string | null; sem_horarios_em: string | null
+  apresentacao_vista_em: string | null; cta_inicial_em: string | null; diagnostico_capi: boolean
+  teste_reserva_inicio: string | null; teste_reserva_fim: string | null
 }
-const COLS_SESSAO = "id, funil_id, versao_id, segredo_hash, ambiente, lead_id, agendamento_id, estado, etapa_atual, perguntas_concluidas, respostas, respostas_em, atribuicao, consentimento_marketing, fbp, fbc, iniciada_em, contato_visto_em, agenda_vista_em, horario_selecionado_em, sem_horarios_em"
+const COLS_SESSAO = "id, funil_id, versao_id, segredo_hash, ambiente, lead_id, agendamento_id, estado, etapa_atual, perguntas_concluidas, respostas, respostas_em, atribuicao, consentimento_marketing, fbp, fbc, iniciada_em, contato_visto_em, agenda_vista_em, horario_selecionado_em, sem_horarios_em, apresentacao_vista_em, cta_inicial_em, diagnostico_capi, teste_reserva_inicio, teste_reserva_fim"
 
 export async function lerSessao(funil: FunilPublico, id: unknown, segredo: unknown): Promise<SessaoDb | null> {
   if (typeof id !== "string" || !UUID.test(id) || typeof segredo !== "string" || !SEGREDO.test(segredo)) return null
@@ -141,7 +157,7 @@ export async function lerSessao(funil: FunilPublico, id: unknown, segredo: unkno
 export interface EstadoPublico {
   sessaoId: string; segredo?: string; versaoId: string; etapa: string; respostas: Record<string, string>
   lead: { primeiroNome: string } | null
-  reuniao: { inicio: string; fim: string; status: string } | null
+  reuniao: { inicio: string; fim: string; status: string; simulada?: boolean } | null
   consentimento: boolean | null; ambiente: "producao" | "teste"
 }
 
@@ -152,7 +168,9 @@ async function estadoPublico(s: SessaoDb): Promise<EstadoPublico> {
     const { data } = await db.from("funil_leads").select("nome").eq("id", s.lead_id).maybeSingle()
     if (data) lead = { primeiroNome: String(data.nome).split(" ")[0] }
   }
-  if (s.agendamento_id) {
+  if (s.ambiente === "teste" && s.teste_reserva_inicio && s.teste_reserva_fim) {
+    reuniao = { inicio: s.teste_reserva_inicio, fim: s.teste_reserva_fim, status: "simulada", simulada: true }
+  } else if (s.agendamento_id) {
     const { data } = await db.from("reunioes_agendamentos").select("inicio, fim, status").eq("id", s.agendamento_id).maybeSingle()
     if (data?.inicio && data.fim) reuniao = { inicio: data.inicio, fim: data.fim, status: data.status }
   }
@@ -161,11 +179,11 @@ async function estadoPublico(s: SessaoDb): Promise<EstadoPublico> {
 }
 
 /** Abre (ou retoma) a sessão. Não cria contato comercial — sessão é anônima. */
-export async function abrirSessao(funil: FunilPublico, req: Request, body: Record<string, unknown>, ambiente: "producao" | "teste") {
+export async function abrirSessao(funil: FunilPublico, req: Request, body: Record<string, unknown>, ambiente: "producao" | "teste", diagnosticoCapi = false) {
   const db = getSupabaseAdmin()
   if (!db) return null
   const atual = await lerSessao(funil, body.sessaoId, body.segredo)
-  if (atual && atual.versao_id === funil.versaoId && atual.ambiente === ambiente) {
+  if (atual && atual.versao_id === funil.versaoId && atual.ambiente === ambiente && atual.diagnostico_capi === (ambiente === "teste" && diagnosticoCapi)) {
     await db.from("funil_sessoes").update({ ultima_interacao_em: new Date().toISOString(), abandonada: false, abandonada_em: null, etapa_abandono: null }).eq("id", atual.id)
     return estadoPublico(atual)
   }
@@ -188,12 +206,15 @@ export async function abrirSessao(funil: FunilPublico, req: Request, body: Recor
     fbp, fbc: fbcCookie ?? fbcDeFbclid(atrib.fbclid, agora),
     consentimento_marketing: typeof body.consentimento === "boolean" ? body.consentimento : null,
     ip_hash: hashIp(ipDaRequisicao(req)), user_agent: (req.headers.get("user-agent") ?? "").slice(0, 300) || null,
-    referer_host: refererHost, etapa_atual: funil.definicao.perguntas[0]?.id ?? "p1",
+    referer_host: refererHost, etapa_atual: etapaInicial(funil.definicao),
+    variante_entrada: apresentacaoAtiva(funil.definicao) ? "apresentacao" : "direto",
+    versao_visual: identidadeVisual(funil.definicao),
+    diagnostico_capi: ambiente === "teste" && diagnosticoCapi,
   }
   const { data, error } = await db.from("funil_sessoes").insert(linha).select(COLS_SESSAO).single()
   if (error || !data) return null
   await db.from("funil_eventos").insert({ funil_id: funil.id, sessao_id: data.id, eid: randomUUID(), evento: "funnel_page_view", etapa: linha.etapa_atual, ambiente,
-    dados: { versao: funil.versaoNumero, origem: linha.canal_origem } })
+    dados: { versao: funil.versaoNumero, origem: linha.canal_origem, entrada: linha.variante_entrada, visual: linha.versao_visual } })
   return { ...(await estadoPublico(data as SessaoDb)), segredo }
 }
 
@@ -207,7 +228,7 @@ export async function registrarEventos(funil: FunilPublico, s: SessaoDb, eventos
   if (!db) return false
   const perguntas = funil.definicao.perguntas
   const ids = perguntas.map(p => p.id)
-  const etapasValidas = new Set([...ids, "contato", "agenda", "confirmacao"])
+  const etapasValidas = new Set(["apresentacao", ...ids, "contato", "agenda", "confirmacao"])
   const agoraIso = new Date().toISOString()
   const linhas: Record<string, unknown>[] = []
   const respostas = { ...(s.respostas ?? {}) }
@@ -226,6 +247,9 @@ export async function registrarEventos(funil: FunilPublico, s: SessaoDb, eventos
     }
     if ((e.evento === "booking_failed" || e.evento === "client_error") && typeof e.codigo === "string") dados.codigo = e.codigo.replace(/[^A-Z_]/g, "").slice(0, 40)
     if (e.evento === "funnel_started" && !s.iniciada_em) patch.iniciada_em = agoraIso
+    // Etapa 00: gravadas uma única vez por sessão (recarregar/voltar não duplica).
+    if (e.evento === "welcome_viewed" && !s.apresentacao_vista_em) patch.apresentacao_vista_em = agoraIso
+    if (e.evento === "welcome_cta_clicked" && !s.cta_inicial_em) { patch.cta_inicial_em = agoraIso; if (!s.apresentacao_vista_em) patch.apresentacao_vista_em = agoraIso }
     if (e.evento === "contact_form_viewed" && !s.contato_visto_em) patch.contato_visto_em = agoraIso
     if (e.evento === "booking_page_viewed" && !s.agenda_vista_em) patch.agenda_vista_em = agoraIso
     if (e.evento === "booking_no_slots" && !s.sem_horarios_em) patch.sem_horarios_em = agoraIso
@@ -317,16 +341,50 @@ export async function agendaDoFunil(from: string, days: number) {
   return agendaNativa(from, days, "estaticos_meta")
 }
 
-export async function reservarNoFunil(s: SessaoDb, start: string, chave: string, ctx: Record<string, string>) {
+export async function reservarNoFunil(s: SessaoDb, start: string, chave: string, ctx: Record<string, string>, funil?: Pick<FunilPublico, "consentimentoModo">) {
   if (!idempotencyKeyValida(chave)) return { code: "INVALID_INPUT" }
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(start) || !Number.isFinite(Date.parse(start))) return { code: "INVALID_INPUT" }
   const db = getSupabaseAdmin()
   if (!db) return { code: "TEMPORARY_FAILURE" }
+  if (s.ambiente === "teste") return reservarSimulado(s, start, ctx, funil?.consentimentoModo ?? "opt_in")
   const { data, error } = await db.rpc("funil_reservar", {
     p_sessao: s.id, p_segredo_hash: s.segredo_hash, p_inicio: new Date(start).toISOString(), p_chave: chave, p_contexto: ctx,
   })
   if (error || !data) return { code: "TEMPORARY_FAILURE" }
   return data as { code?: string; status?: string; bookingId?: string; startsAt?: string; endsAt?: string; eventId?: string; enviarPixel?: boolean }
+}
+
+/**
+ * Teste funcional: confere o horário na disponibilidade REAL (mesma função da
+ * página), mas não cria reunião, tarefa, notificação nem bloqueio de agenda.
+ * Idempotente: repetir a mesma sessão devolve a mesma simulação.
+ */
+type ResultadoReserva = { code?: string; status?: string; bookingId?: string; startsAt?: string; endsAt?: string; eventId?: string; enviarPixel?: boolean }
+async function reservarSimulado(s: SessaoDb, start: string, ctx: Record<string, string>, consentimentoModo: "opt_in" | "informativo"): Promise<ResultadoReserva> {
+  const db = getSupabaseAdmin()!
+  if (!s.lead_id) return { code: "LEAD_REQUIRED" }
+  if (s.teste_reserva_inicio && s.teste_reserva_fim) {
+    if (Date.parse(s.teste_reserva_inicio) !== Date.parse(start)) return { code: "IDEMPOTENCY_MISMATCH" }
+    return { status: "simulated", bookingId: `teste-${s.id}`, startsAt: s.teste_reserva_inicio, endsAt: s.teste_reserva_fim, enviarPixel: false }
+  }
+  const agenda = await agendaDoFunil(dataBR(new Date(start).toISOString()), 1)
+  if (!agenda) return { code: "CONFIG_UNAVAILABLE" }
+  const slot = agenda.days.flatMap(d => d.slots).find(x => Date.parse(x.start) === Date.parse(start))
+  if (!slot) return { code: "SLOT_UNAVAILABLE" }
+  const agora = new Date().toISOString()
+  const { error } = await db.from("funil_sessoes").update({
+    teste_reserva_inicio: slot.start, teste_reserva_fim: slot.end, estado: "agendada", agendada_em: agora,
+    horario_selecionado_em: s.horario_selecionado_em ?? agora, ultima_interacao_em: agora, etapa_atual: "confirmacao",
+  }).eq("id", s.id).eq("ambiente", "teste")
+  if (error) return { code: "TEMPORARY_FAILURE" }
+  await db.from("funil_eventos").insert({ funil_id: s.funil_id, sessao_id: s.id, lead_id: s.lead_id, eid: randomUUID(), evento: "booking_simulated", etapa: "agenda", ambiente: "teste" })
+  // Diagnóstico da CAPI: um Schedule de teste (event_id próprio, só com test_event_code).
+  // Respeita a escolha de privacidade como no fluxo real.
+  if (s.diagnostico_capi && (consentimentoModo === "informativo" || s.consentimento_marketing === true)) {
+    await db.from("funil_conversoes").upsert({ funil_id: s.funil_id, sessao_id: s.id, lead_id: s.lead_id, evento: "Schedule",
+      event_id: `schedule.teste.${s.id}`, event_time: agora, ambiente: "teste", status: "pendente", contexto: ctx }, { onConflict: "event_id", ignoreDuplicates: true })
+  }
+  return { status: "simulated", bookingId: `teste-${s.id}`, startsAt: slot.start, endsAt: slot.end, enviarPixel: false }
 }
 
 // -----------------------------------------------------------------------------
@@ -363,7 +421,7 @@ export async function despacharConversoes(opts: { sessaoId?: string; limite?: nu
   const token = process.env.FUNIL_ESTATICOS_META_CAPI_TOKEN
   const r = { enviados: 0, erros: 0, ignorados: 0 }
   if (!db || !token) return r
-  let q = db.from("funil_conversoes").select("id, funil_id, lead_id, evento, event_id, event_time, ambiente, tentativas, contexto")
+  let q = db.from("funil_conversoes").select("id, funil_id, sessao_id, lead_id, evento, event_id, event_time, ambiente, tentativas, contexto")
     .in("status", ["pendente", "erro"]).lte("proxima_tentativa_em", new Date().toISOString()).lt("tentativas", 8)
     .order("criado_em", { ascending: true }).limit(opts.limite ?? 25)
   if (opts.sessaoId) q = q.eq("sessao_id", opts.sessaoId)
@@ -371,9 +429,18 @@ export async function despacharConversoes(opts: { sessaoId?: string; limite?: nu
   for (const it of itens ?? []) {
     const { data: f } = await db.from("funil_config").select("pixel_id, capi_ativo, meta_test_event_code, nome").eq("id", it.funil_id).maybeSingle()
     const { data: lead } = it.lead_id ? await db.from("funil_leads").select("id, nome, telefone_e164, email").eq("id", it.lead_id).maybeSingle() : { data: null }
-    // Teste só vai à Meta com código de teste (nunca como conversão real).
-    if (!f?.pixel_id || !f.capi_ativo || !lead || (it.ambiente === "teste" && !f.meta_test_event_code)) {
-      await db.from("funil_conversoes").update({ status: "ignorado", motivo: !lead ? "sem lead" : it.ambiente === "teste" ? "teste sem test_event_code" : "CAPI desativada", contexto: {} }).eq("id", it.id)
+    // Teste só vai à Meta pelo link de DIAGNÓSTICO e com código de teste
+    // (nunca como conversão real; prévia/teste funcional não envia nada).
+    let diagnostico = false
+    if (it.ambiente === "teste" && it.sessao_id) {
+      const { data: ss } = await db.from("funil_sessoes").select("diagnostico_capi").eq("id", it.sessao_id).maybeSingle()
+      diagnostico = ss?.diagnostico_capi === true
+    }
+    const motivo = !f?.pixel_id || !f.capi_ativo ? "CAPI desativada" : !lead ? "sem lead"
+      : it.ambiente === "teste" && !diagnostico ? "teste funcional (sem diagnóstico da CAPI)"
+      : it.ambiente === "teste" && !f.meta_test_event_code ? "teste sem test_event_code" : null
+    if (motivo || !f || !lead) {
+      await db.from("funil_conversoes").update({ status: "ignorado", motivo: motivo ?? "configuração ausente", contexto: {} }).eq("id", it.id)
       r.ignorados++; continue
     }
     // Trava otimista: só quem muda a tentativa envia (evita envio duplo concorrente).

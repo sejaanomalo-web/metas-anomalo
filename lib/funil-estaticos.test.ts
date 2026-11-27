@@ -3,15 +3,23 @@ import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 import {
-  avaliarRespostas, calcularFunil, classificarOrigem, custoPor, fbcDeFbclid, filtrarRespostas, mediana, resolverCriativo,
+  APRESENTACAO_PADRAO, avaliarRespostas, calcularFunil, etapaInicial, classificarOrigem, custoPor, fbcDeFbclid, filtrarRespostas, mediana, resolverCriativo,
   sanitizarAtribuicao, validarDefinicao, validarEmailLead, validarInstagram, validarNomeLead, validarWhatsappLead, type DefinicaoFunil,
 } from "./funil-estaticos-nucleo"
 import { SCRIPT_CLIENTE } from "./funil-estaticos-cliente"
-import { cabecalhosSeguranca, jsonSeguro, paginaFunil } from "./funil-estaticos-pagina"
+import { jsonSeguro, paginaFunil } from "./funil-estaticos-pagina"
+import { cabecalhosSeguranca } from "./funil-estaticos-seguranca"
+import { lerTokenPrevia, tokenPrevia } from "./funil-estaticos"
+
+process.env.FUNIL_HASH_SECRET ||= "segredo-de-teste-local"
 
 // Definição inicial = a mesma semeada pela migration.
 const sql = readFileSync(new URL("../supabase/migrations/20261127_funil_estaticos_meta.sql", import.meta.url), "utf8")
 const DEF = JSON.parse(sql.split("$json$")[1]) as DefinicaoFunil
+// v2 (20261128) = v1 + identidade branca + Etapa 00 + 2 textos novos.
+const sql2 = readFileSync(new URL("../supabase/migrations/20261128_funil_apresentacao_teste.sql", import.meta.url), "utf8")
+const DEF2: DefinicaoFunil = { ...DEF, visual: "claro", apresentacao: JSON.parse(sql2.split("$json$")[1]),
+  textos: { ...DEF.textos, contato_subtitulo: "Informe seus dados para visualizar os horários disponíveis.", agenda_cta: "Confirmar agendamento" } }
 
 test("definição semeada pela migration é válida e tem as 3 perguntas pedidas", () => {
   assert.deepEqual(validarDefinicao(DEF), [])
@@ -140,6 +148,90 @@ test("script do navegador é JS válido, sem template literal e sem segredo", ()
   assert.ok(!/localStorage\.setItem\([^)]*(nome|whatsapp)/i.test(SCRIPT_CLIENTE))
 })
 
+test("v2 da migration: mesmas perguntas da v1, apresentação padrão, identidade branca", () => {
+  assert.deepEqual(validarDefinicao(DEF2), [])
+  assert.deepEqual(DEF2.perguntas, DEF.perguntas)
+  assert.deepEqual(DEF2.apresentacao, APRESENTACAO_PADRAO)
+  assert.equal(etapaInicial(DEF2), "apresentacao")
+  assert.equal(etapaInicial(DEF), "perfil")
+  // 12 criativos E01–E12 semeados, sem ID de anúncio inventado.
+  const codigos = [...sql2.matchAll(/\('(E\d{2})', '([^']+)'\)/g)].map(m => m[1])
+  assert.deepEqual(codigos, Array.from({ length: 12 }, (_, i) => `E${String(i + 1).padStart(2, "0")}`))
+  assert.ok(!/meta_ad_id/.test(sql2.slice(sql2.indexOf("-- 3) Criativos"), sql2.indexOf("-- 4)"))))
+})
+
+test("apresentação: validação de textos, benefícios e desativação", () => {
+  const d = JSON.parse(JSON.stringify(DEF2)) as DefinicaoFunil
+  d.apresentacao!.headline = ""
+  d.apresentacao!.beneficios.push(...Array.from({ length: 3 }, () => ({ emoji: "🎯", destaque: "x", texto: "" })))
+  d.apresentacao!.cta = "<b>"
+  const e = validarDefinicao(d)
+  assert.ok(e.some(x => x.includes("headline")))
+  assert.ok(e.some(x => x.includes("0 a 6 benefícios")))
+  assert.ok(e.some(x => x.includes("texto do botão")))
+  // Desativada: textos incompletos podem ficar guardados.
+  const off = JSON.parse(JSON.stringify(DEF2)) as DefinicaoFunil
+  off.apresentacao!.ativo = false; off.apresentacao!.headline = ""; off.apresentacao!.cta = ""
+  assert.deepEqual(validarDefinicao(off), [])
+  assert.equal(etapaInicial(off), "perfil")
+  const visual = JSON.parse(JSON.stringify(DEF2)); visual.visual = "neon"
+  assert.ok(validarDefinicao(visual).some(x => x.includes("Identidade visual")))
+})
+
+test("HTML v2: Etapa 00 no servidor (headline, benefícios, CTA, privacidade), sem pergunta e branca", () => {
+  const html = paginaFunil({ slug: "estaticos-meta", nome: "Funil", versaoId: "v", def: DEF2, api: "/api/public/funil",
+    privacidadeUrl: "https://example.com/p?a=1&b=2", consentimentoModo: "opt_in", pixelId: "123456", eventosMeta: {}, previa: null })
+  assert.ok(html.includes("Mais oportunidades de venda para corretores de imóveis de Cascavel."))
+  assert.ok(html.includes("<strong>Tráfego pago</strong> para seus imóveis"))
+  assert.ok(html.includes("Marketing &amp; Tecnologia Imobiliária"))
+  assert.ok(html.includes('id="f-cta-inicio">Quero conhecer as soluções'))
+  assert.ok(html.includes("Suas respostas serão enviadas à ANÔMALO."))
+  assert.ok(html.includes('href="https://example.com/p?a=1&amp;b=2"'))
+  assert.ok(!html.includes('class="f-opcao"'))
+  assert.ok(html.includes('class="t-claro"') && html.includes("logo-anomalo-escuro-96.png"))
+  assert.ok(html.includes('id="f-consent"') && html.includes("Recusar"))
+  assert.ok(html.includes('class="f-prog is-oculta"'))
+  assert.ok(Buffer.byteLength(html) < 45_000, `HTML com ${Buffer.byteLength(html)} bytes`)
+  // Pré-visualização do painel nunca carrega Pixel nem aviso de cookies.
+  const demo = paginaFunil({ slug: "estaticos-meta", nome: "Funil", versaoId: "v", def: DEF2, api: "/x", privacidadeUrl: null,
+    consentimentoModo: "opt_in", pixelId: "123456", eventosMeta: {}, previa: null, demo: true })
+  assert.ok(!demo.includes('id="f-consent"') && demo.includes('"pixelId":null') && demo.includes('"demo":true'))
+})
+
+test("links de teste: modo funcional x diagnóstico da CAPI, assinados e com validade", () => {
+  const f = "11111111-1111-4111-8111-111111111111", v = "22222222-2222-4222-8222-222222222222"
+  assert.deepEqual(lerTokenPrevia(f, tokenPrevia(f, v)), { versaoId: v, modo: "funcional" })
+  const d = tokenPrevia(f, v, "diagnostico_capi")
+  assert.deepEqual(lerTokenPrevia(f, d), { versaoId: v, modo: "diagnostico_capi" })
+  // Trocar o modo invalida a assinatura (um link funcional não vira diagnóstico).
+  assert.equal(lerTokenPrevia(f, tokenPrevia(f, v).replace(".f.", ".d.")), null)
+  assert.equal(lerTokenPrevia("33333333-3333-4333-8333-333333333333", d), null)
+  assert.equal(lerTokenPrevia(f, tokenPrevia(f, v, "funcional", Date.now() - 8 * 86400_000)), null)
+})
+
+test("métricas da Etapa 00: início e abandono inicial só sobre quem viu a apresentação", () => {
+  const b = { criativo_id: null, canal_origem: "meta_pago", aberta_em: "2026-11-01T10:00:00Z", perguntas_concluidas: 0, contato_em: null,
+    agenda_vista_em: null, horario_selecionado_em: null, agendada_em: null, abandonada: false, etapa_abandono: null, lead_id: null, agendamento_id: null, iniciada_em: null }
+  const v = "2026-11-01T10:00:01Z"
+  const sessoes = [
+    { ...b, id: "a", apresentacao_vista_em: v, cta_inicial_em: v, iniciada_em: v, perguntas_concluidas: 1 },
+    { ...b, id: "b", apresentacao_vista_em: v, cta_inicial_em: v, abandonada: true, etapa_abandono: "perfil" },
+    { ...b, id: "c", apresentacao_vista_em: v, abandonada: true, etapa_abandono: "apresentacao" },
+    { ...b, id: "d", apresentacao_vista_em: v }, // ainda ativa: fora do denominador do abandono
+    { ...b, id: "e", iniciada_em: v }, // versão direta: não entra nas taxas da apresentação
+  ]
+  const m = calcularFunil(sessoes, 3, [], new Map())
+  assert.deepEqual(m.taxas.inicioAposApresentacao, { valor: 0.25, num: 1, den: 4 })
+  assert.deepEqual(m.taxas.cliqueInicial, { valor: 0.5, num: 2, den: 4 })
+  assert.deepEqual(m.taxas.abandonoInicial, { valor: 2 / 3, num: 2, den: 3 })
+  assert.equal(m.etapas.find(e => e.chave === "apresentacao")!.qtd, 4)
+  assert.equal(m.etapas.find(e => e.chave === "cta_inicial")!.qtd, 2)
+  assert.deepEqual(m.taxas.inicio, { valor: 0.4, num: 2, den: 5 })
+  // Sem nenhuma sessão com apresentação, as etapas extras não aparecem.
+  assert.equal(calcularFunil([{ ...b, id: "x" }], 3, [], new Map()).etapas.some(e => e.chave === "apresentacao"), false)
+  assert.equal(calcularFunil([], 3, [], new Map()).taxas.abandonoInicial.valor, null)
+})
+
 test("HTML: 1ª pergunta renderizada no servidor, JSON escapado e CSP com hash do script", () => {
   const html = paginaFunil({ slug: "estaticos-meta", nome: "Funil </script><b>", versaoId: "v", def: DEF, api: "/api/public/funil",
     privacidadeUrl: "https://example.com/p", consentimentoModo: "opt_in", pixelId: null, eventosMeta: {}, previa: null })
@@ -150,6 +242,6 @@ test("HTML: 1ª pergunta renderizada no servidor, JSON escapado e CSP com hash d
   const hash = createHash("sha256").update(SCRIPT_CLIENTE).digest("base64")
   assert.ok(cabecalhosSeguranca()["content-security-policy"].includes(`sha256-${hash}`))
   assert.ok(html.includes(`<script>${SCRIPT_CLIENTE}</script>`))
-  assert.ok(Buffer.byteLength(html) < 40_000, `HTML com ${Buffer.byteLength(html)} bytes`)
+  assert.ok(Buffer.byteLength(html) < 45_000, `HTML com ${Buffer.byteLength(html)} bytes`)
   assert.equal(jsonSeguro({ a: "</script>" }), '{"a":"\\u003c/script\\u003e"}')
 })
