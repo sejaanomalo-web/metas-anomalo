@@ -31,6 +31,10 @@
     {
       "path": "/api/reunioes/reconciliar",
       "schedule": "30 10 * * *"
+    },
+    {
+      "path": "/api/funil/processar",
+      "schedule": "15 11 * * *"
     }
   ]
 }
