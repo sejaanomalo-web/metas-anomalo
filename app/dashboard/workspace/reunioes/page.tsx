@@ -11,6 +11,7 @@ import TiposReuniao from "@/components/workspace/reunioes/TiposReuniao"
 import EditorDisponibilidade from "@/components/workspace/reunioes/EditorDisponibilidade"
 import IntegracoesReunioes from "@/components/workspace/reunioes/IntegracoesReunioes"
 import HistoricoReunioes from "@/components/workspace/reunioes/HistoricoReunioes"
+import CartaoFunilIntegracao from "@/components/workspace/funil/CartaoFunilIntegracao"
 
 export const dynamic = "force-dynamic"
 
@@ -162,6 +163,7 @@ export default async function ReunioesPage({ searchParams }: { searchParams: SP 
             <section className="glass" style={{ padding: 14, borderRadius: 10, fontSize: 12, color: "var(--text-2)" }}>
               <strong>Agendamento nativo do Workspace</strong> · {painel.canalNativo?.ativo ? "ativo no banco" : "inativo"}. Configure em Tipos de reunião; a API pública também exige a feature flag do servidor.
             </section>
+            <CartaoFunilIntegracao />
           </div>
 
         ) : (
