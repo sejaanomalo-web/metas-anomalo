@@ -14,12 +14,12 @@ export function jsonSeguro(v: unknown): string {
 }
 
 // Tokens: identidade branca é o padrão; .t-escuro reproduz a identidade da v1.
-// Amarelo = #C9953A (token --accent oficial do projeto). Texto sobre ele: preto
-// (contraste ≈ 7:1). Tamanhos em rem/clamp para respeitar fonte ampliada.
+// Amarelo do formulário = #FFC803 (definido pela ANÔMALO para o funil). Texto sobre ele: preto
+// (contraste ≈ 13:1). Tamanhos em rem/clamp para respeitar fonte ampliada.
 const CSS = `
 *,*::before,*::after{box-sizing:border-box}
-:root{--bg:#fff;--s1:#fff;--s2:#f5f5f3;--b:#e3e3df;--b2:#c9c9c4;--t1:#141414;--t2:#4f4f55;--t3:#6e6e74;--ac:#C9953A;--ac-s:#fbf3e4;--on-ac:#141414;--er:#b3261e;--ok:#141414;color-scheme:light}
-.t-escuro{--bg:#000;--s1:#0f0f12;--s2:#17171c;--b:#2a2a31;--b2:#44444d;--t1:#fff;--t2:#c9c9d1;--t3:#9a9aa3;--ac-s:#1d1709;--er:#ff8a80;color-scheme:dark}
+:root{--bg:#fff;--s1:#fff;--s2:#f5f5f3;--b:#e3e3df;--b2:#c9c9c4;--t1:#141414;--t2:#4f4f55;--t3:#6e6e74;--ac:#FFC803;--ac-s:#fff8d6;--on-ac:#141414;--er:#b3261e;--ok:#141414;color-scheme:light}
+.t-escuro{--bg:#000;--s1:#0f0f12;--s2:#17171c;--b:#2a2a31;--b2:#44444d;--t1:#fff;--t2:#c9c9d1;--t3:#9a9aa3;--ac-s:#2a2200;--er:#ff8a80;color-scheme:dark}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;background:var(--bg)}
 body{margin:0;background:var(--bg);color:var(--t1);font:400 1.0625rem/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
 .f-app{display:flex;flex-direction:column;min-height:100vh;min-height:100svh}
