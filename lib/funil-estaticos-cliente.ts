@@ -321,7 +321,7 @@ function desenharAgenda(corpo) {
   function irMes(delta) { var d = new Date(Date.UTC(ano, mes + delta, 1)); st.mes = d.toISOString().slice(0, 7); desenharAgenda(corpo); }
 
   corpo.appendChild(el("div", { "class": "f-tipo" }, [icone(ICONE_CAL), el("div", {}, [
-    el("strong", { text: T.agenda_reuniao || "Reunião com o time!" }), el("span", { text: r.durationMinutes + " minutos · Horário de Brasília" })])]));
+    el("strong", { text: T.agenda_reuniao || "Reunião com o time!" }), el("span", { text: "Horário de Brasília" })])]));
   corpo.appendChild(el("p", { "class": "f-rot", text: "Selecione uma data" }));
 
   var cal = el("div", { "class": "f-cal" });
