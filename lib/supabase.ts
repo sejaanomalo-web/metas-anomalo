@@ -76,6 +76,14 @@ export interface DadosDiariosLog {
 let cliente: SupabaseClient | null = null
 let clienteAdmin: SupabaseClient | null = null
 
+/**
+ * Next 14 intercepta o fetch e, num Route Handler só com GET (mesmo com
+ * `dynamic = "force-dynamic"`), guarda as leituras GET do PostgREST no Data
+ * Cache SEM expiração. Foi o que deixou /funil/estaticos-meta respondendo
+ * "inativo" depois de ativado. Dado do banco nunca deve vir desse cache.
+ */
+const semCache: typeof fetch = (input, init) => fetch(input, { ...init, cache: "no-store" })
+
 export function getSupabase(): SupabaseClient | null {
   if (cliente) return cliente
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -83,6 +91,7 @@ export function getSupabase(): SupabaseClient | null {
   if (!url || !key) return null
   cliente = createClient(url, key, {
     auth: { persistSession: false },
+    global: { fetch: semCache },
   })
   return cliente
 }
@@ -101,6 +110,7 @@ export function getSupabaseAdmin(): SupabaseClient | null {
   if (!url || !key) return null
   clienteAdmin = createClient(url, key, {
     auth: { persistSession: false },
+    global: { fetch: semCache },
   })
   return clienteAdmin
 }
