@@ -47,9 +47,10 @@ body{margin:0;background:var(--bg);color:var(--t1);font:400 1.0625rem/1.5 -apple
 .f-titulo{font-size:clamp(1.625rem,1.35rem + 1.4vw,1.875rem);line-height:1.18;margin:0 0 22px;font-weight:800;letter-spacing:-.015em;outline:none;text-wrap:balance}
 .f-sub{color:var(--t2);margin:-8px 0 22px}
 .f-meta{color:var(--t3);font-size:.875rem;margin:0 0 14px}
-.f-opcoes{display:grid;gap:10px}
+.f-opcoes{display:grid;gap:10px;counter-reset:f-op}
 .f-opcao,.f-slot,.f-dia{font:inherit;color:var(--t1);background:var(--s1);border:1px solid var(--b);border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .f-opcao{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:16px 16px 16px 18px;min-height:60px;font-size:1.0625rem;line-height:1.35;transition:border-color .12s,background-color .12s,box-shadow .12s}
+.f-opcao::before{counter-increment:f-op;content:counter(f-op,upper-alpha);flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--ac);color:var(--on-ac);font-weight:700;font-size:.9375rem;line-height:1}
 .f-opcao::after{content:"";flex:none;margin-left:auto;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--b2);background:var(--s1)}
 .f-opcao[aria-checked=true]::after{border-color:var(--ac);background:var(--ac);box-shadow:inset 0 0 0 4px var(--s1)}
 @media (hover:hover){.f-opcao:hover,.f-slot:hover,.f-dia:hover{border-color:var(--b2)}}
