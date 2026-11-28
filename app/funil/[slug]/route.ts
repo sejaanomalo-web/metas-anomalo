@@ -7,6 +7,10 @@ import { identidadeVisual } from "@/lib/funil-estaticos-nucleo"
 // HTML mínimo, sem o layout/CSS global do Workspace — ver lib/funil-estaticos-cliente.ts.
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+// Next 14.2: num Route Handler só com GET, force-dynamic NÃO desliga o Data
+// Cache do fetch — a leitura do Supabase ficava em cache indefinidamente e a
+// página continuava "indisponível" depois de ativar o funil no painel.
+export const fetchCache = "force-no-store"
 
 function html(corpo: string, status: number, cacheavel: boolean) {
   return new Response(corpo, {

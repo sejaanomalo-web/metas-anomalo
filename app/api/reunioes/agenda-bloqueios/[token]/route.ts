@@ -7,6 +7,8 @@ import { hojeISO, somarDiasISO } from "@/lib/workspace-datas"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+// Next 14.2: em rota só-GET, force-dynamic não desliga o Data Cache do fetch.
+export const fetchCache = "force-no-store"
 
 /**
  * Feed ICS dos compromissos do Workspace que BLOQUEIAM a agenda pública.

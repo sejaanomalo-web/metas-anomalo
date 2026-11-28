@@ -4,6 +4,8 @@ import { dataBR } from "@/lib/reunioes-nucleo"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+// Next 14.2: em rota só-GET, force-dynamic não desliga o Data Cache do fetch.
+export const fetchCache = "force-no-store"
 const headers = { "cache-control": "no-store" }
 const erro = (status: number, code: string, message: string) => NextResponse.json({ code, message }, { status, headers })
 

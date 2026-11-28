@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabase"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+// Next 14.2: em rota só-GET, force-dynamic não desliga o Data Cache do fetch.
+export const fetchCache = "force-no-store"
 
 /**
  * Feed ICS (webcal) do calendário de follow-ups do CRM — assinável direto
