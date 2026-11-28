@@ -4,7 +4,7 @@ import { redirect } from "next/navigation"
 import { requererPermissao } from "@/lib/auth"
 import { ehAdminNoModulo } from "@/lib/acesso-admin"
 import { getPreferencia, listarAbas } from "@/lib/workspace"
-import { carregarPainelFunil, PERIODOS, type Periodo } from "@/lib/funil-estaticos-admin"
+import { carregarPainelFunil, PERIODOS, resolverIntervalo } from "@/lib/funil-estaticos-admin"
 import {
   mascararTelefone, PARAMETROS_META_ADS, ROTULO_QUALIFICACAO, ROTULO_STATUS_COMERCIAL, custoPor, type Taxa,
 } from "@/lib/funil-estaticos-nucleo"
@@ -24,6 +24,7 @@ const ABAS = [
 ] as const
 type Aba = (typeof ABAS)[number]["id"]
 type SP = Record<string, string | string[] | undefined>
+const estiloData = { fontSize: 11, padding: "2px 6px", borderRadius: 8, border: "1px solid var(--surface-3)", background: "var(--surface-3)", color: "var(--text-1)", colorScheme: "dark" } as const
 const um = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
 
 const pct = (t: Taxa) => (t.valor === null ? "Sem dados" : `${(t.valor * 100).toFixed(1).replace(".", ",")}%`)
@@ -43,9 +44,11 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
   const usuario = await requererPermissao("workspace")
   if (!ehAdminNoModulo(usuario, "workspace")) redirect("/dashboard/workspace/reunioes")
   const aba: Aba = (ABAS.find(a => a.id === um(searchParams.aba))?.id ?? "visao") as Aba
-  const periodo = (Object.keys(PERIODOS).includes(um(searchParams.periodo) ?? "") ? um(searchParams.periodo) : "30") as Periodo
+  const intervalo = resolverIntervalo(um(searchParams.periodo), um(searchParams.de), um(searchParams.ate))
+  const periodo = intervalo.periodo
+  const paramsPeriodo: Record<string, string> = periodo === "intervalo" ? { periodo, de: intervalo.de, ate: intervalo.ate } : { periodo }
   const teste = um(searchParams.teste) === "1"
-  const [abas, pref, p] = await Promise.all([listarAbas(), getPreferencia(usuario.id), carregarPainelFunil(params.slug, periodo, teste)])
+  const [abas, pref, p] = await Promise.all([listarAbas(), getPreferencia(usuario.id), carregarPainelFunil(params.slug, intervalo, teste)])
 
   const nav = <WorkspaceNav abas={abas} presenca={{ id: usuario.id, nome: usuario.nome, foto: pref.foto_url }} />
   if ("erro" in p) {
@@ -65,7 +68,8 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
   const m = p.metricas
   const nomeCriativo = (id: string | null) => (id ? p.criativos.find(c => c.id === id)?.codigo ?? "?" : "Não identificado")
   const qs = (extra: Record<string, string>) => {
-    const u = new URLSearchParams({ aba, periodo, ...(teste ? { teste: "1" } : {}), ...extra })
+    const u = new URLSearchParams({ aba, ...paramsPeriodo, ...(teste ? { teste: "1" } : {}), ...extra })
+    for (const [k, v] of Array.from(u.entries())) if (!v) u.delete(k)
     return `?${u.toString()}`
   }
   const pendencias: string[] = []
@@ -91,15 +95,28 @@ export default async function FunilPage({ params, searchParams }: { params: { sl
           <span style={{ fontSize: 11, color: "var(--text-4)" }}>{producao ? "Produção" : `Ambiente: ${p.env.ambiente}`}</span>
           <span style={{ flex: 1 }} />
           <nav aria-label="Período" style={{ display: "flex", gap: 4 }}>
-            {Object.keys(PERIODOS).map(k => (
-              <Link key={k} href={qs({ periodo: k })} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, textDecoration: "none", color: k === periodo ? "#1e1f21" : "var(--text-2)", background: k === periodo ? "var(--accent)" : "var(--surface-3)" }}>{k}d</Link>
+            {(Object.keys(PERIODOS) as (keyof typeof PERIODOS)[]).map(k => (
+              <Link key={k} href={qs({ periodo: k, de: "", ate: "" })} aria-current={k === periodo ? "true" : undefined} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, textDecoration: "none", color: k === periodo ? "#1e1f21" : "var(--text-2)", background: k === periodo ? "var(--accent)" : "var(--surface-3)" }}>{PERIODOS[k]}</Link>
             ))}
             <Link href={qs({ teste: teste ? "0" : "1" })} title="Por padrão os relatórios mostram só produção" style={{ fontSize: 11, padding: "3px 8px", color: teste ? "#C9953A" : "var(--text-3)" }}>{teste ? "Mostrando testes — ocultar" : "Incluir testes"}</Link>
           </nav>
+          <form method="get" aria-label="Intervalo de datas" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-3)" }}>
+            <input type="hidden" name="aba" value={aba} />
+            <input type="hidden" name="periodo" value="intervalo" />
+            {teste && <input type="hidden" name="teste" value="1" />}
+            <label style={{ display: "flex", alignItems: "center", gap: 4 }}>De
+              <input type="date" name="de" required defaultValue={intervalo.de} max={resolverIntervalo("hoje").ate} style={estiloData} />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 4 }}>até
+              <input type="date" name="ate" defaultValue={intervalo.ate} max={resolverIntervalo("hoje").ate} style={estiloData} />
+            </label>
+            <button type="submit" style={{ fontSize: 11, padding: "3px 9px", borderRadius: 999, border: 0, cursor: "pointer", color: periodo === "intervalo" ? "#1e1f21" : "var(--text-2)", background: periodo === "intervalo" ? "var(--accent)" : "var(--surface-3)" }}>Aplicar</button>
+            <span title="Dias de calendário no horário de Brasília" style={{ marginLeft: 4, color: "var(--text-4)" }}>{intervalo.rotulo}</span>
+          </form>
         </div>
         <nav aria-label="Seções do funil" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {ABAS.map(a => (
-            <Link key={a.id} href={`?aba=${a.id}&periodo=${periodo}${teste ? "&teste=1" : ""}`} aria-current={a.id === aba ? "page" : undefined}
+            <Link key={a.id} href={qs({ aba: a.id })} aria-current={a.id === aba ? "page" : undefined}
               style={{ fontSize: 12, padding: "5px 11px", borderRadius: 999, textDecoration: "none", fontWeight: a.id === aba ? 600 : 400, color: a.id === aba ? "#1e1f21" : "var(--text-2)", background: a.id === aba ? "var(--accent)" : "var(--surface-3)" }}>{a.rotulo}</Link>
           ))}
         </nav>

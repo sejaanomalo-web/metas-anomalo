@@ -5,8 +5,35 @@ import {
   calcularFunil, type DefinicaoFunil, type LeadMetrica, type Qualificacao, type ReuniaoMetrica, type SessaoMetrica, type StatusComercial,
 } from "./funil-estaticos-nucleo"
 
-export const PERIODOS = { "7": 7, "30": 30, "90": 90, "365": 365 } as const
-export type Periodo = keyof typeof PERIODOS
+// Períodos do painel em DIAS DE CALENDÁRIO de Brasília (sem horário de verão
+// desde 2019 → UTC-3 fixo). "7" = hoje + 6 dias anteriores. "intervalo" usa de/ate.
+export const PERIODOS = { hoje: "Hoje", ontem: "Ontem", "7": "7d", "30": "30d", "90": "90d", "365": "365d" } as const
+export type Periodo = keyof typeof PERIODOS | "intervalo"
+export interface Intervalo { periodo: Periodo; de: string; ate: string; desde: string; antes: string; rotulo: string }
+
+const DIA = /^\d{4}-\d{2}-\d{2}$/
+const diaBrasilia = (ms: number) => new Date(ms - 3 * 3600_000).toISOString().slice(0, 10)
+const somarDias = (dia: string, n: number) => new Date(Date.parse(`${dia}T00:00:00Z`) + n * 86400_000).toISOString().slice(0, 10)
+const fmt = (dia: string) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}/${dia.slice(0, 4)}`
+
+/** Resolve o período da URL em limites exatos: [desde, antes) em ISO, e de/ate em dias (inclusivos). */
+export function resolverIntervalo(periodo?: string, de?: string, ate?: string, agora = Date.now()): Intervalo {
+  const hoje = diaBrasilia(agora)
+  let p: Periodo = "30", d: string, a: string
+  if (periodo === "intervalo" && de && DIA.test(de) && !Number.isNaN(Date.parse(de))) {
+    p = "intervalo"; d = de
+    a = ate && DIA.test(ate) && !Number.isNaN(Date.parse(ate)) ? ate : d
+    if (a < d) [d, a] = [a, d]
+    if (a > hoje) a = hoje < d ? d : hoje
+  } else {
+    p = (periodo && periodo in PERIODOS ? periodo : "30") as Periodo
+    if (p === "hoje") { d = hoje; a = hoje }
+    else if (p === "ontem") { d = somarDias(hoje, -1); a = d }
+    else { a = hoje; d = somarDias(hoje, -(Number(p) - 1)) }
+  }
+  const rotulo = d === a ? fmt(d) : `${fmt(d)} – ${fmt(a)}`
+  return { periodo: p, de: d, ate: a, desde: `${d}T03:00:00.000Z`, antes: `${somarDias(a, 1)}T03:00:00.000Z`, rotulo }
+}
 
 export interface CriativoAdmin { id: string; codigo: string; nome: string; hipotese: string | null; miniatura_url: string | null; meta_ad_id: string | null; status: string; inicio_em: string | null }
 export interface LeadAdmin {
@@ -17,25 +44,25 @@ export interface LeadAdmin {
   criativo_id: string | null; reuniao: { id: string; inicio: string | null; status: string; tarefa_id: string | null } | null
 }
 
-export async function carregarPainelFunil(slug: string, periodo: Periodo, incluirTeste: boolean) {
+export async function carregarPainelFunil(slug: string, intervalo: Intervalo, incluirTeste: boolean) {
   const db = getSupabaseAdmin()
   if (!db) return { erro: "Banco indisponível." as const }
   const { data: f, error } = await db.from("funil_config").select("*").eq("slug", slug).maybeSingle()
   if (error?.code === "42P01" || error?.message?.includes("funil_config")) return { erro: "migracao" as const }
   if (!f) return { erro: "nao_encontrado" as const }
-  const desde = new Date(Date.now() - PERIODOS[periodo] * 86400_000).toISOString()
+  const { desde, antes } = intervalo
   const ambientes = incluirTeste ? ["producao", "teste"] : ["producao"]
 
   const [versoes, criativos, sessoes, leads, conv, convPend, invManual, canal, tipos, disps, usuarios, instancias, hist] = await Promise.all([
     db.from("funil_versoes").select("id, numero, status, definicao, criado_em, publicada_em, criado_por").eq("funil_id", f.id).order("numero", { ascending: false }).limit(30),
     db.from("funil_criativos").select("id, codigo, nome, hipotese, miniatura_url, meta_ad_id, status, inicio_em").eq("funil_id", f.id).order("codigo"),
     db.from("funil_sessoes").select("id, criativo_id, canal_origem, aberta_em, iniciada_em, perguntas_concluidas, contato_em, agenda_vista_em, horario_selecionado_em, agendada_em, abandonada, etapa_abandono, lead_id, agendamento_id, atribuicao, versao_id, ambiente, apresentacao_vista_em, cta_inicial_em, variante_entrada, versao_visual, teste_reserva_inicio")
-      .eq("funil_id", f.id).in("ambiente", ambientes).gte("aberta_em", desde).order("aberta_em", { ascending: false }).limit(20000),
+      .eq("funil_id", f.id).in("ambiente", ambientes).gte("aberta_em", desde).lt("aberta_em", antes).order("aberta_em", { ascending: false }).limit(20000),
     db.from("funil_leads").select("id, nome, telefone_e164, email, instagram, criado_em, ultima_interacao_em, respostas, interesse, pontuacao, qualificacao, qualificacao_manual, status_comercial, valor_venda, responsavel_id, crm_lead_id, ambiente, first_touch, last_touch, sessoes, primeira_sessao_id")
-      .eq("funil_id", f.id).in("ambiente", ambientes).gte("criado_em", desde).order("criado_em", { ascending: false }).limit(5000),
+      .eq("funil_id", f.id).in("ambiente", ambientes).gte("criado_em", desde).lt("criado_em", antes).order("criado_em", { ascending: false }).limit(5000),
     db.from("funil_conversoes").select("evento, status, motivo, ultimo_erro, enviado_em, criado_em, event_id, id, tentativas, ambiente").eq("funil_id", f.id).order("criado_em", { ascending: false }).limit(50),
     db.from("funil_conversoes").select("id", { count: "exact", head: true }).eq("funil_id", f.id).in("status", ["pendente", "erro"]),
-    db.from("funil_investimentos").select("id, criativo_id, data, investimento, impressoes, alcance, cliques_link, observacao").eq("funil_id", f.id).gte("data", desde.slice(0, 10)).order("data", { ascending: false }),
+    db.from("funil_investimentos").select("id, criativo_id, data, investimento, impressoes, alcance, cliques_link, observacao").eq("funil_id", f.id).gte("data", intervalo.de).lte("data", intervalo.ate).order("data", { ascending: false }),
     db.from("reunioes_canais_nativos").select("tipo_id, disponibilidade_id, ativo, exclusividade_verificada_em").eq("chave", f.canal_chave).maybeSingle(),
     db.from("reunioes_tipos").select("id, nome, duracao_min, antecedencia_min_horas, horizonte_dias, responsavel_id, ativo, origem_comercial").order("nome"),
     db.from("reunioes_disponibilidades").select("id, nome, modo_nativo, responsavel_id, fuso").order("nome"),
@@ -75,7 +102,7 @@ export async function carregarPainelFunil(slug: string, periodo: Periodo, inclui
   // Investimento: manual + Sentinela (dados_diarios_ad) para anúncios cadastrados.
   const adIds = (criativos.data ?? []).map(c => c.meta_ad_id).filter(Boolean) as string[]
   const sentinela = adIds.length
-    ? (await db.from("dados_diarios_ad").select("ad_id, data, investimento_real, impressoes_real, alcance_real, cliques_real").in("ad_id", adIds).gte("data", desde.slice(0, 10))).data ?? []
+    ? (await db.from("dados_diarios_ad").select("ad_id, data, investimento_real, impressoes_real, alcance_real, cliques_real").in("ad_id", adIds).gte("data", intervalo.de).lte("data", intervalo.ate)).data ?? []
     : []
 
   const versaoPub = (versoes.data ?? []).find(v => v.id === f.versao_publicada_id)
