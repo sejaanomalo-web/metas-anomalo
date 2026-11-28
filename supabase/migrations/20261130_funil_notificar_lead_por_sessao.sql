@@ -8,7 +8,8 @@
 --
 -- Agora: notifica na PRIMEIRA vez que cada sessão envia nome + WhatsApp
 -- (v_s.contato_em is null antes do update). Reenviar o contato na mesma sessão
--- (voltar e corrigir) não duplica. Telefone já conhecido → "Lead voltou".
+-- (voltar e corrigir) não duplica. Telefone já conhecido → "Lead voltou", com
+-- nome + WhatsApp e aviso de que pode contar de novo como Lead no Gerenciador.
 -- Fluxo completo = 2 notificações: contato enviado + reunião agendada.
 --
 -- Inalterado: o lead continua salvo no clique (upsert por telefone), sessão de
@@ -98,8 +99,15 @@ begin
     insert into public.notificacoes(tipo, empresa, titulo, mensagem, payload, papel_alvo)
       values ('ws_tarefa', null,
         case when v_novo then 'Novo lead — ' else 'Lead voltou — ' end || v_f.nome,
-        case when v_novo then 'Um corretor respondeu o formulário. Abra o lead para ver respostas e origem.'
-             else 'Um lead que já tinha preenchido enviou o contato de novo. Abra para ver respostas e origem.' end,
+        -- Nome + WhatsApp na mensagem: dá pra saber QUEM disparou sem abrir o painel.
+        p_nome || ' · (' || substr(p_telefone, 4, 2) || ') ' || substr(p_telefone, 6) ||
+        case when v_novo then ' respondeu o formulário. Abra o lead para ver respostas e origem.'
+             else ' já tinha preenchido antes e enviou o contato de novo.' ||
+               -- O Pixel do navegador dispara Lead de novo; passado o prazo de
+               -- deduplicação da Meta, o Gerenciador pode contar mais um resultado.
+               case when v_status <> 'ignorado' or v_motivo = 'CAPI não configurada'
+                    then ' Pode aparecer como mais um Lead no Gerenciador de Anúncios.' else '' end
+        end,
         jsonb_build_object('url','/dashboard/workspace/funis/' || v_f.slug || '?aba=leads&lead=' || v_lead),
         array['admin','comercial'])
       returning id into v_notif;

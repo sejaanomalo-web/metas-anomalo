@@ -194,6 +194,8 @@ await lead(s8, "Lead Real", "+5545999990088")
 ok(await nLead() === n0, "reenviar o contato na MESMA sessão não duplica a notificação")
 const s9 = await novaSessao(); const l9 = await lead(s9, "Lead Real", "+5545999990088")
 ok(await nLead() === n0 + 1 && (await q1(`select count(*)::int n from notificacoes where titulo like 'Lead voltou%'`)).n === 1, "telefone já conhecido em NOVA sessão → notifica 'Lead voltou'")
+const mv = (await q1(`select mensagem from notificacoes where titulo like 'Lead voltou%'`)).mensagem
+ok(mv.startsWith("Lead Real · (45) 999990088") && mv.includes("Gerenciador de Anúncios"), "aviso de 'Lead voltou' diz quem foi e que pode contar de novo na Meta")
 ok(l9.novo === false && (await q1(`select count(*)::int n from funil_conversoes where lead_id=$1 and evento='Lead'`, [l9.leadId])).n === 1, "conversão Lead da Meta continua uma por pessoa")
 const s10 = await novaSessao("teste"); await lead(s10, "Teste Sem Efeito", "+5545999990077")
 ok(await nLead() === n0 + 1, "sessão de TESTE continua sem notificar")
