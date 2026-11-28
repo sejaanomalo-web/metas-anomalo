@@ -129,8 +129,8 @@ function topo(escuro: boolean, voltar = true): string {
   // A logo oficial só existe em branco: na identidade clara ela vai sobre o
   // quadrado preto oficial (mesma arte do ícone do app), sem redesenho.
   const logo = escuro ? "/funil/logo-anomalo-96.png" : "/funil/logo-anomalo-escuro-96.png"
-  return `<header class="f-top"><img class="f-logo" src="${logo}" width="32" height="32" alt="ANÔMALO">` +
-    `<span class="f-marca" aria-hidden="true">ANÔMALO</span>` +
+  return `<header class="f-top"><img class="f-logo" src="${logo}" width="32" height="32" alt="ASSESSORIA ANÔMALO">` +
+    `<span class="f-marca" aria-hidden="true">ASSESSORIA ANÔMALO</span>` +
     (voltar ? `<button type="button" class="f-voltar" id="f-voltar" hidden>← Voltar</button>` : "") + `</header>`
 }
 
