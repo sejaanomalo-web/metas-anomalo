@@ -26,7 +26,7 @@ body{margin:0;background:var(--bg);color:var(--t1);font:400 1.0625rem/1.5 -apple
 .f-prog{height:3px;background:var(--s2);flex:none}
 .f-prog.is-oculta{visibility:hidden}
 #f-barra{height:100%;background:var(--ac);transform-origin:left;transform:scaleX(0);transition:transform .25s ease}
-.f-top{width:100%;max-width:560px;margin:0 auto;padding:max(14px,env(safe-area-inset-top)) max(22px,env(safe-area-inset-right)) 0 max(22px,env(safe-area-inset-left));display:flex;align-items:center;gap:10px;min-height:58px;flex:none}
+.f-top{width:100%;max-width:560px;margin:0 auto;padding:calc(max(14px,env(safe-area-inset-top)) + 22px) max(22px,env(safe-area-inset-right)) 0 max(22px,env(safe-area-inset-left));display:flex;align-items:center;gap:10px;min-height:58px;flex:none}
 .f-logo{display:block;width:32px;height:32px;border-radius:8px}
 .f-marca{font-weight:700;letter-spacing:.18em;font-size:.75rem;color:var(--t1)}
 .f-voltar{margin-left:auto;background:none;border:0;color:var(--t2);font:inherit;font-size:.9375rem;padding:10px 4px;min-height:44px;cursor:pointer;-webkit-tap-highlight-color:transparent}
