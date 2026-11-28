@@ -337,8 +337,10 @@ export async function vincularCrm(funil: Pick<FunilPublico, "crmUsuarioId" | "cr
 // -----------------------------------------------------------------------------
 // Agenda e reserva
 // -----------------------------------------------------------------------------
+export const PASSO_AGENDA_FUNIL_MIN = 60
 export async function agendaDoFunil(from: string, days: number) {
-  return agendaNativa(from, days, "estaticos_meta")
+  // Funil: um horário por hora cheia da janela (09:00, 10:00…), não a grade de 15 min do ATIVO.
+  return agendaNativa(from, days, "estaticos_meta", PASSO_AGENDA_FUNIL_MIN)
 }
 
 export async function reservarNoFunil(s: SessaoDb, start: string, chave: string, ctx: Record<string, string>, funil?: Pick<FunilPublico, "consentimentoModo">) {
