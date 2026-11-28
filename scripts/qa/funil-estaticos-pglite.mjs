@@ -1,7 +1,7 @@
 // Teste das RPCs do Funil Estáticos Meta em PostgreSQL embutido (PGlite), com
 // schema mínimo + migrations na ordem aplicada em produção: 20261125, 20261126
 // (integridade, da main), 20261126 (intervalo_slots), 20261127, 20261128 e
-// 20261129 (reconciliação). Não toca banco real.
+// 20261129 (reconciliação) e 20261130 (notificação por envio). Não toca banco real.
 // Uso (PGlite não é dependência do projeto):
 //   npm i --no-save @electric-sql/pglite@0.2.17 && node scripts/qa/funil-estaticos-pglite.mjs
 import { PGlite } from "@electric-sql/pglite"
@@ -11,7 +11,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { join } from "node:path"
 
 const DIR = process.env.MIGRATIONS_DIR ?? new URL("../../supabase/migrations/", import.meta.url).pathname
-const [m1, m2i, m2, m3, m4, m5] = ["20261125_reunioes_nativas.sql", "20261126_reunioes_nativas_integridade.sql", "20261126_reunioes_nativas_intervalo_slots.sql", "20261127_funil_estaticos_meta.sql", "20261128_funil_apresentacao_teste.sql", "20261129_reunioes_nativas_reconciliacao.sql"]
+const [m1, m2i, m2, m3, m4, m5, m6] = ["20261125_reunioes_nativas.sql", "20261126_reunioes_nativas_integridade.sql", "20261126_reunioes_nativas_intervalo_slots.sql", "20261127_funil_estaticos_meta.sql", "20261128_funil_apresentacao_teste.sql", "20261129_reunioes_nativas_reconciliacao.sql", "20261130_funil_notificar_lead_por_sessao.sql"]
   .map(f => readFileSync(join(DIR, f), "utf8"))
 const db = new PGlite({ extensions: { btree_gist } })
 await db.exec(`
@@ -69,6 +69,7 @@ ok(f0 && f0.versao_publicada_id && f0.ativo === false, "seed: funil criado inati
 // 20261128 (fase 2): v2 com apresentação, criativos E01–E12, colunas novas.
 await db.exec(m4)
 await db.exec(m5)
+await db.exec(m6)
 const f = await q1(`select id, versao_publicada_id, ativo from funil_config where chave='estaticos_meta'`)
 const vs = (await db.query(`select numero, status, definicao from funil_versoes where funil_id=$1 order by numero`, [f.id])).rows
 ok(vs.length === 2 && vs[0].status === "arquivada" && vs[1].status === "publicada" && f.ativo === false, "20261128: v2 publicada, v1 arquivada, funil continua inativo")
@@ -76,7 +77,7 @@ ok(JSON.stringify(vs[1].definicao.perguntas) === JSON.stringify(vs[0].definicao.
 ok(vs[1].definicao.apresentacao?.ativo === true && vs[1].definicao.visual === "claro" && vs[1].definicao.apresentacao.beneficios.length === 4, "v2 com apresentação ativa e identidade branca")
 const cr = (await db.query(`select codigo, meta_ad_id from funil_criativos where funil_id=$1 order by codigo`, [f.id])).rows
 ok(cr.length === 12 && cr[0].codigo === "E01" && cr[11].codigo === "E12" && cr.every(c => c.meta_ad_id === null), "12 criativos E01–E12, sem ID de anúncio inventado")
-await db.exec(m4); await db.exec(m5)
+await db.exec(m4); await db.exec(m5); await db.exec(m6)
 ok((await q1(`select count(*)::int n from funil_versoes where funil_id=$1`, [f.id])).n === 2 && (await q1(`select count(*)::int n from funil_criativos`)).n === 12, "20261128 reaplicada: idempotente (sem v3, sem criativo duplicado)")
 let erroAtivar = false
 try { await db.exec(`update funil_config set ativo = true`) } catch { erroAtivar = true }
@@ -186,6 +187,18 @@ const s7 = await novaSessao("teste"); const l7 = await lead(s7, "Teste Sem Efeit
 ok((await q1(`select count(*)::int n from notificacoes`)).n === nAntes, "lead de TESTE não gera notificação para a equipe")
 const s8 = await novaSessao(); await lead(s8, "Lead Real", "+5545999990088")
 ok((await q1(`select count(*)::int n from notificacoes where titulo like 'Novo lead%'`)).n >= 1 && (await q1(`select count(*)::int n from notificacoes`)).n === nAntes + 1, "lead de produção continua notificando")
+// 20261130: notifica a cada 1º envio do contato por sessão, mesmo com telefone já conhecido.
+const nLead = async () => (await q1(`select count(*)::int n from notificacoes where titulo like 'Novo lead%' or titulo like 'Lead voltou%'`)).n
+const n0 = await nLead()
+await lead(s8, "Lead Real", "+5545999990088")
+ok(await nLead() === n0, "reenviar o contato na MESMA sessão não duplica a notificação")
+const s9 = await novaSessao(); const l9 = await lead(s9, "Lead Real", "+5545999990088")
+ok(await nLead() === n0 + 1 && (await q1(`select count(*)::int n from notificacoes where titulo like 'Lead voltou%'`)).n === 1, "telefone já conhecido em NOVA sessão → notifica 'Lead voltou'")
+const mv = (await q1(`select mensagem from notificacoes where titulo like 'Lead voltou%'`)).mensagem
+ok(mv.startsWith("Lead Real · (45) 999990088") && mv.includes("Gerenciador de Anúncios"), "aviso de 'Lead voltou' diz quem foi e que pode contar de novo na Meta")
+ok(l9.novo === false && (await q1(`select count(*)::int n from funil_conversoes where lead_id=$1 and evento='Lead'`, [l9.leadId])).n === 1, "conversão Lead da Meta continua uma por pessoa")
+const s10 = await novaSessao("teste"); await lead(s10, "Teste Sem Efeito", "+5545999990077")
+ok(await nLead() === n0 + 1, "sessão de TESTE continua sem notificar")
 await db.query(`update funil_leads set criado_em = now() - interval '1 hour' where id=$1`, [l7.leadId])
 await q1(`select public.funil_processar_inatividade() r`)
 ok((await q1(`select followup_tarefa_id from funil_leads where id=$1`, [l7.leadId])).followup_tarefa_id === null, "lead de TESTE não gera tarefa de follow-up")

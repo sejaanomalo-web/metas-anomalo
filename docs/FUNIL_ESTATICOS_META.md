@@ -164,6 +164,7 @@ A coorte é formada pelas sessões abertas no período. Cada taxa mostra o denom
   - criativos E01–E12;
   - `CREATE OR REPLACE` de três funções da 20261127 (diferenças comentadas no arquivo): `funil_reservar` (trava por lead), `funil_capturar_lead` (teste não notifica) e `funil_processar_inatividade` (teste não gera follow-up).
   - É idempotente: reaplicar não cria v3 nem duplica criativos.
+- `20261130_funil_notificar_lead_por_sessao.sql`: `funil_capturar_lead` passa a notificar no **1º envio do contato de cada sessão** (antes: só quando o telefone era inédito). Telefone já conhecido → "Lead voltou — …". Fluxo completo gera 2 notificações (contato + reunião). Reenviar na mesma sessão não duplica; teste segue sem notificar; a conversão **Lead** da Meta continua uma por pessoa (`lead.<lead_id>`).
 
 ## Variáveis de ambiente (servidor)
 | Variável | Obrigatória | Uso |
