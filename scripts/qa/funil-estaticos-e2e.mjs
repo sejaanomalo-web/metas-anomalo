@@ -138,7 +138,7 @@ await page.locator("form .f-cta").click()
 // Agenda.
 await page.getByRole("heading", { name: "Escolha o melhor horário para conversarmos." }).waitFor()
 await page.locator(".f-slot").first().waitFor()
-ok(await page.getByText("Diagnóstico comercial", { exact: true }).isVisible() && await page.getByText("60 minutos · Horário de Brasília").isVisible() && await page.locator(".f-cal-grade").isVisible(), "agenda: calendário mensal, tipo, duração e fuso")
+ok(await page.getByText("Reunião com o time!", { exact: true }).isVisible() && await page.getByText("60 minutos · Horário de Brasília").isVisible() && await page.locator(".f-cal-grade").isVisible(), "agenda: calendário mensal, tipo, duração e fuso")
 ok(await page.locator("#f-pe").isHidden(), "sem horário escolhido, sem botão de confirmar")
 ok(!/Jo[aã]o|99999/.test(await page.evaluate(() => JSON.stringify(localStorage))), "nome/WhatsApp fora do localStorage")
 await page.waitForTimeout(450); await page.screenshot({ path: `${OUT}/05-agenda-mobile.png` })

@@ -137,7 +137,7 @@ function progresso() {
   // A barra só chega a 100% na confirmação real.
   barra.style.transform = "scaleX(" + (st.i < 0 ? 0 : concluido ? 1 : (st.i + 1) / (TOTAL + 1)) + ")";
   prog.setAttribute("aria-valuenow", String(st.i < 0 ? 0 : Math.min(st.i + 1, TOTAL)));
-  passo.textContent = st.i < 0 || concluido ? "" : st.i < N ? "Pergunta " + (st.i + 1) + " de " + N : st.i === N ? "Seus dados" : "Agendamento";
+  passo.textContent = st.i < 0 || concluido ? "" : st.i < N ? "Pergunta " + (st.i + 1) + " de " + N : st.i === N ? "Seus dados" : "";
   voltar.hidden = !(st.i > INI && st.i <= N && !st.reuniao);
   main.classList.toggle("is-centro", st.i < 0 || concluido);
 }
@@ -285,7 +285,7 @@ function fmtHora(iso) { return new Date(iso).toLocaleTimeString("pt-BR", { timeZ
 function maiuscula(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 var TEXTO_CONFIRMAR = T.agenda_cta || "Confirmar agendamento";
 function agenda(recarregar) {
-  var cab = [el("h2", { "class": "f-titulo", text: T.agenda_titulo }), el("p", { "class": "f-sub", text: T.agenda_subtitulo })];
+  var cab = [el("h2", { "class": "f-titulo", text: T.agenda_titulo }), T.agenda_subtitulo ? el("p", { "class": "f-sub", text: T.agenda_subtitulo }) : null];
   var corpo = el("div", { "class": "f-agenda", "aria-busy": "true" }, [el("div", { "class": "f-skel" }), el("div", { "class": "f-skel" }), el("div", { "class": "f-skel" })]);
   trocar(cab.concat([corpo]), !recarregar);
   if (!recarregar) evento("booking_page_viewed", { etapa: "agenda" });
@@ -321,7 +321,7 @@ function desenharAgenda(corpo) {
   function irMes(delta) { var d = new Date(Date.UTC(ano, mes + delta, 1)); st.mes = d.toISOString().slice(0, 7); desenharAgenda(corpo); }
 
   corpo.appendChild(el("div", { "class": "f-tipo" }, [icone(ICONE_CAL), el("div", {}, [
-    el("strong", { text: r.tipoNome || "Reunião" }), el("span", { text: r.durationMinutes + " minutos · Horário de Brasília" })])]));
+    el("strong", { text: T.agenda_reuniao || "Reunião com o time!" }), el("span", { text: r.durationMinutes + " minutos · Horário de Brasília" })])]));
   corpo.appendChild(el("p", { "class": "f-rot", text: "Selecione uma data" }));
 
   var cal = el("div", { "class": "f-cal" });
