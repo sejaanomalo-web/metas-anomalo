@@ -137,7 +137,7 @@ export function FormCanalFunil({ funilId, canal, tipos, disponibilidades, usuari
           </Rotulo>
         </div>
         {tipo && <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>
-          Duração {tipo.duracao_min} min · horários a cada 15 min · antecedência {tipo.antecedencia_min_horas} h · horizonte {tipo.horizonte_dias} dias · responsável {nome(tipo.responsavel_id)}. Atribuição: responsável único do tipo/agenda (regra atual do Workspace).
+          Duração {tipo.duracao_min} min · horários de 1 em 1 hora a partir do início de cada janela · antecedência {tipo.antecedencia_min_horas} h · horizonte {tipo.horizonte_dias} dias · responsável {nome(tipo.responsavel_id)}. Atribuição: responsável único do tipo/agenda (regra atual do Workspace).
         </p>}
         <Check nome="exclusividade_verificada" padrao={false} texto="Confirmo que nenhuma das contas Cal.com oferece estas mesmas janelas para o mesmo responsável." />
         <Check nome="ativo" padrao={canal?.ativo ?? false} texto="Agenda do funil ativa" />
@@ -172,7 +172,7 @@ export function EditorFormularioFunil({ funilId, urlPublica, publicada, rascunho
   const mover = (i: number, d: number) => set(c => { const j = i + d; if (j < 0 || j >= c.perguntas.length) return; [c.perguntas[i], c.perguntas[j]] = [c.perguntas[j], c.perguntas[i]] })
   const textos: [keyof DefinicaoFunil["textos"], string][] = [["titulo", "Título de abertura (só no início direto, sem apresentação)"], ["subtitulo", "Texto de abertura (só no início direto)"],
     ["contato_titulo", "Título da identificação"], ["contato_subtitulo", "Texto da identificação"], ["contato_cta", "Botão da identificação"],
-    ["agenda_titulo", "Título da agenda"], ["agenda_subtitulo", "Texto da agenda"], ["agenda_cta", "Botão de confirmar horário"], ["sem_horarios", "Sem horários"],
+    ["agenda_titulo", "Título da agenda"], ["agenda_subtitulo", "Texto da agenda (opcional — vazio não exibe)"], ["agenda_reuniao", "Nome da reunião na agenda (padrão: Reunião com o time!)"], ["agenda_cta", "Botão de confirmar horário"], ["sem_horarios", "Sem horários"],
     ["confirmacao_titulo", "Título da confirmação"], ["confirmacao_texto", "Texto da confirmação"], ["inativo", "Mensagem com funil inativo"]]
   const ap = def.apresentacao
   const moverBeneficio = (i: number, d: number) => set(c => { const b = c.apresentacao!.beneficios; const j = i + d; if (j < 0 || j >= b.length) return; [b[i], b[j]] = [b[j], b[i]] })
@@ -261,7 +261,7 @@ export function EditorFormularioFunil({ funilId, urlPublica, publicada, rascunho
         <button type="button" className="no-ds" style={estiloBotao()} onClick={() => set(c => { let k = c.perguntas.length + 1; while (c.perguntas.some(p => p.id === `pergunta_${k}`)) k++; c.perguntas.push({ id: `pergunta_${k}`, texto: "Nova pergunta", opcoes: [{ id: "a", texto: "Alternativa A", pontos: 0 }, { id: "b", texto: "Alternativa B", pontos: 0 }] } as Pergunta) })}>+ Pergunta</button>
         <Cartao titulo="Textos públicos">
           {textos.map(([k, r]) => (
-            <Rotulo key={k} texto={r}><textarea value={def.textos[k] ?? ""} maxLength={k === "agenda_cta" ? 60 : 400} rows={k.length > 12 ? 3 : 2} onChange={e => set(c => { c.textos[k] = e.target.value })} style={{ ...estiloCampo, resize: "vertical" }} /></Rotulo>
+            <Rotulo key={k} texto={r}><textarea value={def.textos[k] ?? ""} maxLength={k === "agenda_cta" ? 60 : k === "agenda_reuniao" ? 80 : 400} rows={k.length > 12 ? 3 : 2} onChange={e => set(c => { c.textos[k] = e.target.value })} style={{ ...estiloCampo, resize: "vertical" }} /></Rotulo>
           ))}
         </Cartao>
         <Cartao titulo="Histórico de versões">

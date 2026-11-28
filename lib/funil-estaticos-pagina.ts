@@ -14,12 +14,12 @@ export function jsonSeguro(v: unknown): string {
 }
 
 // Tokens: identidade branca é o padrão; .t-escuro reproduz a identidade da v1.
-// Amarelo = #C9953A (token --accent oficial do projeto). Texto sobre ele: preto
-// (contraste ≈ 7:1). Tamanhos em rem/clamp para respeitar fonte ampliada.
+// Amarelo do formulário = #FFC803 (definido pela ANÔMALO para o funil). Texto sobre ele: preto
+// (contraste ≈ 13:1). Tamanhos em rem/clamp para respeitar fonte ampliada.
 const CSS = `
 *,*::before,*::after{box-sizing:border-box}
-:root{--bg:#fff;--s1:#fff;--s2:#f5f5f3;--b:#e3e3df;--b2:#c9c9c4;--t1:#141414;--t2:#4f4f55;--t3:#6e6e74;--ac:#C9953A;--ac-s:#fbf3e4;--on-ac:#141414;--er:#b3261e;--ok:#141414;color-scheme:light}
-.t-escuro{--bg:#000;--s1:#0f0f12;--s2:#17171c;--b:#2a2a31;--b2:#44444d;--t1:#fff;--t2:#c9c9d1;--t3:#9a9aa3;--ac-s:#1d1709;--er:#ff8a80;color-scheme:dark}
+:root{--bg:#fff;--s1:#fff;--s2:#f5f5f3;--b:#e3e3df;--b2:#c9c9c4;--t1:#141414;--t2:#4f4f55;--t3:#6e6e74;--ac:#FFC803;--ac-s:#fff8d6;--on-ac:#141414;--er:#b3261e;--ok:#141414;color-scheme:light}
+.t-escuro{--bg:#000;--s1:#0f0f12;--s2:#17171c;--b:#2a2a31;--b2:#44444d;--t1:#fff;--t2:#c9c9d1;--t3:#9a9aa3;--ac-s:#2a2200;--er:#ff8a80;color-scheme:dark}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;background:var(--bg)}
 body{margin:0;background:var(--bg);color:var(--t1);font:400 1.0625rem/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
 .f-app{display:flex;flex-direction:column;min-height:100vh;min-height:100svh}
@@ -47,13 +47,14 @@ body{margin:0;background:var(--bg);color:var(--t1);font:400 1.0625rem/1.5 -apple
 .f-titulo{font-size:clamp(1.625rem,1.35rem + 1.4vw,1.875rem);line-height:1.18;margin:0 0 22px;font-weight:800;letter-spacing:-.015em;outline:none;text-wrap:balance}
 .f-sub{color:var(--t2);margin:-8px 0 22px}
 .f-meta{color:var(--t3);font-size:.875rem;margin:0 0 14px}
-.f-opcoes{display:grid;gap:10px}
-.f-opcao,.f-slot,.f-dia{font:inherit;color:var(--t1);background:var(--s1);border:1px solid var(--b);border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.f-opcoes{display:grid;gap:10px;counter-reset:f-op}
+.f-opcao,.f-slot{font:inherit;color:var(--t1);background:var(--s1);border:1px solid var(--b);border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .f-opcao{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:16px 16px 16px 18px;min-height:60px;font-size:1.0625rem;line-height:1.35;transition:border-color .12s,background-color .12s,box-shadow .12s}
+.f-opcao::before{counter-increment:f-op;content:counter(f-op,upper-alpha);flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--ac);color:var(--on-ac);font-weight:700;font-size:.9375rem;line-height:1}
 .f-opcao::after{content:"";flex:none;margin-left:auto;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--b2);background:var(--s1)}
 .f-opcao[aria-checked=true]::after{border-color:var(--ac);background:var(--ac);box-shadow:inset 0 0 0 4px var(--s1)}
-@media (hover:hover){.f-opcao:hover,.f-slot:hover,.f-dia:hover{border-color:var(--b2)}}
-.f-opcao[aria-checked=true],.f-slot[aria-checked=true],.f-dia[aria-selected=true]{border-color:var(--ac);background:var(--ac-s);box-shadow:inset 0 0 0 1px var(--ac)}
+@media (hover:hover){.f-opcao:hover,.f-slot:hover,.f-cal-dia:not(:disabled):hover{border-color:var(--b2)}}
+.f-opcao[aria-checked=true],.f-slot[aria-checked=true]{border-color:var(--ac);background:var(--ac-s);box-shadow:inset 0 0 0 1px var(--ac)}
 button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--t1);outline-offset:2px}
 .f-cta{display:block;width:100%;margin-top:8px;padding:15px 14px;min-height:56px;border:0;border-radius:14px;background:var(--ac);color:var(--on-ac);font:inherit;font-weight:800;font-size:1rem;letter-spacing:.015em;text-transform:uppercase;line-height:1.3;text-align:center;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .f-cta[disabled]{opacity:.55;cursor:default}
@@ -79,11 +80,20 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 .f-aviso{margin:14px 0 0;font-size:.9375rem;color:var(--t2)}
 .f-aviso:empty{display:none}
 .f-erro{color:var(--er);font-weight:600}
-.f-dias{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 12px;margin:0 -2px 8px;scroll-snap-type:x mandatory;scrollbar-width:none}
-.f-dias::-webkit-scrollbar{display:none}
-.f-dia{flex:none;display:grid;justify-items:center;gap:2px;padding:10px 12px;min-width:70px;min-height:76px;scroll-snap-align:start;text-transform:capitalize;font-size:.8125rem;color:var(--t2)}
-.f-dia strong{font-size:1.375rem;line-height:1.1;color:var(--t1)}
-.f-slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.f-tipo{display:flex;align-items:center;gap:12px;margin:0 0 18px}.f-tipo .f-ico{width:44px;height:44px;border-radius:12px;background:var(--ac);color:var(--on-ac);display:grid;place-items:center;flex:none}.f-tipo .f-ico svg{width:22px;height:22px}.f-tipo strong{display:block;font-size:1rem;text-transform:uppercase;letter-spacing:.01em}.f-tipo span{display:block;color:var(--t3);font-size:.875rem;margin-top:2px}
+.f-rot{margin:0 0 8px;font-weight:600;font-size:.9375rem}
+.f-cal{border:1px solid var(--b);border-radius:18px;padding:14px 10px 12px;background:var(--s1);margin:0 0 22px}
+.f-cal-topo{display:flex;align-items:center;justify-content:space-between;padding:0 4px 10px}.f-cal-topo strong{font-size:1.0625rem}
+.f-cal-nav{width:40px;height:40px;border-radius:50%;border:0;background:transparent;color:var(--t1);font:inherit;font-size:1.5rem;line-height:1;cursor:pointer}.f-cal-nav:disabled{opacity:.25;cursor:default}
+.f-cal-grade{display:grid;grid-template-columns:repeat(7,1fr);row-gap:6px;justify-items:center}
+.f-cal-sem{font-size:.6875rem;font-weight:600;letter-spacing:.06em;color:var(--t3);padding:2px 0 6px}
+.f-cal-dia{width:min(44px,11vw);height:min(44px,11vw);border-radius:50%;border:0;background:transparent;font:inherit;font-size:.9375rem;color:var(--t3);opacity:.45;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.f-cal-dia:not(:disabled){opacity:1;cursor:pointer;font-weight:700;color:var(--t1);background:var(--ac-s);box-shadow:inset 0 0 0 1.5px var(--ac)}
+.f-cal-dia[aria-pressed=true]{background:var(--ac);color:var(--on-ac);box-shadow:0 0 0 4px var(--ac-s)}
+.f-cal-dia.is-hoje:disabled{box-shadow:inset 0 0 0 1px var(--b2)}
+.f-dia-tit{display:flex;align-items:center;gap:8px;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--b);font-size:1rem}.f-dia-tit .f-ico{width:20px;height:20px;color:var(--t2);display:grid}.f-dia-tit svg{width:20px;height:20px}
+.f-slots{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media (min-width:480px){.f-slots{grid-template-columns:repeat(3,1fr)}}
 .f-slot{padding:12px 8px;min-height:52px;font-size:1.0625rem;font-weight:700}
 .f-resumo{margin:0 0 10px;font-size:.9375rem;color:var(--t2);text-align:center}
 .f-resumo strong{color:var(--t1)}
@@ -128,8 +138,8 @@ function topo(escuro: boolean, voltar = true): string {
   // A logo oficial só existe em branco: na identidade clara ela vai sobre o
   // quadrado preto oficial (mesma arte do ícone do app), sem redesenho.
   const logo = escuro ? "/funil/logo-anomalo-96.png" : "/funil/logo-anomalo-escuro-96.png"
-  return `<header class="f-top"><img class="f-logo" src="${logo}" width="32" height="32" alt="ANÔMALO">` +
-    `<span class="f-marca" aria-hidden="true">ANÔMALO</span>` +
+  return `<header class="f-top"><img class="f-logo" src="${logo}" width="32" height="32" alt="ASSESSORIA ANÔMALO">` +
+    `<span class="f-marca" aria-hidden="true">ASSESSORIA ANÔMALO</span>` +
     (voltar ? `<button type="button" class="f-voltar" id="f-voltar" hidden>← Voltar</button>` : "") + `</header>`
 }
 

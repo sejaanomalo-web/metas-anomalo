@@ -15,7 +15,12 @@ export interface Textos {
   titulo: string; subtitulo: string; contato_titulo: string; contato_cta: string
   /** Texto complementar da etapa de identificação (opcional nas versões antigas). */
   contato_subtitulo?: string
-  agenda_titulo: string; agenda_subtitulo: string; sem_horarios: string
+  agenda_titulo: string
+  /** Texto abaixo do título da agenda (opcional; vazio = não exibe). */
+  agenda_subtitulo?: string
+  /** Nome da reunião no cabeçalho da agenda (opcional; padrão "Reunião com o time!"). */
+  agenda_reuniao?: string
+  sem_horarios: string
   /** Botão de confirmação da agenda (opcional; padrão "Confirmar agendamento"). */
   agenda_cta?: string
   confirmacao_titulo: string; confirmacao_texto: string; inativo: string
@@ -226,9 +231,11 @@ export function validarDefinicao(d: unknown): string[] {
     }
   }
   const t = def.textos as unknown as Record<string, unknown> | undefined
-  const chaves: (keyof Textos)[] = ["titulo", "subtitulo", "contato_titulo", "contato_cta", "agenda_titulo", "agenda_subtitulo", "sem_horarios", "confirmacao_titulo", "confirmacao_texto", "inativo"]
+  const chaves: (keyof Textos)[] = ["titulo", "subtitulo", "contato_titulo", "contato_cta", "agenda_titulo", "sem_horarios", "confirmacao_titulo", "confirmacao_texto", "inativo"]
   for (const k of chaves) if (!TEXTO_LIVRE(t?.[k], 400)) erros.push(`Texto "${k}" obrigatório (até 400 caracteres, sem < >).`)
   if (t?.contato_subtitulo !== undefined && t.contato_subtitulo !== "" && !TEXTO_LIVRE(t.contato_subtitulo, 300)) erros.push("Texto da identificação: até 300 caracteres, sem < >.")
+  if (t?.agenda_subtitulo !== undefined && t.agenda_subtitulo !== "" && !TEXTO_LIVRE(t.agenda_subtitulo, 400)) erros.push("Texto da agenda: até 400 caracteres, sem < >.")
+  if (t?.agenda_reuniao !== undefined && t.agenda_reuniao !== "" && !TEXTO_LIVRE(t.agenda_reuniao, 80)) erros.push("Nome da reunião na agenda: até 80 caracteres, sem < >.")
   if (t?.agenda_cta !== undefined && !TEXTO_LIVRE(t.agenda_cta, 60)) erros.push("Botão da agenda: até 60 caracteres, sem < >.")
   if (def.visual !== undefined && !["claro", "escuro"].includes(def.visual)) erros.push("Identidade visual inválida.")
   if (def.apresentacao !== undefined) erros.push(...validarApresentacao(def.apresentacao))

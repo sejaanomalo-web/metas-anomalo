@@ -24,7 +24,7 @@ var $ = function (id) { return document.getElementById(id); };
 var root = $("f-etapa"), barra = $("f-barra"), prog = $("f-prog"), passo = $("f-passo"), voltar = $("f-voltar"), aviso = $("f-aviso");
 var main = $("f-main"), pe = $("f-pe"), peAcoes = $("f-pe-acoes"), consentBox = $("f-consent");
 var KEY = "funil:" + CFG.slug + ":" + CFG.versaoId + (CFG.previa ? ":teste" : "");
-var st = { i: INI, respostas: {}, sid: null, sk: null, lead: null, reuniao: null, slot: null, chave: null, dias: null, dia: null, enviando: false, simulada: false };
+var st = { i: INI, respostas: {}, sid: null, sk: null, lead: null, reuniao: null, slot: null, chave: null, dias: null, dia: null, mes: null, enviando: false, simulada: false };
 var fila = [], pronto = false, timer = null;
 // Etapa 00 vem pronta no HTML; guardamos a marcação para reexibir ao voltar.
 var apresentacaoHtml = AP ? root.innerHTML : "", apresentacaoPe = AP && peAcoes ? peAcoes.innerHTML : "";
@@ -137,7 +137,7 @@ function progresso() {
   // A barra só chega a 100% na confirmação real.
   barra.style.transform = "scaleX(" + (st.i < 0 ? 0 : concluido ? 1 : (st.i + 1) / (TOTAL + 1)) + ")";
   prog.setAttribute("aria-valuenow", String(st.i < 0 ? 0 : Math.min(st.i + 1, TOTAL)));
-  passo.textContent = st.i < 0 || concluido ? "" : st.i < N ? "Pergunta " + (st.i + 1) + " de " + N : st.i === N ? "Seus dados" : "Agendamento";
+  passo.textContent = st.i < 0 || concluido ? "" : st.i < N ? "Pergunta " + (st.i + 1) + " de " + N : st.i === N ? "Seus dados" : "";
   voltar.hidden = !(st.i > INI && st.i <= N && !st.reuniao);
   main.classList.toggle("is-centro", st.i < 0 || concluido);
 }
@@ -285,7 +285,7 @@ function fmtHora(iso) { return new Date(iso).toLocaleTimeString("pt-BR", { timeZ
 function maiuscula(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 var TEXTO_CONFIRMAR = T.agenda_cta || "Confirmar agendamento";
 function agenda(recarregar) {
-  var cab = [el("h2", { "class": "f-titulo", text: T.agenda_titulo }), el("p", { "class": "f-sub", text: T.agenda_subtitulo })];
+  var cab = [el("h2", { "class": "f-titulo", text: T.agenda_titulo }), T.agenda_subtitulo ? el("p", { "class": "f-sub", text: T.agenda_subtitulo }) : null];
   var corpo = el("div", { "class": "f-agenda", "aria-busy": "true" }, [el("div", { "class": "f-skel" }), el("div", { "class": "f-skel" }), el("div", { "class": "f-skel" })]);
   trocar(cab.concat([corpo]), !recarregar);
   if (!recarregar) evento("booking_page_viewed", { etapa: "agenda" });
@@ -304,26 +304,56 @@ function agenda(recarregar) {
     desenharAgenda(corpo);
   });
 }
+// Calendário mensal (datas com horário em destaque) + horários do dia escolhido.
+// Datas "AAAA-MM-DD" já vêm no fuso de Brasília; a grade é montada em UTC puro.
+var MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+var SEMANA = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+var ICONE_CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/></svg>';
+function hojeBrasilia() { return new Date(Date.now() - 3 * 36e5).toISOString().slice(0, 10); }
+function icone(svg) { var s = el("span", { "class": "f-ico", "aria-hidden": "true" }); s.innerHTML = svg; return s; }
 function desenharAgenda(corpo) {
   corpo.innerHTML = "";
-  var r = st.info;
-  corpo.appendChild(el("p", { "class": "f-meta", text: (r.tipoNome ? r.tipoNome + " · " : "") + r.durationMinutes + " min · Horário de Brasília" }));
-  var dias = el("div", { "class": "f-dias", role: "tablist", "aria-label": "Datas disponíveis" });
-  st.dias.forEach(function (d) {
-    var iso = d.date + "T12:00:00Z", ativo = d.date === st.dia;
-    dias.appendChild(el("button", { type: "button", role: "tab", "aria-selected": ativo ? "true" : "false", "class": "f-dia",
-      onclick: function () { if (st.enviando) return; st.dia = d.date; st.slot = null; desenharAgenda(corpo); } }, [
-      el("span", { text: fmtData(iso, { weekday: "short" }).replace(".", "") }), el("strong", { text: fmtData(iso, { day: "2-digit" }) }), el("span", { text: fmtData(iso, { month: "short" }).replace(".", "") })]));
-  });
-  corpo.appendChild(dias);
+  var r = st.info, livres = {};
+  st.dias.forEach(function (d) { livres[d.date] = true; });
+  var primeiroMes = st.dias[0].date.slice(0, 7), ultimoMes = st.dias[st.dias.length - 1].date.slice(0, 7);
+  if (!st.mes || st.mes < primeiroMes || st.mes > ultimoMes) st.mes = (st.dia || st.dias[0].date).slice(0, 7);
+  var ano = Number(st.mes.slice(0, 4)), mes = Number(st.mes.slice(5, 7)) - 1;
+  function irMes(delta) { var d = new Date(Date.UTC(ano, mes + delta, 1)); st.mes = d.toISOString().slice(0, 7); desenharAgenda(corpo); }
+
+  corpo.appendChild(el("div", { "class": "f-tipo" }, [icone(ICONE_CAL), el("div", {}, [
+    el("strong", { text: T.agenda_reuniao || "Reunião com o time!" }), el("span", { text: "Horário de Brasília" })])]));
+  corpo.appendChild(el("p", { "class": "f-rot", text: "Selecione uma data" }));
+
+  var cal = el("div", { "class": "f-cal" });
+  cal.appendChild(el("div", { "class": "f-cal-topo" }, [
+    el("button", { type: "button", "class": "f-cal-nav", "aria-label": "Mês anterior", text: "‹", disabled: st.mes <= primeiroMes ? "" : null, onclick: function () { irMes(-1); } }),
+    el("strong", { "aria-live": "polite", text: MESES[mes] + " " + ano }),
+    el("button", { type: "button", "class": "f-cal-nav", "aria-label": "Próximo mês", text: "›", disabled: st.mes >= ultimoMes ? "" : null, onclick: function () { irMes(1); } })]));
+  var grade = el("div", { "class": "f-cal-grade", role: "group", "aria-label": "Datas de " + MESES[mes] });
+  SEMANA.forEach(function (w) { grade.appendChild(el("span", { "class": "f-cal-sem", "aria-hidden": "true", text: w })); });
+  var inicio = new Date(Date.UTC(ano, mes, 1)).getUTCDay(), total = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate(), hoje = hojeBrasilia();
+  for (var v = 0; v < inicio; v++) grade.appendChild(el("span", {}));
+  for (var n = 1; n <= total; n++) (function (n) {
+    var data = st.mes + "-" + (n < 10 ? "0" : "") + n, livre = !!livres[data], sel = data === st.dia;
+    var rot = maiuscula(fmtData(data + "T12:00:00Z", { weekday: "long", day: "numeric", month: "long" })) + (livre ? "" : " — sem horários");
+    grade.appendChild(el("button", { type: "button", "class": "f-cal-dia" + (data === hoje ? " is-hoje" : ""), "aria-label": rot,
+      "aria-pressed": livre ? (sel ? "true" : "false") : null, disabled: livre ? null : "", text: String(n),
+      onclick: function () { if (st.enviando) return; st.dia = data; st.slot = null; desenharAgenda(corpo); var h = $("f-horas"); if (h) h.scrollIntoView({ behavior: "smooth", block: "nearest" }); } }));
+  })(n);
+  cal.appendChild(grade);
+  corpo.appendChild(cal);
+
   var dia = st.dias.filter(function (d) { return d.date === st.dia; })[0];
-  var grade = el("div", { "class": "f-slots", role: "radiogroup", "aria-label": "Horários disponíveis" });
-  dia.slots.forEach(function (s) {
-    var sel = st.slot && st.slot.start === s.start;
-    grade.appendChild(el("button", { type: "button", role: "radio", "aria-checked": sel ? "true" : "false", "class": "f-slot", text: s.label,
-      onclick: function () { if (st.enviando) return; st.slot = s; st.chave = uuid(); evento("booking_slot_selected", { etapa: "agenda" }); desenharAgenda(corpo); var c = $("f-confirmar"); if (c) c.focus({ preventScroll: true }); } }));
-  });
-  corpo.appendChild(grade);
+  if (dia) {
+    corpo.appendChild(el("h3", { "class": "f-dia-tit", id: "f-horas" }, [icone(ICONE_CAL), document.createTextNode(maiuscula(fmtData(dia.date + "T12:00:00Z", { weekday: "long", day: "numeric", month: "long" })))]));
+    var horas = el("div", { "class": "f-slots", role: "radiogroup", "aria-label": "Horários disponíveis" });
+    dia.slots.forEach(function (s) {
+      var sel = st.slot && st.slot.start === s.start;
+      horas.appendChild(el("button", { type: "button", role: "radio", "aria-checked": sel ? "true" : "false", "class": "f-slot", text: s.label,
+        onclick: function () { if (st.enviando) return; st.slot = s; st.chave = uuid(); evento("booking_slot_selected", { etapa: "agenda" }); desenharAgenda(corpo); var c = $("f-confirmar"); if (c) c.focus({ preventScroll: true }); } }));
+    });
+    corpo.appendChild(horas);
+  }
   if (st.slot) {
     var txt = maiuscula(fmtData(st.slot.start, { weekday: "long", day: "2-digit", month: "long" }));
     var b = cta(TEXTO_CONFIRMAR, { type: "button", id: "f-confirmar", onclick: function () { confirmar(b); } });

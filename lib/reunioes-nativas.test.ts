@@ -142,3 +142,11 @@ test("buffer da reunião existente e limite do tipo são respeitados mesmo com o
   c.tipo.limite_diario = 1
   assert.equal(slotsDoDia(c, seg, [{ ...ag(seg, "16:00"), bloqueia: false }], agora).length, 0)
 })
+
+test("passo de 60 min: horários de hora em hora a partir do início da janela", () => {
+  const s = slotsDoDia(config(), seg, [], agora, 60).map(x => x.label)
+  assert.ok(s.length > 0)
+  assert.ok(s.every(l => l.endsWith(":00")), s.join(","))
+  const q = slotsDoDia(config(), seg, [], agora).map(x => x.label)
+  assert.ok(q.some(l => !l.endsWith(":00")), "ATIVO continua na grade de 15 min")
+})

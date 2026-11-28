@@ -24,7 +24,8 @@ export function sobrepoe(a: { inicio: string; fim: string }, b: { inicio: string
   return Date.parse(a.inicio) < Date.parse(b.fim) + bufferMin * 60_000 && Date.parse(a.fim) + bufferMin * 60_000 > Date.parse(b.inicio)
 }
 
-export function slotsDoDia(c: Config, data: string, ocupados: Ocupado[], agora = new Date()): { start: string; end: string; label: string }[] {
+/** `passoMin` = distância entre inícios oferecidos, a partir do início da janela (múltiplo de 15; o banco valida a grade de 15 min). */
+export function slotsDoDia(c: Config, data: string, ocupados: Ocupado[], agora = new Date(), passoMin = 15): { start: string; end: string; label: string }[] {
   const hoje = dataBR(agora.toISOString())
   if (data < hoje || data >= somarDia(hoje, c.tipo.horizonte_dias)) return []
   const dia = new Date(`${data}T00:00:00Z`).getUTCDay()
@@ -39,7 +40,7 @@ export function slotsDoDia(c: Config, data: string, ocupados: Ocupado[], agora =
   if (limite !== null && reservasNoDia >= limite) return []
   const out: { start: string; end: string; label: string }[] = []
   for (const janela of janelas.filter(j => j.dia === dia)) {
-    for (let min = Math.ceil(minutos(janela.inicio) / 15) * 15; min + c.tipo.duracao_min <= minutos(janela.fim); min += 15) {
+    for (let min = Math.ceil(minutos(janela.inicio) / 15) * 15; min + c.tipo.duracao_min <= minutos(janela.fim); min += passoMin) {
       const start = brParaUtcIso(data, hhmm(min))
       const end = new Date(Date.parse(start) + c.tipo.duracao_min * 60_000).toISOString()
       if (dataBR(end) !== data || Date.parse(start) < agora.getTime() + c.tipo.antecedencia_min_horas * 3_600_000) continue
@@ -112,7 +113,7 @@ async function ocupacao(c: Config, from: string, to: string): Promise<Ocupado[] 
   return ocupados
 }
 
-export async function agendaNativa(from: string, days: number, canal: ChaveCanalNativo = "ativo") {
+export async function agendaNativa(from: string, days: number, canal: ChaveCanalNativo = "ativo", passoMin = 15) {
   const c = canal === "ativo" ? await configurarNativo() : await configurarCanal(canal)
   if (!c) return null
   const hoje = dataBR(new Date().toISOString())
@@ -125,7 +126,7 @@ export async function agendaNativa(from: string, days: number, canal: ChaveCanal
   const ocupados = await ocupacao(c, startUtc, endUtc)
   if (!ocupados) return null
   return { timezone: FUSO_NATIVO, durationMinutes: c.tipo.duracao_min,
-    days: Array.from({ length: dias }, (_, i) => { const date = somarDia(inicio, i); return { date, slots: slotsDoDia(c, date, ocupados) } }) }
+    days: Array.from({ length: dias }, (_, i) => { const date = somarDia(inicio, i); return { date, slots: slotsDoDia(c, date, ocupados, new Date(), passoMin) } }) }
 }
 
 export function validarNome(v: unknown): string | null {
